@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    name: Build and test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Format check
+        run: dotnet format --verify-no-changes --no-restore
+
+      - name: Test
+        run: dotnet test --configuration Release --no-build
+
+      - name: Pack
+        run: dotnet pack src/RogueDeck.Core/RogueDeck.Core.csproj --configuration Release --no-build
+
+      - name: Smoke (ConsoleSandbox)
+        run: dotnet run --project src/RogueDeck.ConsoleSandbox/RogueDeck.ConsoleSandbox.csproj --configuration Release --no-build
+
+      - name: Benchmarks build check
+        run: dotnet build tests/RogueDeck.Core.Benchmarks/RogueDeck.Core.Benchmarks.csproj --configuration Release --no-restore
