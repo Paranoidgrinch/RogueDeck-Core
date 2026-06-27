@@ -91,7 +91,7 @@ public sealed class RandomScenarioGenerator
         for (var t = 0; t < _rng.Next(0, 3); t++)
             status.Triggers.Add(new StatusTriggerModel
             {
-                Event = OneOf<TriggerEvent>(),
+                Event = OneOf(StatusTriggerEvents),
                 Effects = GenerateEffects(1, 2, depth: 2),
             });
 
@@ -238,6 +238,16 @@ public sealed class RandomScenarioGenerator
 
     private static readonly EffectTarget[] Collections =
         { EffectTarget.AllEnemies, EffectTarget.AllAllies, EffectTarget.DamagedAllies, EffectTarget.AllCombatants };
+
+    // Only the events a status-bound trigger supports (mirrors the composer's BuildTrigger); the broader
+    // resource/card events are for temporary rules, which the fuzzer does not generate.
+    private static readonly TriggerEvent[] StatusTriggerEvents =
+    {
+        TriggerEvent.TurnStarted, TriggerEvent.TurnEnded, TriggerEvent.DamageTaken, TriggerEvent.DamageDealt,
+        TriggerEvent.Healed, TriggerEvent.CardPlayed, TriggerEvent.Downed, TriggerEvent.StatusExpired,
+        TriggerEvent.ResourceGained, TriggerEvent.CardCostPaid, TriggerEvent.StatusApplied,
+        TriggerEvent.StatusRemoved, TriggerEvent.StatusMerged, TriggerEvent.RoundStarted, TriggerEvent.RoundEnded,
+    };
 
     // ── small helpers ──
     private T OneOf<T>() where T : struct, Enum

@@ -34,6 +34,7 @@ public enum EffectKind
     MoveCard,      // move a referenced card instance to a pile (exhaust / banish / discard / draw / hand)
     ReplayCard,    // re-run a referenced card's on-play effects (no cost / no zone move)
     RemoveRule,    // remove a previously-installed named temporary rule (see LineKind.InstallRule)
+    MoveAllCards,  // move every card from one zone to another (discard/exhaust the hand, reshuffle, …)
 }
 
 // Lifetime of an installed temporary rule (see LineKind.InstallRule).
@@ -190,8 +191,11 @@ public sealed class EffectLineModel
     // Only used by MoveCard / ReplayCard: which card instance to act on.
     public CardRef CardRef { get; set; } = CardRef.ThisCard;
 
-    // Only used by MoveCard: the destination pile.
+    // Only used by MoveCard / MoveAllCards: the destination pile.
     public CardZone MoveToZone { get; set; } = CardZone.ExhaustPile;
+
+    // Only used by MoveAllCards: the source pile every card is moved out of.
+    public CardZone MoveFromZone { get; set; } = CardZone.Hand;
 
     // ── If ──
     public AmountSource ConditionLeft { get; set; } = AmountSource.TargetCurrentHp;
@@ -354,6 +358,17 @@ public enum TriggerEvent
     StatusApplied,  // when the bearer gains any OTHER status
     RoundStarted,   // at the start of each round ("Self" = every bearer; use constant amounts)
     RoundEnded,     // at the end of each round ("Self" = every bearer; use constant amounts)
+    StatusRemoved,  // when a status is removed from the bearer
+    StatusMerged,   // when a status merges into an existing one on the bearer
+    // The following fire for any combatant and are available to temporary rules (not status triggers):
+    ResourceLost,        // when a combatant loses a resource
+    ResourceModified,    // when a combatant's resource is changed (signed)
+    ResourceRefilled,    // when a combatant's resource is refilled
+    CardsDrawn,          // when a combatant draws cards
+    CardMovedToZone,     // when a card moves between zones
+    HandDiscarded,       // when a combatant's hand is discarded
+    DiscardPileShuffled, // when a combatant's discard reshuffles into the draw pile
+    EnemyActionExecuted, // when an enemy executes an action
 }
 
 // One trigger on a custom status: an event plus the native effects it runs when it fires.

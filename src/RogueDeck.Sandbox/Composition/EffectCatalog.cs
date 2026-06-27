@@ -22,7 +22,8 @@ public sealed record EffectKindInfo(
     bool UsesZone = false,
     bool UsesResource = false,
     bool UsesDefensivePool = false,
-    bool UsesRuleName = false);
+    bool UsesRuleName = false,
+    bool UsesFromZone = false);
 
 public sealed record TargetInfo(EffectTarget Target, string Label, string Description);
 
@@ -84,6 +85,9 @@ public static class EffectCatalog
             "Re-run a referenced card's on-play effects at a target (no cost, no zone move).", "", false, true, false, UsesCardInstanceRef: true),
         new EffectKindInfo(EffectKind.RemoveRule, "Remove rule",
             "Remove a previously-installed named temporary rule.", "", false, false, false, UsesRuleName: true),
+        new EffectKindInfo(EffectKind.MoveAllCards, "Move all cards",
+            "Move every card from one of the hero's piles to another (discard or exhaust the hand, reshuffle the discard into the draw pile, …).",
+            "", false, false, false, UsesZone: true, UsesFromZone: true),
     };
 
     public static IReadOnlyList<TargetInfo> Targets { get; } = new[]

@@ -1536,4 +1536,81 @@ public class ScenarioComposerTests
         Assert.Equal(35, armed.FinalState.GetCombatant(new CombatantId("dummy")).Health.Current);    // rule fired
         Assert.Equal(40, disarmed.FinalState.GetCombatant(new CombatantId("dummy")).Health.Current); // removed first
     }
+
+    // ── Step 6: extra effects + trigger events ──────────────────────────────────────
+
+    [Fact]
+    public void Compose_MoveAllCards_ExhaustsTheRestOfTheHand()
+    {
+        var model = new SandboxModel
+        {
+            Hero = new HeroModel
+            {
+                Name = "Knight", Hp = 30, Energy = 3,
+                UseRealDeck = true, DrawPerTurn = 3,
+                Deck = { new DeckCardModel { CardName = "Bomb", Copies = 1 }, new DeckCardModel { CardName = "Junk", Copies = 2 } },
+            },
+            Cards =
+            {
+                new CardModel
+                {
+                    Name = "Bomb", Cost = 0,
+                    Effects = { new EffectLineModel { Kind = EffectKind.MoveAllCards, MoveFromZone = CardZone.Hand, MoveToZone = CardZone.ExhaustPile } },
+                },
+                new CardModel { Name = "Junk", Cost = 0 },
+            },
+            Enemies = { new EnemyModel { Name = "Dummy", Hp = 40 } },
+            Rounds = { new RoundModel { HeroPlays = { new PlayModel { CardName = "Bomb" } } } },
+        };
+
+        var report = new ScenarioRunner().Run(new ScenarioComposer().Compose(model));
+
+        Assert.False(report.HasProblems);
+        var zones = report.FinalState.GetCardZones(new CombatantId("knight"));
+        // The whole hand (both Junk plus Bomb itself, still in hand mid-resolution) is sent to exhaust.
+        Assert.Equal(3, zones.GetCardsInZone(CardZone.ExhaustPile).Count);
+        Assert.Empty(zones.GetCardsInZone(CardZone.Hand));
+    }
+
+    [Fact]
+    public void Compose_TemporaryRule_OnEnemyActionExecuted_Fires()
+    {
+        var model = new SandboxModel
+        {
+            Hero = new HeroModel { Name = "Knight", Hp = 30, Energy = 3 },
+            Cards =
+            {
+                new CardModel
+                {
+                    Name = "Curse", Cost = 0,
+                    Effects =
+                    {
+                        new EffectLineModel
+                        {
+                            Line = LineKind.InstallRule,
+                            RuleEvent = TriggerEvent.EnemyActionExecuted,
+                            RuleLifetime = RuleLifetimeKind.Unlimited,
+                            // Whenever an enemy acts, that enemy (Self = the actor) takes 3.
+                            Body = { new EffectLineModel { Kind = EffectKind.DealDamage, Target = EffectTarget.Self, Amount = 3 } },
+                        },
+                    },
+                },
+            },
+            Enemies =
+            {
+                new EnemyModel
+                {
+                    Name = "Ogre", Hp = 40,
+                    Intents = { new IntentModel { Label = "Smash", Kind = IntentKind.Attack, Effects = { new EffectLineModel { Kind = EffectKind.DealDamage, Target = EffectTarget.Target, Amount = 4 } } } },
+                },
+            },
+            Rounds = { new RoundModel { HeroPlays = { new PlayModel { CardName = "Curse" } } } },
+        };
+
+        var report = new ScenarioRunner().Run(new ScenarioComposer().Compose(model));
+
+        Assert.False(report.HasProblems);
+        Assert.Equal(26, report.FinalState.GetCombatant(new CombatantId("knight")).Health.Current); // 30 − 4 (ogre's smash)
+        Assert.Equal(37, report.FinalState.GetCombatant(new CombatantId("ogre")).Health.Current);   // 40 − 3 (rule on its action)
+    }
 }

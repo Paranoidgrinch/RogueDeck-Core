@@ -199,7 +199,13 @@ public sealed class ScenarioComposer
                 id, BuildRoundProgram<RoundStartedTriggeredEffectContext>(trigger.Effects, statusId)),
             TriggerEvent.RoundEnded => TriggeredProgramContextAdapters.RoundEnded.Define(
                 id, BuildRoundProgram<RoundEndedTriggeredEffectContext>(trigger.Effects, statusId)),
-            _ => throw new InvalidOperationException($"Unknown trigger event '{trigger.Event}'."),
+            TriggerEvent.StatusRemoved => TriggeredProgramContextAdapters.StatusRemoved.Define(
+                id, BuildProgram<StatusRemovedTriggeredEffectContext>(trigger.Effects, selector)!,
+                filters: [new StatusRemovedTargetHasStatusTriggerFilter(statusId)]),
+            TriggerEvent.StatusMerged => TriggeredProgramContextAdapters.StatusMerged.Define(
+                id, BuildProgram<StatusMergedTriggeredEffectContext>(trigger.Effects, selector)!,
+                filters: [new StatusMergedTargetHasStatusTriggerFilter(statusId)]),
+            _ => throw new InvalidOperationException($"Trigger event '{trigger.Event}' is not supported for a status trigger."),
         };
     }
 
@@ -209,7 +215,10 @@ public sealed class ScenarioComposer
     {
         var bearerIsSource = ev is TriggerEvent.TurnStarted or TriggerEvent.TurnEnded
             or TriggerEvent.DamageDealt or TriggerEvent.CardPlayed
-            or TriggerEvent.ResourceGained or TriggerEvent.CardCostPaid;
+            or TriggerEvent.ResourceGained or TriggerEvent.CardCostPaid
+            or TriggerEvent.ResourceLost or TriggerEvent.ResourceModified or TriggerEvent.ResourceRefilled
+            or TriggerEvent.CardsDrawn or TriggerEvent.CardMovedToZone or TriggerEvent.HandDiscarded
+            or TriggerEvent.DiscardPileShuffled or TriggerEvent.EnemyActionExecuted;
         // Only Self/Target carry the bearer/other meaning; every other selector resolves relative to the
         // event source (the bearer for source-events) exactly as in a card.
         return target => target switch
@@ -461,6 +470,22 @@ public sealed class ScenarioComposer
                 id, RuleProgram<ResourceGainedTriggeredEffectContext>(effects, selector)),
             TriggerEvent.CardCostPaid => TriggeredProgramContextAdapters.CardCostPaid.Define(
                 id, RuleProgram<CardCostPaidTriggeredEffectContext>(effects, selector)),
+            TriggerEvent.ResourceLost => TriggeredProgramContextAdapters.ResourceLost.Define(
+                id, RuleProgram<ResourceLostTriggeredEffectContext>(effects, selector)),
+            TriggerEvent.ResourceModified => TriggeredProgramContextAdapters.ResourceModified.Define(
+                id, RuleProgram<ResourceModifiedTriggeredEffectContext>(effects, selector)),
+            TriggerEvent.ResourceRefilled => TriggeredProgramContextAdapters.ResourceRefilled.Define(
+                id, RuleProgram<ResourceRefilledTriggeredEffectContext>(effects, selector)),
+            TriggerEvent.CardsDrawn => TriggeredProgramContextAdapters.CardsDrawn.Define(
+                id, RuleProgram<CardsDrawnTriggeredEffectContext>(effects, selector)),
+            TriggerEvent.CardMovedToZone => TriggeredProgramContextAdapters.CardMovedToZone.Define(
+                id, RuleProgram<CardMovedToZoneTriggeredEffectContext>(effects, selector)),
+            TriggerEvent.HandDiscarded => TriggeredProgramContextAdapters.HandDiscarded.Define(
+                id, RuleProgram<HandDiscardedTriggeredEffectContext>(effects, selector)),
+            TriggerEvent.DiscardPileShuffled => TriggeredProgramContextAdapters.DiscardPileShuffled.Define(
+                id, RuleProgram<DiscardPileShuffledTriggeredEffectContext>(effects, selector)),
+            TriggerEvent.EnemyActionExecuted => TriggeredProgramContextAdapters.EnemyActionExecuted.Define(
+                id, RuleProgram<EnemyActionExecutedTriggeredEffectContext>(effects, selector)),
             _ => throw new InvalidOperationException(
                 $"Trigger event '{ev}' cannot be used for an unbound temporary rule."),
         };
@@ -527,6 +552,8 @@ public sealed class ScenarioComposer
                 CardInstanceExpr<TContext>(line.CardRef), selector(line.Target)),
             EffectKind.RemoveRule => new RemoveTemporaryRuleNode<TContext>(
                 new TriggeredEffectDefinitionId($"temprule_{Slug(line.RuleName)}")),
+            EffectKind.MoveAllCards => new MoveAllCardsFromZoneNode<TContext>(
+                CombatantTargetSelectors.Source, line.MoveFromZone, line.MoveToZone),
             _ => throw new InvalidOperationException($"Unknown effect kind '{line.Kind}'."),
         };
     }

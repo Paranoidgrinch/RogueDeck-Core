@@ -226,7 +226,7 @@
                         <div class="row">
                             <label>When
                                 <select @bind="t.Event">
-                                    @foreach (var ev in Enum.GetValues<TriggerEvent>())
+                                    @foreach (var ev in StatusTriggerEvents)
                                     {
                                         <option value="@ev">@TriggerEventLabel(ev)</option>
                                     }
@@ -689,6 +689,16 @@ else
         TriggerEvent.StatusApplied => "bearer gains a status",
         TriggerEvent.RoundStarted => "each round starts (all bearers)",
         TriggerEvent.RoundEnded => "each round ends (all bearers)",
+        TriggerEvent.StatusRemoved => "a status leaves the bearer",
+        TriggerEvent.StatusMerged => "a status merges on the bearer",
+        TriggerEvent.ResourceLost => "a resource is lost",
+        TriggerEvent.ResourceModified => "a resource changes",
+        TriggerEvent.ResourceRefilled => "a resource is refilled",
+        TriggerEvent.CardsDrawn => "cards are drawn",
+        TriggerEvent.CardMovedToZone => "a card moves to a pile",
+        TriggerEvent.HandDiscarded => "the hand is discarded",
+        TriggerEvent.DiscardPileShuffled => "the discard reshuffles into draw",
+        TriggerEvent.EnemyActionExecuted => "an enemy acts",
         _ => ev.ToString(),
     };
 
@@ -1028,6 +1038,16 @@ else
                                 <option value="@CardRef.TriggeringCard">the played card</option>
                             </select>
                         }
+                        @if (info.UsesFromZone)
+                        {
+                            <span class="amount-label">from</span>
+                            <select @bind="line.MoveFromZone" title="source pile">
+                                @foreach (var z in Enum.GetValues<CardZone>())
+                                {
+                                    <option value="@z">@z</option>
+                                }
+                            </select>
+                        }
                         @if (info.UsesZone)
                         {
                             <span class="amount-label">to</span>
@@ -1227,11 +1247,23 @@ else
         _ => k.ToString(),
     };
 
-    // Events an unbound temporary rule can listen for (the cleanly-unbindable subset of TriggerEvent).
+    // Events a status-bound trigger supports (every TriggerEvent the composer's BuildTrigger handles).
+    private static readonly TriggerEvent[] StatusTriggerEvents =
+    {
+        TriggerEvent.TurnStarted, TriggerEvent.TurnEnded, TriggerEvent.DamageTaken, TriggerEvent.DamageDealt,
+        TriggerEvent.Healed, TriggerEvent.CardPlayed, TriggerEvent.Downed, TriggerEvent.StatusExpired,
+        TriggerEvent.ResourceGained, TriggerEvent.CardCostPaid, TriggerEvent.StatusApplied,
+        TriggerEvent.StatusRemoved, TriggerEvent.StatusMerged, TriggerEvent.RoundStarted, TriggerEvent.RoundEnded,
+    };
+
+    // Events an unbound temporary rule can listen for (the cleanly-unbindable adapters).
     private static readonly TriggerEvent[] TempRuleEvents =
     {
         TriggerEvent.TurnStarted, TriggerEvent.TurnEnded, TriggerEvent.DamageTaken, TriggerEvent.DamageDealt,
         TriggerEvent.Healed, TriggerEvent.CardPlayed, TriggerEvent.ResourceGained, TriggerEvent.CardCostPaid,
+        TriggerEvent.ResourceLost, TriggerEvent.ResourceModified, TriggerEvent.ResourceRefilled,
+        TriggerEvent.CardsDrawn, TriggerEvent.CardMovedToZone, TriggerEvent.HandDiscarded,
+        TriggerEvent.DiscardPileShuffled, TriggerEvent.EnemyActionExecuted,
     };
 
     private static string RuleLifetimeLabel(RuleLifetimeKind k) => k switch
