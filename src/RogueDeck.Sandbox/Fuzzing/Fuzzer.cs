@@ -69,7 +69,10 @@ public sealed class Fuzzer
         problem.Contains("reaching the limit of", StringComparison.Ordinal) ||
         problem.Contains("exceeds the configured maximum", StringComparison.Ordinal) ||
         problem.Contains("maximum trigger depth", StringComparison.Ordinal) ||
-        problem.Contains("maximum repeat count", StringComparison.Ordinal);
+        problem.Contains("maximum repeat count", StringComparison.Ordinal) ||
+        // Installing the same temporary rule id twice (e.g. a card with an unlimited-lifetime InstallRule
+        // played in two rounds) is an intentional engine guard, not a fault.
+        problem.Contains("is already installed", StringComparison.Ordinal);
 
     private static string SafeJson(SandboxModel model)
     {

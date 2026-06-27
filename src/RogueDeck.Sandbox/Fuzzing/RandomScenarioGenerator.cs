@@ -14,6 +14,9 @@ public sealed class RandomScenarioGenerator
     private string[] _statusPool = Array.Empty<string>();
     private string[] _cardPool = Array.Empty<string>();
     private string[] _enemyPool = Array.Empty<string>();
+    private string[] _resourcePool = Array.Empty<string>();
+    private string[] _poolPool = Array.Empty<string>();
+    private string[] _ruleNamePool = Array.Empty<string>();
 
     public RandomScenarioGenerator(int seed) => _rng = new Random(seed);
 
@@ -41,6 +44,27 @@ public sealed class RandomScenarioGenerator
         _cardPool = Enumerable.Range(0, cardCount).Select(i => $"fuzzcard{i}").ToArray();
         _enemyPool = Enumerable.Range(0, enemyCount).Select(i => $"fuzzenemy{i}").ToArray();
         _statusPool = StandardStatuses.Concat(customStatusNames).ToArray();
+
+        // Custom resources / defensive pools / named rules, fixed up front so effects can reference them.
+        _resourcePool = Enumerable.Range(0, _rng.Next(0, 3)).Select(i => $"fuzzres{i}").ToArray();
+        _poolPool = Enumerable.Range(0, _rng.Next(0, 3)).Select(i => $"fuzzpool{i}").ToArray();
+        _ruleNamePool = Enumerable.Range(0, _rng.Next(0, 3)).Select(i => $"fuzzrule{i}").ToArray();
+
+        foreach (var name in _resourcePool)
+            model.Resources.Add(new ResourceModel
+            {
+                Name = name,
+                Start = _rng.Next(0, 4),
+                Max = _rng.Next(1, 6),
+                RefillEachTurn = _rng.NextDouble() < 0.5,
+            });
+        foreach (var name in _poolPool)
+            model.DefensivePools.Add(new DefensivePoolModel
+            {
+                Name = name,
+                AbsorbsBeforeBlock = _rng.NextDouble() < 0.5,
+                ClearsEachTurn = _rng.NextDouble() < 0.5,
+            });
 
         foreach (var name in customStatusNames)
             model.Statuses.Add(GenerateStatus(name));
@@ -110,12 +134,24 @@ public sealed class RandomScenarioGenerator
         return status;
     }
 
-    private CardModel GenerateCard(string name) => new()
+    private CardModel GenerateCard(string name)
     {
-        Name = name,
-        Cost = _rng.Next(0, 4),
-        Effects = GenerateEffects(1, 3, depth: 2),
-    };
+        var card = new CardModel
+        {
+            Name = name,
+            Cost = _rng.Next(0, 4),
+            RetainInHand = _rng.NextDouble() < 0.2,
+            PlayedZone = _rng.NextDouble() < 0.25 ? OneOf<CardZone>() : CardZone.DiscardPile,
+            TurnEndZone = _rng.NextDouble() < 0.25 ? OneOf<CardZone>() : CardZone.DiscardPile,
+            Effects = GenerateEffects(1, 3, depth: 2),
+        };
+        foreach (var tag in EffectCatalog.CardTags)
+            if (_rng.NextDouble() < 0.3)
+                card.Tags.Add(tag.Id);
+        if (_resourcePool.Length > 0 && _rng.NextDouble() < 0.3)
+            card.ExtraCosts.Add(new ResourceCostModel { ResourceName = OneOf(_resourcePool), Amount = _rng.Next(1, 4) });
+        return card;
+    }
 
     private EnemyModel GenerateEnemy(string name)
     {
@@ -162,8 +198,18 @@ public sealed class RandomScenarioGenerator
         if (depth <= 0 || _rng.NextDouble() < 0.75)
             return GenerateLeaf();
 
-        return OneOf(new[] { LineKind.If, LineKind.Repeat, LineKind.ForEach, LineKind.Causal, LineKind.RandomTargets, LineKind.RepeatUntil }) switch
+        return OneOf(new[] { LineKind.If, LineKind.Repeat, LineKind.ForEach, LineKind.Causal, LineKind.RandomTargets, LineKind.RepeatUntil, LineKind.InstallRule }) switch
         {
+            LineKind.InstallRule => new EffectLineModel
+            {
+                Line = LineKind.InstallRule,
+                RuleEvent = OneOf(TempRuleEvents),
+                RuleName = _ruleNamePool.Length > 0 && _rng.NextDouble() < 0.6 ? OneOf(_ruleNamePool) : "",
+                RuleLifetime = OneOf<RuleLifetimeKind>(),
+                RuleActivations = _rng.Next(1, 4),
+                RuleExpiryRound = _rng.Next(1, 4),
+                Body = GenerateLeafEffects(1, 2),
+            },
             LineKind.If => new EffectLineModel
             {
                 Line = LineKind.If,
@@ -210,7 +256,13 @@ public sealed class RandomScenarioGenerator
             CreateCardName = OneOf(_cardPool),
             CardRef = OneOf<CardRef>(),
             MoveToZone = OneOf<CardZone>(),
+            MoveFromZone = OneOf<CardZone>(),
             DurationTurns = _rng.NextDouble() < 0.3 ? _rng.Next(1, 4) : 0,
+            // Empty = the built-in Energy / Block; otherwise a defined custom resource / pool.
+            ResourceName = _resourcePool.Length > 0 && _rng.NextDouble() < 0.5 ? OneOf(_resourcePool) : "",
+            AmountResourceId = _resourcePool.Length > 0 && _rng.NextDouble() < 0.5 ? OneOf(_resourcePool) : "",
+            DefensivePoolName = _poolPool.Length > 0 && _rng.NextDouble() < 0.5 ? OneOf(_poolPool) : "",
+            RuleName = _ruleNamePool.Length > 0 ? OneOf(_ruleNamePool) : "",
         };
         if (_rng.NextDouble() < 0.3)
         {
@@ -247,6 +299,16 @@ public sealed class RandomScenarioGenerator
         TriggerEvent.Healed, TriggerEvent.CardPlayed, TriggerEvent.Downed, TriggerEvent.StatusExpired,
         TriggerEvent.ResourceGained, TriggerEvent.CardCostPaid, TriggerEvent.StatusApplied,
         TriggerEvent.StatusRemoved, TriggerEvent.StatusMerged, TriggerEvent.RoundStarted, TriggerEvent.RoundEnded,
+    };
+
+    // Events an unbound temporary rule can listen for (mirrors the composer's BuildUnboundTrigger).
+    private static readonly TriggerEvent[] TempRuleEvents =
+    {
+        TriggerEvent.TurnStarted, TriggerEvent.TurnEnded, TriggerEvent.DamageTaken, TriggerEvent.DamageDealt,
+        TriggerEvent.Healed, TriggerEvent.CardPlayed, TriggerEvent.ResourceGained, TriggerEvent.CardCostPaid,
+        TriggerEvent.ResourceLost, TriggerEvent.ResourceModified, TriggerEvent.ResourceRefilled,
+        TriggerEvent.CardsDrawn, TriggerEvent.CardMovedToZone, TriggerEvent.HandDiscarded,
+        TriggerEvent.DiscardPileShuffled, TriggerEvent.EnemyActionExecuted,
     };
 
     // ── small helpers ──
