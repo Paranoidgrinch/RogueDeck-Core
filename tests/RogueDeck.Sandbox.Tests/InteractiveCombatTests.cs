@@ -36,6 +36,52 @@ public class InteractiveCombatTests
         Assert.Equal(32, combat.State.GetCombatant(new CombatantId("dummy")).Health.Current); // 40 − 8
     }
 
+    [Fact]
+    public void PlayCard_WhenAnEffectThrows_RecordsAProblem_WithoutTearingDownTheSession()
+    {
+        // A card that installs an unlimited temporary rule. Playing it twice hits the engine's "already
+        // installed" guard; the interactive driver must surface that as a problem, not throw.
+        var model = new SandboxModel
+        {
+            Hero = new HeroModel
+            {
+                Name = "Knight", Hp = 30, Energy = 5,
+                UseRealDeck = true, DrawPerTurn = 2,
+                Deck = { new DeckCardModel { CardName = "Trap", Copies = 2 } },
+            },
+            Cards =
+            {
+                new CardModel
+                {
+                    Name = "Trap", Cost = 0,
+                    Effects =
+                    {
+                        new EffectLineModel
+                        {
+                            Line = LineKind.InstallRule,
+                            RuleEvent = TriggerEvent.TurnStarted,
+                            RuleName = "trap",
+                            RuleLifetime = RuleLifetimeKind.Unlimited,
+                            Body = { new EffectLineModel { Kind = EffectKind.DealDamage, Target = EffectTarget.Self, Amount = 1 } },
+                        },
+                    },
+                },
+            },
+            Enemies = { new EnemyModel { Name = "Dummy", Hp = 40 } },
+        };
+
+        var combat = new ScenarioComposer().StartInteractive(model);
+
+        var trap = combat.Hand.First(c => c.DefinitionId.value == "trap");
+        combat.PlayCard(trap.Id, null);                           // installs the rule
+        var second = combat.Hand.First(c => c.DefinitionId.value == "trap");
+        combat.PlayCard(second.Id, null);                         // duplicate install — must not throw
+
+        Assert.True(combat.IsHeroTurn);                           // session is intact
+        var problem = combat.Steps.SelectMany(s => s.Problems).FirstOrDefault(p => p.Contains("already installed"));
+        Assert.NotNull(problem);
+    }
+
     private static SandboxModel Model()
     {
         return new SandboxModel

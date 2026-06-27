@@ -799,7 +799,9 @@ else
         _error = null;
     }
 
-    // The default Knight-vs-Ogre-&-Imp fight, so the page does something the moment it loads.
+    // The default fight. Doubles as a tour of the engine's breadth: a custom buildup resource (Mana) with a
+    // non-energy card cost, a persistent custom defensive pool (Ward), a built-in Thorns status, card type
+    // tags, and a temporary rule that punishes the enemy each time it acts.
     private static SandboxModel DemoModel()
     {
         EffectLineModel Dmg(int n, EffectTarget t = EffectTarget.Target) =>
@@ -807,16 +809,48 @@ else
         EffectLineModel Block(int n) => new() { Kind = EffectKind.GainBlock, Target = EffectTarget.Self, Amount = n };
         EffectLineModel Status(string id, int n, EffectTarget t) =>
             new() { Kind = EffectKind.ApplyStatus, Target = t, StatusId = id, Amount = n };
+        EffectLineModel GainMana(int n) =>
+            new() { Kind = EffectKind.GainResource, Target = EffectTarget.Self, ResourceName = "Mana", Amount = n };
+        EffectLineModel GainWard(int n) =>
+            new() { Kind = EffectKind.ModifyBlock, Target = EffectTarget.Self, DefensivePoolName = "Ward", Amount = n };
 
         return new SandboxModel
         {
             Hero = new HeroModel { Name = "Knight", Hp = 50, Energy = 3 },
+            // Mana accumulates across turns (no per-turn refill) — distinct from Energy. Build it with Channel,
+            // spend it on Arcane Bolt.
+            Resources = { new ResourceModel { Name = "Mana", Start = 0, Max = 5, RefillEachTurn = false } },
+            // A persistent shield that soaks damage after Block and does NOT clear at turn start.
+            DefensivePools = { new DefensivePoolModel { Name = "Ward", AbsorbsBeforeBlock = false, ClearsEachTurn = false } },
             Cards =
             {
-                new CardModel { Name = "Strike", Cost = 1, Effects = { Dmg(8) } },
-                new CardModel { Name = "Guard", Cost = 1, Effects = { Block(6) } },
-                new CardModel { Name = "Venom", Cost = 1, Effects = { Status("standard.poison", 3, EffectTarget.Target) } },
-                new CardModel { Name = "Rally", Cost = 1, Effects = { Status("standard.strength", 2, EffectTarget.Self) } },
+                new CardModel { Name = "Strike", Cost = 1, Tags = { "attack" }, Effects = { Dmg(8) } },
+                new CardModel { Name = "Channel", Cost = 1, Tags = { "skill" }, Effects = { GainMana(2) } },
+                // Costs no Energy but 2 Mana.
+                new CardModel
+                {
+                    Name = "Arcane Bolt", Cost = 0, Tags = { "attack" },
+                    ExtraCosts = { new ResourceCostModel { ResourceName = "Mana", Amount = 2 } },
+                    Effects = { Dmg(10) },
+                },
+                new CardModel { Name = "Ward Up", Cost = 1, Tags = { "skill" }, Effects = { GainWard(6) } },
+                new CardModel { Name = "Thornmail", Cost = 1, Tags = { "skill" }, Effects = { Status("standard.thorns", 3, EffectTarget.Self) } },
+                // Installs a permanent rule: whenever ANY enemy acts, that enemy takes 3.
+                new CardModel
+                {
+                    Name = "Trap", Cost = 1, Tags = { "skill" },
+                    Effects =
+                    {
+                        new EffectLineModel
+                        {
+                            Line = LineKind.InstallRule,
+                            RuleEvent = TriggerEvent.EnemyActionExecuted,
+                            RuleName = "trap",
+                            RuleLifetime = RuleLifetimeKind.Unlimited,
+                            Body = { Dmg(3, EffectTarget.Self) },
+                        },
+                    },
+                },
             },
             Enemies =
             {
@@ -827,11 +861,12 @@ else
                     {
                         new IntentModel { Label = "Smash", Kind = IntentKind.Attack, Effects = { Dmg(12) } },
                         new IntentModel { Label = "Harden", Kind = IntentKind.Defend, Effects = { Block(10) } },
+                        new IntentModel { Label = "Smash", Kind = IntentKind.Attack, Effects = { Dmg(12) } },
                     },
                 },
                 new EnemyModel
                 {
-                    Name = "Imp", Hp = 14,
+                    Name = "Imp", Hp = 16,
                     Intents =
                     {
                         new IntentModel { Label = "Hex", Kind = IntentKind.Debuff, Effects = { Status("standard.weak", 2, EffectTarget.Target) } },
@@ -840,8 +875,12 @@ else
             },
             Rounds =
             {
-                new RoundModel { HeroPlays = { Play("Rally"), Play("Venom", "Ogre"), Play("Strike", "Ogre") } },
-                new RoundModel { HeroPlays = { Play("Guard"), Play("Strike", "Ogre") } },
+                // R1: build Mana, armour up with Thorns, and arm the Trap.
+                new RoundModel { HeroPlays = { Play("Channel"), Play("Thornmail"), Play("Trap") } },
+                // R2: more Mana, raise the Ward, and Strike.
+                new RoundModel { HeroPlays = { Play("Channel"), Play("Ward Up"), Play("Strike", "Ogre") } },
+                // R3: spend Mana on the Bolt, then Strike.
+                new RoundModel { HeroPlays = { Play("Arcane Bolt", "Ogre"), Play("Strike", "Ogre") } },
             },
         };
     }

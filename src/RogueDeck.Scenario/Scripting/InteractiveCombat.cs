@@ -89,11 +89,20 @@ public sealed class InteractiveCombat
         var cardId = zones.GetCard(cardInstanceId).DefinitionId.value;
 
         var slot = new PlayCardOutcomeSlot();
-        _combat.EnqueueEffect(new PlayCardEffectRequest(_heroId, cardInstanceId, target, slot));
-        _queues.ResolvePendingQueues(_combat, _registry);
+        try
+        {
+            _combat.EnqueueEffect(new PlayCardEffectRequest(_heroId, cardInstanceId, target, slot));
+            _queues.ResolvePendingQueues(_combat, _registry);
 
-        if (slot.Value is { WasPlayed: false })
-            problems.Add($"Card '{cardId}' was not played (unaffordable or rejected by a validator).");
+            if (slot.Value is { WasPlayed: false })
+                problems.Add($"Card '{cardId}' was not played (unaffordable or rejected by a validator).");
+        }
+        catch (Exception ex)
+        {
+            // An effect threw mid-resolution (e.g. installing a temporary rule that is already installed).
+            // Surface it as a step problem rather than tearing down the interactive session.
+            problems.Add($"Step threw resolving '{cardId}': {ex.GetType().Name}: {ex.Message}");
+        }
 
         Record(new HeroPlaysCard(cardId, target?.value), round, turn, _heroId, problems, before);
     }
