@@ -1038,6 +1038,10 @@ else
                                 }
                             </select>
                         }
+                        @if (info.UsesRuleName)
+                        {
+                            <input @bind="line.RuleName" placeholder="rule name" style="width:8rem" title="which named rule to remove" />
+                        }
                         @if (line.Kind == EffectKind.DealDamage)
                         {
                             <label title="ignore block (true damage)"><input type="checkbox" @bind="line.IgnoresBlock" /> true</label>
@@ -1133,6 +1137,34 @@ else
                             <input type="number" @bind="line.ConditionRight" style="width:4rem" />
                         }
                     }
+                    else if (line.Line == LineKind.InstallRule)
+                    {
+                        <span>install rule on</span>
+                        <select @bind="line.RuleEvent">
+                            @foreach (var ev in TempRuleEvents)
+                            {
+                                <option value="@ev">@TriggerEventLabel(ev)</option>
+                            }
+                        </select>
+                        <span class="amount-label">named</span>
+                        <input @bind="line.RuleName" placeholder="(optional)" style="width:7rem" title="name so a Remove rule can target it" />
+                        <select @bind="line.RuleLifetime" title="lifetime">
+                            @foreach (var lk in Enum.GetValues<RuleLifetimeKind>())
+                            {
+                                <option value="@lk">@RuleLifetimeLabel(lk)</option>
+                            }
+                        </select>
+                        @if (line.RuleLifetime == RuleLifetimeKind.Activations)
+                        {
+                            <input type="number" @bind="line.RuleActivations" style="width:4rem" />
+                            <span class="amount-label">times</span>
+                        }
+                        else if (line.RuleLifetime == RuleLifetimeKind.UntilRound)
+                        {
+                            <span class="amount-label">until round</span>
+                            <input type="number" @bind="line.RuleExpiryRound" style="width:4rem" />
+                        }
+                    }
 
                     <button class="del" @onclick="() => effects.Remove(line)">✕</button>
                 </div>
@@ -1191,6 +1223,23 @@ else
         LineKind.Causal => "in order…",
         LineKind.RandomTargets => "random…",
         LineKind.RepeatUntil => "until…",
+        LineKind.InstallRule => "install rule…",
+        _ => k.ToString(),
+    };
+
+    // Events an unbound temporary rule can listen for (the cleanly-unbindable subset of TriggerEvent).
+    private static readonly TriggerEvent[] TempRuleEvents =
+    {
+        TriggerEvent.TurnStarted, TriggerEvent.TurnEnded, TriggerEvent.DamageTaken, TriggerEvent.DamageDealt,
+        TriggerEvent.Healed, TriggerEvent.CardPlayed, TriggerEvent.ResourceGained, TriggerEvent.CardCostPaid,
+    };
+
+    private static string RuleLifetimeLabel(RuleLifetimeKind k) => k switch
+    {
+        RuleLifetimeKind.Unlimited => "forever",
+        RuleLifetimeKind.OneShot => "once",
+        RuleLifetimeKind.Activations => "N times",
+        RuleLifetimeKind.UntilRound => "until round",
         _ => k.ToString(),
     };
 

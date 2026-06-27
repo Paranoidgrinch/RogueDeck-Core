@@ -21,7 +21,8 @@ public sealed record EffectKindInfo(
     bool UsesCardInstanceRef = false,
     bool UsesZone = false,
     bool UsesResource = false,
-    bool UsesDefensivePool = false);
+    bool UsesDefensivePool = false,
+    bool UsesRuleName = false);
 
 public sealed record TargetInfo(EffectTarget Target, string Label, string Description);
 
@@ -81,6 +82,8 @@ public static class EffectCatalog
             "Move a referenced card to a pile (e.g. exhaust the played card).", "", false, false, false, UsesCardInstanceRef: true, UsesZone: true),
         new EffectKindInfo(EffectKind.ReplayCard, "Replay a card",
             "Re-run a referenced card's on-play effects at a target (no cost, no zone move).", "", false, true, false, UsesCardInstanceRef: true),
+        new EffectKindInfo(EffectKind.RemoveRule, "Remove rule",
+            "Remove a previously-installed named temporary rule.", "", false, false, false, UsesRuleName: true),
     };
 
     public static IReadOnlyList<TargetInfo> Targets { get; } = new[]

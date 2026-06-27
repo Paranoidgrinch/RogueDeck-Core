@@ -9,6 +9,11 @@ namespace RogueDeck.Sandbox.Composition;
 // introduce combat semantics the engine doesn't already own.
 public sealed class ScenarioComposer
 {
+    // Per-composition counter for auto-naming unnamed temporary rules. ThreadStatic + reset-at-blueprint
+    // keeps the generated ids stable for a given model (composition is synchronous on one thread), so the
+    // engine stays deterministic.
+    [ThreadStatic] private static int _ruleCounter;
+
     // Scripted (one-shot) mode: build the blueprint AND the per-round hero/enemy step script.
     public Playthrough Compose(SandboxModel model)
     {
@@ -48,6 +53,8 @@ public sealed class ScenarioComposer
             throw new InvalidOperationException("The sandbox needs a hero.");
         if (model.Enemies.Count == 0)
             throw new InvalidOperationException("The sandbox needs at least one enemy.");
+
+        _ruleCounter = 0;
 
         var blueprint = new ScenarioBlueprint
         {
@@ -411,8 +418,61 @@ public sealed class ScenarioComposer
                         ? new ConstantExpression<TContext>(line.ConditionRight)
                         : BuildReadBase<TContext>(line.ConditionRightSource, line.ConditionRight, line.AmountStatusId, line.AmountResourceId, line.DefensivePoolName, selector)),
                 BuildRoot<TContext>(line.Body, selector)),
+            LineKind.InstallRule => new InstallTemporaryRuleNode<TContext>(
+                BuildUnboundTrigger(RuleIdFor(line.RuleName), line.RuleEvent, line.Body),
+                LifetimeFor(line)),
             _ => BuildLeaf<TContext>(line, selector),
         };
+
+    // A temporary-rule id: the slug of the authored name, or an auto-generated unique id when unnamed.
+    private static TriggeredEffectDefinitionId RuleIdFor(string? name) =>
+        new(string.IsNullOrWhiteSpace(name) ? $"temprule_{_ruleCounter++}" : $"temprule_{Slug(name)}");
+
+    private static TemporaryRuleLifetime LifetimeFor(EffectLineModel line) => line.RuleLifetime switch
+    {
+        RuleLifetimeKind.OneShot => TemporaryRuleLifetime.OneShot,
+        RuleLifetimeKind.Activations => TemporaryRuleLifetime.Activations(Math.Max(1, line.RuleActivations)),
+        RuleLifetimeKind.UntilRound => TemporaryRuleLifetime.UntilEndOfRound(Math.Max(1, line.RuleExpiryRound)),
+        _ => TemporaryRuleLifetime.Unlimited,
+    };
+
+    // Builds an unbound temporary-rule definition: fires for every combatant on the chosen event (no status
+    // filter), with the rule's effects targeting relative to the event source — same Self/Target sense as a
+    // status trigger. Only the cleanly-unbindable events are supported.
+    private static ITriggeredEffectDefinition BuildUnboundTrigger(
+        TriggeredEffectDefinitionId id, TriggerEvent ev, IReadOnlyList<EffectLineModel> effects)
+    {
+        var selector = TriggerSelector(ev);
+        return ev switch
+        {
+            TriggerEvent.TurnStarted => TriggeredProgramContextAdapters.TurnStarted.Define(
+                id, RuleProgram<TurnStartedTriggeredEffectContext>(effects, selector)),
+            TriggerEvent.TurnEnded => TriggeredProgramContextAdapters.TurnEnded.Define(
+                id, RuleProgram<TurnEndedTriggeredEffectContext>(effects, selector)),
+            TriggerEvent.DamageTaken => TriggeredProgramContextAdapters.DamageReceived.Define(
+                id, RuleProgram<DamageReceivedTriggeredEffectContext>(effects, selector)),
+            TriggerEvent.DamageDealt => TriggeredProgramContextAdapters.DamageDealt.Define(
+                id, RuleProgram<DamageDealtTriggeredEffectContext>(effects, selector)),
+            TriggerEvent.Healed => TriggeredProgramContextAdapters.Healed.Define(
+                id, RuleProgram<HealedTriggeredEffectContext>(effects, selector)),
+            TriggerEvent.CardPlayed => TriggeredProgramContextAdapters.CardPlayed.Define(
+                id, RuleProgram<CardPlayedTriggeredEffectContext>(effects, selector)),
+            TriggerEvent.ResourceGained => TriggeredProgramContextAdapters.ResourceGained.Define(
+                id, RuleProgram<ResourceGainedTriggeredEffectContext>(effects, selector)),
+            TriggerEvent.CardCostPaid => TriggeredProgramContextAdapters.CardCostPaid.Define(
+                id, RuleProgram<CardCostPaidTriggeredEffectContext>(effects, selector)),
+            _ => throw new InvalidOperationException(
+                $"Trigger event '{ev}' cannot be used for an unbound temporary rule."),
+        };
+    }
+
+    // Like BuildProgram but never null — an empty body yields a no-op program (a rule may legitimately have
+    // no effects yet while being authored).
+    private static EffectProgram<TContext> RuleProgram<TContext>(
+        IReadOnlyList<EffectLineModel> effects,
+        Func<EffectTarget, ICombatantTargetSelector> selector)
+        where TContext : class =>
+        new(BuildRoot<TContext>(effects, selector));
 
     private static IEffectNode<TContext> BuildLeaf<TContext>(
         EffectLineModel line,
@@ -465,6 +525,8 @@ public sealed class ScenarioComposer
                 CombatantTargetSelectors.Source, CardInstanceExpr<TContext>(line.CardRef), line.MoveToZone),
             EffectKind.ReplayCard => new ReplayCardProgramNode<TContext>(
                 CardInstanceExpr<TContext>(line.CardRef), selector(line.Target)),
+            EffectKind.RemoveRule => new RemoveTemporaryRuleNode<TContext>(
+                new TriggeredEffectDefinitionId($"temprule_{Slug(line.RuleName)}")),
             _ => throw new InvalidOperationException($"Unknown effect kind '{line.Kind}'."),
         };
     }

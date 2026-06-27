@@ -33,6 +33,16 @@ public enum EffectKind
     CreateCard,    // add a copy of a defined card to the hand
     MoveCard,      // move a referenced card instance to a pile (exhaust / banish / discard / draw / hand)
     ReplayCard,    // re-run a referenced card's on-play effects (no cost / no zone move)
+    RemoveRule,    // remove a previously-installed named temporary rule (see LineKind.InstallRule)
+}
+
+// Lifetime of an installed temporary rule (see LineKind.InstallRule).
+public enum RuleLifetimeKind
+{
+    Unlimited,   // never expires on its own
+    OneShot,     // fires once, then gone (a delayed effect)
+    Activations, // fires at most RuleActivations times
+    UntilRound,  // removed once combat advances past round RuleExpiryRound
 }
 
 // Which card instance an op acts on. ThisCard works inside a card's own program; TriggeringCard works
@@ -125,6 +135,7 @@ public enum LineKind
     Causal,        // run Body in order, settling reactions between each step
     RandomTargets, // run Body for RepeatCount random members of ForEachOver, with "Target" = the picked one
     RepeatUntil,   // run Body repeatedly until the condition holds (post-condition loop)
+    InstallRule,   // install a temporary rule: when RuleEvent fires, run Body, for the chosen lifetime
 }
 
 public sealed class EffectLineModel
@@ -195,6 +206,16 @@ public sealed class EffectLineModel
     public int RepeatCount { get; set; } = 2;
     public EffectTarget ForEachOver { get; set; } = EffectTarget.AllEnemies;
     public List<EffectLineModel> Body { get; set; } = new();
+
+    // ── InstallRule (uses Body for the rule's effects) / RemoveRule ──
+    // The event the temporary rule listens for. "Self" in the rule's effects is the event source, "Target"
+    // the other party — the same sense as a status trigger.
+    public TriggerEvent RuleEvent { get; set; } = TriggerEvent.TurnStarted;
+    // Optional name → the installed rule's id (so RemoveRule can target it). Empty = an auto-generated id.
+    public string RuleName { get; set; } = "";
+    public RuleLifetimeKind RuleLifetime { get; set; } = RuleLifetimeKind.Unlimited;
+    public int RuleActivations { get; set; } = 2; // used when RuleLifetime == Activations
+    public int RuleExpiryRound { get; set; } = 1; // used when RuleLifetime == UntilRound
 }
 
 public sealed class CardModel

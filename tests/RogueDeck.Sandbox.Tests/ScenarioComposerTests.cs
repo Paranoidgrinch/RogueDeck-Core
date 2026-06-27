@@ -1452,4 +1452,88 @@ public class ScenarioComposerTests
         Assert.Equal(24, report.FinalState.GetCombatant(new CombatantId("knight")).Health.Current); // 30 − 6
         Assert.Equal(37, report.FinalState.GetCombatant(new CombatantId("ogre")).Health.Current);   // 40 − 3 thorns
     }
+
+    // ── Step 5: temporary rules (install / remove) ──────────────────────────────────
+
+    [Fact]
+    public void Compose_InstallRule_FiresOnTheEvent()
+    {
+        var model = new SandboxModel
+        {
+            Hero = new HeroModel { Name = "Mage", Hp = 30, Energy = 3 },
+            Cards =
+            {
+                new CardModel
+                {
+                    Name = "Trap", Cost = 0,
+                    Effects =
+                    {
+                        new EffectLineModel
+                        {
+                            Line = LineKind.InstallRule,
+                            RuleEvent = TriggerEvent.TurnStarted,
+                            RuleLifetime = RuleLifetimeKind.OneShot,
+                            // When a turn starts, the unit whose turn it is takes 5 (Self = the event source).
+                            Body = { new EffectLineModel { Kind = EffectKind.DealDamage, Target = EffectTarget.Self, Amount = 5 } },
+                        },
+                    },
+                },
+            },
+            Enemies = { new EnemyModel { Name = "Dummy", Hp = 40 } },
+            Rounds = { new RoundModel { HeroPlays = { new PlayModel { CardName = "Trap" } } } },
+        };
+
+        var report = new ScenarioRunner().Run(new ScenarioComposer().Compose(model));
+
+        Assert.False(report.HasProblems);
+        // The rule was installed mid-hero-turn; the next turn start (the dummy's) fires it once: 40 − 5.
+        Assert.Equal(35, report.FinalState.GetCombatant(new CombatantId("dummy")).Health.Current);
+    }
+
+    [Fact]
+    public void Compose_RemoveRule_CancelsAnInstalledRule()
+    {
+        SandboxModel Model(bool disarm)
+        {
+            var plays = new RoundModel { HeroPlays = { new PlayModel { CardName = "Trap" } } };
+            if (disarm)
+                plays.HeroPlays.Add(new PlayModel { CardName = "Disarm" });
+
+            return new SandboxModel
+            {
+                Hero = new HeroModel { Name = "Mage", Hp = 30, Energy = 3 },
+                Cards =
+                {
+                    new CardModel
+                    {
+                        Name = "Trap", Cost = 0,
+                        Effects =
+                        {
+                            new EffectLineModel
+                            {
+                                Line = LineKind.InstallRule,
+                                RuleEvent = TriggerEvent.TurnStarted,
+                                RuleName = "trap",
+                                RuleLifetime = RuleLifetimeKind.Unlimited,
+                                Body = { new EffectLineModel { Kind = EffectKind.DealDamage, Target = EffectTarget.Self, Amount = 5 } },
+                            },
+                        },
+                    },
+                    new CardModel
+                    {
+                        Name = "Disarm", Cost = 0,
+                        Effects = { new EffectLineModel { Kind = EffectKind.RemoveRule, RuleName = "trap" } },
+                    },
+                },
+                Enemies = { new EnemyModel { Name = "Dummy", Hp = 40 } },
+                Rounds = { plays },
+            };
+        }
+
+        var armed = new ScenarioRunner().Run(new ScenarioComposer().Compose(Model(disarm: false)));
+        var disarmed = new ScenarioRunner().Run(new ScenarioComposer().Compose(Model(disarm: true)));
+
+        Assert.Equal(35, armed.FinalState.GetCombatant(new CombatantId("dummy")).Health.Current);    // rule fired
+        Assert.Equal(40, disarmed.FinalState.GetCombatant(new CombatantId("dummy")).Health.Current); // removed first
+    }
 }
