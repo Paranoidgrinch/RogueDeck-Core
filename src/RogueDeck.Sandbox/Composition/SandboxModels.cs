@@ -80,6 +80,7 @@ public enum AmountSource
     TargetMissingHp,
     TargetMaxHp,
     TargetBlock,
+    TargetDefensivePool, // a named custom defensive pool (DefensivePoolName) on the target: current value
     TargetStatusStacks,
     CardsInHand,
     EventAmount, // the amount of the event that fired the trigger (HP damage taken/dealt, HP healed)
@@ -156,6 +157,10 @@ public sealed class EffectLineModel
     // which resource to act on (matches a ResourceModel.Name). Empty acts on the built-in Energy.
     public string ResourceName { get; set; } = "";
 
+    // Used by ModifyBlock and the TargetDefensivePool amount source: which defensive pool (matches a
+    // DefensivePoolModel.Name). Empty acts on the built-in Block pool.
+    public string DefensivePoolName { get; set; } = "";
+
     // Only used by Cleanse: which polarity of statuses to remove.
     public StatusPolarity Polarity { get; set; } = StatusPolarity.Debuff;
 
@@ -211,6 +216,16 @@ public sealed class ResourceCostModel
 {
     public string ResourceName { get; set; } = "";
     public int Amount { get; set; } = 1;
+}
+
+// A custom defensive pool (alongside the built-in Block) that genuinely absorbs incoming damage. Effects
+// add to it via "Modify defensive pool". AbsorbsBeforeBlock decides whether it soaks damage ahead of Block;
+// ClearsEachTurn mirrors how Block empties at turn start (leave off for a persistent ward/barrier).
+public sealed class DefensivePoolModel
+{
+    public string Name { get; set; } = "Ward";
+    public bool AbsorbsBeforeBlock { get; set; }
+    public bool ClearsEachTurn { get; set; }
 }
 
 // A custom resource the hero carries (alongside the built-in Energy) that cards can cost and effects can
@@ -352,6 +367,9 @@ public sealed class SandboxModel
     // Custom resources the hero carries beyond the built-in Energy. Cards can cost them and effects gain/spend
     // them; flag RefillEachTurn to top them up to Max at every turn start the way Energy does.
     public List<ResourceModel> Resources { get; set; } = new();
+
+    // Custom defensive pools beyond the built-in Block — they genuinely absorb damage (see DefensivePoolModel).
+    public List<DefensivePoolModel> DefensivePools { get; set; } = new();
 
     public List<CustomStatusModel> Statuses { get; set; } = new();
     public List<EnemyModel> Enemies { get; set; } = new();

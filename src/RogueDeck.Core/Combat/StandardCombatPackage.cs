@@ -48,6 +48,11 @@ public sealed class StandardCombatPackage : ICombatPackage
 
         registry.RegisterBlockAmountModifier(new DeclarativePassiveBlockModifier());
 
+        // Block: the standard defensive pool — absorbs first (priority 0) and empties at the owner's
+        // turn start (unless a retain-block status suppresses it).
+        registry.RegisterDefensivePool(new DefensivePoolDefinition(
+            StandardCombatIds.BlockDefensivePool, AbsorbPriority: 0, ClearsOnOwnerTurnStart: true));
+
         registry.RegisterCardCostModifier(new DeclarativePassiveCostModifier());
 
         registry.RegisterCardPlayValidator(new StunCardPlayValidator());

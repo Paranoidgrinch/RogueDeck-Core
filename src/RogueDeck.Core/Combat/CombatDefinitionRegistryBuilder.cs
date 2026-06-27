@@ -24,6 +24,7 @@ public sealed class CombatDefinitionRegistryBuilder
     private readonly List<IPreDownInterceptor> _preDownInterceptors = new();
     private readonly List<IDamageSplitter> _damageSplitters = new();
     private readonly List<IBlockAmountModifier> _blockAmountModifiers = new();
+    private readonly Dictionary<DefensivePoolId, DefensivePoolDefinition> _defensivePoolDefinitions = new();
     private readonly Dictionary<TriggeredEffectDefinitionId, ITriggeredEffectDefinition> _triggeredEffectDefinitions = new();
     private readonly Dictionary<EnemyActionDefinitionId, EnemyActionDefinition> _enemyActionDefinitions = new();
 
@@ -218,6 +219,22 @@ public sealed class CombatDefinitionRegistryBuilder
         SortByPriorityThenId(_blockAmountModifiers, m => m.Priority, m => m.ModifierId);
     }
 
+    public void RegisterDefensivePool(DefensivePoolDefinition definition)
+    {
+        EnsureNotBuilt();
+        ArgumentNullException.ThrowIfNull(definition);
+
+        if (string.IsNullOrWhiteSpace(definition.Id.value))
+            throw new ArgumentException(
+                "Defensive pool id cannot be empty or whitespace.", nameof(definition));
+
+        if (_defensivePoolDefinitions.ContainsKey(definition.Id))
+            throw new InvalidOperationException(
+                $"Defensive pool '{definition.Id}' is already registered.");
+
+        _defensivePoolDefinitions.Add(definition.Id, definition);
+    }
+
     public void RegisterEffectRequestHandler(IEffectRequestHandler handler)
     {
         EnsureNotBuilt();
@@ -317,6 +334,7 @@ public sealed class CombatDefinitionRegistryBuilder
             _preDownInterceptors.ToImmutableArray(),
             _damageSplitters.ToImmutableArray(),
             _blockAmountModifiers.ToImmutableArray(),
+            _defensivePoolDefinitions.ToImmutableDictionary(),
             _combatEventHandlers.ToImmutableDictionary(
                 pair => pair.Key,
                 pair => pair.Value.ToImmutableArray()),

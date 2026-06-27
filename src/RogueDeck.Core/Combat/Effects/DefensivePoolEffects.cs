@@ -278,26 +278,32 @@ public sealed class ClearBlockOnTurnStartedHandler
         if (!combat.TryGetCombatant(combatEvent.CombatantId, out var combatant))
             return;
 
-        if (!combatant!.DefensivePools.TryGetValue(StandardCombatIds.BlockDefensivePool, out var block))
-            return;
+        // Declarative override: a status bearing the retain-block tag suppresses the start-of-turn clear of
+        // every clearing pool for its wearer (e.g. Barricade keeping Block across turns). Same status-tag
+        // mechanism as retain-hand and DamageOverTime.
+        var retains = combatant!.Statuses.Any(status => status.Tags.Contains(StandardCombatIds.RetainBlockTag));
 
-        if (block.Current <= 0)
-            return;
-
-        // Declarative override: a status bearing the retain-block tag suppresses the start-of-turn block
-        // clear for its wearer (block persists across turns, e.g. Barricade). Same status-tag mechanism
-        // as retain-hand and DamageOverTime.
-        if (combatant.Statuses.Any(status => status.Tags.Contains(StandardCombatIds.RetainBlockTag)))
+        // Clear every registered defensive pool that empties at its owner's turn start (Block by default;
+        // custom pools opt in via DefensivePoolDefinition.ClearsOnOwnerTurnStart).
+        foreach (var poolDef in registry.DefensivePoolDefinitions.Values)
         {
-            combat.AddLogEntry(
-                StandardCombatLogTypes.TurnAutomationSuppressed,
-                $"Combatant '{combatEvent.CombatantId}' retained its block (start-of-turn block clear suppressed).");
-            return;
-        }
+            if (!poolDef.ClearsOnOwnerTurnStart)
+                continue;
+            if (!combatant.DefensivePools.TryGetValue(poolDef.Id, out var pool) || pool.Current <= 0)
+                continue;
 
-        combat.EnqueueEffect(
-            new ClearDefensivePoolEffectRequest(
-                TargetCombatantId: combatEvent.CombatantId,
-                PoolId: StandardCombatIds.BlockDefensivePool));
+            if (retains)
+            {
+                combat.AddLogEntry(
+                    StandardCombatLogTypes.TurnAutomationSuppressed,
+                    $"Combatant '{combatEvent.CombatantId}' retained '{poolDef.Id}' (start-of-turn clear suppressed).");
+                continue;
+            }
+
+            combat.EnqueueEffect(
+                new ClearDefensivePoolEffectRequest(
+                    TargetCombatantId: combatEvent.CombatantId,
+                    PoolId: poolDef.Id));
+        }
     }
 }

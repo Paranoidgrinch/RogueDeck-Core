@@ -1254,4 +1254,83 @@ public class ScenarioComposerTests
         Assert.False(report.HasProblems);
         Assert.Equal(36, report.FinalState.GetCombatant(new CombatantId("dummy")).Health.Current); // 40 − 4 (my Mana)
     }
+
+    // ── Step 2: generic defensive pools (beyond Block) ──────────────────────────────
+
+    private static int Pool(CombatState state, string combatant, string pool) =>
+        state.GetCombatant(new CombatantId(combatant)).DefensivePools
+            .TryGetValue(new DefensivePoolId(pool), out var p) ? p.Current : -1;
+
+    [Fact]
+    public void Compose_CustomDefensivePool_AbsorbsIncomingDamage()
+    {
+        var model = new SandboxModel
+        {
+            Hero = new HeroModel { Name = "Knight", Hp = 30, Energy = 3 },
+            DefensivePools = { new DefensivePoolModel { Name = "Ward", AbsorbsBeforeBlock = false, ClearsEachTurn = false } },
+            Cards =
+            {
+                new CardModel
+                {
+                    Name = "Ward Up", Cost = 0,
+                    Effects = { new EffectLineModel { Kind = EffectKind.ModifyBlock, Target = EffectTarget.Self, DefensivePoolName = "Ward", Amount = 5 } },
+                },
+            },
+            Enemies =
+            {
+                new EnemyModel
+                {
+                    Name = "Ogre", Hp = 40,
+                    Intents = { new IntentModel { Label = "Smash", Kind = IntentKind.Attack, Effects = { new EffectLineModel { Kind = EffectKind.DealDamage, Target = EffectTarget.Target, Amount = 8 } } } },
+                },
+            },
+            Rounds = { new RoundModel { HeroPlays = { new PlayModel { CardName = "Ward Up" } } } },
+        };
+
+        var report = new ScenarioRunner().Run(new ScenarioComposer().Compose(model));
+
+        Assert.False(report.HasProblems);
+        // Ward (5) soaks 5 of the 8 hit; the remaining 3 lands on HP (30 − 3).
+        Assert.Equal(27, report.FinalState.GetCombatant(new CombatantId("knight")).Health.Current);
+        Assert.Equal(0, Pool(report.FinalState, "knight", "ward"));
+    }
+
+    [Fact]
+    public void Compose_DefensivePoolBeforeBlock_DrainsAheadOfBlock()
+    {
+        var model = new SandboxModel
+        {
+            Hero = new HeroModel { Name = "Knight", Hp = 30, Energy = 3 },
+            DefensivePools = { new DefensivePoolModel { Name = "Ward", AbsorbsBeforeBlock = true, ClearsEachTurn = false } },
+            Cards =
+            {
+                new CardModel
+                {
+                    Name = "Brace", Cost = 0,
+                    Effects =
+                    {
+                        new EffectLineModel { Kind = EffectKind.GainBlock, Target = EffectTarget.Self, Amount = 5 },
+                        new EffectLineModel { Kind = EffectKind.ModifyBlock, Target = EffectTarget.Self, DefensivePoolName = "Ward", Amount = 3 },
+                    },
+                },
+            },
+            Enemies =
+            {
+                new EnemyModel
+                {
+                    Name = "Ogre", Hp = 40,
+                    Intents = { new IntentModel { Label = "Smash", Kind = IntentKind.Attack, Effects = { new EffectLineModel { Kind = EffectKind.DealDamage, Target = EffectTarget.Target, Amount = 6 } } } },
+                },
+            },
+            Rounds = { new RoundModel { HeroPlays = { new PlayModel { CardName = "Brace" } } } },
+        };
+
+        var report = new ScenarioRunner().Run(new ScenarioComposer().Compose(model));
+
+        Assert.False(report.HasProblems);
+        // Ward (priority before Block) soaks 3 of the 6 hit; the remaining 3 falls to Block (5 → 2). HP untouched.
+        Assert.Equal(30, report.FinalState.GetCombatant(new CombatantId("knight")).Health.Current);
+        Assert.Equal(0, Pool(report.FinalState, "knight", "ward"));
+        Assert.Equal(2, Pool(report.FinalState, "knight", "standard.block"));
+    }
 }

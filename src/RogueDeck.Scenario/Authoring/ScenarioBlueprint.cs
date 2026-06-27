@@ -25,6 +25,10 @@ public sealed class ScenarioBlueprint
     // handler is registered per entry, in addition to the standard package's Energy refill.
     public List<ResourceRefillSpec> TurnStartResourceRefills { get; } = new();
 
+    // Custom defensive pools (beyond the standard Block) that genuinely absorb damage. Registered as-is;
+    // do NOT add Block here — the standard package already registers it.
+    public List<DefensivePoolDefinition> DefensivePools { get; } = new();
+
     // How many cards the hero draws at the start of each turn. The default mirrors the standard 5-card
     // hand; an editor/sandbox can raise it (e.g. to the whole deck) so every authored card is in hand.
     public int CardsDrawnPerTurn { get; set; } = 5;
@@ -54,6 +58,9 @@ public sealed class ScenarioBlueprint
         if (TurnStartResourceRefills.Count > 0)
             builder.RegisterCombatEventHandler(
                 new TurnStartResourceRefillHandler(TurnStartResourceRefills.ToList()));
+
+        foreach (var pool in DefensivePools)
+            builder.RegisterDefensivePool(pool);
 
         foreach (var trigger in TriggeredPrograms)
             builder.RegisterTriggeredEffectDefinition(trigger);

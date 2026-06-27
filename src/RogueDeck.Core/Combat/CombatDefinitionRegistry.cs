@@ -21,6 +21,9 @@ public sealed class CombatDefinitionRegistry
     private readonly ImmutableArray<IPreDownInterceptor> _preDownInterceptors;
     private readonly ImmutableArray<IDamageSplitter> _damageSplitters;
     private readonly ImmutableArray<IBlockAmountModifier> _blockAmountModifiers;
+    private readonly ImmutableDictionary<DefensivePoolId, DefensivePoolDefinition> _defensivePoolDefinitions;
+    // Precomputed absorb order (lowest AbsorbPriority first, id as a deterministic tie-break).
+    private readonly ImmutableArray<DefensivePoolDefinition> _defensivePoolsInAbsorbOrder;
     private readonly ImmutableDictionary<Type, ImmutableArray<ICombatEventHandler>> _combatEventHandlers;
     private readonly EffectNodeExecutorRegistry _nodeExecutorRegistry;
 
@@ -37,6 +40,7 @@ public sealed class CombatDefinitionRegistry
         ImmutableArray<IPreDownInterceptor> preDownInterceptors,
         ImmutableArray<IDamageSplitter> damageSplitters,
         ImmutableArray<IBlockAmountModifier> blockAmountModifiers,
+        ImmutableDictionary<DefensivePoolId, DefensivePoolDefinition> defensivePoolDefinitions,
         ImmutableDictionary<Type, ImmutableArray<ICombatEventHandler>> combatEventHandlers,
         EffectNodeExecutorRegistry nodeExecutorRegistry,
         bool allowsUnsafeSideEffects)
@@ -54,6 +58,11 @@ public sealed class CombatDefinitionRegistry
         _preDownInterceptors = preDownInterceptors;
         _damageSplitters = damageSplitters;
         _blockAmountModifiers = blockAmountModifiers;
+        _defensivePoolDefinitions = defensivePoolDefinitions;
+        _defensivePoolsInAbsorbOrder = defensivePoolDefinitions.Values
+            .OrderBy(d => d.AbsorbPriority)
+            .ThenBy(d => d.Id.value, StringComparer.Ordinal)
+            .ToImmutableArray();
         _combatEventHandlers = combatEventHandlers;
         _nodeExecutorRegistry = nodeExecutorRegistry;
     }
@@ -122,6 +131,18 @@ public sealed class CombatDefinitionRegistry
     public IReadOnlyList<IDamageSplitter> GetDamageSplitters() => _damageSplitters;
 
     public IReadOnlyList<IBlockAmountModifier> GetBlockAmountModifiers() => _blockAmountModifiers;
+
+    public IReadOnlyDictionary<DefensivePoolId, DefensivePoolDefinition> DefensivePoolDefinitions => _defensivePoolDefinitions;
+
+    public bool TryGetDefensivePool(DefensivePoolId id, out DefensivePoolDefinition? definition)
+    {
+        var found = _defensivePoolDefinitions.TryGetValue(id, out var value);
+        definition = value;
+        return found;
+    }
+
+    // Registered defensive pools in the order incoming damage drains them (lowest AbsorbPriority first).
+    public IReadOnlyList<DefensivePoolDefinition> GetDefensivePoolsInAbsorbOrder() => _defensivePoolsInAbsorbOrder;
 
     public IEffectRequestHandler GetEffectRequestHandler(Type requestType)
     {

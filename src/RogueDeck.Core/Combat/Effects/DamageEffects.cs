@@ -61,20 +61,35 @@ public sealed class DealDamageEffectHandler : EffectRequestHandler<DealDamageEff
 
         var remainingDamage = modifiedAmount;
         var blockedDamage = 0;
+        // Trace reports the first (highest-priority) pool that absorbs; BlockedAmount is the total across
+        // every pool. For the common single-Block case these coincide, so the trace is unchanged.
         DefensivePoolId? blockPoolId = null;
         var blockBefore = 0;
         var blockAfter = 0;
 
-        if (!dealDamage.IgnoresBlock &&
-            target.DefensivePools.TryGetValue(StandardCombatIds.BlockDefensivePool, out var block) &&
-            block.Current > 0)
+        // Drain the target's registered defensive pools in absorb order (Block first by default) until the
+        // hit is spent. "True" damage (IgnoresBlock) bypasses every pool.
+        if (!dealDamage.IgnoresBlock)
         {
-            blockPoolId = StandardCombatIds.BlockDefensivePool;
-            blockBefore = block.Current;
-            blockedDamage = Math.Min(block.Current, remainingDamage);
-            block.SetCurrent(block.Current - blockedDamage);
-            blockAfter = block.Current;
-            remainingDamage -= blockedDamage;
+            foreach (var poolDef in registry.GetDefensivePoolsInAbsorbOrder())
+            {
+                if (remainingDamage <= 0)
+                    break;
+                if (!target.DefensivePools.TryGetValue(poolDef.Id, out var pool) || pool.Current <= 0)
+                    continue;
+
+                var absorbed = Math.Min(pool.Current, remainingDamage);
+                if (blockPoolId is null)
+                {
+                    blockPoolId = poolDef.Id;
+                    blockBefore = pool.Current;
+                }
+                pool.SetCurrent(pool.Current - absorbed);
+                if (poolDef.Id == blockPoolId)
+                    blockAfter = pool.Current;
+                blockedDamage += absorbed;
+                remainingDamage -= absorbed;
+            }
         }
 
         var healthBeforeDamage = target.Health.Current;

@@ -36,6 +36,19 @@
                 <button class="del" @onclick="() => _model.Resources.Remove(res)">✕</button>
             </div>
         }
+        <div class="sub-head">
+            <span>Defensive pools (besides Block)</span>
+            <button @onclick="() => _model.DefensivePools.Add(new DefensivePoolModel())">+ pool</button>
+        </div>
+        @foreach (var pool in _model.DefensivePools)
+        {
+            <div class="effect-line">
+                <input @bind="pool.Name" placeholder="name" style="width:7rem" title="defensive pool name" />
+                <label title="soak damage before Block (otherwise after)"><input type="checkbox" @bind="pool.AbsorbsBeforeBlock" /> before block</label>
+                <label title="empty at the start of every turn (like Block); off = persistent ward"><input type="checkbox" @bind="pool.ClearsEachTurn" /> clears/turn</label>
+                <button class="del" @onclick="() => _model.DefensivePools.Remove(pool)">✕</button>
+            </div>
+        }
         @StatusListEditor(_model.Hero.StartingStatuses)
         <div class="row">
             <label><input type="checkbox" @bind="_model.Hero.UseRealDeck" /> use a real deck (draw / discard / reshuffle)</label>
@@ -351,7 +364,7 @@ else
                 <div class="unit @(c.Id == _combat.HeroId ? "hero" : "enemy") @(c.IsAlive ? "" : "downed")">
                     <div class="unit-head">
                         <strong>@DisplayName(c.Id)</strong>
-                        <span>@c.Health.Current/@c.Health.Max HP@(Block(c) > 0 ? $" · 🛡{Block(c)}" : "") @(c.IsAlive ? "" : "💀")</span>
+                        <span>@c.Health.Current/@c.Health.Max HP@(Block(c) > 0 ? $" · 🛡{Block(c)}" : "")@DefensivePoolsLine(c) @(c.IsAlive ? "" : "💀")</span>
                     </div>
                     <div class="hpbar"><div class="hpfill" style="width:@HpPercent(c)%"></div></div>
                     @if (c.Statuses.Count > 0)
@@ -544,6 +557,22 @@ else
     private static int Block(CombatantState c) =>
         c.DefensivePools.TryGetValue(StandardCombatIds.BlockDefensivePool, out var pool) ? pool.Current : 0;
 
+    // " · 🛡Ward 4" for each custom defensive pool the combatant currently holds, shown beside its HP/Block.
+    private string DefensivePoolsLine(CombatantState c)
+    {
+        if (_model.DefensivePools.Count == 0)
+            return "";
+        var parts = new List<string>();
+        foreach (var pool in _model.DefensivePools)
+        {
+            if (string.IsNullOrWhiteSpace(pool.Name))
+                continue;
+            if (c.DefensivePools.TryGetValue(new DefensivePoolId(ScenarioComposer.Slug(pool.Name)), out var p) && p.Current > 0)
+                parts.Add($"🛡{pool.Name} {p.Current}");
+        }
+        return parts.Count == 0 ? "" : " · " + string.Join(" · ", parts);
+    }
+
     private static int HpPercent(CombatantState c) =>
         c.Health.Max <= 0 ? 0 : (int)(100.0 * c.Health.Current / c.Health.Max);
 
@@ -671,6 +700,7 @@ else
         AmountSource.TargetMissingHp => "= target missing HP",
         AmountSource.TargetMaxHp => "= target max HP",
         AmountSource.TargetBlock => "= target block",
+        AmountSource.TargetDefensivePool => "= target pool",
         AmountSource.TargetStatusStacks => "= target status stacks",
         AmountSource.CardsInHand => "= cards in hand",
         AmountSource.EventAmount => "= event amount",
@@ -858,6 +888,16 @@ else
                                     }
                                 </select>
                             }
+                            else if (line.AmountSource == AmountSource.TargetDefensivePool)
+                            {
+                                <select @bind="line.DefensivePoolName">
+                                    <option value="">🛡 block</option>
+                                    @foreach (var pool in _model.DefensivePools)
+                                    {
+                                        <option value="@pool.Name">@pool.Name</option>
+                                    }
+                                </select>
+                            }
                             <select @bind="line.ArithmeticOp" title="arithmetic">
                                 @foreach (var op in Enum.GetValues<ArithmeticOp>())
                                 {
@@ -894,6 +934,16 @@ else
                                 @foreach (var res in _model.Resources)
                                 {
                                     <option value="@res.Name">@res.Name</option>
+                                }
+                            </select>
+                        }
+                        @if (info.UsesDefensivePool)
+                        {
+                            <select @bind="line.DefensivePoolName" title="which defensive pool">
+                                <option value="">🛡 block</option>
+                                @foreach (var pool in _model.DefensivePools)
+                                {
+                                    <option value="@pool.Name">@pool.Name</option>
                                 }
                             </select>
                         }
@@ -1070,7 +1120,7 @@ else
     {
         AmountSource.SelfCurrentHp, AmountSource.SelfMissingHp, AmountSource.SelfMaxHp, AmountSource.SelfStatusStacks,
         AmountSource.TargetCurrentHp, AmountSource.TargetMissingHp, AmountSource.TargetMaxHp,
-        AmountSource.TargetBlock, AmountSource.TargetStatusStacks, AmountSource.CardsInHand,
+        AmountSource.TargetBlock, AmountSource.TargetDefensivePool, AmountSource.TargetStatusStacks, AmountSource.CardsInHand,
         AmountSource.EventAmount,
         AmountSource.SelfHealthPercent, AmountSource.TargetHealthPercent,
         AmountSource.SelfEnergy, AmountSource.SelfMaxEnergy, AmountSource.SelfMissingEnergy,

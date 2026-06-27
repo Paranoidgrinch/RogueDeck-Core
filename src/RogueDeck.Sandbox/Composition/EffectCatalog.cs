@@ -20,7 +20,8 @@ public sealed record EffectKindInfo(
     bool UsesCardRef = false,
     bool UsesCardInstanceRef = false,
     bool UsesZone = false,
-    bool UsesResource = false);
+    bool UsesResource = false,
+    bool UsesDefensivePool = false);
 
 public sealed record TargetInfo(EffectTarget Target, string Label, string Description);
 
@@ -62,8 +63,8 @@ public static class EffectCatalog
             "Add or remove charges of a status on the target (negative removes).", "charges", true, true, true),
         new EffectKindInfo(EffectKind.ModifyStatusDuration, "Change status duration",
             "Add or remove turns of duration of a status on the target.", "turns", true, true, true),
-        new EffectKindInfo(EffectKind.ModifyBlock, "Modify block",
-            "Add or remove Block on the target (a large negative clears it).", "block", true, true, false),
+        new EffectKindInfo(EffectKind.ModifyBlock, "Modify defensive pool",
+            "Add or remove a defensive pool on the target (Block by default, or a custom pool; a large negative clears it).", "amount", true, true, false, UsesDefensivePool: true),
         new EffectKindInfo(EffectKind.ModifyEnergy, "Change resource",
             "Add or remove a resource on the target (signed; Energy by default, or a custom resource).", "amount", true, true, false, UsesResource: true),
         new EffectKindInfo(EffectKind.RefillEnergy, "Refill resource",

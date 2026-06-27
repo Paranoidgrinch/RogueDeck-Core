@@ -138,6 +138,10 @@ public class CombatTurnProcessorTests
         var builder = CreateEmptyBuilder();
         builder.RegisterEffectRequestHandler(new GainBlockEffectHandler());
         builder.RegisterEffectRequestHandler(new DealDamageEffectHandler());
+        // A defensive pool absorbs damage only when its definition is registered (the standard package
+        // registers Block; this bare builder registers it explicitly).
+        builder.RegisterDefensivePool(new DefensivePoolDefinition(
+            StandardCombatIds.BlockDefensivePool, AbsorbPriority: 0, ClearsOnOwnerTurnStart: true));
 
         var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
         var processor = new CombatTurnProcessor();

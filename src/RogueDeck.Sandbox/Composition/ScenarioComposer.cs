@@ -59,6 +59,7 @@ public sealed class ScenarioComposer
         };
 
         AddCustomStatuses(model, blueprint);
+        AddDefensivePools(model, blueprint);
         AddCards(model, blueprint);
         AddHero(model, blueprint);
         AddEnemies(model, blueprint);
@@ -212,6 +213,21 @@ public sealed class ScenarioComposer
         };
     }
 
+    // Custom defensive pools that genuinely absorb damage. AbsorbsBeforeBlock maps to a negative priority so
+    // it drains ahead of Block (priority 0); otherwise a positive priority drains after it.
+    private static void AddDefensivePools(SandboxModel model, ScenarioBlueprint blueprint)
+    {
+        foreach (var pool in model.DefensivePools)
+        {
+            if (string.IsNullOrWhiteSpace(pool.Name))
+                continue;
+            blueprint.DefensivePools.Add(new DefensivePoolDefinition(
+                new DefensivePoolId(Slug(pool.Name)),
+                AbsorbPriority: pool.AbsorbsBeforeBlock ? -10 : 10,
+                ClearsOnOwnerTurnStart: pool.ClearsEachTurn));
+        }
+    }
+
     private static void AddCards(SandboxModel model, ScenarioBlueprint blueprint)
     {
         foreach (var card in model.Cards)
@@ -361,11 +377,11 @@ public sealed class ScenarioComposer
         {
             LineKind.If => new ConditionalEffectNode<TContext>(
                 new ComparisonExpression<TContext>(
-                    BuildReadBase<TContext>(line.ConditionLeft, line.Amount, line.AmountStatusId, line.AmountResourceId, selector),
+                    BuildReadBase<TContext>(line.ConditionLeft, line.Amount, line.AmountStatusId, line.AmountResourceId, line.DefensivePoolName, selector),
                     line.ConditionOp,
                     line.ConditionRightSource == AmountSource.Constant
                         ? new ConstantExpression<TContext>(line.ConditionRight)
-                        : BuildReadBase<TContext>(line.ConditionRightSource, line.ConditionRight, line.AmountStatusId, line.AmountResourceId, selector)),
+                        : BuildReadBase<TContext>(line.ConditionRightSource, line.ConditionRight, line.AmountStatusId, line.AmountResourceId, line.DefensivePoolName, selector)),
                 BuildRoot<TContext>(line.Then, selector),
                 line.Else.Count > 0 ? BuildRoot<TContext>(line.Else, selector) : null),
             LineKind.Repeat => new RepeatEffectNode<TContext>(
@@ -383,11 +399,11 @@ public sealed class ScenarioComposer
                 BuildRoot<TContext>(line.Body, ForEachSelector(selector))),
             LineKind.RepeatUntil => new RepeatUntilEffectNode<TContext>(
                 new ComparisonExpression<TContext>(
-                    BuildReadBase<TContext>(line.ConditionLeft, line.Amount, line.AmountStatusId, line.AmountResourceId, selector),
+                    BuildReadBase<TContext>(line.ConditionLeft, line.Amount, line.AmountStatusId, line.AmountResourceId, line.DefensivePoolName, selector),
                     line.ConditionOp,
                     line.ConditionRightSource == AmountSource.Constant
                         ? new ConstantExpression<TContext>(line.ConditionRight)
-                        : BuildReadBase<TContext>(line.ConditionRightSource, line.ConditionRight, line.AmountStatusId, line.AmountResourceId, selector)),
+                        : BuildReadBase<TContext>(line.ConditionRightSource, line.ConditionRight, line.AmountStatusId, line.AmountResourceId, line.DefensivePoolName, selector)),
                 BuildRoot<TContext>(line.Body, selector)),
             _ => BuildLeaf<TContext>(line, selector),
         };
@@ -428,7 +444,7 @@ public sealed class ScenarioComposer
             EffectKind.ModifyStatusDuration => new ModifyStatusDurationNode<TContext>(
                 target, new StatusDefinitionId(line.StatusId), amount),
             EffectKind.ModifyBlock => new ModifyDefensivePoolNode<TContext>(
-                target, StandardCombatIds.BlockDefensivePool, amount),
+                target, DefensivePoolIdFor(line.DefensivePoolName), amount),
             EffectKind.ModifyEnergy => new ModifyResourceNode<TContext>(target, ResourceIdFor(line.ResourceName), amount),
             EffectKind.RefillEnergy => new RefillResourceNode<TContext>(
                 target, ResourceIdFor(line.ResourceName), Math.Max(0, line.Amount)),
@@ -455,6 +471,11 @@ public sealed class ScenarioComposer
     private static ResourceId ResourceIdFor(string? name) =>
         string.IsNullOrWhiteSpace(name) ? StandardCombatIds.EnergyResource : new ResourceId(Slug(name));
 
+    // Resolves an authored defensive-pool name to its id; an empty name means the built-in Block pool, so
+    // existing "block" effects keep working unchanged.
+    private static DefensivePoolId DefensivePoolIdFor(string? name) =>
+        string.IsNullOrWhiteSpace(name) ? StandardCombatIds.BlockDefensivePool : new DefensivePoolId(Slug(name));
+
     // The authorable card-instance references: the card being played, or the card that fired a CardPlayed
     // trigger. Each resolves to nothing (op no-ops) outside its valid context.
     private static ICardInstanceExpression<TContext> CardInstanceExpr<TContext>(CardRef cardRef)
@@ -469,7 +490,7 @@ public sealed class ScenarioComposer
         Func<EffectTarget, ICombatantTargetSelector> selector)
         where TContext : class
     {
-        var read = BuildReadBase<TContext>(line.AmountSource, line.Amount, line.AmountStatusId, line.AmountResourceId, selector);
+        var read = BuildReadBase<TContext>(line.AmountSource, line.Amount, line.AmountStatusId, line.AmountResourceId, line.DefensivePoolName, selector);
         if (line.ArithmeticOp == ArithmeticOp.None)
             return read;
 
@@ -494,6 +515,7 @@ public sealed class ScenarioComposer
         int constant,
         string statusId,
         string resourceId,
+        string defensivePoolId,
         Func<EffectTarget, ICombatantTargetSelector> selector)
         where TContext : class
     {
@@ -511,6 +533,7 @@ public sealed class ScenarioComposer
             AmountSource.TargetMissingHp => new CombatantMissingHealthExpression<TContext>(other),
             AmountSource.TargetMaxHp => new CombatantMaxHealthExpression<TContext>(other),
             AmountSource.TargetBlock => new CombatantDefensivePoolExpression<TContext>(other, StandardCombatIds.BlockDefensivePool),
+            AmountSource.TargetDefensivePool => new CombatantDefensivePoolExpression<TContext>(other, DefensivePoolIdFor(defensivePoolId)),
             AmountSource.TargetStatusStacks => new CombatantStatusStacksExpression<TContext>(other, new StatusDefinitionId(statusId)),
             AmountSource.CardsInHand => new CombatantZoneCardCountExpression<TContext>(self, CardZone.Hand),
             AmountSource.EventAmount => EventAmountExpression<TContext>(),
