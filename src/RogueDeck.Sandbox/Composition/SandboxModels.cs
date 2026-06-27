@@ -208,6 +208,20 @@ public sealed class CardModel
     // a ResourceModel.Name; the engine requires the hero to hold enough of every listed resource to play.
     public List<ResourceCostModel> ExtraCosts { get; set; } = new();
 
+    // Card-type tags (e.g. "attack", "skill", "combo") the engine keys on — Attack gates the
+    // one-attack-per-turn / first-attack-free rules, Skill enables skill cost reduction, etc.
+    public List<string> Tags { get; set; } = new();
+
+    // Keep this card in hand at the end of the turn instead of discarding it (the Retain keyword).
+    public bool RetainInHand { get; set; }
+
+    // Where a non-retained copy of this card goes from hand at turn end (default discard; e.g. Exhaust for
+    // an "ethereal" card). Only meaningful in real-deck mode.
+    public CardZone TurnEndZone { get; set; } = CardZone.DiscardPile;
+
+    // Where this card goes once it has been played (default discard; e.g. Exhaust = exhaust-on-play).
+    public CardZone PlayedZone { get; set; } = CardZone.DiscardPile;
+
     public List<EffectLineModel> Effects { get; set; } = new();
 }
 

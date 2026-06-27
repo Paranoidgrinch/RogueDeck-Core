@@ -238,6 +238,12 @@ public sealed class ScenarioComposer
             foreach (var extra in card.ExtraCosts)
                 if (!string.IsNullOrWhiteSpace(extra.ResourceName) && extra.Amount > 0)
                     bp.Cost(new ResourceId(Slug(extra.ResourceName)), extra.Amount);
+            foreach (var tag in card.Tags)
+                if (!string.IsNullOrWhiteSpace(tag))
+                    bp.Tags.Add(new TagId(tag));
+            bp.RetainInHandOnTurnEnd = card.RetainInHand;
+            bp.TurnEndHandDestinationZone = card.TurnEndZone;
+            bp.PlayedCardDestinationZone = card.PlayedZone;
             bp.Program = BuildProgram<CardPlayContext>(card.Effects, ToSelector);
             blueprint.Cards.Add(bp);
         }

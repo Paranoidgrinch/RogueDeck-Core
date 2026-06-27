@@ -118,6 +118,31 @@
                         <button @onclick="() => card.ExtraCosts.Add(new ResourceCostModel { ResourceName = _model.Resources[0].Name })">+ cost</button>
                     </div>
                 }
+                <div class="effect-line">
+                    <span class="amount-label">tags</span>
+                    @foreach (var tag in EffectCatalog.CardTags)
+                    {
+                        <label title="@tag.Description"><input type="checkbox" checked="@card.Tags.Contains(tag.Id)"
+                            @onchange="e => ToggleCardTag(card, tag.Id, (bool)e.Value!)" /> @tag.Label</label>
+                    }
+                    <label title="keep this card in hand at turn end (Retain)"><input type="checkbox" @bind="card.RetainInHand" /> retain</label>
+                </div>
+                <div class="effect-line">
+                    <span class="amount-label" title="where the card goes once played">on play →</span>
+                    <select @bind="card.PlayedZone">
+                        @foreach (var z in Enum.GetValues<CardZone>())
+                        {
+                            <option value="@z">@z</option>
+                        }
+                    </select>
+                    <span class="amount-label" title="where a non-retained card in hand goes at turn end">at turn end →</span>
+                    <select @bind="card.TurnEndZone">
+                        @foreach (var z in Enum.GetValues<CardZone>())
+                        {
+                            <option value="@z">@z</option>
+                        }
+                    </select>
+                </div>
                 @EffectEditor(card.Effects)
             </div>
         }
@@ -623,6 +648,19 @@ else
         catch (Exception ex)
         {
             _error = $"Could not run the fight:\n{ex.Message}";
+        }
+    }
+
+    private static void ToggleCardTag(CardModel card, string tag, bool on)
+    {
+        if (on)
+        {
+            if (!card.Tags.Contains(tag))
+                card.Tags.Add(tag);
+        }
+        else
+        {
+            card.Tags.Remove(tag);
         }
     }
 

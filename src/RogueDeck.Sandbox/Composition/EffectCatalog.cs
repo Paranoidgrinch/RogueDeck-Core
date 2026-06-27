@@ -117,6 +117,15 @@ public static class EffectCatalog
             "Negates the next debuff applied to the bearer (uses one charge)."),
     };
 
+    // Card-type tags the engine reacts to. Attack gates the one-attack-per-turn / first-attack-free rules;
+    // Skill enables skill cost reduction; Combo marks combo cards. (Stored as the raw tag value.)
+    public static IReadOnlyList<StatusInfo> CardTags { get; } = new[]
+    {
+        new StatusInfo(StandardCombatIds.AttackCardTag.value, "Attack", "Counts as an attack card."),
+        new StatusInfo(StandardCombatIds.SkillCardTag.value, "Skill", "Counts as a skill card."),
+        new StatusInfo(StandardCombatIds.ComboTag.value, "Combo", "Counts as a combo card."),
+    };
+
     public static EffectKindInfo For(EffectKind kind) => Kinds.First(k => k.Kind == kind);
 
     public static TargetInfo For(EffectTarget target) => Targets.First(t => t.Target == target);

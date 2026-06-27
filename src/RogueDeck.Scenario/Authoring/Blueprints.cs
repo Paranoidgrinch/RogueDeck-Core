@@ -51,6 +51,11 @@ public sealed class CardBlueprint
     public List<TagId> Tags { get; } = new();
     public EffectProgram<CardPlayContext>? Program { get; set; }
 
+    // Card-lifecycle flags (default to the standard discard-on-everything behaviour).
+    public bool RetainInHandOnTurnEnd { get; set; }
+    public CardZone TurnEndHandDestinationZone { get; set; } = CardZone.DiscardPile;
+    public CardZone PlayedCardDestinationZone { get; set; } = CardZone.DiscardPile;
+
     public CardBlueprint(string id)
     {
         if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("Card id cannot be empty.", nameof(id));
@@ -73,6 +78,9 @@ public sealed class CardBlueprint
         var builder = new CardDefinitionBuilder(DefinitionId, new PackageId(PackageId), NameKey, DescriptionKey)
         {
             Program = Program,
+            RetainInHandOnTurnEnd = RetainInHandOnTurnEnd,
+            TurnEndHandDestinationZone = TurnEndHandDestinationZone,
+            PlayedCardDestinationZone = PlayedCardDestinationZone,
         };
         builder.Costs.AddRange(Costs);
         builder.Tags.AddRange(Tags);

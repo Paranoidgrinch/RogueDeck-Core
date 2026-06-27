@@ -1333,4 +1333,92 @@ public class ScenarioComposerTests
         Assert.Equal(0, Pool(report.FinalState, "knight", "ward"));
         Assert.Equal(2, Pool(report.FinalState, "knight", "standard.block"));
     }
+
+    // ── Step 3: card mechanics (tags, retain, zones) ────────────────────────────────
+
+    [Fact]
+    public void Compose_SkillTag_EnablesSkillCostReduction()
+    {
+        SandboxModel Model(bool skill) => new()
+        {
+            Hero = new HeroModel
+            {
+                Name = "Rogue", Hp = 30, Energy = 1,
+                StartingStatuses = { new StartingStatusModel { StatusId = "standard.skill_cost_reduction", Amount = 1 } },
+            },
+            Cards =
+            {
+                new CardModel
+                {
+                    Name = "Trick", Cost = 2,
+                    Tags = skill ? new List<string> { "skill" } : new List<string>(),
+                    Effects = { new EffectLineModel { Kind = EffectKind.DealDamage, Target = EffectTarget.Target, Amount = 5 } },
+                },
+            },
+            Enemies = { new EnemyModel { Name = "Dummy", Hp = 40 } },
+            Rounds = { new RoundModel { HeroPlays = { new PlayModel { CardName = "Trick", TargetEnemy = "Dummy" } } } },
+        };
+
+        var withTag = new ScenarioRunner().Run(new ScenarioComposer().Compose(Model(skill: true)));
+        var without = new ScenarioRunner().Run(new ScenarioComposer().Compose(Model(skill: false)));
+
+        // Skill-tagged: cost 2 − 1 = 1 ≤ 1 energy → played, deals 5. Untagged: cost stays 2 > 1 → not played.
+        Assert.Equal(35, withTag.FinalState.GetCombatant(new CombatantId("dummy")).Health.Current);
+        Assert.Equal(40, without.FinalState.GetCombatant(new CombatantId("dummy")).Health.Current);
+    }
+
+    [Fact]
+    public void Compose_PlayedCardDestinationZone_ExhaustsOnPlay()
+    {
+        var model = new SandboxModel
+        {
+            Hero = new HeroModel
+            {
+                Name = "Knight", Hp = 30, Energy = 3,
+                UseRealDeck = true, DrawPerTurn = 1,
+                Deck = { new DeckCardModel { CardName = "Strike", Copies = 1 } },
+            },
+            Cards =
+            {
+                new CardModel
+                {
+                    Name = "Strike", Cost = 0, PlayedZone = CardZone.ExhaustPile,
+                    Effects = { new EffectLineModel { Kind = EffectKind.DealDamage, Target = EffectTarget.Target, Amount = 8 } },
+                },
+            },
+            Enemies = { new EnemyModel { Name = "Dummy", Hp = 40 } },
+            Rounds = { new RoundModel { HeroPlays = { new PlayModel { CardName = "Strike", TargetEnemy = "Dummy" } } } },
+        };
+
+        var report = new ScenarioRunner().Run(new ScenarioComposer().Compose(model));
+
+        Assert.False(report.HasProblems);
+        var zones = report.FinalState.GetCardZones(new CombatantId("knight"));
+        Assert.Single(zones.GetCardsInZone(CardZone.ExhaustPile)); // exhaust-on-play sent it to exhaust
+        Assert.Empty(zones.GetCardsInZone(CardZone.DiscardPile));   // not the normal discard
+    }
+
+    [Fact]
+    public void Compose_RetainInHand_KeepsTheCardAtTurnEnd()
+    {
+        var model = new SandboxModel
+        {
+            Hero = new HeroModel
+            {
+                Name = "Knight", Hp = 30, Energy = 3,
+                UseRealDeck = true, DrawPerTurn = 1,
+                Deck = { new DeckCardModel { CardName = "Hold", Copies = 1 } },
+            },
+            Cards = { new CardModel { Name = "Hold", Cost = 0, RetainInHand = true } },
+            Enemies = { new EnemyModel { Name = "Dummy", Hp = 40 } },
+            Rounds = { new RoundModel() }, // hero plays nothing, then ends the turn
+        };
+
+        var report = new ScenarioRunner().Run(new ScenarioComposer().Compose(model));
+
+        Assert.False(report.HasProblems);
+        var zones = report.FinalState.GetCardZones(new CombatantId("knight"));
+        Assert.Single(zones.GetCardsInZone(CardZone.Hand));        // retained across the turn end
+        Assert.Empty(zones.GetCardsInZone(CardZone.DiscardPile));  // not discarded
+    }
 }
