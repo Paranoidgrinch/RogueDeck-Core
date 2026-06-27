@@ -1343,7 +1343,9 @@ public class ScenarioComposerTests
         {
             Hero = new HeroModel
             {
-                Name = "Rogue", Hp = 30, Energy = 1,
+                Name = "Rogue",
+                Hp = 30,
+                Energy = 1,
                 StartingStatuses = { new StartingStatusModel { StatusId = "standard.skill_cost_reduction", Amount = 1 } },
             },
             Cards =
@@ -1374,8 +1376,11 @@ public class ScenarioComposerTests
         {
             Hero = new HeroModel
             {
-                Name = "Knight", Hp = 30, Energy = 3,
-                UseRealDeck = true, DrawPerTurn = 1,
+                Name = "Knight",
+                Hp = 30,
+                Energy = 3,
+                UseRealDeck = true,
+                DrawPerTurn = 1,
                 Deck = { new DeckCardModel { CardName = "Strike", Copies = 1 } },
             },
             Cards =
@@ -1405,8 +1410,11 @@ public class ScenarioComposerTests
         {
             Hero = new HeroModel
             {
-                Name = "Knight", Hp = 30, Energy = 3,
-                UseRealDeck = true, DrawPerTurn = 1,
+                Name = "Knight",
+                Hp = 30,
+                Energy = 3,
+                UseRealDeck = true,
+                DrawPerTurn = 1,
                 Deck = { new DeckCardModel { CardName = "Hold", Copies = 1 } },
             },
             Cards = { new CardModel { Name = "Hold", Cost = 0, RetainInHand = true } },
@@ -1431,7 +1439,9 @@ public class ScenarioComposerTests
         {
             Hero = new HeroModel
             {
-                Name = "Knight", Hp = 30, Energy = 3,
+                Name = "Knight",
+                Hp = 30,
+                Energy = 3,
                 StartingStatuses = { new StartingStatusModel { StatusId = "standard.thorns", Amount = 3 } },
             },
             Cards = { new CardModel { Name = "Wait", Cost = 0 } },
@@ -1546,8 +1556,11 @@ public class ScenarioComposerTests
         {
             Hero = new HeroModel
             {
-                Name = "Knight", Hp = 30, Energy = 3,
-                UseRealDeck = true, DrawPerTurn = 3,
+                Name = "Knight",
+                Hp = 30,
+                Energy = 3,
+                UseRealDeck = true,
+                DrawPerTurn = 3,
                 Deck = { new DeckCardModel { CardName = "Bomb", Copies = 1 }, new DeckCardModel { CardName = "Junk", Copies = 2 } },
             },
             Cards =

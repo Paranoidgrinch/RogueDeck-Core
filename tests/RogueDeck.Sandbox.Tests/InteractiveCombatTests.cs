@@ -45,8 +45,11 @@ public class InteractiveCombatTests
         {
             Hero = new HeroModel
             {
-                Name = "Knight", Hp = 30, Energy = 5,
-                UseRealDeck = true, DrawPerTurn = 2,
+                Name = "Knight",
+                Hp = 30,
+                Energy = 5,
+                UseRealDeck = true,
+                DrawPerTurn = 2,
                 Deck = { new DeckCardModel { CardName = "Trap", Copies = 2 } },
             },
             Cards =
