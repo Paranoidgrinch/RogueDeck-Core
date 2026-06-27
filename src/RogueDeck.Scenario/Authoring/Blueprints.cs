@@ -108,6 +108,10 @@ public sealed class EnemyActionBlueprint
 // ── Combatant specifications (consumed by the ScenarioRunner in the next step) ──
 
 public sealed record ResourceSpec(ResourceId Resource, int Current, int Max);
+
+// Requests that a resource be topped up to Max at the start of every combatant's turn — the same automation
+// the standard package installs for Energy. Registered by ScenarioBlueprint.Compile().
+public sealed record ResourceRefillSpec(ResourceId Resource, int Max);
 public sealed record StartingStatusSpec(StatusDefinitionId Status, int Stacks = 0, int DurationTurns = 0, int Charges = 0);
 public sealed record DeckEntry(CardDefinitionId Card, int Count = 1);
 

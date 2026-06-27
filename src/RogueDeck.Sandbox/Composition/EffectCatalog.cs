@@ -19,7 +19,8 @@ public sealed record EffectKindInfo(
     bool UsesResult = false,
     bool UsesCardRef = false,
     bool UsesCardInstanceRef = false,
-    bool UsesZone = false);
+    bool UsesZone = false,
+    bool UsesResource = false);
 
 public sealed record TargetInfo(EffectTarget Target, string Label, string Description);
 
@@ -39,10 +40,10 @@ public static class EffectCatalog
             "Apply a status effect (e.g. Poison or Strength) to the target.", "stacks", true, true, true),
         new EffectKindInfo(EffectKind.DrawCards, "Draw cards",
             "Draw cards into the hero's hand.", "cards", true, false, false),
-        new EffectKindInfo(EffectKind.GainResource, "Gain energy",
-            "Add Energy, the resource spent to play cards this turn.", "energy", true, false, false),
-        new EffectKindInfo(EffectKind.LoseResource, "Lose energy",
-            "Drain Energy from the target.", "energy", true, true, false),
+        new EffectKindInfo(EffectKind.GainResource, "Gain resource",
+            "Add a resource (Energy by default, or a custom resource) to the hero.", "amount", true, false, false, UsesResource: true),
+        new EffectKindInfo(EffectKind.LoseResource, "Lose resource",
+            "Drain a resource (Energy by default, or a custom resource) from the target.", "amount", true, true, false, UsesResource: true),
         new EffectKindInfo(EffectKind.SetHealth, "Set HP",
             "Set the target's HP to a value (no damage/heal pipeline).", "HP", true, true, false),
         new EffectKindInfo(EffectKind.ModifyMaxHealth, "Change max HP",
@@ -63,10 +64,10 @@ public static class EffectCatalog
             "Add or remove turns of duration of a status on the target.", "turns", true, true, true),
         new EffectKindInfo(EffectKind.ModifyBlock, "Modify block",
             "Add or remove Block on the target (a large negative clears it).", "block", true, true, false),
-        new EffectKindInfo(EffectKind.ModifyEnergy, "Change energy",
-            "Add or remove Energy on the target (signed).", "energy", true, true, false),
-        new EffectKindInfo(EffectKind.RefillEnergy, "Refill energy",
-            "Refill the target's Energy up to a maximum.", "max", true, true, false),
+        new EffectKindInfo(EffectKind.ModifyEnergy, "Change resource",
+            "Add or remove a resource on the target (signed; Energy by default, or a custom resource).", "amount", true, true, false, UsesResource: true),
+        new EffectKindInfo(EffectKind.RefillEnergy, "Refill resource",
+            "Refill the target's resource up to its maximum (Energy by default, or a custom resource).", "max", true, true, false, UsesResource: true),
         new EffectKindInfo(EffectKind.ChangeTeam, "Change team",
             "Move the target to a team (convert it).", "", false, true, false, UsesTeam: true),
         new EffectKindInfo(EffectKind.Summon, "Summon",

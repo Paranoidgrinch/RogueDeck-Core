@@ -21,6 +21,10 @@ public sealed class ScenarioBlueprint
     public List<IPreDownInterceptor> PreDownInterceptors { get; } = new();
     public List<IStatusApplicationInterceptor> StatusApplicationInterceptors { get; } = new();
 
+    // Custom resources that should top up to Max at every turn start (like Energy). One turn-start refill
+    // handler is registered per entry, in addition to the standard package's Energy refill.
+    public List<ResourceRefillSpec> TurnStartResourceRefills { get; } = new();
+
     // How many cards the hero draws at the start of each turn. The default mirrors the standard 5-card
     // hand; an editor/sandbox can raise it (e.g. to the whole deck) so every authored card is in hand.
     public int CardsDrawnPerTurn { get; set; } = 5;
@@ -46,6 +50,10 @@ public sealed class ScenarioBlueprint
             builder.RegisterEnemyAction(action.Compile());
             intents[action.DefinitionId] = action.Intent;
         }
+
+        if (TurnStartResourceRefills.Count > 0)
+            builder.RegisterCombatEventHandler(
+                new TurnStartResourceRefillHandler(TurnStartResourceRefills.ToList()));
 
         foreach (var trigger in TriggeredPrograms)
             builder.RegisterTriggeredEffectDefinition(trigger);

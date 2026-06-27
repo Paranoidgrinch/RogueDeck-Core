@@ -20,6 +20,22 @@
             <label>HP <input type="number" @bind="_model.Hero.Hp" style="width:5rem" /></label>
             <label>Energy <input type="number" @bind="_model.Hero.Energy" style="width:4rem" /></label>
         </div>
+        <div class="sub-head">
+            <span>Resources (besides Energy)</span>
+            <button @onclick="() => _model.Resources.Add(new ResourceModel())">+ resource</button>
+        </div>
+        @foreach (var res in _model.Resources)
+        {
+            <div class="effect-line">
+                <input @bind="res.Name" placeholder="name" style="width:7rem" title="resource name" />
+                <span class="amount-label">start</span>
+                <input type="number" @bind="res.Start" style="width:4rem" />
+                <span class="amount-label">max</span>
+                <input type="number" @bind="res.Max" style="width:4rem" />
+                <label title="top up to max at the start of every turn (like Energy)"><input type="checkbox" @bind="res.RefillEachTurn" /> refill/turn</label>
+                <button class="del" @onclick="() => _model.Resources.Remove(res)">✕</button>
+            </div>
+        }
         @StatusListEditor(_model.Hero.StartingStatuses)
         <div class="row">
             <label><input type="checkbox" @bind="_model.Hero.UseRealDeck" /> use a real deck (draw / discard / reshuffle)</label>
@@ -71,6 +87,24 @@
                     <label>Cost ⚡<input type="number" @bind="card.Cost" style="width:4rem" /></label>
                     <button class="del" @onclick="() => _model.Cards.Remove(card)">✕</button>
                 </div>
+                @if (_model.Resources.Count > 0)
+                {
+                    <div class="effect-line">
+                        <span class="amount-label">also costs</span>
+                        @foreach (var ec in card.ExtraCosts)
+                        {
+                            <input type="number" @bind="ec.Amount" style="width:3.5rem" />
+                            <select @bind="ec.ResourceName">
+                                @foreach (var res in _model.Resources)
+                                {
+                                    <option value="@res.Name">@res.Name</option>
+                                }
+                            </select>
+                            <button class="del" @onclick="() => card.ExtraCosts.Remove(ec)">✕</button>
+                        }
+                        <button @onclick="() => card.ExtraCosts.Add(new ResourceCostModel { ResourceName = _model.Resources[0].Name })">+ cost</button>
+                    </div>
+                }
                 @EffectEditor(card.Effects)
             </div>
         }
@@ -296,7 +330,7 @@ else
             }
             else if (_combat.IsHeroTurn)
             {
-                <span>your turn · Energy @_combat.HeroEnergy/@_combat.HeroEnergyMax</span>
+                <span>your turn · Energy @_combat.HeroEnergy/@_combat.HeroEnergyMax@HeroResourcesLine()</span>
             }
             else
             {
@@ -465,6 +499,23 @@ else
 
     private void EndTurn() => _combat?.EndTurn();
 
+    // " · Mana 2/3 · Blood 1/5" for the hero's custom resources (everything but Energy), shown in the play bar.
+    private string HeroResourcesLine()
+    {
+        if (_combat is null || _model.Resources.Count == 0)
+            return "";
+        var hero = _combat.State.GetCombatant(_combat.HeroId);
+        var parts = new List<string>();
+        foreach (var res in _model.Resources)
+        {
+            if (string.IsNullOrWhiteSpace(res.Name))
+                continue;
+            if (hero.Resources.TryGetValue(new ResourceId(ScenarioComposer.Slug(res.Name)), out var pool))
+                parts.Add($"{res.Name} {pool.Current}/{pool.Max ?? pool.Current}");
+        }
+        return parts.Count == 0 ? "" : " · " + string.Join(" · ", parts);
+    }
+
     private string PileLine()
     {
         if (_combat is null) return "";
@@ -628,6 +679,9 @@ else
         AmountSource.SelfEnergy => "= my energy",
         AmountSource.SelfMaxEnergy => "= my max energy",
         AmountSource.SelfMissingEnergy => "= my missing energy",
+        AmountSource.SelfResourceCurrent => "= my resource",
+        AmountSource.SelfResourceMax => "= my max resource",
+        AmountSource.SelfResourceMissing => "= my missing resource",
         AmountSource.SelfBuffStacks => "= my buff stacks",
         AmountSource.SelfDebuffStacks => "= my debuff stacks",
         AmountSource.TargetBuffStacks => "= target buff stacks",
@@ -794,6 +848,16 @@ else
                                     }
                                 </select>
                             }
+                            else if (line.AmountSource is AmountSource.SelfResourceCurrent or AmountSource.SelfResourceMax or AmountSource.SelfResourceMissing)
+                            {
+                                <select @bind="line.AmountResourceId">
+                                    <option value="">⚡ energy</option>
+                                    @foreach (var res in _model.Resources)
+                                    {
+                                        <option value="@res.Name">@res.Name</option>
+                                    }
+                                </select>
+                            }
                             <select @bind="line.ArithmeticOp" title="arithmetic">
                                 @foreach (var op in Enum.GetValues<ArithmeticOp>())
                                 {
@@ -820,6 +884,16 @@ else
                                 @foreach (var s in AllStatuses())
                                 {
                                     <option value="@s.Id">@s.Label</option>
+                                }
+                            </select>
+                        }
+                        @if (info.UsesResource)
+                        {
+                            <select @bind="line.ResourceName" title="which resource">
+                                <option value="">⚡ energy</option>
+                                @foreach (var res in _model.Resources)
+                                {
+                                    <option value="@res.Name">@res.Name</option>
                                 }
                             </select>
                         }
@@ -1000,6 +1074,7 @@ else
         AmountSource.EventAmount,
         AmountSource.SelfHealthPercent, AmountSource.TargetHealthPercent,
         AmountSource.SelfEnergy, AmountSource.SelfMaxEnergy, AmountSource.SelfMissingEnergy,
+        AmountSource.SelfResourceCurrent, AmountSource.SelfResourceMax, AmountSource.SelfResourceMissing,
         AmountSource.SelfBuffStacks, AmountSource.SelfDebuffStacks,
         AmountSource.TargetBuffStacks, AmountSource.TargetDebuffStacks,
         AmountSource.RoundNumber, AmountSource.TurnNumber,

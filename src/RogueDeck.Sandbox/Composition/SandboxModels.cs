@@ -88,6 +88,9 @@ public enum AmountSource
     SelfEnergy,
     SelfMaxEnergy,
     SelfMissingEnergy,
+    SelfResourceCurrent, // a named custom resource (AmountResourceId) on the acting unit: current value
+    SelfResourceMax,     // …its max
+    SelfResourceMissing, // …its missing (max − current)
     SelfBuffStacks,
     SelfDebuffStacks,
     TargetBuffStacks,
@@ -145,6 +148,14 @@ public sealed class EffectLineModel
     // Used when AmountSource reads a status' stacks (Self/TargetStatusStacks): which status to read.
     public string AmountStatusId { get; set; } = StandardCombatIds.PoisonStatus.value;
 
+    // Used when AmountSource reads a custom resource (Self/Resource*): which resource (matches a
+    // ResourceModel.Name). Empty reads the built-in Energy resource.
+    public string AmountResourceId { get; set; } = "";
+
+    // Used by the resource-mutating kinds (GainResource / LoseResource / ModifyEnergy / RefillEnergy):
+    // which resource to act on (matches a ResourceModel.Name). Empty acts on the built-in Energy.
+    public string ResourceName { get; set; } = "";
+
     // Only used by Cleanse: which polarity of statuses to remove.
     public StatusPolarity Polarity { get; set; } = StatusPolarity.Debuff;
 
@@ -184,8 +195,33 @@ public sealed class EffectLineModel
 public sealed class CardModel
 {
     public string Name { get; set; } = "";
+
+    // The built-in Energy cost (the common case). Additional / alternative non-energy costs go in ExtraCosts.
     public int Cost { get; set; } = 1;
+
+    // Extra costs in custom resources (e.g. 2 Mana, 1 Blood) paid alongside the Energy cost. Each references
+    // a ResourceModel.Name; the engine requires the hero to hold enough of every listed resource to play.
+    public List<ResourceCostModel> ExtraCosts { get; set; } = new();
+
     public List<EffectLineModel> Effects { get; set; } = new();
+}
+
+// One non-energy cost on a card: pay Amount of the named resource (matches a ResourceModel.Name).
+public sealed class ResourceCostModel
+{
+    public string ResourceName { get; set; } = "";
+    public int Amount { get; set; } = 1;
+}
+
+// A custom resource the hero carries (alongside the built-in Energy) that cards can cost and effects can
+// gain/spend. RefillEachTurn mirrors how Energy tops up to Max at the start of every turn; leave it off for
+// resources that accumulate across turns (combo points, blood, charge).
+public sealed class ResourceModel
+{
+    public string Name { get; set; } = "Mana";
+    public int Start { get; set; }
+    public int Max { get; set; } = 3;
+    public bool RefillEachTurn { get; set; }
 }
 
 public sealed class IntentModel
@@ -312,6 +348,11 @@ public sealed class SandboxModel
 {
     public HeroModel Hero { get; set; } = new();
     public List<CardModel> Cards { get; set; } = new();
+
+    // Custom resources the hero carries beyond the built-in Energy. Cards can cost them and effects gain/spend
+    // them; flag RefillEachTurn to top them up to Max at every turn start the way Energy does.
+    public List<ResourceModel> Resources { get; set; } = new();
+
     public List<CustomStatusModel> Statuses { get; set; } = new();
     public List<EnemyModel> Enemies { get; set; } = new();
     public List<RoundModel> Rounds { get; set; } = new();

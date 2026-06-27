@@ -219,6 +219,9 @@ public sealed class ScenarioComposer
             var bp = new CardBlueprint(Slug(card.Name));
             if (card.Cost > 0)
                 bp.Cost(StandardCombatIds.EnergyResource, card.Cost);
+            foreach (var extra in card.ExtraCosts)
+                if (!string.IsNullOrWhiteSpace(extra.ResourceName) && extra.Amount > 0)
+                    bp.Cost(new ResourceId(Slug(extra.ResourceName)), extra.Amount);
             bp.Program = BuildProgram<CardPlayContext>(card.Effects, ToSelector);
             blueprint.Cards.Add(bp);
         }
@@ -229,6 +232,18 @@ public sealed class ScenarioComposer
         var hero = new HeroBlueprint(Slug(model.Hero.Name)) { MaxHealth = Math.Max(1, model.Hero.Hp) };
         var energy = Math.Max(0, model.Hero.Energy);
         hero.Resources.Add(new ResourceSpec(StandardCombatIds.EnergyResource, energy, energy));
+
+        // Custom resources: give the hero each pool and, if it refills, install the turn-start top-up handler.
+        foreach (var resource in model.Resources)
+        {
+            if (string.IsNullOrWhiteSpace(resource.Name))
+                continue;
+            var resourceId = new ResourceId(Slug(resource.Name));
+            var max = Math.Max(0, resource.Max);
+            hero.Resources.Add(new ResourceSpec(resourceId, Math.Clamp(resource.Start, 0, max), max));
+            if (resource.RefillEachTurn)
+                blueprint.TurnStartResourceRefills.Add(new ResourceRefillSpec(resourceId, max));
+        }
 
         if (model.Hero.UseRealDeck)
         {
@@ -346,11 +361,11 @@ public sealed class ScenarioComposer
         {
             LineKind.If => new ConditionalEffectNode<TContext>(
                 new ComparisonExpression<TContext>(
-                    BuildReadBase<TContext>(line.ConditionLeft, line.Amount, line.AmountStatusId, selector),
+                    BuildReadBase<TContext>(line.ConditionLeft, line.Amount, line.AmountStatusId, line.AmountResourceId, selector),
                     line.ConditionOp,
                     line.ConditionRightSource == AmountSource.Constant
                         ? new ConstantExpression<TContext>(line.ConditionRight)
-                        : BuildReadBase<TContext>(line.ConditionRightSource, line.ConditionRight, line.AmountStatusId, selector)),
+                        : BuildReadBase<TContext>(line.ConditionRightSource, line.ConditionRight, line.AmountStatusId, line.AmountResourceId, selector)),
                 BuildRoot<TContext>(line.Then, selector),
                 line.Else.Count > 0 ? BuildRoot<TContext>(line.Else, selector) : null),
             LineKind.Repeat => new RepeatEffectNode<TContext>(
@@ -368,11 +383,11 @@ public sealed class ScenarioComposer
                 BuildRoot<TContext>(line.Body, ForEachSelector(selector))),
             LineKind.RepeatUntil => new RepeatUntilEffectNode<TContext>(
                 new ComparisonExpression<TContext>(
-                    BuildReadBase<TContext>(line.ConditionLeft, line.Amount, line.AmountStatusId, selector),
+                    BuildReadBase<TContext>(line.ConditionLeft, line.Amount, line.AmountStatusId, line.AmountResourceId, selector),
                     line.ConditionOp,
                     line.ConditionRightSource == AmountSource.Constant
                         ? new ConstantExpression<TContext>(line.ConditionRight)
-                        : BuildReadBase<TContext>(line.ConditionRightSource, line.ConditionRight, line.AmountStatusId, selector)),
+                        : BuildReadBase<TContext>(line.ConditionRightSource, line.ConditionRight, line.AmountStatusId, line.AmountResourceId, selector)),
                 BuildRoot<TContext>(line.Body, selector)),
             _ => BuildLeaf<TContext>(line, selector),
         };
@@ -397,9 +412,9 @@ public sealed class ScenarioComposer
                 target, new StatusDefinitionId(line.StatusId), nonNeg, durationTurns: line.DurationTurns),
             EffectKind.DrawCards => new DrawCardsNode<TContext>(CombatantTargetSelectors.Source, nonNeg),
             EffectKind.GainResource => new GainResourceNode<TContext>(
-                CombatantTargetSelectors.Source, StandardCombatIds.EnergyResource, nonNeg, null),
+                CombatantTargetSelectors.Source, ResourceIdFor(line.ResourceName), nonNeg, null),
             EffectKind.LoseResource => new LoseResourceNode<TContext>(
-                target, StandardCombatIds.EnergyResource, nonNeg),
+                target, ResourceIdFor(line.ResourceName), nonNeg),
             EffectKind.SetHealth => new SetHealthNode<TContext>(target, amount),
             EffectKind.ModifyMaxHealth => new ModifyMaxHealthNode<TContext>(target, amount),
             EffectKind.ModifyStatusStacks => new ModifyStatusStacksNode<TContext>(
@@ -414,9 +429,9 @@ public sealed class ScenarioComposer
                 target, new StatusDefinitionId(line.StatusId), amount),
             EffectKind.ModifyBlock => new ModifyDefensivePoolNode<TContext>(
                 target, StandardCombatIds.BlockDefensivePool, amount),
-            EffectKind.ModifyEnergy => new ModifyResourceNode<TContext>(target, StandardCombatIds.EnergyResource, amount),
+            EffectKind.ModifyEnergy => new ModifyResourceNode<TContext>(target, ResourceIdFor(line.ResourceName), amount),
             EffectKind.RefillEnergy => new RefillResourceNode<TContext>(
-                target, StandardCombatIds.EnergyResource, Math.Max(0, line.Amount)),
+                target, ResourceIdFor(line.ResourceName), Math.Max(0, line.Amount)),
             EffectKind.ChangeTeam => new ChangeCombatantTeamNode<TContext>(target, TeamOf(line.Team)),
             EffectKind.Summon => new SummonCombatantNode<TContext>(
                 TeamOf(line.Team), new MaxExpression<TContext>(amount, new ConstantExpression<TContext>(1)),
@@ -435,6 +450,11 @@ public sealed class ScenarioComposer
     private static TeamId TeamOf(TeamChoice team) =>
         team == TeamChoice.Player ? StandardCombatIds.PlayerTeam : StandardCombatIds.EnemyTeam;
 
+    // Resolves an authored resource name to its id; an empty name means the built-in Energy resource, so
+    // existing "energy" effects keep working unchanged.
+    private static ResourceId ResourceIdFor(string? name) =>
+        string.IsNullOrWhiteSpace(name) ? StandardCombatIds.EnergyResource : new ResourceId(Slug(name));
+
     // The authorable card-instance references: the card being played, or the card that fired a CardPlayed
     // trigger. Each resolves to nothing (op no-ops) outside its valid context.
     private static ICardInstanceExpression<TContext> CardInstanceExpr<TContext>(CardRef cardRef)
@@ -449,7 +469,7 @@ public sealed class ScenarioComposer
         Func<EffectTarget, ICombatantTargetSelector> selector)
         where TContext : class
     {
-        var read = BuildReadBase<TContext>(line.AmountSource, line.Amount, line.AmountStatusId, selector);
+        var read = BuildReadBase<TContext>(line.AmountSource, line.Amount, line.AmountStatusId, line.AmountResourceId, selector);
         if (line.ArithmeticOp == ArithmeticOp.None)
             return read;
 
@@ -473,11 +493,13 @@ public sealed class ScenarioComposer
         AmountSource source,
         int constant,
         string statusId,
+        string resourceId,
         Func<EffectTarget, ICombatantTargetSelector> selector)
         where TContext : class
     {
         var self = selector(EffectTarget.Self);
         var other = selector(EffectTarget.Target);
+        var resource = ResourceIdFor(resourceId);
 
         return source switch
         {
@@ -497,6 +519,9 @@ public sealed class ScenarioComposer
             AmountSource.SelfEnergy => new CombatantCurrentResourceExpression<TContext>(self, StandardCombatIds.EnergyResource),
             AmountSource.SelfMaxEnergy => new CombatantMaxResourceExpression<TContext>(self, StandardCombatIds.EnergyResource),
             AmountSource.SelfMissingEnergy => new CombatantMissingResourceExpression<TContext>(self, StandardCombatIds.EnergyResource),
+            AmountSource.SelfResourceCurrent => new CombatantCurrentResourceExpression<TContext>(self, resource),
+            AmountSource.SelfResourceMax => new CombatantMaxResourceExpression<TContext>(self, resource),
+            AmountSource.SelfResourceMissing => new CombatantMissingResourceExpression<TContext>(self, resource),
             AmountSource.SelfBuffStacks => new CombatantStacksByPolarityExpression<TContext>(self, StatusPolarity.Buff),
             AmountSource.SelfDebuffStacks => new CombatantStacksByPolarityExpression<TContext>(self, StatusPolarity.Debuff),
             AmountSource.TargetBuffStacks => new CombatantStacksByPolarityExpression<TContext>(other, StatusPolarity.Buff),

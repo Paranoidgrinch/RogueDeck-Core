@@ -1106,4 +1106,152 @@ public class ScenarioComposerTests
         var model = new SandboxModel { Hero = new HeroModel { Name = "Lonely" } };
         Assert.Throws<InvalidOperationException>(() => new ScenarioComposer().Compose(model));
     }
+
+    // ── Step 1: generic resources (beyond Energy) ───────────────────────────────────
+
+    private static int Resource(CombatState state, string combatant, string resource) =>
+        state.GetCombatant(new CombatantId(combatant)).Resources
+            .TryGetValue(new ResourceId(resource), out var pool) ? pool.Current : -1;
+
+    [Fact]
+    public void Compose_NonEnergyCardCost_IsPaidFromTheCustomResource()
+    {
+        var model = new SandboxModel
+        {
+            Hero = new HeroModel { Name = "Mage", Hp = 30, Energy = 3 },
+            Resources = { new ResourceModel { Name = "Mana", Start = 3, Max = 3 } },
+            Cards =
+            {
+                new CardModel
+                {
+                    Name = "Bolt", Cost = 0,
+                    ExtraCosts = { new ResourceCostModel { ResourceName = "Mana", Amount = 2 } },
+                    Effects = { new EffectLineModel { Kind = EffectKind.DealDamage, Target = EffectTarget.Target, Amount = 8 } },
+                },
+            },
+            Enemies = { new EnemyModel { Name = "Dummy", Hp = 40 } },
+            Rounds = { new RoundModel { HeroPlays = { new PlayModel { CardName = "Bolt", TargetEnemy = "Dummy" } } } },
+        };
+
+        var report = new ScenarioRunner().Run(new ScenarioComposer().Compose(model));
+
+        Assert.False(report.HasProblems);
+        Assert.Equal(32, report.FinalState.GetCombatant(new CombatantId("dummy")).Health.Current); // 40 − 8
+        Assert.Equal(1, Resource(report.FinalState, "mage", "mana"));                              // 3 − 2 spent
+    }
+
+    [Fact]
+    public void Compose_UnaffordableNonEnergyCost_StopsTheCardResolving()
+    {
+        var model = new SandboxModel
+        {
+            Hero = new HeroModel { Name = "Mage", Hp = 30, Energy = 3 },
+            Resources = { new ResourceModel { Name = "Mana", Start = 1, Max = 3 } },
+            Cards =
+            {
+                new CardModel
+                {
+                    Name = "Bolt", Cost = 0,
+                    ExtraCosts = { new ResourceCostModel { ResourceName = "Mana", Amount = 2 } },
+                    Effects = { new EffectLineModel { Kind = EffectKind.DealDamage, Target = EffectTarget.Target, Amount = 8 } },
+                },
+            },
+            Enemies = { new EnemyModel { Name = "Dummy", Hp = 40 } },
+            Rounds = { new RoundModel { HeroPlays = { new PlayModel { CardName = "Bolt", TargetEnemy = "Dummy" } } } },
+        };
+
+        var report = new ScenarioRunner().Run(new ScenarioComposer().Compose(model));
+
+        // 1 Mana cannot pay a 2-Mana cost → the bolt never lands and the Mana is untouched.
+        Assert.Equal(40, report.FinalState.GetCombatant(new CombatantId("dummy")).Health.Current);
+        Assert.Equal(1, Resource(report.FinalState, "mage", "mana"));
+    }
+
+    [Fact]
+    public void Compose_RefillEachTurn_TopsTheResourceBackUp()
+    {
+        SandboxModel Model(bool refill) => new()
+        {
+            Hero = new HeroModel { Name = "Mage", Hp = 30, Energy = 3 },
+            Resources = { new ResourceModel { Name = "Mana", Start = 3, Max = 3, RefillEachTurn = refill } },
+            Cards =
+            {
+                new CardModel
+                {
+                    Name = "Bolt", Cost = 0,
+                    ExtraCosts = { new ResourceCostModel { ResourceName = "Mana", Amount = 2 } },
+                    Effects = { new EffectLineModel { Kind = EffectKind.DealDamage, Target = EffectTarget.Target, Amount = 1 } },
+                },
+            },
+            Enemies = { new EnemyModel { Name = "Dummy", Hp = 200 } },
+            Rounds =
+            {
+                new RoundModel { HeroPlays = { new PlayModel { CardName = "Bolt", TargetEnemy = "Dummy" } } },
+                new RoundModel(), // round 2: no plays — the resource's value is whatever the turn start left it
+            },
+        };
+
+        var refilled = new ScenarioRunner().Run(new ScenarioComposer().Compose(Model(refill: true)));
+        var spent = new ScenarioRunner().Run(new ScenarioComposer().Compose(Model(refill: false)));
+
+        Assert.Equal(3, Resource(refilled.FinalState, "mage", "mana"));  // topped back up at round-2 turn start
+        Assert.Equal(1, Resource(spent.FinalState, "mage", "mana"));     // stays spent without refill
+    }
+
+    [Fact]
+    public void Compose_GainResource_AddsToANamedResource()
+    {
+        var model = new SandboxModel
+        {
+            Hero = new HeroModel { Name = "Mage", Hp = 30, Energy = 3 },
+            Resources = { new ResourceModel { Name = "Mana", Start = 0, Max = 5 } },
+            Cards =
+            {
+                new CardModel
+                {
+                    Name = "Channel", Cost = 0,
+                    Effects = { new EffectLineModel { Kind = EffectKind.GainResource, ResourceName = "Mana", Amount = 3 } },
+                },
+            },
+            Enemies = { new EnemyModel { Name = "Dummy", Hp = 40 } },
+            Rounds = { new RoundModel { HeroPlays = { new PlayModel { CardName = "Channel" } } } },
+        };
+
+        var report = new ScenarioRunner().Run(new ScenarioComposer().Compose(model));
+
+        Assert.False(report.HasProblems);
+        Assert.Equal(3, Resource(report.FinalState, "mage", "mana"));
+    }
+
+    [Fact]
+    public void Compose_AmountSource_ReadsANamedResource()
+    {
+        var model = new SandboxModel
+        {
+            Hero = new HeroModel { Name = "Mage", Hp = 30, Energy = 3 },
+            Resources = { new ResourceModel { Name = "Mana", Start = 4, Max = 4 } },
+            Cards =
+            {
+                new CardModel
+                {
+                    Name = "Drain", Cost = 0,
+                    Effects =
+                    {
+                        new EffectLineModel
+                        {
+                            Kind = EffectKind.DealDamage, Target = EffectTarget.Target,
+                            AmountSource = AmountSource.SelfResourceCurrent, AmountResourceId = "Mana",
+                        },
+                    },
+                },
+            },
+            Enemies = { new EnemyModel { Name = "Dummy", Hp = 40 } },
+            Rounds = { new RoundModel { HeroPlays = { new PlayModel { CardName = "Drain", TargetEnemy = "Dummy" } } } },
+        };
+
+        var report = new ScenarioRunner().Run(new ScenarioComposer().Compose(model));
+
+        Assert.False(report.HasProblems);
+        Assert.Equal(36, report.FinalState.GetCombatant(new CombatantId("dummy")).Health.Current); // 40 − 4 (my Mana)
+    }
 }
