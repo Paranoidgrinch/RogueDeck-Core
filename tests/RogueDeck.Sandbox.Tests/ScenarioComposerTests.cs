@@ -1421,4 +1421,35 @@ public class ScenarioComposerTests
         Assert.Single(zones.GetCardsInZone(CardZone.Hand));        // retained across the turn end
         Assert.Empty(zones.GetCardsInZone(CardZone.DiscardPile));  // not discarded
     }
+
+    // ── Step 4: built-in statuses exposed in the catalog ────────────────────────────
+
+    [Fact]
+    public void Compose_ThornsStatus_ReflectsDamageToTheAttacker()
+    {
+        var model = new SandboxModel
+        {
+            Hero = new HeroModel
+            {
+                Name = "Knight", Hp = 30, Energy = 3,
+                StartingStatuses = { new StartingStatusModel { StatusId = "standard.thorns", Amount = 3 } },
+            },
+            Cards = { new CardModel { Name = "Wait", Cost = 0 } },
+            Enemies =
+            {
+                new EnemyModel
+                {
+                    Name = "Ogre", Hp = 40,
+                    Intents = { new IntentModel { Label = "Smash", Kind = IntentKind.Attack, Effects = { new EffectLineModel { Kind = EffectKind.DealDamage, Target = EffectTarget.Target, Amount = 6 } } } },
+                },
+            },
+            Rounds = { new RoundModel() }, // hero waits; the ogre attacks and eats the thorns
+        };
+
+        var report = new ScenarioRunner().Run(new ScenarioComposer().Compose(model));
+
+        Assert.False(report.HasProblems);
+        Assert.Equal(24, report.FinalState.GetCombatant(new CombatantId("knight")).Health.Current); // 30 − 6
+        Assert.Equal(37, report.FinalState.GetCombatant(new CombatantId("ogre")).Health.Current);   // 40 − 3 thorns
+    }
 }

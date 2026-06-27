@@ -115,6 +115,22 @@ public static class EffectCatalog
             "The bearer gains +1 Block per stack."),
         new StatusInfo(StandardCombatIds.ArtifactStatus.value, "Artifact",
             "Negates the next debuff applied to the bearer (uses one charge)."),
+        new StatusInfo(StandardCombatIds.ThornsStatus.value, "Thorns",
+            "Deals damage equal to its stacks back to anyone who damages the bearer."),
+        new StatusInfo(StandardCombatIds.RageStatus.value, "Rage",
+            "The bearer gains Block equal to its stacks whenever it plays an Attack card."),
+        new StatusInfo(StandardCombatIds.StunStatus.value, "Stun",
+            "The bearer cannot play cards while stunned (its turn is effectively skipped)."),
+        new StatusInfo(StandardCombatIds.OneAttackPerTurnStatus.value, "One attack / turn",
+            "The bearer may play only one Attack card per turn."),
+        new StatusInfo(StandardCombatIds.FreeNextCardStatus.value, "Free next card",
+            "The bearer's next card played this combat costs 0."),
+        new StatusInfo(StandardCombatIds.FirstAttackEachTurnFreeStatus.value, "First attack free",
+            "The bearer's first Attack card each turn costs 0."),
+        new StatusInfo(StandardCombatIds.SkillComboDrawStatus.value, "Skill combo draw",
+            "The bearer draws a card whenever it plays a Skill card."),
+        new StatusInfo(StandardCombatIds.SkillCostReductionStatus.value, "Skill cost reduction",
+            "The bearer's Skill cards cost 1 less per stack."),
     };
 
     // Card-type tags the engine reacts to. Attack gates the one-attack-per-turn / first-attack-free rules;
