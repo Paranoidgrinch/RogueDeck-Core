@@ -128,6 +128,11 @@ public abstract class CombatantBlueprint
     public string Id { get; }
     public string NameKey { get; init; }
     public int MaxHealth { get; init; } = 1;
+
+    // Starting current health. Null (the default) means "full" — start at MaxHealth. The run layer sets this
+    // so a wounded hero carries their current HP into the next fight instead of being healed to full.
+    public int? CurrentHealth { get; init; }
+
     public List<ResourceSpec> Resources { get; } = new();
     public List<StartingStatusSpec> StartingStatuses { get; } = new();
 

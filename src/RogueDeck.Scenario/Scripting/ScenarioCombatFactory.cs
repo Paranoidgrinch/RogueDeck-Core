@@ -36,12 +36,16 @@ internal static class ScenarioCombatFactory
 
     private static void AddCombatant(CombatState combat, CombatantBlueprint blueprint, TeamId team)
     {
+        // A null CurrentHealth means "full"; the run layer passes a value to carry a wounded hero's HP in.
+        var startingHealth = Math.Clamp(
+            blueprint.CurrentHealth ?? blueprint.MaxHealth, 1, blueprint.MaxHealth);
+
         combat.AddCombatant(new CombatantState(
             blueprint.CombatantId,
             new CombatantDefinitionId(blueprint.Id),
             blueprint.NameKey,
             team,
-            new HealthState(blueprint.MaxHealth, blueprint.MaxHealth)));
+            new HealthState(startingHealth, blueprint.MaxHealth)));
 
         var combatant = combat.GetCombatant(blueprint.CombatantId);
         foreach (var resource in blueprint.Resources)
