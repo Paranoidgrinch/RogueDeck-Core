@@ -4,11 +4,13 @@
     <Project Path="src/RogueDeck.Core/RogueDeck.Core.csproj" />
     <Project Path="src/RogueDeck.Sandbox/RogueDeck.Sandbox.csproj" />
     <Project Path="src/RogueDeck.Scenario/RogueDeck.Scenario.csproj" />
+    <Project Path="src/RogueDeck.Run/RogueDeck.Run.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/RogueDeck.Core.Tests/RogueDeck.Core.Tests.csproj" />
     <Project Path="tests/RogueDeck.Core.Benchmarks/RogueDeck.Core.Benchmarks.csproj" />
     <Project Path="tests/RogueDeck.Sandbox.Tests/RogueDeck.Sandbox.Tests.csproj" />
     <Project Path="tests/RogueDeck.Scenario.Tests/RogueDeck.Scenario.Tests.csproj" />
+    <Project Path="tests/RogueDeck.Run.Tests/RogueDeck.Run.Tests.csproj" />
   </Folder>
 </Solution>
