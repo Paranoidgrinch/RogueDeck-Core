@@ -52,12 +52,13 @@ public sealed class EventNodeResolver : INodeResolver
 
     public NodeType NodeType => StandardRunIds.EventNode;
 
-    public NodeOutcome Resolve(RunState run, Node node, IRunChoiceProvider choices)
+    public NodeOutcome Resolve(NodeResolveContext context, Node node)
     {
         if (node.Payload is not EventScript script)
             throw new ArgumentException(
                 $"Event node '{node.Id}' payload must be an EventScript.", nameof(node));
 
+        var run = context.Run;
         var visited = 0;
         var currentId = script.StartSituationId;
         var lastChoiceId = "(none)";
@@ -69,13 +70,17 @@ public sealed class EventNodeResolver : INodeResolver
             if (available.Count == 0)
                 break;
 
-            var chosen = choices.Choose(situation, available, run);
+            var chosen = context.Choices.Choose(situation, available, run);
             foreach (var effect in chosen.Effects)
                 run.EnqueueEffect(effect);
 
             run.AddLog(StandardRunLogTypes.EventChoiceMade,
                 $"Node '{node.Id}': situation '{situation.Id}' -> choice '{chosen.Id}'.");
             run.RaiseEvent(new EventChoiceMadeRunEvent(node.Id, chosen.Id));
+
+            // Apply this choice's effects before the next situation so its requirements (e.g. a shop's
+            // affordability check) observe the updated run state rather than stale entry state.
+            context.ResolvePendingEffects();
 
             lastChoiceId = chosen.Id;
             currentId = chosen.NextSituationId;

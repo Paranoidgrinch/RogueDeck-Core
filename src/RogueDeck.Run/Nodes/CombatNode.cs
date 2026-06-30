@@ -59,12 +59,13 @@ public sealed class CombatNodeResolver : INodeResolver
 
     public NodeType NodeType => StandardRunIds.CombatNode;
 
-    public NodeOutcome Resolve(RunState run, Node node, IRunChoiceProvider choices)
+    public NodeOutcome Resolve(NodeResolveContext context, Node node)
     {
         if (node.Payload is not CombatNodePayload payload)
             throw new ArgumentException(
                 $"Combat node '{node.Id}' payload must be a CombatNodePayload.", nameof(node));
 
+        var run = context.Run;
         var playthrough = payload.BuildPlaythrough(run);
         var before = run.Health.Current;
 

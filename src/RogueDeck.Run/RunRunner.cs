@@ -27,6 +27,8 @@ public sealed class RunRunner
     {
         ArgumentNullException.ThrowIfNull(run);
 
+        var context = new NodeResolveContext(run, _choices, _registry, _processor);
+
         run.AddLog(StandardRunLogTypes.RunStarted, $"Run '{run.Id}' started.");
         run.RaiseEvent(new RunStartedRunEvent(run.Id));
         _processor.ResolvePending(run, _registry);
@@ -39,7 +41,7 @@ public sealed class RunRunner
             run.AddLog(StandardRunLogTypes.NodeEntered, $"Entered node '{node.Id}' ({node.Type}).");
             run.RaiseEvent(new NodeEnteredRunEvent(node.Id, node.Type));
 
-            _registry.GetResolver(node.Type).Resolve(run, node, _choices);
+            _registry.GetResolver(node.Type).Resolve(context, node);
             _processor.ResolvePending(run, _registry);
 
             if (run.Health.Current <= 0)
