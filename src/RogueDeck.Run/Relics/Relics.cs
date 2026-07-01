@@ -30,27 +30,6 @@ public sealed class TriggeredRunEffect<TEvent> : ITriggeredRunEffectDefinition
         runEvent is TEvent typed ? _build(typed, run) : Array.Empty<IRunEffectRequest>();
 }
 
-// Composable relic reactions. These turn a relic's response into expression *data* rather than a bespoke
-// delegate: the amount is a RunExpr tree that may read the triggering event (RunExpr.EventValue). The
-// expression is evaluated at dispatch — where the event is in context — and baked into a literal effect, so
-// the enqueued effect needs no event later. This is what "relics compute from event data" means in practice.
-public static class RelicPrograms
-{
-    // React to TEvent by gaining `amount` of a resource, where `amount` may read the event.
-    public static ITriggeredRunEffectDefinition GainResourceOn<TEvent>(
-        RunResourceId resource, IRunExpression<int> amount) where TEvent : IRunEvent
-    {
-        ArgumentNullException.ThrowIfNull(amount);
-        return new TriggeredRunEffect<TEvent>((evt, run) =>
-        {
-            var value = amount.Evaluate(new RunEvalContext(run, evt));
-            return value == 0
-                ? Array.Empty<IRunEffectRequest>()
-                : new IRunEffectRequest[] { new ChangeResourceRunEffect(resource, value) };
-        });
-    }
-}
-
 // A relic definition. It has two faces, exactly because relics bend the whole game, not just one fight:
 //   (a) RunPrograms  — react to run-level events (implemented now).
 //   (b) CombatContributions — triggered programs injected into a fight when a combat node spawns. The hook

@@ -53,3 +53,108 @@ public sealed class UninstallRunProgramRunEffectHandler : RunEffectHandler<Unins
         run.RaiseEvent(new RunProgramUninstalledRunEvent(request.ProgramId));
     }
 }
+
+// ── Declarative triggered programs (R1) ──────────────────────────────────────────
+// The data-first alternative to TriggeredRunEffect's (evt, run) => effects lambda. A relic, rule, or
+// scheduled reaction becomes pure data: an event type, an optional condition expression, and effect
+// TEMPLATES. Everything is evaluated at DISPATCH with the event in RunEvalContext, so both the condition and
+// the effects can read event data (via RunEventValues) — which a plain queued effect cannot, because it
+// drains later when the event is gone. Templates materialise a concrete effect from that context.
+
+public interface IRunEffectTemplate
+{
+    IRunEffectRequest Build(RunEvalContext context);
+}
+
+// Readable template construction. Literal wraps a fixed, event-independent effect; the others compute a value
+// from the context (run + triggering event) at dispatch.
+public static class RunEffectTemplates
+{
+    public static IRunEffectTemplate Literal(IRunEffectRequest effect) => new LiteralTemplate(effect);
+    public static IRunEffectTemplate GainResource(RunResourceId resource, IRunExpression<int> amount) =>
+        new DelegateTemplate(ctx => new ChangeResourceRunEffect(resource, amount.Evaluate(ctx)));
+    public static IRunEffectTemplate Heal(IRunExpression<int> amount) =>
+        new DelegateTemplate(ctx => new HealRunEffect(amount.Evaluate(ctx)));
+    public static IRunEffectTemplate Damage(IRunExpression<int> amount) =>
+        new DelegateTemplate(ctx => new ApplyRunDamageRunEffect(amount.Evaluate(ctx)));
+
+    private sealed class LiteralTemplate : IRunEffectTemplate
+    {
+        private readonly IRunEffectRequest _effect;
+        public LiteralTemplate(IRunEffectRequest effect)
+        {
+            ArgumentNullException.ThrowIfNull(effect);
+            _effect = effect;
+        }
+        public IRunEffectRequest Build(RunEvalContext context) => _effect;
+    }
+
+    private sealed class DelegateTemplate : IRunEffectTemplate
+    {
+        private readonly Func<RunEvalContext, IRunEffectRequest> _build;
+        public DelegateTemplate(Func<RunEvalContext, IRunEffectRequest> build) => _build = build;
+        public IRunEffectRequest Build(RunEvalContext context) => _build(context);
+    }
+}
+
+// A triggered program expressed as data: event type (via TEvent), optional condition, and effect templates.
+public sealed class DataTriggeredRunEffect<TEvent> : ITriggeredRunEffectDefinition
+    where TEvent : IRunEvent
+{
+    private readonly IRunExpression<bool>? _condition;
+    private readonly IReadOnlyList<IRunEffectTemplate> _templates;
+
+    public DataTriggeredRunEffect(IRunExpression<bool>? condition, IReadOnlyList<IRunEffectTemplate> templates)
+    {
+        ArgumentNullException.ThrowIfNull(templates);
+        _condition = condition;
+        _templates = templates;
+    }
+
+    public Type EventType => typeof(TEvent);
+
+    public IReadOnlyList<IRunEffectRequest> Build(IRunEvent runEvent, RunState run)
+    {
+        if (runEvent is not TEvent)
+            return Array.Empty<IRunEffectRequest>();
+
+        var context = new RunEvalContext(run, runEvent);
+        if (_condition is not null && !_condition.Evaluate(context))
+            return Array.Empty<IRunEffectRequest>();
+
+        var effects = new IRunEffectRequest[_templates.Count];
+        for (var i = 0; i < _templates.Count; i++)
+            effects[i] = _templates[i].Build(context);
+        return effects;
+    }
+}
+
+// Factory for declarative triggered programs — usable as a relic RunProgram or wrapped in an
+// InstalledRunProgram. `On` reacts to every matching event; `When` gates on a condition. Fixed effects are
+// wrapped as literal templates; the template overloads let effects read event data.
+public static class RunPrograms
+{
+    public static ITriggeredRunEffectDefinition On<TEvent>(params IRunEffectRequest[] effects)
+        where TEvent : IRunEvent =>
+        new DataTriggeredRunEffect<TEvent>(null, Wrap(effects));
+
+    public static ITriggeredRunEffectDefinition On<TEvent>(params IRunEffectTemplate[] templates)
+        where TEvent : IRunEvent =>
+        new DataTriggeredRunEffect<TEvent>(null, templates);
+
+    public static ITriggeredRunEffectDefinition When<TEvent>(
+        IRunExpression<bool> condition, params IRunEffectRequest[] effects) where TEvent : IRunEvent =>
+        new DataTriggeredRunEffect<TEvent>(condition, Wrap(effects));
+
+    public static ITriggeredRunEffectDefinition When<TEvent>(
+        IRunExpression<bool> condition, params IRunEffectTemplate[] templates) where TEvent : IRunEvent =>
+        new DataTriggeredRunEffect<TEvent>(condition, templates);
+
+    private static IReadOnlyList<IRunEffectTemplate> Wrap(IRunEffectRequest[] effects)
+    {
+        var templates = new IRunEffectTemplate[effects.Length];
+        for (var i = 0; i < effects.Length; i++)
+            templates[i] = RunEffectTemplates.Literal(effects[i]);
+        return templates;
+    }
+}

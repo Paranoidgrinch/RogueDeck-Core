@@ -52,4 +52,11 @@ deliberately deferred to their own foundations.) A **catalog-gap pass** is part 
 
 ## Status
 
-- R2 + starter R5 (RunEventValues) + R1: in progress.
+- **R2 done** — `RunSchedule.When(IRunExpression<bool>)`.
+- **R5 (starter) done** — `RunEventValues` named event-field accessors (int + bool).
+- **R1 done** — `DataTriggeredRunEffect` + `RunPrograms.On/When` + `RunEffectTemplates` (condition and effects
+  read the event at dispatch). `StandardRelics` (Bloodstone/Leech) now authored declaratively; the old
+  `RelicPrograms.GainResourceOn` and the `TriggeredRunEffect` lambda are no longer needed for content
+  (the lambda stays only as an internal/escape mechanism).
+- Remaining: R4 (selector filter vocabulary), R3 (data ForEach + iteration target), R6 (reward tables),
+  R5 rest (entity value accessors: CardValue.*), catalog-gap pass, R7 (encounters as data).

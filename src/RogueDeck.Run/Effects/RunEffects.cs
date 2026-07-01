@@ -13,6 +13,9 @@ public sealed class ChangeResourceRunEffectHandler : RunEffectHandler<ChangeReso
     {
         var previous = run.GetResource(request.Resource);
         var next = Math.Max(0, previous + request.Delta);
+        if (next == previous)
+            return; // no actual change (e.g. a computed +0) — raise nothing, like the flag/counter effects
+
         run.SetResource(request.Resource, next);
 
         run.AddLog(StandardRunLogTypes.ResourceChanged,
