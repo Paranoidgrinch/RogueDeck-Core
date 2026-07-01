@@ -1,4 +1,5 @@
 using RogueDeck.Core.Combat;
+using RogueDeck.Scenario.Authoring;
 using RogueDeck.Scenario.Scripting;
 
 namespace RogueDeck.Run;
@@ -50,11 +51,17 @@ public sealed class ScriptedCombatDriver : ICombatDriver
 public sealed class CombatNodeResolver : INodeResolver
 {
     private readonly ICombatDriver _driver;
+    private readonly Func<RunCardInstance, CardDefinitionId> _deckMapper;
 
-    public CombatNodeResolver(ICombatDriver driver)
+    // The deck mapper projects a run card copy to the combat card definition it fights as. The default is
+    // identity (ignore per-copy state); a caller passes an upgrade-aware mapper to make upgrades matter in
+    // combat (Phase G3). Keeping it here means the run owns deck projection, not each combat node's author.
+    public CombatNodeResolver(
+        ICombatDriver driver, Func<RunCardInstance, CardDefinitionId>? deckMapper = null)
     {
         ArgumentNullException.ThrowIfNull(driver);
         _driver = driver;
+        _deckMapper = deckMapper ?? (card => card.DefinitionId);
     }
 
     public NodeType NodeType => StandardRunIds.CombatNode;
@@ -67,6 +74,7 @@ public sealed class CombatNodeResolver : INodeResolver
 
         var run = context.Run;
         var playthrough = payload.BuildPlaythrough(run);
+        ApplyRunProjection(playthrough, run);
         var before = run.Health.Current;
 
         var result = _driver.Drive(playthrough);
@@ -80,5 +88,27 @@ public sealed class CombatNodeResolver : INodeResolver
             node.Id, result.Result, result.HeroHpRemaining, damageTaken));
 
         return new NodeOutcome($"combat resolved ({result.Result}).");
+    }
+
+    // Inject the run into the freshly built (still mutable, not-yet-compiled) blueprint: the bridge owns deck
+    // projection and the relic combat-injection face, so the node author only authors the encounter.
+    private void ApplyRunProjection(Playthrough playthrough, RunState run)
+    {
+        var blueprint = playthrough.Blueprint;
+
+        // Deck projection: the fight's deck IS the run deck, mapped copy-by-copy. The bridge owns it, so it
+        // replaces whatever the author left on the hero (authors should not populate the deck themselves).
+        if (blueprint.Hero is { } hero)
+        {
+            hero.Deck.Clear();
+            foreach (var card in run.Deck)
+                hero.Deck.Add(new DeckEntry(_deckMapper(card), 1));
+        }
+
+        // Relic combat-injection face (b): each acquired relic's combat contributions become triggered
+        // programs in the spawned fight, so a relic can bend combat, not just the run.
+        foreach (var relic in run.Relics)
+            foreach (var contribution in relic.Definition.CombatContributions)
+                blueprint.TriggeredPrograms.Add(contribution);
     }
 }
