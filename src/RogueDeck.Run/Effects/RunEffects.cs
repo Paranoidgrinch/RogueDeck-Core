@@ -54,6 +54,41 @@ public sealed class HealRunEffectHandler : RunEffectHandler<HealRunEffect>
     }
 }
 
+// Change max HP by a delta (min 1). Gaining max also heals by that much (a full-heal-on-gain convention);
+// losing max caps current down. Raises a distinct event so "on max HP changed" triggers can react.
+public sealed record ChangeMaxHealthRunEffect(int Delta) : IRunEffectRequest;
+
+public sealed class ChangeMaxHealthRunEffectHandler : RunEffectHandler<ChangeMaxHealthRunEffect>
+{
+    protected override void Resolve(RunState run, RunDefinitionRegistry registry, ChangeMaxHealthRunEffect request)
+    {
+        var previousMax = run.Health.Max;
+        var newMax = Math.Max(1, previousMax + request.Delta);
+        if (newMax == previousMax)
+            return;
+
+        run.Health.SetMax(newMax);
+        if (request.Delta > 0)
+            run.Health.SetCurrent(Math.Min(newMax, run.Health.Current + request.Delta));
+
+        run.AddLog(StandardRunLogTypes.MaxHealthChanged, $"Max HP {previousMax} -> {newMax}.");
+        run.RaiseEvent(new RunMaxHealthChangedRunEvent(previousMax, newMax));
+    }
+}
+
+public sealed record RemoveRelicRunEffect(RelicId Relic) : IRunEffectRequest;
+
+public sealed class RemoveRelicRunEffectHandler : RunEffectHandler<RemoveRelicRunEffect>
+{
+    protected override void Resolve(RunState run, RunDefinitionRegistry registry, RemoveRelicRunEffect request)
+    {
+        if (!run.RemoveRelic(request.Relic))
+            return;
+        run.AddLog(StandardRunLogTypes.RelicRemoved, $"Removed relic '{request.Relic}'.");
+        run.RaiseEvent(new RelicRemovedRunEvent(request.Relic));
+    }
+}
+
 public sealed record AddCardToDeckRunEffect(CardDefinitionId Card) : IRunEffectRequest;
 
 public sealed class AddCardToDeckRunEffectHandler : RunEffectHandler<AddCardToDeckRunEffect>

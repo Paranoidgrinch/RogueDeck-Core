@@ -22,6 +22,8 @@ public sealed class StandardRunPackage : IRunPackage
             .RegisterEffectHandler(new HealRunEffectHandler())
             .RegisterEffectHandler(new AddCardToDeckRunEffectHandler())
             .RegisterEffectHandler(new AddRelicRunEffectHandler())
+            .RegisterEffectHandler(new RemoveRelicRunEffectHandler())
+            .RegisterEffectHandler(new ChangeMaxHealthRunEffectHandler())
             .RegisterEffectHandler(new GrantRewardRunEffectHandler())
             .RegisterEffectHandler(new ComputedResourceRunEffectHandler())
             .RegisterEffectHandler(new ConditionalRunEffectHandler())

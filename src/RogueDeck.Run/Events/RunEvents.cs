@@ -36,7 +36,11 @@ public sealed record RunHealthChangedRunEvent(
     int Max
 ) : IRunEvent;
 
+public sealed record RunMaxHealthChangedRunEvent(int PreviousMax, int NewMax) : IRunEvent;
+
 public sealed record RelicAcquiredRunEvent(RelicId RelicId) : IRunEvent;
+
+public sealed record RelicRemovedRunEvent(RelicId RelicId) : IRunEvent;
 
 public sealed record RewardGrantedRunEvent(RewardId RewardId) : IRunEvent;
 

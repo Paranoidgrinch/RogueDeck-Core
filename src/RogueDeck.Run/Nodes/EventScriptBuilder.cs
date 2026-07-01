@@ -121,6 +121,17 @@ public sealed class ChoiceBuilder
 
     public ChoiceBuilder Damage(IRunExpression<int> amount) => Effect(new ComputedDamageRunEffect(amount));
 
+    public ChoiceBuilder GainMaxHealth(int amount) => Effect(new ChangeMaxHealthRunEffect(amount));
+
+    public ChoiceBuilder LoseMaxHealth(int amount)
+    {
+        if (amount < 0)
+            throw new ArgumentOutOfRangeException(nameof(amount), "Lose amount must be non-negative.");
+        return Effect(new ChangeMaxHealthRunEffect(-amount));
+    }
+
+    public ChoiceBuilder RemoveRelic(RelicId relic) => Effect(new RemoveRelicRunEffect(relic));
+
     // Repeat a block of effects a computed number of times.
     public ChoiceBuilder Repeat(IRunExpression<int> count, params IRunEffectRequest[] effects) =>
         Effect(new RepeatRunEffect(count, effects));
@@ -226,10 +237,9 @@ public sealed class ChoiceBuilder
     public ChoiceBuilder OfferReward(RewardId reward, IReadOnlyList<RewardOffer> offers, int pickCount = 1) =>
         Effect(new OfferRewardRunEffect(reward, offers, pickCount));
 
-    // Offer a reward whose offers are generated at resolve time (e.g. Rewards.FromPool(...)).
-    public ChoiceBuilder OfferReward(
-        RewardId reward, Func<RunState, IReadOnlyList<RewardOffer>> generate, int pickCount = 1) =>
-        Effect(new OfferRewardRunEffect(reward, generate, pickCount));
+    // Offer a reward whose offers come from a data source (e.g. RewardTable.FromPool(...)).
+    public ChoiceBuilder OfferReward(RewardId reward, IRewardSource source, int pickCount = 1) =>
+        Effect(new OfferRewardRunEffect(reward, source, pickCount));
 
     // Register a reward modifier for the next `rewardCount` rewards (e.g. RewardModifiers.AddOffer(...)).
     public ChoiceBuilder AddRewardModifier(IRunRewardModifier modifier, int rewardCount = 1) =>

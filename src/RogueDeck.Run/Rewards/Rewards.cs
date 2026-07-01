@@ -7,16 +7,67 @@ namespace RogueDeck.Run;
 // gold, or any composition — with zero engine privilege.
 public sealed record RewardOffer(string Id, IReadOnlyList<IRunEffectRequest> Grant);
 
-// Offer a reward: generate the offers (often from a pool, at resolve time so the run RNG drives it), let the
-// player pick PickCount of them, and grant the chosen offers. Generation is a Func<RunState,...> so it can be
-// deterministic and state-aware; a fixed offer list is a convenience overload.
+// How a reward's offers are produced — the data-first replacement for a generation lambda. A RewardTable
+// builds the common sources (fixed list, weighted-pool draw); Custom is the escape hatch.
+public interface IRewardSource
+{
+    IReadOnlyList<RewardOffer> Generate(RunState run);
+}
+
+public sealed class FixedRewardSource : IRewardSource
+{
+    private readonly IReadOnlyList<RewardOffer> _offers;
+    public FixedRewardSource(IReadOnlyList<RewardOffer> offers)
+    {
+        ArgumentNullException.ThrowIfNull(offers);
+        _offers = offers;
+    }
+    public IReadOnlyList<RewardOffer> Generate(RunState run) => _offers;
+}
+
+// Draw up to `count` distinct offers from a weighted pool (seed-reproducible via RunPool.DrawMany).
+public sealed class PoolRewardSource : IRewardSource
+{
+    private readonly RunPool<RewardOffer> _pool;
+    private readonly int _count;
+    public PoolRewardSource(RunPool<RewardOffer> pool, int count)
+    {
+        ArgumentNullException.ThrowIfNull(pool);
+        _pool = pool;
+        _count = count;
+    }
+    public IReadOnlyList<RewardOffer> Generate(RunState run) =>
+        _pool.DrawMany(run, Math.Clamp(_count, 0, _pool.Entries.Count));
+}
+
+public sealed class DelegateRewardSource : IRewardSource
+{
+    private readonly Func<RunState, IReadOnlyList<RewardOffer>> _generate;
+    public DelegateRewardSource(Func<RunState, IReadOnlyList<RewardOffer>> generate)
+    {
+        ArgumentNullException.ThrowIfNull(generate);
+        _generate = generate;
+    }
+    public IReadOnlyList<RewardOffer> Generate(RunState run) => _generate(run);
+}
+
+public static class RewardTable
+{
+    public static IRewardSource Of(params RewardOffer[] offers) => new FixedRewardSource(offers);
+    public static IRewardSource FromPool(RunPool<RewardOffer> pool, int count) => new PoolRewardSource(pool, count);
+    public static IRewardSource Custom(Func<RunState, IReadOnlyList<RewardOffer>> generate) =>
+        new DelegateRewardSource(generate);
+}
+
+// Offer a reward: generate the offers from a data source, apply reward modifiers, let the player pick
+// PickCount, and grant the chosen offers. A fixed offer list is a convenience overload.
 public sealed record OfferRewardRunEffect(
     RewardId Reward,
-    Func<RunState, IReadOnlyList<RewardOffer>> GenerateOffers,
+    IRewardSource Source,
     int PickCount = 1) : IRunEffectRequest
 {
     public OfferRewardRunEffect(RewardId reward, IReadOnlyList<RewardOffer> offers, int pickCount = 1)
-        : this(reward, _ => offers, pickCount)
+        : this(reward, new FixedRewardSource(offers), pickCount)
     {
     }
 }
@@ -25,7 +76,7 @@ public sealed class OfferRewardRunEffectHandler : RunEffectHandler<OfferRewardRu
 {
     protected override void Resolve(RunState run, RunDefinitionRegistry registry, OfferRewardRunEffect request)
     {
-        var offers = request.GenerateOffers(run).ToList();
+        var offers = request.Source.Generate(run).ToList();
         // Active reward modifiers reshape the offers (add/transform) before the player sees them.
         run.ApplyRewardModifiers(offers);
         if (offers.Count == 0)
@@ -115,11 +166,4 @@ public static class Rewards
         new(id ?? $"{resource}-{amount}", new IRunEffectRequest[] { new ChangeResourceRunEffect(resource, amount) });
 
     public static RewardOffer Gold(int amount) => Resource(StandardRunIds.Gold, amount, $"gold-{amount}");
-
-    // Generation: draw `count` distinct offers from a pool at resolve time (seed-reproducible).
-    public static Func<RunState, IReadOnlyList<RewardOffer>> FromPool(RunPool<RewardOffer> pool, int count)
-    {
-        ArgumentNullException.ThrowIfNull(pool);
-        return run => pool.DrawMany(run, count);
-    }
 }

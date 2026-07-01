@@ -68,5 +68,10 @@ deliberately deferred to their own foundations.) A **catalog-gap pass** is part 
   (UpgradeThisCard/TagThisCard/RemoveThisCard/SetThisCardMemory/TransformThisCard); `ForEachCardRunEffect`
   applies templates per selected card with that card in scope. `.ForEachCard(selector, templates)` sugar;
   the lambda overload stays as escape.
-- Remaining: R6 (reward tables), catalog-gap pass (MaxHP±, relic remove/disable, consumables), R7 (encounters
-  as data). Then serialization + content registry/validation + run Sandbox UI.
+- **R6 done** — reward generation is data: `IRewardSource` (`RewardTable.Of` / `FromPool` / `Custom` escape);
+  `OfferRewardRunEffect` takes it; the generation Func is gone from content.
+- **Catalog-gap (partial) done** — `ChangeMaxHealthRunEffect` (GainMaxHealth heals too; LoseMaxHealth caps,
+  min 1) and `RemoveRelicRunEffect`. Still open: relic disable (needs per-relic active state) and consumables
+  (a run inventory of one-shot items) — each its own slice.
+- Remaining: R7 (encounters as data → kill CombatNodePayload Func; needs combat content addressable by id),
+  relic-disable + consumables. Then serialization + content registry/validation + run Sandbox UI.

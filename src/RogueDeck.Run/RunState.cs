@@ -96,6 +96,16 @@ public sealed class RunState
         _relics.Add(relic);
     }
 
+    // Removes the first relic with this id; returns whether one was removed.
+    public bool RemoveRelic(RelicId id)
+    {
+        var index = _relics.FindIndex(r => r.Id == id);
+        if (index < 0)
+            return false;
+        _relics.RemoveAt(index);
+        return true;
+    }
+
     // Install a triggered program on the run. Ids are unique — installing a duplicate id is a programming
     // error (a scheduled consequence should mint a fresh id each time). Usable at setup; the in-flow path is
     // InstallRunProgramRunEffect.

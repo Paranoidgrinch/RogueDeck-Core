@@ -105,7 +105,7 @@ public class RewardTests
 
         var pool = RunPool.Uniform(CardOffers);
         // Offer 2 distinct card offers drawn from the pool; take both.
-        run.EnqueueEffect(new OfferRewardRunEffect(ChestReward, Rewards.FromPool(pool, 2), 2));
+        run.EnqueueEffect(new OfferRewardRunEffect(ChestReward, RewardTable.FromPool(pool, 2), 2));
         Drain(run, registry);
 
         Assert.Equal(2, run.Deck.Count);

@@ -95,6 +95,8 @@ public static class StandardRunLogTypes
     public const string EventChoiceMade = "run.event-choice";
     public const string ResourceChanged = "run.resource-changed";
     public const string RelicAcquired = "run.relic-acquired";
+    public const string RelicRemoved = "run.relic-removed";
+    public const string MaxHealthChanged = "run.max-health-changed";
     public const string RewardGranted = "run.reward-granted";
     public const string RewardOffered = "run.reward-offered";
     public const string RewardChosen = "run.reward-chosen";
