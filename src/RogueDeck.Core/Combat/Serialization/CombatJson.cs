@@ -87,6 +87,7 @@ public static class CombatJson
         var registry = new CombatJsonRegistry();
         RegisterExpressions(registry);
         RegisterSelectors(registry);
+        RegisterNodes(registry);
         return registry;
     }
 
@@ -101,6 +102,7 @@ public static class CombatJson
         options.Converters.Add(new CombatPolymorphicConverter<ICombatExpression<TContext, bool>>(registry, typeof(TContext)));
         // Target selectors are context-independent (non-generic); the same converter works for every context.
         options.Converters.Add(new CombatPolymorphicConverter<ICombatantTargetSelector>(registry, typeof(TContext)));
+        options.Converters.Add(new CombatPolymorphicConverter<IEffectNode<TContext>>(registry, typeof(TContext)));
         return options;
     }
 
@@ -152,5 +154,16 @@ public static class CombatJson
          .Register("sel.lowestHealthAlly", typeof(LowestHealthAllyOfSourceCombatantTargetSelector))
          .Register("sel.highestHealthAlly", typeof(HighestHealthAllyOfSourceCombatantTargetSelector))
          .Register("sel.union", typeof(UnionCombatantTargetSelector));
+    }
+
+    // Leaf native operation nodes (they hold a selector + expressions, no child nodes). Composite/control-flow
+    // nodes (Sequence/Conditional/ForEach) land in a later slice; nodes with a non-null EffectResultKey are not
+    // yet round-trippable (support the null case first).
+    private static void RegisterNodes(CombatJsonRegistry r)
+    {
+        r.Register("node.dealDamage", typeof(DealDamageNode<>))
+         .Register("node.heal", typeof(HealNode<>))
+         .Register("node.gainBlock", typeof(GainBlockNode<>))
+         .Register("node.gainResource", typeof(GainResourceNode<>));
     }
 }
