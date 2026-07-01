@@ -22,7 +22,9 @@ public sealed class StandardRunPackage : IRunPackage
             .RegisterEffectHandler(new HealRunEffectHandler())
             .RegisterEffectHandler(new AddCardToDeckRunEffectHandler())
             .RegisterEffectHandler(new AddRelicRunEffectHandler())
-            .RegisterEffectHandler(new GrantRewardRunEffectHandler());
+            .RegisterEffectHandler(new GrantRewardRunEffectHandler())
+            .RegisterEffectHandler(new ComputedResourceRunEffectHandler())
+            .RegisterEffectHandler(new ConditionalRunEffectHandler());
 
         builder
             .RegisterResolver(new CombatNodeResolver(_combatDriver))

@@ -93,7 +93,15 @@ public sealed class ChoiceBuilder
 
     // The choice is only offered when the run still holds at least `min` of the resource (e.g. shop price).
     public ChoiceBuilder RequireResource(RunResourceId resource, int min) =>
-        Require(run => run.GetResource(resource) >= min);
+        Require(RunExpr.HasResource(resource, min));
+
+    // Composable requirement: the choice is offered only when the condition expression holds against the run.
+    // Prefer this over the raw-delegate overload so the requirement stays inspectable data.
+    public ChoiceBuilder Require(IRunExpression<bool> condition)
+    {
+        ArgumentNullException.ThrowIfNull(condition);
+        return Require(condition.Evaluate);
+    }
 
     public ChoiceBuilder Require(Func<RunState, bool> requirement)
     {
