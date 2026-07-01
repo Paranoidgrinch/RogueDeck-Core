@@ -25,6 +25,52 @@
             <p class="error">@_error</p>
         }
 
+        <h2>Map</h2>
+        @if (TryBlueprint(out var bp))
+        {
+            <ol class="log">
+                @for (var i = 0; i < bp.Map.Nodes.Count; i++)
+                {
+                    var index = i;
+                    var node = bp.Map.Nodes[i];
+                    <li>
+                        <span class="line-kind">@NodeKind(node)</span> <strong>@NodeTarget(node)</strong>
+                        <button class="mini" @onclick="() => MoveNode(index, -1)">↑</button>
+                        <button class="mini" @onclick="() => MoveNode(index, 1)">↓</button>
+                        <button class="mini" @onclick="() => RemoveNode(index)">✕</button>
+                    </li>
+                }
+            </ol>
+            <div class="run-bar">
+                <select @bind="_newNodeType">
+                    <option value="event">event</option>
+                    <option value="combat">combat</option>
+                </select>
+                <select @bind="_newNodeTarget">
+                    <option value="">— target —</option>
+                    @if (_newNodeType == "combat")
+                    {
+                        @foreach (var encounter in bp.Encounters)
+                        {
+                            <option value="@encounter.Id.Value">@encounter.Id.Value</option>
+                        }
+                    }
+                    else
+                    {
+                        @foreach (var key in bp.Events.Keys)
+                        {
+                            <option value="@key">@key</option>
+                        }
+                    }
+                </select>
+                <button class="play" @onclick="AddNode">Add node</button>
+            </div>
+        }
+        else
+        {
+            <p class="muted">Fix the JSON to edit the map visually.</p>
+        }
+
         <h2>Headless balancing</h2>
         <p class="muted">Auto-play the blueprint over many seeds (choices auto-pick the first option) and tally outcomes.</p>
         <div class="run-bar">
@@ -125,6 +171,63 @@
     private int _simRuns = 50;
     private string? _simSummary;
     private IJSObjectReference? _jsModule;
+    private string _newNodeType = "event";
+    private string _newNodeTarget = "";
+    private int _nodeSeq = 100;
+
+    // ── Visual map builder (edits the parsed blueprint, then writes it back to the JSON) ──
+    private bool TryBlueprint(out RunBlueprint blueprint)
+    {
+        try { blueprint = RunJson.FromJson<RunBlueprint>(_json, _options); return true; }
+        catch { blueprint = null!; return false; }
+    }
+
+    private void RebuildMap(RunBlueprint blueprint, List<Node> nodes) =>
+        _json = RunJson.ToJson(blueprint with { Map = new RunMap(nodes) }, _options);
+
+    private void AddNode()
+    {
+        if (string.IsNullOrEmpty(_newNodeTarget) || !TryBlueprint(out var blueprint))
+            return;
+        var nodes = blueprint.Map.Nodes.ToList();
+        var (type, payload) = _newNodeType == "combat"
+            ? (StandardRunIds.CombatNode, (IRunNodePayload)new EncounterRef(new EncounterId(_newNodeTarget)))
+            : (StandardRunIds.EventNode, new EventRef(new EventId(_newNodeTarget)));
+        nodes.Add(new Node(new NodeId($"n{_nodeSeq++}"), type, payload));
+        RebuildMap(blueprint, nodes);
+    }
+
+    private void RemoveNode(int index)
+    {
+        if (!TryBlueprint(out var blueprint))
+            return;
+        var nodes = blueprint.Map.Nodes.ToList();
+        if (index < 0 || index >= nodes.Count)
+            return;
+        nodes.RemoveAt(index);
+        RebuildMap(blueprint, nodes);
+    }
+
+    private void MoveNode(int index, int direction)
+    {
+        if (!TryBlueprint(out var blueprint))
+            return;
+        var nodes = blueprint.Map.Nodes.ToList();
+        var target = index + direction;
+        if (index < 0 || index >= nodes.Count || target < 0 || target >= nodes.Count)
+            return;
+        (nodes[index], nodes[target]) = (nodes[target], nodes[index]);
+        RebuildMap(blueprint, nodes);
+    }
+
+    private static string NodeKind(Node node) => node.Type == StandardRunIds.CombatNode ? "combat" : "event";
+
+    private static string NodeTarget(Node node) => node.Payload switch
+    {
+        EventRef e => e.Id.Value,
+        EncounterRef en => en.Id.Value,
+        _ => "?",
+    };
 
     protected override void OnInitialized() => _json = RunJson.ToJson(DemoBlueprint(), _options);
 

@@ -55,3 +55,19 @@ body {
     flex-wrap: wrap;
     margin: 0.5rem 0 1rem;
 }
+
+.mini {
+    margin-left: 0.25rem;
+    padding: 0 0.4rem;
+    font-size: 0.85em;
+    background: #2b2f3a;
+    color: #cbd5e1;
+    border: 1px solid #3a3f4b;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.mini:hover {
+    background: #37506b;
+    color: #fff;
+}
