@@ -126,14 +126,14 @@ public static class RunEffectTemplates
 public sealed class DataTriggeredRunEffect<TEvent> : ITriggeredRunEffectDefinition
     where TEvent : IRunEvent
 {
-    private readonly IRunExpression<bool>? _condition;
-    private readonly IReadOnlyList<IRunEffectTemplate> _templates;
+    public IRunExpression<bool>? Condition { get; }
+    public IReadOnlyList<IRunEffectTemplate> Templates { get; }
 
     public DataTriggeredRunEffect(IRunExpression<bool>? condition, IReadOnlyList<IRunEffectTemplate> templates)
     {
         ArgumentNullException.ThrowIfNull(templates);
-        _condition = condition;
-        _templates = templates;
+        Condition = condition;
+        Templates = templates;
     }
 
     public Type EventType => typeof(TEvent);
@@ -144,12 +144,12 @@ public sealed class DataTriggeredRunEffect<TEvent> : ITriggeredRunEffectDefiniti
             return Array.Empty<IRunEffectRequest>();
 
         var context = new RunEvalContext(run, runEvent);
-        if (_condition is not null && !_condition.Evaluate(context))
+        if (Condition is not null && !Condition.Evaluate(context))
             return Array.Empty<IRunEffectRequest>();
 
-        var effects = new IRunEffectRequest[_templates.Count];
-        for (var i = 0; i < _templates.Count; i++)
-            effects[i] = _templates[i].Build(context);
+        var effects = new IRunEffectRequest[Templates.Count];
+        for (var i = 0; i < Templates.Count; i++)
+            effects[i] = Templates[i].Build(context);
         return effects;
     }
 }

@@ -16,28 +16,28 @@ public interface IRewardSource
 
 public sealed class FixedRewardSource : IRewardSource
 {
-    private readonly IReadOnlyList<RewardOffer> _offers;
+    public IReadOnlyList<RewardOffer> Offers { get; }
     public FixedRewardSource(IReadOnlyList<RewardOffer> offers)
     {
         ArgumentNullException.ThrowIfNull(offers);
-        _offers = offers;
+        Offers = offers;
     }
-    public IReadOnlyList<RewardOffer> Generate(RunState run) => _offers;
+    public IReadOnlyList<RewardOffer> Generate(RunState run) => Offers;
 }
 
 // Draw up to `count` distinct offers from a weighted pool (seed-reproducible via RunPool.DrawMany).
 public sealed class PoolRewardSource : IRewardSource
 {
-    private readonly RunPool<RewardOffer> _pool;
-    private readonly int _count;
+    public RunPool<RewardOffer> Pool { get; }
+    public int Count { get; }
     public PoolRewardSource(RunPool<RewardOffer> pool, int count)
     {
         ArgumentNullException.ThrowIfNull(pool);
-        _pool = pool;
-        _count = count;
+        Pool = pool;
+        Count = count;
     }
     public IReadOnlyList<RewardOffer> Generate(RunState run) =>
-        _pool.DrawMany(run, Math.Clamp(_count, 0, _pool.Entries.Count));
+        Pool.DrawMany(run, Math.Clamp(Count, 0, Pool.Entries.Count));
 }
 
 public sealed class DelegateRewardSource : IRewardSource

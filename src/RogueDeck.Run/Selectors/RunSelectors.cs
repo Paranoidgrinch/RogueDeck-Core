@@ -39,27 +39,27 @@ public sealed class RelicsSelector : IRunSelector<RelicInstance>
 // stable id, so it survives until the effect drains — the way a ForEach template targets "this card".
 public sealed class InstanceSelector : IRunSelector<RunCardInstance>
 {
-    private readonly RunCardInstanceId _id;
-    public InstanceSelector(RunCardInstanceId id) => _id = id;
+    public RunCardInstanceId Id { get; }
+    public InstanceSelector(RunCardInstanceId id) => Id = id;
     public IReadOnlyList<RunCardInstance> Select(RunEvalContext context) =>
-        context.Run.Deck.Where(card => card.Id == _id).ToArray();
+        context.Run.Deck.Where(card => card.Id == Id).ToArray();
 }
 
 // ── Combinators ───────────────────────────────────────────────────────────────────
 
 public sealed class WhereSelector<T> : IRunSelector<T>
 {
-    private readonly IRunSelector<T> _inner;
-    private readonly Func<T, bool> _predicate;
+    public IRunSelector<T> Inner { get; }
+    public Func<T, bool> Predicate { get; }
     public WhereSelector(IRunSelector<T> inner, Func<T, bool> predicate)
     {
         ArgumentNullException.ThrowIfNull(inner);
         ArgumentNullException.ThrowIfNull(predicate);
-        _inner = inner;
-        _predicate = predicate;
+        Inner = inner;
+        Predicate = predicate;
     }
     public IReadOnlyList<T> Select(RunEvalContext context) =>
-        _inner.Select(context).Where(_predicate).ToArray();
+        Inner.Select(context).Where(Predicate).ToArray();
 }
 
 // Keeps the cards matching a data predicate — the current card is put in scope so the predicate reads it via
@@ -67,55 +67,55 @@ public sealed class WhereSelector<T> : IRunSelector<T>
 // ordinary combinators, no code.
 public sealed class MatchingCardSelector : IRunSelector<RunCardInstance>
 {
-    private readonly IRunSelector<RunCardInstance> _inner;
-    private readonly IRunExpression<bool> _predicate;
+    public IRunSelector<RunCardInstance> Inner { get; }
+    public IRunExpression<bool> Predicate { get; }
     public MatchingCardSelector(IRunSelector<RunCardInstance> inner, IRunExpression<bool> predicate)
     {
         ArgumentNullException.ThrowIfNull(inner);
         ArgumentNullException.ThrowIfNull(predicate);
-        _inner = inner;
-        _predicate = predicate;
+        Inner = inner;
+        Predicate = predicate;
     }
     public IReadOnlyList<RunCardInstance> Select(RunEvalContext context) =>
-        _inner.Select(context)
-            .Where(card => _predicate.Evaluate(context.WithCard(card)))
+        Inner.Select(context)
+            .Where(card => Predicate.Evaluate(context.WithCard(card)))
             .ToArray();
 }
 
 // The first `count` in source order (fewer if there are not enough). Deterministic; no RNG.
 public sealed class TakeSelector<T> : IRunSelector<T>
 {
-    private readonly IRunSelector<T> _inner;
-    private readonly int _count;
+    public IRunSelector<T> Inner { get; }
+    public int Count { get; }
     public TakeSelector(IRunSelector<T> inner, int count)
     {
         ArgumentNullException.ThrowIfNull(inner);
-        _inner = inner;
-        _count = Math.Max(0, count);
+        Inner = inner;
+        Count = Math.Max(0, count);
     }
     public IReadOnlyList<T> Select(RunEvalContext context) =>
-        _inner.Select(context).Take(_count).ToArray();
+        Inner.Select(context).Take(Count).ToArray();
 }
 
 // Up to `count` distinct entities drawn uniformly at random via the run RNG (reusing RunPool's
 // draw-without-replacement, so the seed reproduces the pick). Empty source yields empty.
 public sealed class RandomSelector<T> : IRunSelector<T>
 {
-    private readonly IRunSelector<T> _inner;
-    private readonly int _count;
+    public IRunSelector<T> Inner { get; }
+    public int Count { get; }
     public RandomSelector(IRunSelector<T> inner, int count)
     {
         ArgumentNullException.ThrowIfNull(inner);
-        _inner = inner;
-        _count = Math.Max(0, count);
+        Inner = inner;
+        Count = Math.Max(0, count);
     }
     public IReadOnlyList<T> Select(RunEvalContext context)
     {
-        var candidates = _inner.Select(context);
-        if (candidates.Count == 0 || _count == 0)
+        var candidates = Inner.Select(context);
+        if (candidates.Count == 0 || Count == 0)
             return Array.Empty<T>();
 
-        var take = Math.Min(_count, candidates.Count);
+        var take = Math.Min(Count, candidates.Count);
         return RunPool.Uniform(candidates.ToArray()).DrawMany(context.Run, take);
     }
 }
@@ -124,27 +124,27 @@ public sealed class RandomSelector<T> : IRunSelector<T>
 // one is an author error (it can only run where player input is available).
 public sealed class ChooseSelector<T> : IRunSelector<T>
 {
-    private readonly IRunSelector<T> _inner;
-    private readonly int _count;
-    private readonly string _purpose;
+    public IRunSelector<T> Inner { get; }
+    public int Count { get; }
+    public string Purpose { get; }
     public ChooseSelector(IRunSelector<T> inner, int count, string purpose)
     {
         ArgumentNullException.ThrowIfNull(inner);
-        _inner = inner;
-        _count = Math.Max(0, count);
-        _purpose = purpose;
+        Inner = inner;
+        Count = Math.Max(0, count);
+        Purpose = purpose;
     }
     public IReadOnlyList<T> Select(RunEvalContext context)
     {
-        var candidates = _inner.Select(context);
-        if (candidates.Count == 0 || _count == 0)
+        var candidates = Inner.Select(context);
+        if (candidates.Count == 0 || Count == 0)
             return Array.Empty<T>();
         if (context.Chooser is null)
             throw new InvalidOperationException(
-                $"A player-choice selector ('{_purpose}') was evaluated without a chooser in context.");
+                $"A player-choice selector ('{Purpose}') was evaluated without a chooser in context.");
 
-        var take = Math.Min(_count, candidates.Count);
-        return context.Chooser.ChooseEntities(candidates, take, _purpose);
+        var take = Math.Min(Count, candidates.Count);
+        return context.Chooser.ChooseEntities(candidates, take, Purpose);
     }
 }
 

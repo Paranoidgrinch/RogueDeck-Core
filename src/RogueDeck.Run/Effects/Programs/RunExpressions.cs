@@ -55,9 +55,9 @@ public sealed class RunConstantExpression : IRunExpression<int>
 
 public sealed class ResourceValueExpression : IRunExpression<int>
 {
-    private readonly RunResourceId _resource;
-    public ResourceValueExpression(RunResourceId resource) => _resource = resource;
-    public int Evaluate(RunEvalContext context) => context.Run.GetResource(_resource);
+    public RunResourceId Resource { get; }
+    public ResourceValueExpression(RunResourceId resource) => Resource = resource;
+    public int Evaluate(RunEvalContext context) => context.Run.GetResource(Resource);
 }
 
 public sealed class CurrentHealthExpression : IRunExpression<int>
@@ -87,16 +87,16 @@ public sealed class RelicCountExpression : IRunExpression<int>
 
 public sealed class CounterValueExpression : IRunExpression<int>
 {
-    private readonly RunCounterId _counter;
-    public CounterValueExpression(RunCounterId counter) => _counter = counter;
-    public int Evaluate(RunEvalContext context) => context.Run.GetCounter(_counter);
+    public RunCounterId Counter { get; }
+    public CounterValueExpression(RunCounterId counter) => Counter = counter;
+    public int Evaluate(RunEvalContext context) => context.Run.GetCounter(Counter);
 }
 
 public sealed class FlagSetExpression : IRunExpression<bool>
 {
-    private readonly RunFlagId _flag;
-    public FlagSetExpression(RunFlagId flag) => _flag = flag;
-    public bool Evaluate(RunEvalContext context) => context.Run.HasFlag(_flag);
+    public RunFlagId Flag { get; }
+    public FlagSetExpression(RunFlagId flag) => Flag = flag;
+    public bool Evaluate(RunEvalContext context) => context.Run.HasFlag(Flag);
 }
 
 // Reads an int field off the triggering event. Only meaningful while an event of the expected type is in
@@ -104,11 +104,11 @@ public sealed class FlagSetExpression : IRunExpression<bool>
 public sealed class EventFieldExpression<TEvent> : IRunExpression<int>
     where TEvent : IRunEvent
 {
-    private readonly Func<TEvent, int> _field;
+    public Func<TEvent, int> Field { get; }
     public EventFieldExpression(Func<TEvent, int> field)
     {
         ArgumentNullException.ThrowIfNull(field);
-        _field = field;
+        Field = field;
     }
     public int Evaluate(RunEvalContext context)
     {
@@ -116,7 +116,7 @@ public sealed class EventFieldExpression<TEvent> : IRunExpression<int>
             throw new InvalidOperationException(
                 $"EventValue<{typeof(TEvent).Name}> was evaluated without a matching '{typeof(TEvent).Name}' " +
                 "in the context — it is only valid during a reaction to that event.");
-        return _field(typed);
+        return Field(typed);
     }
 }
 
@@ -125,18 +125,18 @@ public sealed class EventFieldExpression<TEvent> : IRunExpression<int>
 public sealed class EventBoolFieldExpression<TEvent> : IRunExpression<bool>
     where TEvent : IRunEvent
 {
-    private readonly Func<TEvent, bool> _field;
+    public Func<TEvent, bool> Field { get; }
     public EventBoolFieldExpression(Func<TEvent, bool> field)
     {
         ArgumentNullException.ThrowIfNull(field);
-        _field = field;
+        Field = field;
     }
     public bool Evaluate(RunEvalContext context)
     {
         if (context.Event is not TEvent typed)
             throw new InvalidOperationException(
                 $"An event predicate for '{typeof(TEvent).Name}' was evaluated without a matching event in context.");
-        return _field(typed);
+        return Field(typed);
     }
 }
 
@@ -144,141 +144,141 @@ public sealed class EventBoolFieldExpression<TEvent> : IRunExpression<bool>
 
 public sealed class AddExpression : IRunExpression<int>
 {
-    private readonly IRunExpression<int> _left;
-    private readonly IRunExpression<int> _right;
+    public IRunExpression<int> Left { get; }
+    public IRunExpression<int> Right { get; }
     public AddExpression(IRunExpression<int> left, IRunExpression<int> right)
     {
         ArgumentNullException.ThrowIfNull(left);
         ArgumentNullException.ThrowIfNull(right);
-        _left = left;
-        _right = right;
+        Left = left;
+        Right = right;
     }
-    public int Evaluate(RunEvalContext context) => _left.Evaluate(context) + _right.Evaluate(context);
+    public int Evaluate(RunEvalContext context) => Left.Evaluate(context) + Right.Evaluate(context);
 }
 
 public sealed class SubtractExpression : IRunExpression<int>
 {
-    private readonly IRunExpression<int> _left;
-    private readonly IRunExpression<int> _right;
+    public IRunExpression<int> Left { get; }
+    public IRunExpression<int> Right { get; }
     public SubtractExpression(IRunExpression<int> left, IRunExpression<int> right)
     {
         ArgumentNullException.ThrowIfNull(left);
         ArgumentNullException.ThrowIfNull(right);
-        _left = left;
-        _right = right;
+        Left = left;
+        Right = right;
     }
-    public int Evaluate(RunEvalContext context) => _left.Evaluate(context) - _right.Evaluate(context);
+    public int Evaluate(RunEvalContext context) => Left.Evaluate(context) - Right.Evaluate(context);
 }
 
 public sealed class MultiplyExpression : IRunExpression<int>
 {
-    private readonly IRunExpression<int> _left;
-    private readonly IRunExpression<int> _right;
+    public IRunExpression<int> Left { get; }
+    public IRunExpression<int> Right { get; }
     public MultiplyExpression(IRunExpression<int> left, IRunExpression<int> right)
     {
         ArgumentNullException.ThrowIfNull(left);
         ArgumentNullException.ThrowIfNull(right);
-        _left = left;
-        _right = right;
+        Left = left;
+        Right = right;
     }
-    public int Evaluate(RunEvalContext context) => _left.Evaluate(context) * _right.Evaluate(context);
+    public int Evaluate(RunEvalContext context) => Left.Evaluate(context) * Right.Evaluate(context);
 }
 
 public sealed class MinExpression : IRunExpression<int>
 {
-    private readonly IRunExpression<int> _left;
-    private readonly IRunExpression<int> _right;
+    public IRunExpression<int> Left { get; }
+    public IRunExpression<int> Right { get; }
     public MinExpression(IRunExpression<int> left, IRunExpression<int> right)
     {
         ArgumentNullException.ThrowIfNull(left);
         ArgumentNullException.ThrowIfNull(right);
-        _left = left;
-        _right = right;
+        Left = left;
+        Right = right;
     }
-    public int Evaluate(RunEvalContext context) => Math.Min(_left.Evaluate(context), _right.Evaluate(context));
+    public int Evaluate(RunEvalContext context) => Math.Min(Left.Evaluate(context), Right.Evaluate(context));
 }
 
 public sealed class MaxExpression : IRunExpression<int>
 {
-    private readonly IRunExpression<int> _left;
-    private readonly IRunExpression<int> _right;
+    public IRunExpression<int> Left { get; }
+    public IRunExpression<int> Right { get; }
     public MaxExpression(IRunExpression<int> left, IRunExpression<int> right)
     {
         ArgumentNullException.ThrowIfNull(left);
         ArgumentNullException.ThrowIfNull(right);
-        _left = left;
-        _right = right;
+        Left = left;
+        Right = right;
     }
-    public int Evaluate(RunEvalContext context) => Math.Max(_left.Evaluate(context), _right.Evaluate(context));
+    public int Evaluate(RunEvalContext context) => Math.Max(Left.Evaluate(context), Right.Evaluate(context));
 }
 
 // Clamps value into [min, max]. min must not exceed max (a construction-time author error).
 public sealed class ClampExpression : IRunExpression<int>
 {
-    private readonly IRunExpression<int> _value;
-    private readonly IRunExpression<int> _min;
-    private readonly IRunExpression<int> _max;
+    public IRunExpression<int> Value { get; }
+    public IRunExpression<int> Min { get; }
+    public IRunExpression<int> Max { get; }
     public ClampExpression(IRunExpression<int> value, IRunExpression<int> min, IRunExpression<int> max)
     {
         ArgumentNullException.ThrowIfNull(value);
         ArgumentNullException.ThrowIfNull(min);
         ArgumentNullException.ThrowIfNull(max);
-        _value = value;
-        _min = min;
-        _max = max;
+        Value = value;
+        Min = min;
+        Max = max;
     }
     public int Evaluate(RunEvalContext context)
     {
-        var min = _min.Evaluate(context);
-        var max = _max.Evaluate(context);
+        var min = Min.Evaluate(context);
+        var max = Max.Evaluate(context);
         if (min > max)
             throw new InvalidOperationException(
                 $"Clamp min ({min}) exceeds max ({max}).");
-        return Math.Clamp(_value.Evaluate(context), min, max);
+        return Math.Clamp(Value.Evaluate(context), min, max);
     }
 }
 
 // Integer division (truncating toward zero). Division by zero is an author error and throws.
 public sealed class DivideExpression : IRunExpression<int>
 {
-    private readonly IRunExpression<int> _left;
-    private readonly IRunExpression<int> _right;
+    public IRunExpression<int> Left { get; }
+    public IRunExpression<int> Right { get; }
     public DivideExpression(IRunExpression<int> left, IRunExpression<int> right)
     {
         ArgumentNullException.ThrowIfNull(left);
         ArgumentNullException.ThrowIfNull(right);
-        _left = left;
-        _right = right;
+        Left = left;
+        Right = right;
     }
     public int Evaluate(RunEvalContext context)
     {
-        var divisor = _right.Evaluate(context);
+        var divisor = Right.Evaluate(context);
         if (divisor == 0)
             throw new InvalidOperationException("Division by zero in a run expression.");
-        return _left.Evaluate(context) / divisor;
+        return Left.Evaluate(context) / divisor;
     }
 }
 
 public sealed class AbsExpression : IRunExpression<int>
 {
-    private readonly IRunExpression<int> _inner;
+    public IRunExpression<int> Inner { get; }
     public AbsExpression(IRunExpression<int> inner)
     {
         ArgumentNullException.ThrowIfNull(inner);
-        _inner = inner;
+        Inner = inner;
     }
-    public int Evaluate(RunEvalContext context) => Math.Abs(_inner.Evaluate(context));
+    public int Evaluate(RunEvalContext context) => Math.Abs(Inner.Evaluate(context));
 }
 
 public sealed class NegateExpression : IRunExpression<int>
 {
-    private readonly IRunExpression<int> _inner;
+    public IRunExpression<int> Inner { get; }
     public NegateExpression(IRunExpression<int> inner)
     {
         ArgumentNullException.ThrowIfNull(inner);
-        _inner = inner;
+        Inner = inner;
     }
-    public int Evaluate(RunEvalContext context) => -_inner.Evaluate(context);
+    public int Evaluate(RunEvalContext context) => -Inner.Evaluate(context);
 }
 
 // ── Aggregates over selectors ───────────────────────────────────────────────────────
@@ -288,45 +288,45 @@ public sealed class NegateExpression : IRunExpression<int>
 
 public sealed class CountExpression<T> : IRunExpression<int>
 {
-    private readonly IRunSelector<T> _selector;
+    public IRunSelector<T> Selector { get; }
     public CountExpression(IRunSelector<T> selector)
     {
         ArgumentNullException.ThrowIfNull(selector);
-        _selector = selector;
+        Selector = selector;
     }
-    public int Evaluate(RunEvalContext context) => _selector.Select(new RunEvalContext(context.Run)).Count;
+    public int Evaluate(RunEvalContext context) => Selector.Select(new RunEvalContext(context.Run)).Count;
 }
 
 public sealed class SumExpression<T> : IRunExpression<int>
 {
-    private readonly IRunSelector<T> _selector;
-    private readonly Func<T, int> _value;
+    public IRunSelector<T> Selector { get; }
+    public Func<T, int> Value { get; }
     public SumExpression(IRunSelector<T> selector, Func<T, int> value)
     {
         ArgumentNullException.ThrowIfNull(selector);
         ArgumentNullException.ThrowIfNull(value);
-        _selector = selector;
-        _value = value;
+        Selector = selector;
+        Value = value;
     }
     public int Evaluate(RunEvalContext context) =>
-        _selector.Select(new RunEvalContext(context.Run)).Sum(_value);
+        Selector.Select(new RunEvalContext(context.Run)).Sum(Value);
 }
 
 // Sum a per-card value expression over selected cards — the data-first Sum (each card is put in scope, so the
 // value expression reads it via CardValue).
 public sealed class SumCardsExpression : IRunExpression<int>
 {
-    private readonly IRunSelector<RunCardInstance> _selector;
-    private readonly IRunExpression<int> _perCard;
+    public IRunSelector<RunCardInstance> Selector { get; }
+    public IRunExpression<int> PerCard { get; }
     public SumCardsExpression(IRunSelector<RunCardInstance> selector, IRunExpression<int> perCard)
     {
         ArgumentNullException.ThrowIfNull(selector);
         ArgumentNullException.ThrowIfNull(perCard);
-        _selector = selector;
-        _perCard = perCard;
+        Selector = selector;
+        PerCard = perCard;
     }
     public int Evaluate(RunEvalContext context) =>
-        _selector.Select(new RunEvalContext(context.Run)).Sum(card => _perCard.Evaluate(context.WithCard(card)));
+        Selector.Select(new RunEvalContext(context.Run)).Sum(card => PerCard.Evaluate(context.WithCard(card)));
 }
 
 // ── Card values (R5) ────────────────────────────────────────────────────────────────
@@ -348,24 +348,24 @@ public sealed class CardUpgradeLevelExpression : IRunExpression<int>
 
 public sealed class CardMemoryExpression : IRunExpression<int>
 {
-    private readonly string _key;
-    public CardMemoryExpression(string key) => _key = key;
-    public int Evaluate(RunEvalContext context) => CardScope.Require(context, "CardValue.Memory").GetMemory(_key);
+    public string Key { get; }
+    public CardMemoryExpression(string key) => Key = key;
+    public int Evaluate(RunEvalContext context) => CardScope.Require(context, "CardValue.Memory").GetMemory(Key);
 }
 
 public sealed class CardHasTagExpression : IRunExpression<bool>
 {
-    private readonly RunCardTagId _tag;
-    public CardHasTagExpression(RunCardTagId tag) => _tag = tag;
-    public bool Evaluate(RunEvalContext context) => CardScope.Require(context, "CardValue.HasTag").HasTag(_tag);
+    public RunCardTagId Tag { get; }
+    public CardHasTagExpression(RunCardTagId tag) => Tag = tag;
+    public bool Evaluate(RunEvalContext context) => CardScope.Require(context, "CardValue.HasTag").HasTag(Tag);
 }
 
 public sealed class CardIsKindExpression : IRunExpression<bool>
 {
-    private readonly CardDefinitionId _definition;
-    public CardIsKindExpression(CardDefinitionId definition) => _definition = definition;
+    public CardDefinitionId Definition { get; }
+    public CardIsKindExpression(CardDefinitionId definition) => Definition = definition;
     public bool Evaluate(RunEvalContext context) =>
-        CardScope.Require(context, "CardValue.IsKind").DefinitionId == _definition;
+        CardScope.Require(context, "CardValue.IsKind").DefinitionId == Definition;
 }
 
 public static class CardValue
@@ -387,19 +387,19 @@ public static class CardValue
 // scale with run state (e.g. a treasure roll that grows with depth). min must not exceed max.
 public sealed class RandomRangeExpression : IRunExpression<int>
 {
-    private readonly IRunExpression<int> _minInclusive;
-    private readonly IRunExpression<int> _maxInclusive;
+    public IRunExpression<int> MinInclusive { get; }
+    public IRunExpression<int> MaxInclusive { get; }
     public RandomRangeExpression(IRunExpression<int> minInclusive, IRunExpression<int> maxInclusive)
     {
         ArgumentNullException.ThrowIfNull(minInclusive);
         ArgumentNullException.ThrowIfNull(maxInclusive);
-        _minInclusive = minInclusive;
-        _maxInclusive = maxInclusive;
+        MinInclusive = minInclusive;
+        MaxInclusive = maxInclusive;
     }
     public int Evaluate(RunEvalContext context)
     {
-        var min = _minInclusive.Evaluate(context);
-        var max = _maxInclusive.Evaluate(context);
+        var min = MinInclusive.Evaluate(context);
+        var max = MaxInclusive.Evaluate(context);
         if (min > max)
             throw new InvalidOperationException($"RandomRange min ({min}) exceeds max ({max}).");
         return min + context.Run.NextRandom(max - min + 1);
@@ -409,13 +409,13 @@ public sealed class RandomRangeExpression : IRunExpression<int>
 // Weighted draw of an int from a pool (e.g. loot values with different rarities).
 public sealed class PoolValueExpression : IRunExpression<int>
 {
-    private readonly RunPool<int> _pool;
+    public RunPool<int> Pool { get; }
     public PoolValueExpression(RunPool<int> pool)
     {
         ArgumentNullException.ThrowIfNull(pool);
-        _pool = pool;
+        Pool = pool;
     }
-    public int Evaluate(RunEvalContext context) => _pool.Draw(context.Run);
+    public int Evaluate(RunEvalContext context) => Pool.Draw(context.Run);
 }
 
 // ── Conditions ──────────────────────────────────────────────────────────────────
@@ -439,23 +439,23 @@ public sealed class RunConstantBoolExpression : IRunExpression<bool>
 
 public sealed class RunComparisonExpression : IRunExpression<bool>
 {
-    private readonly IRunExpression<int> _left;
-    private readonly RunComparisonOperator _op;
-    private readonly IRunExpression<int> _right;
+    public IRunExpression<int> Left { get; }
+    public RunComparisonOperator Op { get; }
+    public IRunExpression<int> Right { get; }
     public RunComparisonExpression(
         IRunExpression<int> left, RunComparisonOperator op, IRunExpression<int> right)
     {
         ArgumentNullException.ThrowIfNull(left);
         ArgumentNullException.ThrowIfNull(right);
-        _left = left;
-        _op = op;
-        _right = right;
+        Left = left;
+        Op = op;
+        Right = right;
     }
     public bool Evaluate(RunEvalContext context)
     {
-        var l = _left.Evaluate(context);
-        var r = _right.Evaluate(context);
-        return _op switch
+        var l = Left.Evaluate(context);
+        var r = Right.Evaluate(context);
+        return Op switch
         {
             RunComparisonOperator.Equal => l == r,
             RunComparisonOperator.NotEqual => l != r,
@@ -463,49 +463,49 @@ public sealed class RunComparisonExpression : IRunExpression<bool>
             RunComparisonOperator.LessOrEqual => l <= r,
             RunComparisonOperator.GreaterThan => l > r,
             RunComparisonOperator.GreaterOrEqual => l >= r,
-            _ => throw new ArgumentOutOfRangeException(nameof(context), _op, "Unknown comparison operator.")
+            _ => throw new ArgumentOutOfRangeException(nameof(context), Op, "Unknown comparison operator.")
         };
     }
 }
 
 public sealed class AndExpression : IRunExpression<bool>
 {
-    private readonly IRunExpression<bool> _left;
-    private readonly IRunExpression<bool> _right;
+    public IRunExpression<bool> Left { get; }
+    public IRunExpression<bool> Right { get; }
     public AndExpression(IRunExpression<bool> left, IRunExpression<bool> right)
     {
         ArgumentNullException.ThrowIfNull(left);
         ArgumentNullException.ThrowIfNull(right);
-        _left = left;
-        _right = right;
+        Left = left;
+        Right = right;
     }
     // Short-circuits, matching &&: the right expression is not evaluated when the left is false.
-    public bool Evaluate(RunEvalContext context) => _left.Evaluate(context) && _right.Evaluate(context);
+    public bool Evaluate(RunEvalContext context) => Left.Evaluate(context) && Right.Evaluate(context);
 }
 
 public sealed class OrExpression : IRunExpression<bool>
 {
-    private readonly IRunExpression<bool> _left;
-    private readonly IRunExpression<bool> _right;
+    public IRunExpression<bool> Left { get; }
+    public IRunExpression<bool> Right { get; }
     public OrExpression(IRunExpression<bool> left, IRunExpression<bool> right)
     {
         ArgumentNullException.ThrowIfNull(left);
         ArgumentNullException.ThrowIfNull(right);
-        _left = left;
-        _right = right;
+        Left = left;
+        Right = right;
     }
-    public bool Evaluate(RunEvalContext context) => _left.Evaluate(context) || _right.Evaluate(context);
+    public bool Evaluate(RunEvalContext context) => Left.Evaluate(context) || Right.Evaluate(context);
 }
 
 public sealed class NotExpression : IRunExpression<bool>
 {
-    private readonly IRunExpression<bool> _inner;
+    public IRunExpression<bool> Inner { get; }
     public NotExpression(IRunExpression<bool> inner)
     {
         ArgumentNullException.ThrowIfNull(inner);
-        _inner = inner;
+        Inner = inner;
     }
-    public bool Evaluate(RunEvalContext context) => !_inner.Evaluate(context);
+    public bool Evaluate(RunEvalContext context) => !Inner.Evaluate(context);
 }
 
 // ── Authoring facade ──────────────────────────────────────────────────────────────
