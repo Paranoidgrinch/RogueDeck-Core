@@ -40,6 +40,10 @@ public sealed record RelicAcquiredRunEvent(RelicId RelicId) : IRunEvent;
 
 public sealed record RewardGrantedRunEvent(RewardId RewardId) : IRunEvent;
 
+public sealed record RewardOfferedRunEvent(RewardId RewardId, IReadOnlyList<string> OfferIds) : IRunEvent;
+
+public sealed record RewardChosenRunEvent(RewardId RewardId, string OfferId) : IRunEvent;
+
 public sealed record RunEndedRunEvent(RunResult Result) : IRunEvent;
 
 public sealed record RunProgramInstalledRunEvent(RunProgramId ProgramId) : IRunEvent;

@@ -217,6 +217,15 @@ public sealed class ChoiceBuilder
     public ChoiceBuilder Schedule(InstalledRunProgram program) =>
         Effect(new InstallRunProgramRunEffect(program));
 
+    // Offer a reward the player picks from (fixed offers).
+    public ChoiceBuilder OfferReward(RewardId reward, IReadOnlyList<RewardOffer> offers, int pickCount = 1) =>
+        Effect(new OfferRewardRunEffect(reward, offers, pickCount));
+
+    // Offer a reward whose offers are generated at resolve time (e.g. Rewards.FromPool(...)).
+    public ChoiceBuilder OfferReward(
+        RewardId reward, Func<RunState, IReadOnlyList<RewardOffer>> generate, int pickCount = 1) =>
+        Effect(new OfferRewardRunEffect(reward, generate, pickCount));
+
     // Draw one bundle of effects from a weighted pool (a random outcome).
     public ChoiceBuilder DrawEffects(RunPool<IReadOnlyList<IRunEffectRequest>> pool) =>
         Effect(new DrawEffectsRunEffect(pool));

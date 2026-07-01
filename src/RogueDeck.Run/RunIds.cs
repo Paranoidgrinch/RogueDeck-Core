@@ -96,6 +96,8 @@ public static class StandardRunLogTypes
     public const string ResourceChanged = "run.resource-changed";
     public const string RelicAcquired = "run.relic-acquired";
     public const string RewardGranted = "run.reward-granted";
+    public const string RewardOffered = "run.reward-offered";
+    public const string RewardChosen = "run.reward-chosen";
     public const string RunEnded = "run.ended";
     public const string ResolveGuardTripped = "run.resolve-guard-tripped";
     public const string ProgramInstalled = "run.program-installed";
