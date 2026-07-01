@@ -5,14 +5,30 @@ namespace RogueDeck.Run;
 // situation (or ends). Shops, rests, treasure and random encounters are all just authored EventScripts —
 // no new resolver type is needed for them.
 
+// A cost is checked before a choice can be taken and paid before its effects run — the difference from a
+// plain effect (idea doc §9). Modeled from the existing layers: CanPay is a condition expression, Pay is a
+// list of effects. A gold price is HasResource + a resource deduction; an HP price is "survive it" + damage.
+public sealed record RunCost(IRunExpression<bool> CanPay, IReadOnlyList<IRunEffectRequest> Pay);
+
 public sealed record EventChoice(
     string Id,
     IReadOnlyList<IRunEffectRequest> Effects,
     string? NextSituationId = null,
     Func<RunState, bool>? Requirement = null,
-    string? TextKey = null)
+    string? TextKey = null,
+    IReadOnlyList<RunCost>? Costs = null)
 {
-    public bool IsAvailable(RunState run) => Requirement?.Invoke(run) ?? true;
+    // Offered only when visible (Requirement) and affordable (every cost's CanPay holds). Folding
+    // affordability into availability keeps the scripted resolver simple: unaffordable choices are not
+    // offered, rather than shown-but-disabled.
+    public bool IsAvailable(RunState run) => (Requirement?.Invoke(run) ?? true) && CanAfford(run);
+
+    public bool CanAfford(RunState run) =>
+        Costs is null || Costs.All(cost => cost.CanPay.Evaluate(run));
+
+    // The effects that pay every cost, in cost order — enqueued before the choice's own effects.
+    public IEnumerable<IRunEffectRequest> PayEffects =>
+        Costs is null ? Enumerable.Empty<IRunEffectRequest>() : Costs.SelectMany(cost => cost.Pay);
 }
 
 public sealed record EventSituation(
@@ -71,6 +87,9 @@ public sealed class EventNodeResolver : INodeResolver
                 break;
 
             var chosen = context.Choices.Choose(situation, available, run);
+            // Pay costs first, then run the choice's effects.
+            foreach (var effect in chosen.PayEffects)
+                run.EnqueueEffect(effect);
             foreach (var effect in chosen.Effects)
                 run.EnqueueEffect(effect);
 

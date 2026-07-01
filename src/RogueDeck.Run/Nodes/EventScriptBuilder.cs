@@ -66,6 +66,7 @@ public sealed class ChoiceBuilder
 {
     private readonly string _id;
     private readonly List<IRunEffectRequest> _effects = new();
+    private readonly List<RunCost> _costs = new();
     private string? _nextSituationId;
     private Func<RunState, bool>? _requirement;
     private string? _textKey;
@@ -120,6 +121,42 @@ public sealed class ChoiceBuilder
     public ChoiceBuilder IncrementCounter(RunCounterId counter, int delta) =>
         Effect(new IncrementCounterRunEffect(counter, delta));
 
+    // ── Costs ──────────────────────────────────────────────────────────────────────
+    // A cost gates the choice (checked before it is offered) and is paid before the choice's effects run.
+
+    public ChoiceBuilder Cost(RunCost cost)
+    {
+        ArgumentNullException.ThrowIfNull(cost);
+        _costs.Add(cost);
+        return this;
+    }
+
+    // Custom cost: `canPay` must hold to offer the choice; `pay` runs when it is taken.
+    public ChoiceBuilder Cost(IRunExpression<bool> canPay, params IRunEffectRequest[] pay)
+    {
+        ArgumentNullException.ThrowIfNull(canPay);
+        ArgumentNullException.ThrowIfNull(pay);
+        return Cost(new RunCost(canPay, pay));
+    }
+
+    // Pay a resource price: requires at least `amount`, then deducts it.
+    public ChoiceBuilder PayResource(RunResourceId resource, int amount)
+    {
+        if (amount < 0)
+            throw new ArgumentOutOfRangeException(nameof(amount), "Pay amount must be non-negative.");
+        return Cost(RunExpr.HasResource(resource, amount), new ChangeResourceRunEffect(resource, -amount));
+    }
+
+    // Pay an HP price: allowed only if the hero survives it (current HP strictly greater than the cost).
+    public ChoiceBuilder PayHealth(int amount)
+    {
+        if (amount < 0)
+            throw new ArgumentOutOfRangeException(nameof(amount), "Pay amount must be non-negative.");
+        return Cost(
+            RunExpr.GreaterThan(RunExpr.CurrentHealth, RunExpr.Const(amount)),
+            new ApplyRunDamageRunEffect(amount));
+    }
+
     // Branch on a condition expression: enqueue one arm of effects. Omit whenFalse for a "do nothing" else.
     public ChoiceBuilder Conditional(
         IRunExpression<bool> condition,
@@ -172,5 +209,5 @@ public sealed class ChoiceBuilder
     }
 
     internal EventChoice Build() =>
-        new(_id, _effects, _nextSituationId, _requirement, _textKey);
+        new(_id, _effects, _nextSituationId, _requirement, _textKey, _costs);
 }

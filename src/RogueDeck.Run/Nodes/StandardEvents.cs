@@ -43,8 +43,7 @@ public static class StandardEvents
             {
                 foreach (var item in items)
                     situation.Choice(item.Id, choice => choice
-                        .RequireResource(item.Currency, item.Price)
-                        .SpendResource(item.Currency, item.Price)
+                        .PayResource(item.Currency, item.Price)
                         .Effect(item.Payload)
                         .Then("shop"));
 
