@@ -65,4 +65,7 @@ first); pure-content ideas (rival run, deck-as-dungeon, living-deck events, etc.
 
 ## Status
 
-- Phase A: not started.
+- Phase A: done — installed run programs (generalized trigger substrate).
+- Phase B: done — flags & counters state vocabulary.
+- Phase C: done — scheduler via installed programs (RunSchedule).
+- Phase D: next — costs on choices.

@@ -127,6 +127,10 @@ public sealed class ChoiceBuilder
         IRunEffectRequest[]? whenFalse = null) =>
         Effect(new ConditionalRunEffect(condition, whenTrue, whenFalse ?? Array.Empty<IRunEffectRequest>()));
 
+    // Install a scheduled consequence (built via RunSchedule) that fires later in the run.
+    public ChoiceBuilder Schedule(InstalledRunProgram program) =>
+        Effect(new InstallRunProgramRunEffect(program));
+
     // Draw one bundle of effects from a weighted pool (a random outcome).
     public ChoiceBuilder DrawEffects(RunPool<IReadOnlyList<IRunEffectRequest>> pool) =>
         Effect(new DrawEffectsRunEffect(pool));
