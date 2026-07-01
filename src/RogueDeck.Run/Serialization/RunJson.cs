@@ -123,7 +123,8 @@ public static class RunJson
          .Register("clamp", typeof(ClampExpression))
          .Register("randomRange", typeof(RandomRangeExpression))
          .Register("card.upgradeLevel", typeof(CardUpgradeLevelExpression))
-         .Register("card.memory", typeof(CardMemoryExpression));
+         .Register("card.memory", typeof(CardMemoryExpression))
+         .Register("event.int", typeof(EventIntValueExpression));
 
         // Condition expressions (IRunExpression<bool>).
         r.Register("bool", typeof(RunConstantBoolExpression))
@@ -133,7 +134,8 @@ public static class RunJson
          .Register("not", typeof(NotExpression))
          .Register("flag", typeof(FlagSetExpression))
          .Register("card.hasTag", typeof(CardHasTagExpression))
-         .Register("card.isKind", typeof(CardIsKindExpression));
+         .Register("card.isKind", typeof(CardIsKindExpression))
+         .Register("event.bool", typeof(EventBoolValueExpression));
     }
 
     // Card selectors. Only the card closing is registered (no effect consumes a relic selector yet). The

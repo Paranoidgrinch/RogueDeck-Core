@@ -97,7 +97,16 @@ Endgame remaining: **serialization** (multi-slice) + a run Sandbox UI. Serializa
 - S1 — done: `RunJson` — `RunJsonRegistry` (kind ↔ type) + `PolymorphicRunJsonConverter<TBase>` (envelope
   `{"kind":..,"value":..}`, recursive). The expression family (values + conditions) is registered and
   round-trips (verified by evaluation-equality); escapes (Func-backed) throw NotSupportedException.
-- S2 — next: register the remaining families (effects, selectors, rewards, pools) + round-trip tests. Needs
-  concrete public template types (LiteralTemplate etc. are private/Func now) and RunPool serialization.
-- S3 — redesign event accessors (RunEventValues / EventValue) from Func-backed to serializable field-key +
-  registry lookup. Escapes stay non-serializable by design; combat content is referenced by id, not serialized.
+- S2 — done: effects, card selectors, and reward sources registered; nested effect lists / expressions /
+  selectors / RunPool entries recurse. Round-trips verified (idempotence + a functional deserialize-and-run).
+- S3 — done: event accessors are serializable — `RunEventFields` (string field-key catalog + readers) and
+  key-based `EventIntValueExpression` / `EventBoolValueExpression`; `RunEventValues` rebuilt on them. The old
+  Func-backed `RunExpr.EventValue` stays as the escape.
+
+**Serialization S0-S3 complete.** The run content tree — expressions (incl. event-reading), effects,
+selectors, reward sources — round-trips as JSON. Non-serializable by design (escapes / content objects):
+Func-backed nodes (`.Where`, `EventValue`, `Custom` modifiers, `ExpandRunEffect`), and effects that embed
+content objects (`AddRelic` embeds a RelicInstance; `InstallRunProgram`; `AddRewardModifier`/`AddCombatModifier`).
+Remaining serialization follow-ups: triggered-program (relic reaction) serialization needs concrete public
+effect-template types; granting relics/programs should move to id references. Combat card EffectPrograms remain
+combat-authoring (referenced by id).
