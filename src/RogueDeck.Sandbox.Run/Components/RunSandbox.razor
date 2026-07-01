@@ -1,0 +1,150 @@
+@rendermode InteractiveServer
+
+<h1>RogueDeck Run Sandbox</h1>
+<p class="muted">
+    A demo run (a shrine event, then a goblin fight) built entirely from the run engine's data primitives —
+    events, encounters, effects, an id-referenced relic. Enter a choice script (comma-separated choice ids for
+    each event; e.g. <code>heal</code> or <code>gold</code>) and press <strong>Run</strong>. The fight is
+    played headlessly by the auto-play driver. Nothing here invents run rules; it only composes existing ones.
+</p>
+
+<div class="run-bar">
+    <label>Choices <input @bind="_choiceScript" style="width:16rem" placeholder="heal" /></label>
+    <label>Seed <input type="number" @bind="_seed" style="width:6rem" /></label>
+    <button class="play" @onclick="Run">Run</button>
+</div>
+
+@if (_error is not null)
+{
+    <p class="error">@_error</p>
+}
+
+@if (_state is not null)
+{
+    <div class="grid">
+        <section class="panel">
+            <h2>Result</h2>
+            <div class="row"><span class="muted">Outcome</span> <strong>@_state.Result</strong></div>
+            <div class="row"><span class="muted">HP</span> @_state.Health.Current / @_state.Health.Max</div>
+            <div class="row"><span class="muted">Gold</span> @_state.GetResource(StandardRunIds.Gold)</div>
+
+            <h2>Deck (@_state.Deck.Count)</h2>
+            <ul class="log">
+                @foreach (var card in _state.Deck)
+                {
+                    <li>@card.DefinitionId@(card.UpgradeLevel > 0 ? $" +{card.UpgradeLevel}" : "")</li>
+                }
+            </ul>
+
+            <h2>Relics</h2>
+            @if (_state.Relics.Count == 0)
+            {
+                <p class="muted">none</p>
+            }
+            else
+            {
+                <ul class="log">@foreach (var r in _state.Relics) { <li>@r.Id @(r.Enabled ? "" : "(disabled)")</li> }</ul>
+            }
+
+            <h2>Flags &amp; counters</h2>
+            @if (_state.Flags.Count == 0 && _state.Counters.Count == 0)
+            {
+                <p class="muted">none</p>
+            }
+            else
+            {
+                <ul class="log">
+                    @foreach (var f in _state.Flags) { <li>flag: @f</li> }
+                    @foreach (var c in _state.Counters) { <li>@c.Key = @c.Value</li> }
+                </ul>
+            }
+        </section>
+
+        <section class="panel">
+            <h2>Run log</h2>
+            <ul class="log">
+                @foreach (var entry in _state.Log)
+                {
+                    <li><span class="line-kind">@entry.Type</span> @entry.Message</li>
+                }
+            </ul>
+        </section>
+    </div>
+}
+
+@code {
+    private static readonly EncounterId GoblinFight = new("goblin-fight");
+    private static readonly EventId Shrine = new("shrine");
+
+    private string _choiceScript = "heal";
+    private int _seed = 1;
+    private RunState? _state;
+    private string? _error;
+
+    private void Run()
+    {
+        _error = null;
+        try
+        {
+            var content = BuildContent();
+            var builder = new RunDefinitionRegistryBuilder();
+            new StandardRunPackage(new AutoPlayCombatDriver(), content).RegisterDefinitions(builder);
+            var registry = builder.Build();
+
+            var map = new RunMap(new Node[]
+            {
+                new(new NodeId("shrine"), StandardRunIds.EventNode, new EventRef(Shrine)),
+                new(new NodeId("fight"), StandardRunIds.CombatNode, new EncounterRef(GoblinFight)),
+            });
+
+            var run = new RunState(new RunId("demo"), new HealthState(30, 40), map, randomSeed: _seed);
+            for (var i = 0; i < 5; i++)
+                run.AddDeckCard(new CardDefinitionId("smite"));
+
+            var choices = _choiceScript
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            new RunRunner(registry, new ScriptedChoiceProvider(choices), content: content).Run(run);
+            _state = run;
+        }
+        catch (Exception ex)
+        {
+            _error = $"{ex.GetType().Name}: {ex.Message}";
+            _state = null;
+        }
+    }
+
+    private static RunContentRegistry BuildContent()
+    {
+        var library = new CombatContentLibrary(
+            cards: new[]
+            {
+                new CardBlueprint("smite") { Program = Effects.Program(Effects.DealDamage(Targets.EventTarget, 6)) },
+            },
+            enemyActions: new[]
+            {
+                new EnemyActionBlueprint("slam", new ActionIntent("Slam", IntentKind.Attack))
+                {
+                    Program = new EffectProgram<EnemyActionContext>(new DealDamageNode<EnemyActionContext>(
+                        CombatantTargetSelectors.EventTarget, new ConstantExpression<EnemyActionContext>(4))),
+                },
+            });
+
+        var encounter = new EncounterDefinition(
+            GoblinFight,
+            enemies: new[] { new EncounterEnemy("goblin", 12, new[] { new EnemyActionDefinitionId("slam") }) },
+            heroResources: new[] { new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3) });
+
+        var shrine = new EventScriptBuilder("shrine")
+            .Situation("shrine", "event.shrine", s => s
+                .Choice("heal", c => c.Heal(8))
+                .Choice("gold", c => c.GainResource(StandardRunIds.Gold, 20))
+                .Choice("leave", _ => { }))
+            .Build();
+
+        return new RunContentRegistryBuilder()
+            .RegisterEvent(Shrine, shrine)
+            .RegisterRelic(StandardRelics.Bloodstone())
+            .SetEncounters(new EncounterCatalog(library, new[] { encounter }))
+            .Build();
+    }
+}

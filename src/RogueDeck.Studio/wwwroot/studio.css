@@ -1,0 +1,50 @@
+/* Minimal shell chrome for the Studio app. Panel/log/etc. styling comes from the shared combat app.css. */
+body {
+    margin: 0;
+    background: #14161a;
+    color: #e6e6e6;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.studio-nav {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 0.6rem 1.25rem;
+    background: #1c1f26;
+    border-bottom: 1px solid #2b2f3a;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.studio-brand {
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.studio-nav nav {
+    display: flex;
+    gap: 1rem;
+}
+
+.studio-link {
+    color: #9fb3c8;
+    text-decoration: none;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+}
+
+.studio-link:hover {
+    color: #fff;
+    background: #2b2f3a;
+}
+
+.studio-link.active {
+    color: #fff;
+    background: #37506b;
+}
+
+.studio-main {
+    padding: 1rem 1.5rem 3rem;
+}

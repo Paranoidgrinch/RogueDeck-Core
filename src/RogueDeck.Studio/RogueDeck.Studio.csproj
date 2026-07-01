@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RogueDeck.Sandbox.Combat\RogueDeck.Sandbox.Combat.csproj" />
+    <ProjectReference Include="..\RogueDeck.Sandbox.Run\RogueDeck.Sandbox.Run.csproj" />
+  </ItemGroup>
+
+</Project>
