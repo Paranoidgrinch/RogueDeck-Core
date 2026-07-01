@@ -12,6 +12,8 @@ public sealed class RunState
     private readonly List<CardDefinitionId> _deck = new();
     private readonly List<RelicInstance> _relics = new();
     private readonly List<InstalledRunProgram> _installedPrograms = new();
+    private readonly HashSet<RunFlagId> _flags = new();
+    private readonly Dictionary<RunCounterId, int> _counters = new();
     private readonly Queue<IRunEffectRequest> _effects = new();
     private readonly Queue<IRunEvent> _undispatched = new();
     private readonly List<IRunEvent> _history = new();
@@ -30,6 +32,8 @@ public sealed class RunState
     public IReadOnlyList<CardDefinitionId> Deck => _deck;
     public IReadOnlyList<RelicInstance> Relics => _relics;
     public IReadOnlyList<InstalledRunProgram> InstalledPrograms => _installedPrograms;
+    public IReadOnlyCollection<RunFlagId> Flags => _flags;
+    public IReadOnlyDictionary<RunCounterId, int> Counters => _counters;
     public IReadOnlyList<IRunEvent> EventHistory => _history;
     public IReadOnlyList<RunLogEntry> Log => _log;
 
@@ -81,6 +85,16 @@ public sealed class RunState
         _installedPrograms.RemoveAt(index);
         return true;
     }
+
+    public bool HasFlag(RunFlagId flag) => _flags.Contains(flag);
+
+    // Sets or clears a flag; returns whether the flag actually changed (so handlers only raise on a change).
+    public bool SetFlag(RunFlagId flag, bool value) => value ? _flags.Add(flag) : _flags.Remove(flag);
+
+    public int GetCounter(RunCounterId counter) =>
+        _counters.TryGetValue(counter, out var value) ? value : 0;
+
+    public void SetCounter(RunCounterId counter, int value) => _counters[counter] = value;
 
     public void SetResult(RunResult result) => Result = result;
 

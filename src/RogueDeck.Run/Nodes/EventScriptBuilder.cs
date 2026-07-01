@@ -113,6 +113,13 @@ public sealed class ChoiceBuilder
 
     public ChoiceBuilder Damage(int amount) => Effect(new ApplyRunDamageRunEffect(amount));
 
+    public ChoiceBuilder SetFlag(RunFlagId flag) => Effect(new SetFlagRunEffect(flag, true));
+
+    public ChoiceBuilder UnsetFlag(RunFlagId flag) => Effect(new SetFlagRunEffect(flag, false));
+
+    public ChoiceBuilder IncrementCounter(RunCounterId counter, int delta) =>
+        Effect(new IncrementCounterRunEffect(counter, delta));
+
     // Branch on a condition expression: enqueue one arm of effects. Omit whenFalse for a "do nothing" else.
     public ChoiceBuilder Conditional(
         IRunExpression<bool> condition,

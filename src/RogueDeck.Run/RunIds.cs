@@ -37,6 +37,19 @@ public readonly record struct RunProgramId(string Value)
     public override string ToString() => Value;
 }
 
+// A named boolean fact remembered for the whole run (e.g. "stole-from-merchant"). Open like the resource id
+// so content defines its own vocabulary rather than the engine hard-coding flags.
+public readonly record struct RunFlagId(string Value)
+{
+    public override string ToString() => Value;
+}
+
+// A named integer the run accumulates (e.g. "debt", "elites-defeated"). Absent counters read as 0.
+public readonly record struct RunCounterId(string Value)
+{
+    public override string ToString() => Value;
+}
+
 // The kind of a map node. A string-backed id (not an enum) so new node kinds can be added by any package
 // without touching the core — resolvers are registered against these values.
 public readonly record struct NodeType(string Value)
@@ -73,4 +86,6 @@ public static class StandardRunLogTypes
     public const string ResolveGuardTripped = "run.resolve-guard-tripped";
     public const string ProgramInstalled = "run.program-installed";
     public const string ProgramUninstalled = "run.program-uninstalled";
+    public const string FlagChanged = "run.flag-changed";
+    public const string CounterChanged = "run.counter-changed";
 }

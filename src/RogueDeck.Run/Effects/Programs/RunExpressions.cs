@@ -72,6 +72,20 @@ public sealed class RelicCountExpression : IRunExpression<int>
     public int Evaluate(RunEvalContext context) => context.Run.Relics.Count;
 }
 
+public sealed class CounterValueExpression : IRunExpression<int>
+{
+    private readonly RunCounterId _counter;
+    public CounterValueExpression(RunCounterId counter) => _counter = counter;
+    public int Evaluate(RunEvalContext context) => context.Run.GetCounter(_counter);
+}
+
+public sealed class FlagSetExpression : IRunExpression<bool>
+{
+    private readonly RunFlagId _flag;
+    public FlagSetExpression(RunFlagId flag) => _flag = flag;
+    public bool Evaluate(RunEvalContext context) => context.Run.HasFlag(_flag);
+}
+
 // Reads an int field off the triggering event. Only meaningful while an event of the expected type is in
 // context (relic dispatch); evaluating it outside that scope is an author error and throws.
 public sealed class EventFieldExpression<TEvent> : IRunExpression<int>
@@ -334,6 +348,7 @@ public static class RunExpr
     public static IRunExpression<int> MissingHealth { get; } = new MissingHealthExpression();
     public static IRunExpression<int> DeckSize { get; } = new DeckSizeExpression();
     public static IRunExpression<int> RelicCount { get; } = new RelicCountExpression();
+    public static IRunExpression<int> Counter(RunCounterId counter) => new CounterValueExpression(counter);
 
     // Reads a field off the triggering event — valid only inside a reaction to that event.
     public static IRunExpression<int> EventValue<TEvent>(Func<TEvent, int> field) where TEvent : IRunEvent =>
@@ -357,6 +372,9 @@ public static class RunExpr
     // Conditions
     public static IRunExpression<bool> True { get; } = new RunConstantBoolExpression(true);
     public static IRunExpression<bool> False { get; } = new RunConstantBoolExpression(false);
+
+    // True while the run holds the flag. `Counter` above reads a counter's value for numeric conditions.
+    public static IRunExpression<bool> Flag(RunFlagId flag) => new FlagSetExpression(flag);
 
     public static IRunExpression<bool> Equal(IRunExpression<int> l, IRunExpression<int> r) =>
         new RunComparisonExpression(l, RunComparisonOperator.Equal, r);

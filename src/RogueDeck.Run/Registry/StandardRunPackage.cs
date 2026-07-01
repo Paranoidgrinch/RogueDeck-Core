@@ -28,7 +28,10 @@ public sealed class StandardRunPackage : IRunPackage
             .RegisterEffectHandler(new DrawEffectsRunEffectHandler())
             .RegisterEffectHandler(new DrawManyEffectsRunEffectHandler())
             .RegisterEffectHandler(new InstallRunProgramRunEffectHandler())
-            .RegisterEffectHandler(new UninstallRunProgramRunEffectHandler());
+            .RegisterEffectHandler(new UninstallRunProgramRunEffectHandler())
+            .RegisterEffectHandler(new SetFlagRunEffectHandler())
+            .RegisterEffectHandler(new IncrementCounterRunEffectHandler())
+            .RegisterEffectHandler(new SetCounterRunEffectHandler());
 
         builder
             .RegisterResolver(new CombatNodeResolver(_combatDriver))

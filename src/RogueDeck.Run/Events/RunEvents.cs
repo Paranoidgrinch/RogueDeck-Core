@@ -45,3 +45,12 @@ public sealed record RunEndedRunEvent(RunResult Result) : IRunEvent;
 public sealed record RunProgramInstalledRunEvent(RunProgramId ProgramId) : IRunEvent;
 
 public sealed record RunProgramUninstalledRunEvent(RunProgramId ProgramId) : IRunEvent;
+
+public sealed record RunFlagChangedRunEvent(RunFlagId Flag, bool IsSet) : IRunEvent;
+
+public sealed record RunCounterChangedRunEvent(
+    RunCounterId Counter,
+    int PreviousValue,
+    int NewValue,
+    int Delta
+) : IRunEvent;
