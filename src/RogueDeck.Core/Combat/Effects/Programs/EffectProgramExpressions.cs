@@ -1347,25 +1347,38 @@ public interface ICardInstanceExpression<TContext> where TContext : class
     CardInstanceId? Evaluate(EffectExecutionContext<TContext> context, CombatState combat);
 }
 
-public sealed class ExplicitCardInstanceExpression<TContext>(CardInstanceId id)
+public sealed class ExplicitCardInstanceExpression<TContext>
     : ICardInstanceExpression<TContext>
     where TContext : class
 {
-    public CardInstanceId? Evaluate(EffectExecutionContext<TContext> context, CombatState combat) => id;
+    public CardInstanceId Id { get; }
+
+    public ExplicitCardInstanceExpression(CardInstanceId id) => Id = id;
+
+    public CardInstanceId? Evaluate(EffectExecutionContext<TContext> context, CombatState combat) => Id;
 }
 
-public sealed class CreateCardOutcomeExpression<TContext>(
-    EffectResultKey<OrderedTargetOutcomes<CreateCardInstanceOutcome>> key,
-    int index = 0)
+public sealed class CreateCardOutcomeExpression<TContext>
     : ICardInstanceExpression<TContext>
     where TContext : class
 {
+    public EffectResultKey<OrderedTargetOutcomes<CreateCardInstanceOutcome>> Key { get; }
+    public int Index { get; }
+
+    public CreateCardOutcomeExpression(
+        EffectResultKey<OrderedTargetOutcomes<CreateCardInstanceOutcome>> key,
+        int index = 0)
+    {
+        Key = key;
+        Index = index;
+    }
+
     public CardInstanceId? Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
-        if (!context.TryGet(key, out var ordered) || ordered is null || ordered.Results.Count == 0)
+        if (!context.TryGet(Key, out var ordered) || ordered is null || ordered.Results.Count == 0)
             return null;
         var ids = ordered.Results[0].Outcome.CreatedCardInstanceIds;
-        return index >= 0 && index < ids.Count ? ids[index] : null;
+        return Index >= 0 && Index < ids.Count ? ids[Index] : null;
     }
 }
 

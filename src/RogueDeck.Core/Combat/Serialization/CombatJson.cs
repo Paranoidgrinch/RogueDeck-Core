@@ -114,6 +114,7 @@ public static class CombatJson
     {
         options.Converters.Add(new CombatPolymorphicConverter<ICombatExpression<TContext, int>>(registry, typeof(TContext)));
         options.Converters.Add(new CombatPolymorphicConverter<ICombatExpression<TContext, bool>>(registry, typeof(TContext)));
+        options.Converters.Add(new CombatPolymorphicConverter<ICardInstanceExpression<TContext>>(registry, typeof(TContext)));
         options.Converters.Add(new CombatPolymorphicConverter<IEffectNode<TContext>>(registry, typeof(TContext)));
     }
 
@@ -155,7 +156,12 @@ public static class CombatJson
          .Register("combatantStatusStacks", typeof(CombatantStatusStacksExpression<>))
          .Register("combatantStatusDuration", typeof(CombatantStatusDurationExpression<>))
          .Register("combatantStatusCharges", typeof(CombatantStatusChargesExpression<>))
-         .Register("combatantStacksByPolarity", typeof(CombatantStacksByPolarityExpression<>));
+         .Register("combatantStacksByPolarity", typeof(CombatantStacksByPolarityExpression<>))
+         .Register("cardsPlayedThisTurn", typeof(CardsPlayedThisTurnExpression<>))
+         .Register("damageDealtThisTurn", typeof(DamageDealtThisTurnExpression<>))
+         .Register("resourceGainedThisTurn", typeof(ResourceGainedThisTurnExpression<>))
+         .Register("cardCost", typeof(CardCostExpression<>))
+         .Register("iterationTargetStatusStacks", typeof(IterationTargetStatusStacksExpression<>));
 
         // bool condition expressions.
         r.Register("compare", typeof(ComparisonExpression<>))
@@ -165,7 +171,14 @@ public static class CombatJson
          .Register("targetHasStatus", typeof(TargetHasStatusExpression<>))
          .Register("targetIsAlive", typeof(TargetIsAliveExpression<>))
          .Register("targetDowned", typeof(TargetDownedExpression<>))
-         .Register("targetExists", typeof(TargetExistsExpression<>));
+         .Register("targetExists", typeof(TargetExistsExpression<>))
+         .Register("iterationTargetHasStatus", typeof(IterationTargetHasStatusExpression<>));
+
+        // Card-instance expressions (resolve a specific card instance to act on).
+        r.Register("cardInstance.explicit", typeof(ExplicitCardInstanceExpression<>))
+         .Register("cardInstance.createdOutcome", typeof(CreateCardOutcomeExpression<>))
+         .Register("cardInstance.played", typeof(PlayedCardInstanceExpression<>))
+         .Register("cardInstance.triggerEvent", typeof(TriggerEventCardInstanceExpression<>));
     }
 
     // Combatant target selectors (context-independent, non-generic). Registered as concrete types.
@@ -208,6 +221,17 @@ public static class CombatJson
          .Register("node.modifyStatusCharges", typeof(ModifyStatusChargesNode<>))
          .Register("node.drawCards", typeof(DrawCardsNode<>))
          .Register("node.moveAllCardsFromZone", typeof(MoveAllCardsFromZoneNode<>))
+         .Register("node.createCardInstance", typeof(CreateCardInstanceNode<>))
+         .Register("node.summonCombatant", typeof(SummonCombatantNode<>))
+         .Register("node.setCombatantLifecycleState", typeof(SetCombatantLifecycleStateNode<>))
+         .Register("node.changeCombatantTeam", typeof(ChangeCombatantTeamNode<>))
+         .Register("node.setCombatResult", typeof(SetCombatResultNode<>))
+         .Register("node.removeTemporaryRule", typeof(RemoveTemporaryRuleNode<>))
+         // Card-instance nodes (act on a resolved card instance).
+         .Register("node.moveCardToZone", typeof(MoveCardToZoneNode<>))
+         .Register("node.createCardCopy", typeof(CreateCardCopyNode<>))
+         .Register("node.replayCardProgram", typeof(ReplayCardProgramNode<>))
+         .Register("node.playCard", typeof(PlayCardNode<>))
          // Composite / control-flow nodes (nest child nodes).
          .Register("node.sequence", typeof(SequenceEffectNode<>))
          .Register("node.conditional", typeof(ConditionalEffectNode<>))
