@@ -183,11 +183,15 @@ public sealed class CombatNodeResolver : INodeResolver
                 hero.Deck.Add(new DeckEntry(_deckMapper(card), 1));
         }
 
-        // Relic combat-injection face (b): each acquired relic's combat contributions become triggered
+        // Relic combat-injection face (b): each acquired ENABLED relic's combat contributions become triggered
         // programs in the spawned fight, so a relic can bend combat, not just the run.
         foreach (var relic in run.Relics)
+        {
+            if (!relic.Enabled)
+                continue;
             foreach (var contribution in relic.Definition.CombatContributions)
                 blueprint.TriggeredPrograms.Add(contribution);
+        }
 
         // Pending combat modifiers apply last so a "next fight" consequence can override the encounter, and
         // are consumed here so each affects exactly one fight.

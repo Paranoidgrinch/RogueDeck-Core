@@ -70,6 +70,17 @@ public readonly record struct EncounterId(string Value)
     public override string ToString() => Value;
 }
 
+// The kind of a consumable (e.g. "potion.fire"); and the identity of one owned copy in the run inventory.
+public readonly record struct ConsumableId(string Value)
+{
+    public override string ToString() => Value;
+}
+
+public readonly record struct ConsumableInstanceId(string Value)
+{
+    public override string ToString() => Value;
+}
+
 // The kind of a map node. A string-backed id (not an enum) so new node kinds can be added by any package
 // without touching the core — resolvers are registered against these values.
 public readonly record struct NodeType(string Value)
@@ -102,10 +113,14 @@ public static class StandardRunLogTypes
     public const string ResourceChanged = "run.resource-changed";
     public const string RelicAcquired = "run.relic-acquired";
     public const string RelicRemoved = "run.relic-removed";
+    public const string RelicDisabled = "run.relic-disabled";
+    public const string RelicEnabled = "run.relic-enabled";
     public const string MaxHealthChanged = "run.max-health-changed";
     public const string RewardGranted = "run.reward-granted";
     public const string RewardOffered = "run.reward-offered";
     public const string RewardChosen = "run.reward-chosen";
+    public const string ConsumableGained = "run.consumable-gained";
+    public const string ConsumableUsed = "run.consumable-used";
     public const string RunEnded = "run.ended";
     public const string ResolveGuardTripped = "run.resolve-guard-tripped";
     public const string ProgramInstalled = "run.program-installed";

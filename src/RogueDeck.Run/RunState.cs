@@ -17,6 +17,8 @@ public sealed class RunState
     private readonly Dictionary<RunCounterId, int> _counters = new();
     private readonly List<IRunCombatModifier> _pendingCombatModifiers = new();
     private readonly List<RewardModifierRegistration> _rewardModifiers = new();
+    private readonly List<RunConsumable> _consumables = new();
+    private int _nextConsumableSeq;
     private readonly Queue<IRunEffectRequest> _effects = new();
     private readonly Queue<IRunEvent> _undispatched = new();
     private readonly List<IRunEvent> _history = new();
@@ -30,6 +32,7 @@ public sealed class RunState
 
     public int RandomSeed { get; }
     private int _randomStep;
+    private int _nextProgramSeq;
 
     // The run's player-input collaborator for entity selection (ChooseByPlayer selectors). Run-scoped: set
     // once for the run's lifetime by the runner, so effect handlers resolving a selector can offer choices
@@ -49,6 +52,7 @@ public sealed class RunState
     public IReadOnlyDictionary<RunCounterId, int> Counters => _counters;
     public IReadOnlyList<IRunCombatModifier> PendingCombatModifiers => _pendingCombatModifiers;
     public int ActiveRewardModifierCount => _rewardModifiers.Count;
+    public IReadOnlyList<RunConsumable> Consumables => _consumables;
     public IReadOnlyList<IRunEvent> EventHistory => _history;
     public IReadOnlyList<RunLogEntry> Log => _log;
 
@@ -105,6 +109,32 @@ public sealed class RunState
         _relics.RemoveAt(index);
         return true;
     }
+
+    public RelicInstance? FindRelic(RelicId id) => _relics.FirstOrDefault(r => r.Id == id);
+
+    // Adds a consumable copy to the inventory and returns it (instance id from a run-scoped sequence).
+    public RunConsumable AddConsumable(ConsumableId definition, IReadOnlyList<IRunEffectRequest> useEffects)
+    {
+        var consumable = new RunConsumable(
+            new ConsumableInstanceId($"consumable#{++_nextConsumableSeq}"), definition, useEffects);
+        _consumables.Add(consumable);
+        return consumable;
+    }
+
+    public RunConsumable? FindConsumable(ConsumableInstanceId id) =>
+        _consumables.FirstOrDefault(c => c.Id == id);
+
+    public bool RemoveConsumable(ConsumableInstanceId id)
+    {
+        var index = _consumables.FindIndex(c => c.Id == id);
+        if (index < 0)
+            return false;
+        _consumables.RemoveAt(index);
+        return true;
+    }
+
+    // A run-scoped, deterministic unique program id (for scheduled consequences that must not collide).
+    public RunProgramId NextProgramId(string prefix) => new($"{prefix}#{++_nextProgramSeq}");
 
     // Install a triggered program on the run. Ids are unique — installing a duplicate id is a programming
     // error (a scheduled consequence should mint a fresh id each time). Usable at setup; the in-flow path is

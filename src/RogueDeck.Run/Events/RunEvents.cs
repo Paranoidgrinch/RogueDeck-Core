@@ -42,11 +42,19 @@ public sealed record RelicAcquiredRunEvent(RelicId RelicId) : IRunEvent;
 
 public sealed record RelicRemovedRunEvent(RelicId RelicId) : IRunEvent;
 
+public sealed record RelicDisabledRunEvent(RelicId RelicId, int Combats) : IRunEvent;
+
+public sealed record RelicEnabledRunEvent(RelicId RelicId) : IRunEvent;
+
 public sealed record RewardGrantedRunEvent(RewardId RewardId) : IRunEvent;
 
 public sealed record RewardOfferedRunEvent(RewardId RewardId, IReadOnlyList<string> OfferIds) : IRunEvent;
 
 public sealed record RewardChosenRunEvent(RewardId RewardId, string OfferId) : IRunEvent;
+
+public sealed record ConsumableGainedRunEvent(ConsumableInstanceId InstanceId, ConsumableId Definition) : IRunEvent;
+
+public sealed record ConsumableUsedRunEvent(ConsumableInstanceId InstanceId, ConsumableId Definition) : IRunEvent;
 
 public sealed record RunEndedRunEvent(RunResult Result) : IRunEvent;
 

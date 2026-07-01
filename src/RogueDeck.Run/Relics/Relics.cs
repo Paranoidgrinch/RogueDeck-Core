@@ -65,6 +65,12 @@ public sealed class RelicInstance
     public RelicDefinition Definition { get; }
     public RelicId Id => Definition.Id;
 
+    // A disabled relic neither reacts to run events nor contributes to combats. Toggled by the
+    // disable/enable effects (disable schedules a re-enable after N combats).
+    public bool Enabled { get; private set; } = true;
+
+    public void SetEnabled(bool enabled) => Enabled = enabled;
+
     public RelicInstance(RelicDefinition definition)
     {
         ArgumentNullException.ThrowIfNull(definition);

@@ -89,6 +89,45 @@ public sealed class RemoveRelicRunEffectHandler : RunEffectHandler<RemoveRelicRu
     }
 }
 
+// Disable a relic for the next `Combats` resolved combats, then it re-enables itself. Reuses the scheduler:
+// disabling installs a one-shot "after N combats -> enable" consequence. A disabled relic neither reacts nor
+// contributes to combat.
+public sealed record DisableRelicRunEffect(RelicId Relic, int Combats) : IRunEffectRequest;
+
+public sealed class DisableRelicRunEffectHandler : RunEffectHandler<DisableRelicRunEffect>
+{
+    protected override void Resolve(RunState run, RunDefinitionRegistry registry, DisableRelicRunEffect request)
+    {
+        var relic = run.FindRelic(request.Relic);
+        if (relic is null || request.Combats < 1)
+            return;
+
+        relic.SetEnabled(false);
+        run.AddLog(StandardRunLogTypes.RelicDisabled, $"Disabled relic '{request.Relic}' for {request.Combats} combats.");
+        run.RaiseEvent(new RelicDisabledRunEvent(request.Relic, request.Combats));
+
+        var program = RunSchedule.AfterCombats(
+            run.NextProgramId($"reenable-{request.Relic}"), request.Combats, new EnableRelicRunEffect(request.Relic));
+        run.EnqueueEffect(new InstallRunProgramRunEffect(program));
+    }
+}
+
+public sealed record EnableRelicRunEffect(RelicId Relic) : IRunEffectRequest;
+
+public sealed class EnableRelicRunEffectHandler : RunEffectHandler<EnableRelicRunEffect>
+{
+    protected override void Resolve(RunState run, RunDefinitionRegistry registry, EnableRelicRunEffect request)
+    {
+        var relic = run.FindRelic(request.Relic);
+        if (relic is null || relic.Enabled)
+            return;
+
+        relic.SetEnabled(true);
+        run.AddLog(StandardRunLogTypes.RelicEnabled, $"Re-enabled relic '{request.Relic}'.");
+        run.RaiseEvent(new RelicEnabledRunEvent(request.Relic));
+    }
+}
+
 public sealed record AddCardToDeckRunEffect(CardDefinitionId Card) : IRunEffectRequest;
 
 public sealed class AddCardToDeckRunEffectHandler : RunEffectHandler<AddCardToDeckRunEffect>

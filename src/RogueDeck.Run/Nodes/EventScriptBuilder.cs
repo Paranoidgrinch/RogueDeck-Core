@@ -132,6 +132,13 @@ public sealed class ChoiceBuilder
 
     public ChoiceBuilder RemoveRelic(RelicId relic) => Effect(new RemoveRelicRunEffect(relic));
 
+    public ChoiceBuilder DisableRelic(RelicId relic, int combats) =>
+        Effect(new DisableRelicRunEffect(relic, combats));
+
+    // Add a consumable to the run inventory; `useEffects` are applied when the player later uses it.
+    public ChoiceBuilder AddConsumable(ConsumableId definition, params IRunEffectRequest[] useEffects) =>
+        Effect(new AddConsumableRunEffect(definition, useEffects));
+
     // Repeat a block of effects a computed number of times.
     public ChoiceBuilder Repeat(IRunExpression<int> count, params IRunEffectRequest[] effects) =>
         Effect(new RepeatRunEffect(count, effects));

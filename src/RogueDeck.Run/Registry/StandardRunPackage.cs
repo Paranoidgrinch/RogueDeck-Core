@@ -27,6 +27,8 @@ public sealed class StandardRunPackage : IRunPackage
             .RegisterEffectHandler(new AddCardToDeckRunEffectHandler())
             .RegisterEffectHandler(new AddRelicRunEffectHandler())
             .RegisterEffectHandler(new RemoveRelicRunEffectHandler())
+            .RegisterEffectHandler(new DisableRelicRunEffectHandler())
+            .RegisterEffectHandler(new EnableRelicRunEffectHandler())
             .RegisterEffectHandler(new ChangeMaxHealthRunEffectHandler())
             .RegisterEffectHandler(new GrantRewardRunEffectHandler())
             .RegisterEffectHandler(new ComputedResourceRunEffectHandler())
@@ -50,7 +52,9 @@ public sealed class StandardRunPackage : IRunPackage
             .RegisterEffectHandler(new ExpandRunEffectHandler())
             .RegisterEffectHandler(new AddCombatModifierRunEffectHandler())
             .RegisterEffectHandler(new OfferRewardRunEffectHandler())
-            .RegisterEffectHandler(new AddRewardModifierRunEffectHandler());
+            .RegisterEffectHandler(new AddRewardModifierRunEffectHandler())
+            .RegisterEffectHandler(new AddConsumableRunEffectHandler())
+            .RegisterEffectHandler(new UseConsumableRunEffectHandler());
 
         builder
             .RegisterResolver(new CombatNodeResolver(_combatDriver, encounters: _encounters))

@@ -53,8 +53,12 @@ public sealed class RunEffectProcessor
         var eventType = runEvent.GetType();
 
         foreach (var relic in run.Relics)
+        {
+            if (!relic.Enabled)
+                continue;
             foreach (var program in relic.Definition.RunPrograms)
                 Dispatch(run, runEvent, eventType, program);
+        }
 
         foreach (var installed in run.InstalledPrograms.ToArray())
             Dispatch(run, runEvent, eventType, installed.Reaction);
