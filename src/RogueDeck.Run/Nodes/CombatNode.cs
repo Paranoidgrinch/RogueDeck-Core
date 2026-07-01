@@ -117,28 +117,29 @@ public sealed class CombatNodeResolver : INodeResolver
 {
     private readonly ICombatDriver _driver;
     private readonly Func<RunCardInstance, CardDefinitionId> _deckMapper;
+    private readonly EncounterCatalog? _encounters;
 
     // The deck mapper projects a run card copy to the combat card definition it fights as. The default is
     // identity (ignore per-copy state); a caller passes an upgrade-aware mapper to make upgrades matter in
-    // combat (Phase G3). Keeping it here means the run owns deck projection, not each combat node's author.
+    // combat (Phase G3). The encounter catalog resolves data-defined combats (EncounterRef payloads); it is
+    // optional so runs that only use Func payloads need not supply one. The run owns deck projection either way.
     public CombatNodeResolver(
-        ICombatDriver driver, Func<RunCardInstance, CardDefinitionId>? deckMapper = null)
+        ICombatDriver driver,
+        Func<RunCardInstance, CardDefinitionId>? deckMapper = null,
+        EncounterCatalog? encounters = null)
     {
         ArgumentNullException.ThrowIfNull(driver);
         _driver = driver;
         _deckMapper = deckMapper ?? (card => card.DefinitionId);
+        _encounters = encounters;
     }
 
     public NodeType NodeType => StandardRunIds.CombatNode;
 
     public NodeOutcome Resolve(NodeResolveContext context, Node node)
     {
-        if (node.Payload is not CombatNodePayload payload)
-            throw new ArgumentException(
-                $"Combat node '{node.Id}' payload must be a CombatNodePayload.", nameof(node));
-
         var run = context.Run;
-        var playthrough = payload.BuildPlaythrough(run);
+        var playthrough = BuildPlaythrough(node, run);
         ApplyRunProjection(playthrough, run);
         var before = run.Health.Current;
 
@@ -154,6 +155,18 @@ public sealed class CombatNodeResolver : INodeResolver
 
         return new NodeOutcome($"combat resolved ({result.Result}).");
     }
+
+    // A combat node carries either a data EncounterRef (resolved via the catalog) or a Func escape hatch.
+    private Playthrough BuildPlaythrough(Node node, RunState run) => node.Payload switch
+    {
+        EncounterRef reference => _encounters is not null
+            ? _encounters.Build(reference.Id, run, run.RandomSeed)
+            : throw new InvalidOperationException(
+                $"Combat node '{node.Id}' references encounter '{reference.Id}' but the resolver has no EncounterCatalog."),
+        CombatNodePayload payload => payload.BuildPlaythrough(run),
+        _ => throw new ArgumentException(
+            $"Combat node '{node.Id}' payload must be an EncounterRef or a CombatNodePayload.", nameof(node)),
+    };
 
     // Inject the run into the freshly built (still mutable, not-yet-compiled) blueprint: the bridge owns deck
     // projection and the relic combat-injection face, so the node author only authors the encounter.

@@ -76,6 +76,13 @@ deliberately deferred to their own foundations.) A **catalog-gap pass** is part 
 - **R7a done** — `AutoPlayCombatDriver`: plays a combat headlessly with no authored script (hero plays hand
   at the first living enemy; enemies cycle their actions; round cap guards stalemate), on top of the existing
   `InteractiveCombat`. Removes the script dependency and enables headless run simulation.
-- Remaining: R7b (EncounterDefinition as data + run encounter registry → node references an EncounterId; kill
-  the CombatNodePayload Func for content), relic-disable + consumables. Then serialization + content registry/
-  validation + run Sandbox UI.
+- **R7b done** — data-defined encounters: `CombatContentLibrary` (authored-once card/action/status defs),
+  `EncounterDefinition` (enemy roster + hero combat resources), `EncounterCatalog` assembles the fight from
+  library + encounter + run projection. A combat node carries an `EncounterRef(EncounterId)`; the resolver
+  resolves it via an optional catalog (Func payload kept as escape). `StandardRunPackage(driver, encounters)`.
+
+**All REPLACE seams (R1-R7) done.** Every designer-facing lambda now has a data path; the run map (events +
+combats) is expressible as data. Remaining are separate content/tooling slices, not audit blockers:
+relic-disable (per-relic active state), consumables (run inventory), and the endgame — serialization + a run
+content registry with seal-time validation + a run Sandbox UI (at which point combat card *programs* could also
+become data). Card EffectPrograms remain combat-authoring until that endgame.

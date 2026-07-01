@@ -6,10 +6,14 @@ namespace RogueDeck.Run;
 public sealed class StandardRunPackage : IRunPackage
 {
     private readonly ICombatDriver _combatDriver;
+    private readonly EncounterCatalog? _encounters;
 
-    public StandardRunPackage(ICombatDriver? combatDriver = null)
+    // `encounters` enables data-defined combat nodes (EncounterRef payloads); omit it for runs that only use
+    // Func-based combat payloads.
+    public StandardRunPackage(ICombatDriver? combatDriver = null, EncounterCatalog? encounters = null)
     {
         _combatDriver = combatDriver ?? new ScriptedCombatDriver();
+        _encounters = encounters;
     }
 
     public string DisplayName => "Standard Run Package";
@@ -49,7 +53,7 @@ public sealed class StandardRunPackage : IRunPackage
             .RegisterEffectHandler(new AddRewardModifierRunEffectHandler());
 
         builder
-            .RegisterResolver(new CombatNodeResolver(_combatDriver))
+            .RegisterResolver(new CombatNodeResolver(_combatDriver, encounters: _encounters))
             .RegisterResolver(new EventNodeResolver());
     }
 }

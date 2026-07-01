@@ -64,6 +64,12 @@ public readonly record struct RunCardTagId(string Value)
     public override string ToString() => Value;
 }
 
+// Identity of a data-defined combat encounter, referenced by a combat node instead of a hand-authored fight.
+public readonly record struct EncounterId(string Value)
+{
+    public override string ToString() => Value;
+}
+
 // The kind of a map node. A string-backed id (not an enum) so new node kinds can be added by any package
 // without touching the core — resolvers are registered against these values.
 public readonly record struct NodeType(string Value)
