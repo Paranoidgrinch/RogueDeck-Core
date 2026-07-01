@@ -79,6 +79,10 @@ public sealed class EncounterCatalog
         _encounters = encounters.ToDictionary(encounter => encounter.Id);
     }
 
+    public bool Contains(EncounterId id) => _encounters.ContainsKey(id);
+
+    public IEnumerable<EncounterId> Ids => _encounters.Keys;
+
     public Playthrough Build(EncounterId id, RunState run, int randomSeed)
     {
         if (!_encounters.TryGetValue(id, out var encounter))

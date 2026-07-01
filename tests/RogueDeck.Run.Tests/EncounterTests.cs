@@ -38,6 +38,9 @@ public class EncounterTests
     private static EncounterCatalog Catalog(int goblinHp = 12) =>
         new(Library(), new[] { GoblinEncounter(goblinHp) });
 
+    private static RunContentRegistry Content(int goblinHp = 12) =>
+        new RunContentRegistryBuilder().SetEncounters(Catalog(goblinHp)).Build();
+
     private static RunState NewRun(int current = 30, int max = 30, params string[] deck)
     {
         var map = new RunMap(new[]
@@ -54,7 +57,7 @@ public class EncounterTests
     public void A_data_encounter_node_runs_to_victory_through_the_run()
     {
         var builder = new RunDefinitionRegistryBuilder();
-        new StandardRunPackage(new AutoPlayCombatDriver(), Catalog()).RegisterDefinitions(builder);
+        new StandardRunPackage(new AutoPlayCombatDriver(), Content()).RegisterDefinitions(builder);
         var registry = builder.Build();
 
         var run = NewRun(deck: new[] { "smite", "smite", "smite", "smite", "smite" });
@@ -71,7 +74,7 @@ public class EncounterTests
         var builder = new RunDefinitionRegistryBuilder();
         // Capturing driver records the assembled blueprint instead of playing.
         var capture = new CapturingDriver();
-        new StandardRunPackage(capture, Catalog()).RegisterDefinitions(builder);
+        new StandardRunPackage(capture, Content()).RegisterDefinitions(builder);
         var registry = builder.Build();
 
         var run = NewRun(current: 22, max: 30, deck: new[] { "smite", "smite" });

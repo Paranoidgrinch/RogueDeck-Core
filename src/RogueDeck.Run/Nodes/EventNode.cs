@@ -57,12 +57,18 @@ public sealed class EventScript
     }
 }
 
+// A combat node payload's event counterpart: reference an authored event by id (resolved via the content
+// registry) instead of embedding the EventScript in the node.
+public sealed record EventRef(EventId Id);
+
 public sealed class EventNodeResolver : INodeResolver
 {
+    private readonly RunContentRegistry? _content;
     private readonly int _maxSituations;
 
-    public EventNodeResolver(int maxSituations = 64)
+    public EventNodeResolver(RunContentRegistry? content = null, int maxSituations = 64)
     {
+        _content = content;
         _maxSituations = maxSituations;
     }
 
@@ -70,9 +76,7 @@ public sealed class EventNodeResolver : INodeResolver
 
     public NodeOutcome Resolve(NodeResolveContext context, Node node)
     {
-        if (node.Payload is not EventScript script)
-            throw new ArgumentException(
-                $"Event node '{node.Id}' payload must be an EventScript.", nameof(node));
+        var script = ResolveScript(node);
 
         var run = context.Run;
         var visited = 0;
@@ -107,4 +111,16 @@ public sealed class EventNodeResolver : INodeResolver
 
         return new NodeOutcome($"event resolved (last choice '{lastChoiceId}').");
     }
+
+    // A node carries either an inline EventScript (escape) or a data EventRef resolved via the content registry.
+    private EventScript ResolveScript(Node node) => node.Payload switch
+    {
+        EventScript script => script,
+        EventRef reference => _content is not null
+            ? _content.GetEvent(reference.Id)
+            : throw new InvalidOperationException(
+                $"Event node '{node.Id}' references event '{reference.Id}' but the resolver has no content registry."),
+        _ => throw new ArgumentException(
+            $"Event node '{node.Id}' payload must be an EventScript or an EventRef.", nameof(node)),
+    };
 }

@@ -33,6 +33,8 @@ public sealed class RunDefinitionRegistry
 
         return resolver;
     }
+
+    public bool HasResolver(NodeType nodeType) => _resolvers.ContainsKey(nodeType);
 }
 
 public sealed class RunDefinitionRegistryBuilder

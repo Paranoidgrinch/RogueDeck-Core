@@ -30,6 +30,12 @@ public readonly record struct RewardId(string Value)
     public override string ToString() => Value;
 }
 
+// Identity of a reward table (a named reward source) in the content registry.
+public readonly record struct RewardTableId(string Value)
+{
+    public override string ToString() => Value;
+}
+
 // Identity of a triggered program installed on the run (a scheduled consequence, a rule modifier, a reward
 // modifier — the generalised form of what a relic's RunPrograms do). Lets a program be uninstalled by id.
 public readonly record struct RunProgramId(string Value)
@@ -60,6 +66,12 @@ public readonly record struct RunCardInstanceId(string Value)
 // A run-side tag on a card instance (e.g. "cursed", "scarred"). Open like the other run ids so content owns
 // its vocabulary. Kept distinct from any combat-layer tag — a run tag is metadata on the persistent copy.
 public readonly record struct RunCardTagId(string Value)
+{
+    public override string ToString() => Value;
+}
+
+// Identity of an authored event, referenced by an event node instead of embedding the EventScript.
+public readonly record struct EventId(string Value)
 {
     public override string ToString() => Value;
 }
