@@ -497,6 +497,18 @@ public sealed class OrExpression : IRunExpression<bool>
     public bool Evaluate(RunEvalContext context) => Left.Evaluate(context) || Right.Evaluate(context);
 }
 
+// Escape: an arbitrary run predicate as a lambda (not serializable). Prefer composing data conditions.
+public sealed class RunPredicateExpression : IRunExpression<bool>
+{
+    private readonly Func<RunState, bool> _predicate;
+    public RunPredicateExpression(Func<RunState, bool> predicate)
+    {
+        ArgumentNullException.ThrowIfNull(predicate);
+        _predicate = predicate;
+    }
+    public bool Evaluate(RunEvalContext context) => _predicate(context.Run);
+}
+
 public sealed class NotExpression : IRunExpression<bool>
 {
     public IRunExpression<bool> Inner { get; }

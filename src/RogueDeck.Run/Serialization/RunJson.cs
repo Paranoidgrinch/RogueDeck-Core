@@ -78,6 +78,7 @@ public static class RunJson
         RegisterTemplates(registry);
         RegisterEffects(registry);
         RegisterRewards(registry);
+        RegisterNodes(registry);
         return registry;
     }
 
@@ -92,6 +93,9 @@ public static class RunJson
         options.Converters.Add(new PolymorphicRunJsonConverter<IRunEffectTemplate>(registry));
         options.Converters.Add(new PolymorphicRunJsonConverter<IRunEffectRequest>(registry));
         options.Converters.Add(new PolymorphicRunJsonConverter<IRewardSource>(registry));
+        options.Converters.Add(new PolymorphicRunJsonConverter<IRunNodePayload>(registry));
+        options.Converters.Add(new NodeJsonConverter());
+        options.Converters.Add(new EventScriptJsonConverter());
         return options;
     }
 
@@ -208,5 +212,63 @@ public static class RunJson
     {
         r.Register("reward.fixed", typeof(FixedRewardSource))
          .Register("reward.pool", typeof(PoolRewardSource));
+    }
+
+    // Data node payloads (references). Inline EventScript / Func combat payloads are escapes.
+    private static void RegisterNodes(RunJsonRegistry r)
+    {
+        r.Register("node.event", typeof(EventRef))
+         .Register("node.encounter", typeof(EncounterRef));
+    }
+}
+
+// A map node: id + type + a data payload (IRunNodePayload). Non-data payloads (inline EventScript, Func combat
+// payloads) are not serializable and fault clearly.
+public sealed class NodeJsonConverter : JsonConverter<Node>
+{
+    public override Node Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        using var document = JsonDocument.ParseValue(ref reader);
+        var root = document.RootElement;
+        var id = new NodeId(root.GetProperty("id").GetString()!);
+        var type = new NodeType(root.GetProperty("type").GetString()!);
+        var payload = JsonSerializer.Deserialize<IRunNodePayload>(root.GetProperty("payload").GetRawText(), options)!;
+        return new Node(id, type, payload);
+    }
+
+    public override void Write(Utf8JsonWriter writer, Node value, JsonSerializerOptions options)
+    {
+        if (value.Payload is not IRunNodePayload payload)
+            throw new NotSupportedException(
+                $"Node '{value.Id}' has a non-serializable payload '{value.Payload.GetType().Name}' (use EventRef/EncounterRef).");
+        writer.WriteStartObject();
+        writer.WriteString("id", value.Id.Value);
+        writer.WriteString("type", value.Type.Value);
+        writer.WritePropertyName("payload");
+        JsonSerializer.Serialize(writer, payload, options);
+        writer.WriteEndObject();
+    }
+}
+
+// EventScript keeps its situations as a dictionary but is constructed from a list — serialize the list form.
+public sealed class EventScriptJsonConverter : JsonConverter<EventScript>
+{
+    public override EventScript Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        using var document = JsonDocument.ParseValue(ref reader);
+        var root = document.RootElement;
+        var start = root.GetProperty("startSituationId").GetString()!;
+        var situations = JsonSerializer.Deserialize<List<EventSituation>>(
+            root.GetProperty("situations").GetRawText(), options)!;
+        return new EventScript(start, situations);
+    }
+
+    public override void Write(Utf8JsonWriter writer, EventScript value, JsonSerializerOptions options)
+    {
+        writer.WriteStartObject();
+        writer.WriteString("startSituationId", value.StartSituationId);
+        writer.WritePropertyName("situations");
+        JsonSerializer.Serialize(writer, value.Situations.Values.ToList(), options);
+        writer.WriteEndObject();
     }
 }

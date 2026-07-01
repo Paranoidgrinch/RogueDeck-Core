@@ -14,19 +14,20 @@ public sealed record EventChoice(
     string Id,
     IReadOnlyList<IRunEffectRequest> Effects,
     string? NextSituationId = null,
-    Func<RunState, bool>? Requirement = null,
+    IRunExpression<bool>? Requirement = null,
     string? TextKey = null,
     IReadOnlyList<RunCost>? Costs = null)
 {
     // Offered only when visible (Requirement) and affordable (every cost's CanPay holds). Folding
     // affordability into availability keeps the scripted resolver simple: unaffordable choices are not
-    // offered, rather than shown-but-disabled.
-    public bool IsAvailable(RunState run) => (Requirement?.Invoke(run) ?? true) && CanAfford(run);
+    // offered, rather than shown-but-disabled. Requirement is a data condition so a choice serializes.
+    public bool IsAvailable(RunState run) => (Requirement is null || Requirement.Evaluate(run)) && CanAfford(run);
 
     public bool CanAfford(RunState run) =>
         Costs is null || Costs.All(cost => cost.CanPay.Evaluate(run));
 
     // The effects that pay every cost, in cost order — enqueued before the choice's own effects.
+    [System.Text.Json.Serialization.JsonIgnore]
     public IEnumerable<IRunEffectRequest> PayEffects =>
         Costs is null ? Enumerable.Empty<IRunEffectRequest>() : Costs.SelectMany(cost => cost.Pay);
 }
@@ -57,9 +58,15 @@ public sealed class EventScript
     }
 }
 
+// Marker for a data node payload — one that can be serialized (EventRef / EncounterRef), as opposed to the
+// escape payloads (an inline EventScript, or a Func-based CombatNodePayload).
+public interface IRunNodePayload
+{
+}
+
 // A combat node payload's event counterpart: reference an authored event by id (resolved via the content
 // registry) instead of embedding the EventScript in the node.
-public sealed record EventRef(EventId Id);
+public sealed record EventRef(EventId Id) : IRunNodePayload;
 
 public sealed class EventNodeResolver : INodeResolver
 {

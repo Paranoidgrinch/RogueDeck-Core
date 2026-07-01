@@ -11,7 +11,7 @@ namespace RogueDeck.Run;
 // + run projection (deck/relics/modifiers), so the run designer composes fights from ids, not code.
 
 // A combat node payload that references an encounter by id (resolved via the resolver's EncounterCatalog).
-public sealed record EncounterRef(EncounterId Id);
+public sealed record EncounterRef(EncounterId Id) : IRunNodePayload;
 
 // The shared, authored-once combat content: the definitions every encounter draws its cards / enemy actions /
 // statuses from. This is the one place combat behaviour (EffectPrograms) is authored; encounters reference it.

@@ -70,7 +70,7 @@ public sealed class ChoiceBuilder
     private readonly List<IRunEffectRequest> _effects = new();
     private readonly List<RunCost> _costs = new();
     private string? _nextSituationId;
-    private Func<RunState, bool>? _requirement;
+    private IRunExpression<bool>? _requirement;
     private string? _textKey;
 
     internal ChoiceBuilder(string id)
@@ -268,17 +268,19 @@ public sealed class ChoiceBuilder
         Require(RunExpr.HasResource(resource, min));
 
     // Composable requirement: the choice is offered only when the condition expression holds against the run.
-    // Prefer this over the raw-delegate overload so the requirement stays inspectable data.
+    // Data (inspectable + serializable) — prefer this over the raw-delegate overload.
     public ChoiceBuilder Require(IRunExpression<bool> condition)
     {
         ArgumentNullException.ThrowIfNull(condition);
-        return Require(run => condition.Evaluate(run));
+        _requirement = condition;
+        return this;
     }
 
+    // Escape: an arbitrary predicate (wrapped as a non-serializable expression).
     public ChoiceBuilder Require(Func<RunState, bool> requirement)
     {
         ArgumentNullException.ThrowIfNull(requirement);
-        _requirement = requirement;
+        _requirement = new RunPredicateExpression(requirement);
         return this;
     }
 
