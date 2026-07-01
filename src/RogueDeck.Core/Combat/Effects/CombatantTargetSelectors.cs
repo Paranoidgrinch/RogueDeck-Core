@@ -438,7 +438,7 @@ public sealed record ExplicitCombatantTargetSelector(CombatantId TargetId)
 
 public sealed class UnionCombatantTargetSelector : ICombatantTargetSelector
 {
-    private readonly IReadOnlyCollection<ICombatantTargetSelector> _selectors;
+    public IReadOnlyCollection<ICombatantTargetSelector> Selectors { get; }
 
     public UnionCombatantTargetSelector(params ICombatantTargetSelector[] selectors)
     {
@@ -450,7 +450,7 @@ public sealed class UnionCombatantTargetSelector : ICombatantTargetSelector
         if (selectors.Any(selector => selector is null))
             throw new ArgumentException("Selectors cannot contain null.", nameof(selectors));
 
-        _selectors = selectors.ToArray();
+        Selectors = selectors.ToArray();
     }
 
     public IReadOnlyCollection<CombatantId> ResolveTargets(CombatantTargetSelectionContext context)
@@ -460,7 +460,7 @@ public sealed class UnionCombatantTargetSelector : ICombatantTargetSelector
         var seen = new HashSet<CombatantId>();
         var result = new List<CombatantId>();
 
-        foreach (var selector in _selectors)
+        foreach (var selector in Selectors)
         {
             foreach (var targetId in selector.ResolveTargets(context))
             {
