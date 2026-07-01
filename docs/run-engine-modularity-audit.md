@@ -82,7 +82,19 @@ deliberately deferred to their own foundations.) A **catalog-gap pass** is part 
   resolves it via an optional catalog (Func payload kept as escape). `StandardRunPackage(driver, encounters)`.
 
 **All REPLACE seams (R1-R7) done.** Every designer-facing lambda now has a data path; the run map (events +
-combats) is expressible as data. Remaining are separate content/tooling slices, not audit blockers:
-relic-disable (per-relic active state), consumables (run inventory), and the endgame — serialization + a run
-content registry with seal-time validation + a run Sandbox UI (at which point combat card *programs* could also
-become data). Card EffectPrograms remain combat-authoring until that endgame.
+combats) is expressible as data.
+
+Post-audit slices delivered:
+- **Relic-disable + consumables** — done.
+- **Content registry** — done: `RunContentRegistry` (events/encounters/relics/reward tables by id) +
+  `EventRef` + seal-time map validation.
+
+Endgame remaining: **serialization** (multi-slice) + a run Sandbox UI. Serialization order:
+- S0 — make data nodes serialization-friendly: several expression/selector classes keep operands in PRIVATE
+  fields (e.g. AddExpression._left/_right); System.Text.Json cannot read those. Expose them as public
+  properties / records. Prerequisite for everything below.
+- S1 — kind registry + polymorphic converter (envelope `{"kind":..,"value":..}`, one converter per base,
+  recursive).
+- S2 — register kinds + round-trip tests, family by family.
+- S3 — redesign event accessors (RunEventValues / EventValue) from Func-backed to serializable field-key +
+  registry lookup. Escapes stay non-serializable by design; combat content is referenced by id, not serialized.
