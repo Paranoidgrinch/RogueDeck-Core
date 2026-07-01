@@ -1,5 +1,6 @@
 @rendermode InteractiveServer
-@implements IDisposable
+@implements IAsyncDisposable
+@inject IJSRuntime JS
 
 <h1>RogueDeck Run Sandbox</h1>
 <p class="muted">
@@ -16,6 +17,8 @@
         <div class="run-bar">
             <label>Seed <input type="number" @bind="_seed" style="width:6rem" /></label>
             <button class="play" @onclick="Start">Load &amp; drive</button>
+            <button class="play" @onclick="Download">Download</button>
+            <label class="play">Upload<InputFile OnChange="Upload" style="display:none" /></label>
         </div>
         @if (_error is not null)
         {
@@ -121,8 +124,24 @@
     private readonly HashSet<int> _selected = new();
     private int _simRuns = 50;
     private string? _simSummary;
+    private IJSObjectReference? _jsModule;
 
     protected override void OnInitialized() => _json = RunJson.ToJson(DemoBlueprint(), _options);
+
+    // Save the current blueprint JSON as a file (via a small JS download helper).
+    private async Task Download()
+    {
+        _jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./runSandbox.js");
+        await _jsModule.InvokeVoidAsync("download", "run-blueprint.json", _json);
+    }
+
+    // Load a blueprint JSON from an uploaded file into the editor.
+    private async Task Upload(InputFileChangeEventArgs e)
+    {
+        using var reader = new StreamReader(e.File.OpenReadStream(5 * 1024 * 1024));
+        _json = await reader.ReadToEndAsync();
+        _error = null;
+    }
 
     private void Start()
     {
@@ -223,7 +242,15 @@
         _session = null;
     }
 
-    public void Dispose() => DisposeSession();
+    public async ValueTask DisposeAsync()
+    {
+        DisposeSession();
+        if (_jsModule is not null)
+        {
+            try { await _jsModule.DisposeAsync(); }
+            catch (JSDisconnectedException) { /* circuit already gone */ }
+        }
+    }
 
     // The combat content library, encounter and relic are code-provided and referenced by id; the blueprint's
     // events are registered on top.
