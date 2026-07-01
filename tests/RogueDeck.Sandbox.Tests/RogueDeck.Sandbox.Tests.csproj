@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\RogueDeck.Sandbox\RogueDeck.Sandbox.csproj" />
+    <ProjectReference Include="..\..\src\RogueDeck.Sandbox.Combat\RogueDeck.Sandbox.Combat.csproj" />
     <ProjectReference Include="..\..\src\RogueDeck.Scenario\RogueDeck.Scenario.csproj" />
     <ProjectReference Include="..\..\src\RogueDeck.Core\RogueDeck.Core.csproj" />
   </ItemGroup>

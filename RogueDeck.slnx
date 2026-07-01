@@ -3,6 +3,7 @@
     <Project Path="src/RogueDeck.ConsoleSandbox/RogueDeck.ConsoleSandbox.csproj" />
     <Project Path="src/RogueDeck.Core/RogueDeck.Core.csproj" />
     <Project Path="src/RogueDeck.Sandbox/RogueDeck.Sandbox.csproj" />
+    <Project Path="src/RogueDeck.Sandbox.Combat/RogueDeck.Sandbox.Combat.csproj" />
     <Project Path="src/RogueDeck.Scenario/RogueDeck.Scenario.csproj" />
     <Project Path="src/RogueDeck.Run/RogueDeck.Run.csproj" />
   </Folder>

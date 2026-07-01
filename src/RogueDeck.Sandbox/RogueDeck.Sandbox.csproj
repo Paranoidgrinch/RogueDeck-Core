@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\RogueDeck.Core\RogueDeck.Core.csproj" />
     <ProjectReference Include="..\RogueDeck.Scenario\RogueDeck.Scenario.csproj" />
+    <ProjectReference Include="..\RogueDeck.Sandbox.Combat\RogueDeck.Sandbox.Combat.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
