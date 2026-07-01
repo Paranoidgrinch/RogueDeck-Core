@@ -93,8 +93,11 @@ Endgame remaining: **serialization** (multi-slice) + a run Sandbox UI. Serializa
 - S0 — make data nodes serialization-friendly: several expression/selector classes keep operands in PRIVATE
   fields (e.g. AddExpression._left/_right); System.Text.Json cannot read those. Expose them as public
   properties / records. Prerequisite for everything below.
-- S1 — kind registry + polymorphic converter (envelope `{"kind":..,"value":..}`, one converter per base,
-  recursive).
-- S2 — register kinds + round-trip tests, family by family.
+- S0 — done: data nodes expose operands as public properties.
+- S1 — done: `RunJson` — `RunJsonRegistry` (kind ↔ type) + `PolymorphicRunJsonConverter<TBase>` (envelope
+  `{"kind":..,"value":..}`, recursive). The expression family (values + conditions) is registered and
+  round-trips (verified by evaluation-equality); escapes (Func-backed) throw NotSupportedException.
+- S2 — next: register the remaining families (effects, selectors, rewards, pools) + round-trip tests. Needs
+  concrete public template types (LiteralTemplate etc. are private/Func now) and RunPool serialization.
 - S3 — redesign event accessors (RunEventValues / EventValue) from Func-backed to serializable field-key +
   registry lookup. Escapes stay non-serializable by design; combat content is referenced by id, not serialized.
