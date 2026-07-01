@@ -1,69 +1,70 @@
 @rendermode InteractiveServer
+@implements IDisposable
 
 <h1>RogueDeck Run Sandbox</h1>
 <p class="muted">
     A demo run (a shrine event, then a goblin fight) built entirely from the run engine's data primitives —
-    events, encounters, effects, an id-referenced relic. Enter a choice script (comma-separated choice ids for
-    each event; e.g. <code>heal</code> or <code>gold</code>) and press <strong>Run</strong>. The fight is
-    played headlessly by the auto-play driver. Nothing here invents run rules; it only composes existing ones.
+    events, encounters, effects, an id-referenced relic. Press <strong>Start run</strong>, then click a choice
+    at each event to step through it; the fight is played headlessly by the auto-play driver. Nothing here
+    invents run rules; it only composes existing ones.
 </p>
 
 <div class="run-bar">
-    <label>Choices <input @bind="_choiceScript" style="width:16rem" placeholder="heal" /></label>
     <label>Seed <input type="number" @bind="_seed" style="width:6rem" /></label>
-    <button class="play" @onclick="Run">Run</button>
+    <button class="play" @onclick="Start">@(_session is null ? "Start run" : "Restart")</button>
 </div>
 
-@if (_error is not null)
-{
-    <p class="error">@_error</p>
-}
-
-@if (_state is not null)
+@if (_session is { } session)
 {
     <div class="grid">
         <section class="panel">
-            <h2>Result</h2>
-            <div class="row"><span class="muted">Outcome</span> <strong>@_state.Result</strong></div>
-            <div class="row"><span class="muted">HP</span> @_state.Health.Current / @_state.Health.Max</div>
-            <div class="row"><span class="muted">Gold</span> @_state.GetResource(StandardRunIds.Gold)</div>
-
-            <h2>Deck (@_state.Deck.Count)</h2>
-            <ul class="log">
-                @foreach (var card in _state.Deck)
-                {
-                    <li>@card.DefinitionId@(card.UpgradeLevel > 0 ? $" +{card.UpgradeLevel}" : "")</li>
-                }
-            </ul>
-
-            <h2>Relics</h2>
-            @if (_state.Relics.Count == 0)
+            @if (session.Error is { } error)
             {
-                <p class="muted">none</p>
+                <p class="error">@error</p>
+            }
+            else if (session.IsAwaitingChoice && session.PendingSituation is { } situation)
+            {
+                <h2>@situation.TextKey</h2>
+                <div class="choices">
+                    @foreach (var choice in session.PendingChoices)
+                    {
+                        <button class="play" @onclick="() => session.Pick(choice.Id)">
+                            @(string.IsNullOrEmpty(choice.TextKey) ? choice.Id : choice.TextKey)
+                        </button>
+                    }
+                </div>
+            }
+            else if (session.IsComplete)
+            {
+                <h2>Run complete</h2>
+                <div class="row"><span class="muted">Outcome</span> <strong>@session.Run.Result</strong></div>
             }
             else
             {
-                <ul class="log">@foreach (var r in _state.Relics) { <li>@r.Id @(r.Enabled ? "" : "(disabled)")</li> }</ul>
+                <p class="muted">Resolving…</p>
             }
 
-            <h2>Flags &amp; counters</h2>
-            @if (_state.Flags.Count == 0 && _state.Counters.Count == 0)
+            <h2>State</h2>
+            <div class="row"><span class="muted">HP</span> @session.Run.Health.Current / @session.Run.Health.Max</div>
+            <div class="row"><span class="muted">Gold</span> @session.Run.GetResource(StandardRunIds.Gold)</div>
+            <div class="row"><span class="muted">Deck</span> @session.Run.Deck.Count</div>
+            <div class="row"><span class="muted">Relics</span>
+                @(session.Run.Relics.Count == 0 ? "none" : string.Join(", ", session.Run.Relics.Select(r => r.Id)))
+            </div>
+            @if (session.Run.Flags.Count > 0)
             {
-                <p class="muted">none</p>
+                <div class="row"><span class="muted">Flags</span> @string.Join(", ", session.Run.Flags)</div>
             }
-            else
+            @foreach (var counter in session.Run.Counters)
             {
-                <ul class="log">
-                    @foreach (var f in _state.Flags) { <li>flag: @f</li> }
-                    @foreach (var c in _state.Counters) { <li>@c.Key = @c.Value</li> }
-                </ul>
+                <div class="row"><span class="muted">@counter.Key</span> @counter.Value</div>
             }
         </section>
 
         <section class="panel">
             <h2>Run log</h2>
             <ul class="log">
-                @foreach (var entry in _state.Log)
+                @foreach (var entry in session.Run.Log)
                 {
                     <li><span class="line-kind">@entry.Type</span> @entry.Message</li>
                 }
@@ -76,42 +77,46 @@
     private static readonly EncounterId GoblinFight = new("goblin-fight");
     private static readonly EventId Shrine = new("shrine");
 
-    private string _choiceScript = "heal";
     private int _seed = 1;
-    private RunState? _state;
-    private string? _error;
+    private InteractiveRunSession? _session;
 
-    private void Run()
+    private void Start()
     {
-        _error = null;
-        try
+        DisposeSession();
+
+        var content = BuildContent();
+        var builder = new RunDefinitionRegistryBuilder();
+        new StandardRunPackage(new AutoPlayCombatDriver(), content).RegisterDefinitions(builder);
+        var registry = builder.Build();
+
+        var map = new RunMap(new Node[]
         {
-            var content = BuildContent();
-            var builder = new RunDefinitionRegistryBuilder();
-            new StandardRunPackage(new AutoPlayCombatDriver(), content).RegisterDefinitions(builder);
-            var registry = builder.Build();
+            new(new NodeId("shrine"), StandardRunIds.EventNode, new EventRef(Shrine)),
+            new(new NodeId("fight"), StandardRunIds.CombatNode, new EncounterRef(GoblinFight)),
+        });
 
-            var map = new RunMap(new Node[]
-            {
-                new(new NodeId("shrine"), StandardRunIds.EventNode, new EventRef(Shrine)),
-                new(new NodeId("fight"), StandardRunIds.CombatNode, new EncounterRef(GoblinFight)),
-            });
+        var run = new RunState(new RunId("demo"), new HealthState(30, 40), map, randomSeed: _seed);
+        for (var i = 0; i < 5; i++)
+            run.AddDeckCard(new CardDefinitionId("smite"));
 
-            var run = new RunState(new RunId("demo"), new HealthState(30, 40), map, randomSeed: _seed);
-            for (var i = 0; i < 5; i++)
-                run.AddDeckCard(new CardDefinitionId("smite"));
-
-            var choices = _choiceScript
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            new RunRunner(registry, new ScriptedChoiceProvider(choices), content: content).Run(run);
-            _state = run;
-        }
-        catch (Exception ex)
-        {
-            _error = $"{ex.GetType().Name}: {ex.Message}";
-            _state = null;
-        }
+        var session = new InteractiveRunSession(run, registry, content);
+        session.Changed += OnSessionChanged;
+        _session = session;
+        session.Start();
     }
+
+    private void OnSessionChanged() => InvokeAsync(StateHasChanged);
+
+    private void DisposeSession()
+    {
+        if (_session is null)
+            return;
+        _session.Changed -= OnSessionChanged;
+        _session.Dispose();
+        _session = null;
+    }
+
+    public void Dispose() => DisposeSession();
 
     private static RunContentRegistry BuildContent()
     {
@@ -135,10 +140,10 @@
             heroResources: new[] { new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3) });
 
         var shrine = new EventScriptBuilder("shrine")
-            .Situation("shrine", "event.shrine", s => s
-                .Choice("heal", c => c.Heal(8))
-                .Choice("gold", c => c.GainResource(StandardRunIds.Gold, 20))
-                .Choice("leave", _ => { }))
+            .Situation("shrine", "An ancient shrine hums with power.", s => s
+                .Choice("heal", c => c.TextKey("Pray for healing (+8 HP)").Heal(8))
+                .Choice("gold", c => c.TextKey("Pry loose the offerings (+20 gold)").GainResource(StandardRunIds.Gold, 20))
+                .Choice("leave", c => c.TextKey("Leave it be")))
             .Build();
 
         return new RunContentRegistryBuilder()
