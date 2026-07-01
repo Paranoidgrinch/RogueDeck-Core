@@ -3,24 +3,32 @@
 
 <h1>RogueDeck Run Sandbox</h1>
 <p class="muted">
-    A demo run (a shrine event, then a goblin fight) built entirely from the run engine's data primitives —
-    events, encounters, effects, an id-referenced relic. Press <strong>Start run</strong>, then click a choice
-    at each event to step through it; the fight is played headlessly by the auto-play driver. Nothing here
-    invents run rules; it only composes existing ones.
+    A whole run authored as <strong>data</strong>: the starting deck, the events, and the map are a JSON
+    RunBlueprint you can edit below. The combat content (cards, the goblin encounter) and relics are provided by
+    code and referenced by id. Press <strong>Load &amp; drive</strong>, then click a choice at each event to
+    step through it; fights are played headlessly by the auto-play driver.
 </p>
 
-<div class="run-bar">
-    <label>Seed <input type="number" @bind="_seed" style="width:6rem" /></label>
-    <button class="play" @onclick="Start">@(_session is null ? "Start run" : "Restart")</button>
-</div>
+<div class="grid">
+    <section class="panel">
+        <h2>Run blueprint (JSON)</h2>
+        <textarea @bind="_json" rows="22" style="width:100%;font-family:monospace;font-size:12px"></textarea>
+        <div class="run-bar">
+            <label>Seed <input type="number" @bind="_seed" style="width:6rem" /></label>
+            <button class="play" @onclick="Start">Load &amp; drive</button>
+        </div>
+        @if (_error is not null)
+        {
+            <p class="error">@_error</p>
+        }
+    </section>
 
-@if (_session is { } session)
-{
-    <div class="grid">
+    @if (_session is { } session)
+    {
         <section class="panel">
-            @if (session.Error is { } error)
+            @if (session.Error is { } runError)
             {
-                <p class="error">@error</p>
+                <p class="error">@runError</p>
             }
             else if (session.IsAwaitingChoice && session.PendingSituation is { } situation)
             {
@@ -88,17 +96,50 @@
                 }
             </ul>
         </section>
-    </div>
-}
+    }
+</div>
 
 @code {
     private static readonly EncounterId GoblinFight = new("goblin-fight");
-    private static readonly EventId Shrine = new("shrine");
-    private static readonly EventId Purge = new("purge");
 
+    private readonly JsonSerializerOptions _options = RunJson.CreateOptions();
+    private string _json = "";
     private int _seed = 1;
     private InteractiveRunSession? _session;
+    private string? _error;
     private readonly HashSet<int> _selected = new();
+
+    protected override void OnInitialized() => _json = RunJson.ToJson(DemoBlueprint(), _options);
+
+    private void Start()
+    {
+        _error = null;
+        DisposeSession();
+        _selected.Clear();
+
+        try
+        {
+            var blueprint = RunJson.FromJson<RunBlueprint>(_json, _options);
+            var content = BuildContent(blueprint);
+
+            var defs = new RunDefinitionRegistryBuilder();
+            new StandardRunPackage(new AutoPlayCombatDriver(), content).RegisterDefinitions(defs);
+            var registry = defs.Build();
+
+            var run = new RunState(new RunId("demo"), new HealthState(30, 40), blueprint.Map, randomSeed: _seed);
+            foreach (var card in blueprint.Deck)
+                run.AddDeckCard(card);
+
+            var session = new InteractiveRunSession(run, registry, content);
+            session.Changed += OnSessionChanged;
+            _session = session;
+            session.Start();
+        }
+        catch (Exception ex)
+        {
+            _error = $"{ex.GetType().Name}: {ex.Message}";
+        }
+    }
 
     private void ToggleEntity(int index)
     {
@@ -121,33 +162,6 @@
         _session?.PickEntities(indices);
     }
 
-    private void Start()
-    {
-        DisposeSession();
-        _selected.Clear();
-
-        var content = BuildContent();
-        var builder = new RunDefinitionRegistryBuilder();
-        new StandardRunPackage(new AutoPlayCombatDriver(), content).RegisterDefinitions(builder);
-        var registry = builder.Build();
-
-        var map = new RunMap(new Node[]
-        {
-            new(new NodeId("shrine"), StandardRunIds.EventNode, new EventRef(Shrine)),
-            new(new NodeId("purge"), StandardRunIds.EventNode, new EventRef(Purge)),
-            new(new NodeId("fight"), StandardRunIds.CombatNode, new EncounterRef(GoblinFight)),
-        });
-
-        var run = new RunState(new RunId("demo"), new HealthState(30, 40), map, randomSeed: _seed);
-        for (var i = 0; i < 5; i++)
-            run.AddDeckCard(new CardDefinitionId("smite"));
-
-        var session = new InteractiveRunSession(run, registry, content);
-        session.Changed += OnSessionChanged;
-        _session = session;
-        session.Start();
-    }
-
     private void OnSessionChanged() => InvokeAsync(StateHasChanged);
 
     private void DisposeSession()
@@ -161,7 +175,9 @@
 
     public void Dispose() => DisposeSession();
 
-    private static RunContentRegistry BuildContent()
+    // The combat content library, encounter and relic are code-provided and referenced by id; the blueprint's
+    // events are registered on top.
+    private static RunContentRegistry BuildContent(RunBlueprint blueprint)
     {
         var library = new CombatContentLibrary(
             cards: new[]
@@ -182,6 +198,16 @@
             enemies: new[] { new EncounterEnemy("goblin", 12, new[] { new EnemyActionDefinitionId("slam") }) },
             heroResources: new[] { new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3) });
 
+        var builder = new RunContentRegistryBuilder()
+            .RegisterRelic(StandardRelics.Bloodstone())
+            .SetEncounters(new EncounterCatalog(library, new[] { encounter }));
+        foreach (var (id, script) in blueprint.Events)
+            builder.RegisterEvent(new EventId(id), script);
+        return builder.Build();
+    }
+
+    private static RunBlueprint DemoBlueprint()
+    {
         var shrine = new EventScriptBuilder("shrine")
             .Situation("shrine", "An ancient shrine hums with power.", s => s
                 .Choice("heal", c => c.TextKey("Pray for healing (+8 HP)").Heal(8))
@@ -197,11 +223,16 @@
                 .Choice("keep", c => c.TextKey("Keep your deck intact")))
             .Build();
 
-        return new RunContentRegistryBuilder()
-            .RegisterEvent(Shrine, shrine)
-            .RegisterEvent(Purge, purge)
-            .RegisterRelic(StandardRelics.Bloodstone())
-            .SetEncounters(new EncounterCatalog(library, new[] { encounter }))
-            .Build();
+        var map = new RunMap(new Node[]
+        {
+            new(new NodeId("shrine"), StandardRunIds.EventNode, new EventRef(new EventId("shrine"))),
+            new(new NodeId("purge"), StandardRunIds.EventNode, new EventRef(new EventId("purge"))),
+            new(new NodeId("fight"), StandardRunIds.CombatNode, new EncounterRef(GoblinFight)),
+        });
+
+        return new RunBlueprint(
+            Enumerable.Repeat(new CardDefinitionId("smite"), 5).ToList(),
+            new Dictionary<string, EventScript> { ["shrine"] = shrine, ["purge"] = purge },
+            map);
     }
 }
