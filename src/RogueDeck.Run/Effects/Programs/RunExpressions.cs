@@ -205,6 +205,49 @@ public sealed class ClampExpression : IRunExpression<int>
     }
 }
 
+// Integer division (truncating toward zero). Division by zero is an author error and throws.
+public sealed class DivideExpression : IRunExpression<int>
+{
+    private readonly IRunExpression<int> _left;
+    private readonly IRunExpression<int> _right;
+    public DivideExpression(IRunExpression<int> left, IRunExpression<int> right)
+    {
+        ArgumentNullException.ThrowIfNull(left);
+        ArgumentNullException.ThrowIfNull(right);
+        _left = left;
+        _right = right;
+    }
+    public int Evaluate(RunEvalContext context)
+    {
+        var divisor = _right.Evaluate(context);
+        if (divisor == 0)
+            throw new InvalidOperationException("Division by zero in a run expression.");
+        return _left.Evaluate(context) / divisor;
+    }
+}
+
+public sealed class AbsExpression : IRunExpression<int>
+{
+    private readonly IRunExpression<int> _inner;
+    public AbsExpression(IRunExpression<int> inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        _inner = inner;
+    }
+    public int Evaluate(RunEvalContext context) => Math.Abs(_inner.Evaluate(context));
+}
+
+public sealed class NegateExpression : IRunExpression<int>
+{
+    private readonly IRunExpression<int> _inner;
+    public NegateExpression(IRunExpression<int> inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        _inner = inner;
+    }
+    public int Evaluate(RunEvalContext context) => -_inner.Evaluate(context);
+}
+
 // ── Random / pool draws ───────────────────────────────────────────────────────────
 // These are the one impure corner of the vocabulary: evaluating them advances the run RNG (RunState.NextRandom),
 // so the result is not referentially transparent — evaluate each once per decision. The run seed still makes
@@ -359,6 +402,9 @@ public static class RunExpr
     public static IRunExpression<int> Multiply(IRunExpression<int> l, IRunExpression<int> r) => new MultiplyExpression(l, r);
     public static IRunExpression<int> Min(IRunExpression<int> l, IRunExpression<int> r) => new MinExpression(l, r);
     public static IRunExpression<int> Max(IRunExpression<int> l, IRunExpression<int> r) => new MaxExpression(l, r);
+    public static IRunExpression<int> Divide(IRunExpression<int> l, IRunExpression<int> r) => new DivideExpression(l, r);
+    public static IRunExpression<int> Abs(IRunExpression<int> x) => new AbsExpression(x);
+    public static IRunExpression<int> Negate(IRunExpression<int> x) => new NegateExpression(x);
     public static IRunExpression<int> Clamp(IRunExpression<int> value, IRunExpression<int> min, IRunExpression<int> max) =>
         new ClampExpression(value, min, max);
 

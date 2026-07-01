@@ -112,7 +112,16 @@ public sealed class ChoiceBuilder
 
     public ChoiceBuilder Heal(int amount) => Effect(new HealRunEffect(amount));
 
+    // Heal by an amount computed from run state at resolve time.
+    public ChoiceBuilder Heal(IRunExpression<int> amount) => Effect(new ComputedHealRunEffect(amount));
+
     public ChoiceBuilder Damage(int amount) => Effect(new ApplyRunDamageRunEffect(amount));
+
+    public ChoiceBuilder Damage(IRunExpression<int> amount) => Effect(new ComputedDamageRunEffect(amount));
+
+    // Repeat a block of effects a computed number of times.
+    public ChoiceBuilder Repeat(IRunExpression<int> count, params IRunEffectRequest[] effects) =>
+        Effect(new RepeatRunEffect(count, effects));
 
     public ChoiceBuilder SetFlag(RunFlagId flag) => Effect(new SetFlagRunEffect(flag, true));
 

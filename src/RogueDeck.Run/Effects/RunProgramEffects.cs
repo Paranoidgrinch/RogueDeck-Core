@@ -21,6 +21,41 @@ public sealed class ComputedResourceRunEffectHandler : RunEffectHandler<Computed
     }
 }
 
+// Heal / damage the hero by an amount computed from run state at resolve time (the health counterparts of
+// ComputedResourceRunEffect). They delegate to the primitive Heal/ApplyRunDamage effects so caps and events
+// stay uniform.
+public sealed record ComputedHealRunEffect(IRunExpression<int> Amount) : IRunEffectRequest;
+
+public sealed class ComputedHealRunEffectHandler : RunEffectHandler<ComputedHealRunEffect>
+{
+    protected override void Resolve(RunState run, RunDefinitionRegistry registry, ComputedHealRunEffect request) =>
+        run.EnqueueEffect(new HealRunEffect(request.Amount.Evaluate(run)));
+}
+
+public sealed record ComputedDamageRunEffect(IRunExpression<int> Amount) : IRunEffectRequest;
+
+public sealed class ComputedDamageRunEffectHandler : RunEffectHandler<ComputedDamageRunEffect>
+{
+    protected override void Resolve(RunState run, RunDefinitionRegistry registry, ComputedDamageRunEffect request) =>
+        run.EnqueueEffect(new ApplyRunDamageRunEffect(request.Amount.Evaluate(run)));
+}
+
+// Enqueue a block of effects `Count` times (Count computed at resolve time; <= 0 does nothing). The block is
+// repeated whole, in order. A run-level loop primitive; ForEach-over-a-selector lands with the selector phase.
+public sealed record RepeatRunEffect(IRunExpression<int> Count, IReadOnlyList<IRunEffectRequest> Effects)
+    : IRunEffectRequest;
+
+public sealed class RepeatRunEffectHandler : RunEffectHandler<RepeatRunEffect>
+{
+    protected override void Resolve(RunState run, RunDefinitionRegistry registry, RepeatRunEffect request)
+    {
+        var count = request.Count.Evaluate(run);
+        for (var i = 0; i < count; i++)
+            foreach (var effect in request.Effects)
+                run.EnqueueEffect(effect);
+    }
+}
+
 // Evaluate a condition against current run state and enqueue one branch of effects. The unchosen branch is
 // never enqueued, so branching is real (not both-with-a-guard). Either branch may be empty.
 public sealed record ConditionalRunEffect(

@@ -68,4 +68,6 @@ first); pure-content ideas (rival run, deck-as-dungeon, living-deck events, etc.
 - Phase A: done — installed run programs (generalized trigger substrate).
 - Phase B: done — flags & counters state vocabulary.
 - Phase C: done — scheduler via installed programs (RunSchedule).
-- Phase D: next — costs on choices.
+- Phase D: done — costs on choices (RunCost = canPay + pay).
+- Phase E: done — Divide/Abs/Negate, computed Heal/Damage, Repeat effect (ForEach lands with F).
+- Phase F: next (large; needs discussion) — card instance model + selectors.
