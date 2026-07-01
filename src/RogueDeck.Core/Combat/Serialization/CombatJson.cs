@@ -178,9 +178,9 @@ public static class CombatJson
          .Register("sel.union", typeof(UnionCombatantTargetSelector));
     }
 
-    // Leaf native operation nodes (they hold a selector + expressions, no child nodes). Composite/control-flow
-    // nodes (Sequence/Conditional/ForEach) land in a later slice; nodes with a non-null EffectResultKey are not
-    // yet round-trippable (support the null case first).
+    // Leaf native operation nodes (they hold a selector + expressions, no child nodes) plus the composite/
+    // control-flow nodes. A node's EffectResultKey (a plain record over a fixed outcome type) round-trips too;
+    // only the Func-backed result CONSUMER expressions (PreviousOutcome*) remain non-serializable escapes.
     private static void RegisterNodes(CombatJsonRegistry r)
     {
         r.Register("node.dealDamage", typeof(DealDamageNode<>))

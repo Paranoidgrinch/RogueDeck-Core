@@ -44,6 +44,21 @@ public class CombatJsonNodeTests
     }
 
     [Fact]
+    public void A_node_with_a_result_key_round_trips()
+    {
+        IEffectNode<CardPlayContext> node = new DealDamageNode<CardPlayContext>(
+            new EventTargetCombatantTargetSelector(), Const(6),
+            resultKey: new EffectResultKey<OrderedTargetOutcomes<DamageOutcome>>("dmg"));
+
+        var json1 = CombatJson.ToJson(node, Options);
+        var back = CombatJson.FromJson<IEffectNode<CardPlayContext>>(json1, Options);
+
+        Assert.Equal(json1, CombatJson.ToJson(back, Options));
+        var deal = Assert.IsType<DealDamageNode<CardPlayContext>>(back);
+        Assert.Equal("dmg", deal.ResultKey!.Name);
+    }
+
+    [Fact]
     public void A_single_node_card_program_round_trips()
     {
         // The demo "smite" card: deal 6 to the event target.
