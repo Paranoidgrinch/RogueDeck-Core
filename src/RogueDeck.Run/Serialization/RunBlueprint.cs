@@ -9,4 +9,5 @@ namespace RogueDeck.Run;
 public sealed record RunBlueprint(
     IReadOnlyList<CardDefinitionId> Deck,
     IReadOnlyDictionary<string, EventScript> Events,
+    IReadOnlyList<EncounterDefinition> Encounters,
     RunMap Map);

@@ -270,14 +270,10 @@
                 },
             });
 
-        var encounter = new EncounterDefinition(
-            GoblinFight,
-            enemies: new[] { new EncounterEnemy("goblin", 12, new[] { new EnemyActionDefinitionId("slam") }) },
-            heroResources: new[] { new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3) });
-
+        // The combat content library (card/action EffectPrograms) is code; encounters come from the blueprint.
         var builder = new RunContentRegistryBuilder()
             .RegisterRelic(StandardRelics.Bloodstone())
-            .SetEncounters(new EncounterCatalog(library, new[] { encounter }));
+            .SetEncounters(new EncounterCatalog(library, blueprint.Encounters));
         foreach (var (id, script) in blueprint.Events)
             builder.RegisterEvent(new EventId(id), script);
         return builder.Build();
@@ -300,6 +296,11 @@
                 .Choice("keep", c => c.TextKey("Keep your deck intact")))
             .Build();
 
+        var encounter = new EncounterDefinition(
+            GoblinFight,
+            enemies: new[] { new EncounterEnemy("goblin", 12, new[] { new EnemyActionDefinitionId("slam") }) },
+            heroResources: new[] { new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3) });
+
         var map = new RunMap(new Node[]
         {
             new(new NodeId("shrine"), StandardRunIds.EventNode, new EventRef(new EventId("shrine"))),
@@ -310,6 +311,7 @@
         return new RunBlueprint(
             Enumerable.Repeat(new CardDefinitionId("smite"), 5).ToList(),
             new Dictionary<string, EventScript> { ["shrine"] = shrine, ["purge"] = purge },
+            new[] { encounter },
             map);
     }
 }
