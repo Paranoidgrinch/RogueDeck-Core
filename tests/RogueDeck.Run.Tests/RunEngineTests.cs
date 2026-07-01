@@ -38,7 +38,7 @@ public class RunEngineTests
         };
         blueprint.Hero.Resources.Add(new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3));
         foreach (var card in run.Deck)
-            blueprint.Hero.Deck.Add(new DeckEntry(card, 1));
+            blueprint.Hero.Deck.Add(new DeckEntry(card.DefinitionId, 1));
 
         var goblin = new EnemyBlueprint("goblin") { MaxHealth = 12 };
         goblin.Actions.Add(new EnemyActionDefinitionId("slam"));

@@ -52,7 +52,7 @@ public class EventKitTests
         };
         blueprint.Hero.Resources.Add(new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3));
         foreach (var card in run.Deck)
-            blueprint.Hero.Deck.Add(new DeckEntry(card, 1));
+            blueprint.Hero.Deck.Add(new DeckEntry(card.DefinitionId, 1));
 
         var goblin = new EnemyBlueprint("goblin") { MaxHealth = 12 };
         goblin.Actions.Add(new EnemyActionDefinitionId("slam"));
@@ -95,7 +95,7 @@ public class EventKitTests
         new RunRunner(registry, new ScriptedChoiceProvider("take")).Run(run);
 
         Assert.Equal(25, run.GetResource(StandardRunIds.Gold));
-        Assert.Contains(new CardDefinitionId("relic-card"), run.Deck);
+        Assert.Contains(run.Deck, c => c.DefinitionId == new CardDefinitionId("relic-card"));
         Assert.Single(run.EventHistory.OfType<RewardGrantedRunEvent>());
     }
 
@@ -118,8 +118,8 @@ public class EventKitTests
         new RunRunner(registry, new ScriptedChoiceProvider("buy-a", "buy-b", "leave")).Run(run);
 
         Assert.Equal(10, run.GetResource(StandardRunIds.Gold));
-        Assert.Contains(new CardDefinitionId("card-a"), run.Deck);
-        Assert.DoesNotContain(new CardDefinitionId("card-b"), run.Deck);
+        Assert.Contains(run.Deck, c => c.DefinitionId == new CardDefinitionId("card-a"));
+        Assert.DoesNotContain(run.Deck, c => c.DefinitionId == new CardDefinitionId("card-b"));
     }
 
     [Fact]

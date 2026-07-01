@@ -50,6 +50,20 @@ public readonly record struct RunCounterId(string Value)
     public override string ToString() => Value;
 }
 
+// Identity of a single card as it lives in the run's deck. Unlike CardDefinitionId (the kind of card), this
+// is the individual copy, so per-copy state (upgrade level, tags, memory) can attach to it.
+public readonly record struct RunCardInstanceId(string Value)
+{
+    public override string ToString() => Value;
+}
+
+// A run-side tag on a card instance (e.g. "cursed", "scarred"). Open like the other run ids so content owns
+// its vocabulary. Kept distinct from any combat-layer tag — a run tag is metadata on the persistent copy.
+public readonly record struct RunCardTagId(string Value)
+{
+    public override string ToString() => Value;
+}
+
 // The kind of a map node. A string-backed id (not an enum) so new node kinds can be added by any package
 // without touching the core — resolvers are registered against these values.
 public readonly record struct NodeType(string Value)

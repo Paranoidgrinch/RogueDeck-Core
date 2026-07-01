@@ -9,7 +9,8 @@ namespace RogueDeck.Run;
 public sealed class RunState
 {
     private readonly Dictionary<RunResourceId, int> _resources = new();
-    private readonly List<CardDefinitionId> _deck = new();
+    private readonly List<RunCardInstance> _deck = new();
+    private int _nextCardSeq;
     private readonly List<RelicInstance> _relics = new();
     private readonly List<InstalledRunProgram> _installedPrograms = new();
     private readonly HashSet<RunFlagId> _flags = new();
@@ -29,7 +30,7 @@ public sealed class RunState
     private int _randomStep;
 
     public IReadOnlyDictionary<RunResourceId, int> Resources => _resources;
-    public IReadOnlyList<CardDefinitionId> Deck => _deck;
+    public IReadOnlyList<RunCardInstance> Deck => _deck;
     public IReadOnlyList<RelicInstance> Relics => _relics;
     public IReadOnlyList<InstalledRunProgram> InstalledPrograms => _installedPrograms;
     public IReadOnlyCollection<RunFlagId> Flags => _flags;
@@ -50,7 +51,24 @@ public sealed class RunState
 
     // ── Setup / mutation (used by effect handlers and node resolvers) ──────────────
 
-    public void AddDeckCard(CardDefinitionId card) => _deck.Add(card);
+    // Adds a fresh copy of a card kind to the deck and returns the created instance. Instance ids are minted
+    // from a run-scoped sequence so a replayed run reproduces them.
+    public RunCardInstance AddDeckCard(CardDefinitionId card)
+    {
+        var instance = new RunCardInstance(new RunCardInstanceId($"card#{++_nextCardSeq}"), card);
+        _deck.Add(instance);
+        return instance;
+    }
+
+    // Removes a specific card copy by instance id; returns whether one was removed.
+    public bool RemoveDeckCard(RunCardInstanceId id)
+    {
+        var index = _deck.FindIndex(c => c.Id == id);
+        if (index < 0)
+            return false;
+        _deck.RemoveAt(index);
+        return true;
+    }
 
     public int GetResource(RunResourceId resource) =>
         _resources.TryGetValue(resource, out var value) ? value : 0;
