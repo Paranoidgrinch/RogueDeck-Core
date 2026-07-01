@@ -130,13 +130,24 @@ public static class CombatJson
          .Register("clamp", typeof(ClampExpression<>))
          .Register("roundNumber", typeof(RoundNumberExpression<>))
          .Register("turnNumber", typeof(TurnNumberExpression<>))
-         .Register("iterationIndex", typeof(IterationIndexExpression<>));
+         .Register("iterationIndex", typeof(IterationIndexExpression<>))
+         // Combat-state value reads (hold a target selector).
+         .Register("combatantCurrentHealth", typeof(CombatantCurrentHealthExpression<>))
+         .Register("combatantMaxHealth", typeof(CombatantMaxHealthExpression<>))
+         .Register("combatantMissingHealth", typeof(CombatantMissingHealthExpression<>))
+         .Register("combatantHealthPercentage", typeof(CombatantHealthPercentageExpression<>))
+         .Register("combatantCurrentResource", typeof(CombatantCurrentResourceExpression<>))
+         .Register("combatantStatusStacks", typeof(CombatantStatusStacksExpression<>));
 
         // bool condition expressions.
         r.Register("compare", typeof(ComparisonExpression<>))
          .Register("and", typeof(AndExpression<>))
          .Register("or", typeof(OrExpression<>))
-         .Register("not", typeof(NotExpression<>));
+         .Register("not", typeof(NotExpression<>))
+         .Register("targetHasStatus", typeof(TargetHasStatusExpression<>))
+         .Register("targetIsAlive", typeof(TargetIsAliveExpression<>))
+         .Register("targetDowned", typeof(TargetDownedExpression<>))
+         .Register("targetExists", typeof(TargetExistsExpression<>));
     }
 
     // Combatant target selectors (context-independent, non-generic). Registered as concrete types.
@@ -164,6 +175,11 @@ public static class CombatJson
         r.Register("node.dealDamage", typeof(DealDamageNode<>))
          .Register("node.heal", typeof(HealNode<>))
          .Register("node.gainBlock", typeof(GainBlockNode<>))
-         .Register("node.gainResource", typeof(GainResourceNode<>));
+         .Register("node.gainResource", typeof(GainResourceNode<>))
+         // Composite / control-flow nodes (nest child nodes).
+         .Register("node.sequence", typeof(SequenceEffectNode<>))
+         .Register("node.conditional", typeof(ConditionalEffectNode<>))
+         .Register("node.forEachTarget", typeof(ForEachTargetEffectNode<>))
+         .Register("node.noOp", typeof(NoOpEffectNode<>));
     }
 }

@@ -8,11 +8,19 @@ public sealed class SequenceEffectNode<TContext> : IEffectNode<TContext>
 
     public string GetChildPathSegment(int childIndex) => $"sequence[{childIndex}]";
 
-    public SequenceEffectNode(IEnumerable<IEffectNode<TContext>> children)
+    // The list constructor is the one JSON uses (its parameter type matches the Children property, which
+    // IEnumerable does not); the IEnumerable overload delegates to it.
+    [System.Text.Json.Serialization.JsonConstructor]
+    public SequenceEffectNode(IReadOnlyList<IEffectNode<TContext>> children)
     {
         ArgumentNullException.ThrowIfNull(children);
 
         _children = children.ToArray();
+    }
+
+    public SequenceEffectNode(IEnumerable<IEffectNode<TContext>> children)
+        : this((IReadOnlyList<IEffectNode<TContext>>)(children?.ToArray() ?? throw new ArgumentNullException(nameof(children))))
+    {
     }
 }
 
