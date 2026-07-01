@@ -34,7 +34,12 @@ public sealed class StandardRunPackage : IRunPackage
             .RegisterEffectHandler(new SetCounterRunEffectHandler())
             .RegisterEffectHandler(new ComputedHealRunEffectHandler())
             .RegisterEffectHandler(new ComputedDamageRunEffectHandler())
-            .RegisterEffectHandler(new RepeatRunEffectHandler());
+            .RegisterEffectHandler(new RepeatRunEffectHandler())
+            .RegisterEffectHandler(new RemoveCardsRunEffectHandler())
+            .RegisterEffectHandler(new UpgradeCardsRunEffectHandler())
+            .RegisterEffectHandler(new TagCardsRunEffectHandler())
+            .RegisterEffectHandler(new SetCardMemoryRunEffectHandler())
+            .RegisterEffectHandler(new TransformCardsRunEffectHandler());
 
         builder
             .RegisterResolver(new CombatNodeResolver(_combatDriver))

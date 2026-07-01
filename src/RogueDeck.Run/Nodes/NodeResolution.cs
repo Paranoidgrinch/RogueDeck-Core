@@ -54,8 +54,9 @@ public interface IRunChoiceProvider
 }
 
 // Deterministic provider for tests/replays: picks choices by id in a fixed order, falling back to the first
-// available choice when the script runs out.
-public sealed class ScriptedChoiceProvider : IRunChoiceProvider
+// available choice when the script runs out. It also serves as the entity chooser, selecting the first `count`
+// candidates — enough for deterministic tests and replays.
+public sealed class ScriptedChoiceProvider : IRunChoiceProvider, IRunEntityChooser
 {
     private readonly Queue<string> _choiceIds;
 
@@ -79,4 +80,7 @@ public sealed class ScriptedChoiceProvider : IRunChoiceProvider
 
         return available[0];
     }
+
+    public IReadOnlyList<T> ChooseEntities<T>(IReadOnlyList<T> candidates, int count, string purpose) =>
+        candidates.Take(count).ToArray();
 }

@@ -57,7 +57,9 @@ public sealed class AddCardToDeckRunEffectHandler : RunEffectHandler<AddCardToDe
 {
     protected override void Resolve(RunState run, RunDefinitionRegistry registry, AddCardToDeckRunEffect request)
     {
-        run.AddDeckCard(request.Card);
+        var card = run.AddDeckCard(request.Card);
+        run.AddLog(StandardRunLogTypes.CardAdded, $"Added card '{request.Card}' ({card.Id}).");
+        run.RaiseEvent(new CardAddedToDeckRunEvent(card.Id, card.DefinitionId));
     }
 }
 

@@ -46,6 +46,20 @@ public sealed record RunProgramInstalledRunEvent(RunProgramId ProgramId) : IRunE
 
 public sealed record RunProgramUninstalledRunEvent(RunProgramId ProgramId) : IRunEvent;
 
+public sealed record CardAddedToDeckRunEvent(RunCardInstanceId InstanceId, CardDefinitionId Definition) : IRunEvent;
+
+public sealed record CardRemovedFromDeckRunEvent(RunCardInstanceId InstanceId, CardDefinitionId Definition) : IRunEvent;
+
+public sealed record CardUpgradedRunEvent(RunCardInstanceId InstanceId, int NewLevel) : IRunEvent;
+
+public sealed record CardTransformedRunEvent(
+    RunCardInstanceId OldInstanceId,
+    RunCardInstanceId NewInstanceId,
+    CardDefinitionId NewDefinition
+) : IRunEvent;
+
+public sealed record CardTagChangedRunEvent(RunCardInstanceId InstanceId, RunCardTagId Tag, bool IsSet) : IRunEvent;
+
 public sealed record RunFlagChangedRunEvent(RunFlagId Flag, bool IsSet) : IRunEvent;
 
 public sealed record RunCounterChangedRunEvent(

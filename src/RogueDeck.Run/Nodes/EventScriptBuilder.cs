@@ -1,3 +1,5 @@
+using RogueDeck.Core.Combat;
+
 namespace RogueDeck.Run;
 
 // Fluent authoring for event scripts, analogous to ScenarioScript in the combat layer. It assembles the same
@@ -172,6 +174,29 @@ public sealed class ChoiceBuilder
         IRunEffectRequest[] whenTrue,
         IRunEffectRequest[]? whenFalse = null) =>
         Effect(new ConditionalRunEffect(condition, whenTrue, whenFalse ?? Array.Empty<IRunEffectRequest>()));
+
+    // ── Deck / card effects (over selectors) ────────────────────────────────────────
+
+    public ChoiceBuilder AddCard(CardDefinitionId card) => Effect(new AddCardToDeckRunEffect(card));
+
+    public ChoiceBuilder RemoveCards(IRunSelector<RunCardInstance> selector) =>
+        Effect(new RemoveCardsRunEffect(selector));
+
+    public ChoiceBuilder UpgradeCards(IRunSelector<RunCardInstance> selector, int levels = 1) =>
+        Effect(new UpgradeCardsRunEffect(selector, levels));
+
+    public ChoiceBuilder TagCards(IRunSelector<RunCardInstance> selector, RunCardTagId tag) =>
+        Effect(new TagCardsRunEffect(selector, tag, true));
+
+    public ChoiceBuilder UntagCards(IRunSelector<RunCardInstance> selector, RunCardTagId tag) =>
+        Effect(new TagCardsRunEffect(selector, tag, false));
+
+    public ChoiceBuilder TransformCards(IRunSelector<RunCardInstance> selector, RunPool<CardDefinitionId> pool) =>
+        Effect(new TransformCardsRunEffect(selector, pool));
+
+    // Transform to a single fixed kind.
+    public ChoiceBuilder TransformCards(IRunSelector<RunCardInstance> selector, CardDefinitionId into) =>
+        TransformCards(selector, RunPool.Uniform(into));
 
     // Install a scheduled consequence (built via RunSchedule) that fires later in the run.
     public ChoiceBuilder Schedule(InstalledRunProgram program) =>

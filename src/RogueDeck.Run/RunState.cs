@@ -29,6 +29,16 @@ public sealed class RunState
     public int RandomSeed { get; }
     private int _randomStep;
 
+    // The run's player-input collaborator for entity selection (ChooseByPlayer selectors). Run-scoped: set
+    // once for the run's lifetime by the runner, so effect handlers resolving a selector can offer choices
+    // without threading a provider through every handler. Null when the run has no interactive selection.
+    public IRunEntityChooser? EntityChooser { get; private set; }
+
+    public void SetEntityChooser(IRunEntityChooser? chooser) => EntityChooser = chooser;
+
+    // A selector context bound to this run and its chooser — what effect handlers pass to selectors.
+    public RunSelectorContext SelectorContext => new(this, EntityChooser);
+
     public IReadOnlyDictionary<RunResourceId, int> Resources => _resources;
     public IReadOnlyList<RunCardInstance> Deck => _deck;
     public IReadOnlyList<RelicInstance> Relics => _relics;

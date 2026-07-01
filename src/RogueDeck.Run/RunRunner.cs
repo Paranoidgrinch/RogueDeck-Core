@@ -29,6 +29,11 @@ public sealed class RunRunner
 
         var context = new NodeResolveContext(run, _choices, _registry, _processor);
 
+        // Bind the run's entity chooser to the choice provider when it can make selections, so selector-based
+        // effects (e.g. ChooseByPlayer card removal) can offer choices during effect resolution.
+        if (_choices is IRunEntityChooser chooser)
+            run.SetEntityChooser(chooser);
+
         run.AddLog(StandardRunLogTypes.RunStarted, $"Run '{run.Id}' started.");
         run.RaiseEvent(new RunStartedRunEvent(run.Id));
         _processor.ResolvePending(run, _registry);

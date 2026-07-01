@@ -102,4 +102,9 @@ public static class StandardRunLogTypes
     public const string ProgramUninstalled = "run.program-uninstalled";
     public const string FlagChanged = "run.flag-changed";
     public const string CounterChanged = "run.counter-changed";
+    public const string CardAdded = "run.card-added";
+    public const string CardRemoved = "run.card-removed";
+    public const string CardUpgraded = "run.card-upgraded";
+    public const string CardTransformed = "run.card-transformed";
+    public const string CardTagChanged = "run.card-tag-changed";
 }
