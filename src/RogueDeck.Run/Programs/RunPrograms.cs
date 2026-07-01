@@ -1,3 +1,5 @@
+using RogueDeck.Core.Combat;
+
 namespace RogueDeck.Run;
 
 // A triggered program installed directly on the run, rather than carried by a relic. This is the single
@@ -77,6 +79,29 @@ public static class RunEffectTemplates
         new DelegateTemplate(ctx => new HealRunEffect(amount.Evaluate(ctx)));
     public static IRunEffectTemplate Damage(IRunExpression<int> amount) =>
         new DelegateTemplate(ctx => new ApplyRunDamageRunEffect(amount.Evaluate(ctx)));
+
+    // "This card" templates — target the card in scope (a ForEach element) by its instance id, so the produced
+    // effect survives to drain. Evaluating one without a card in scope is an author error.
+    public static IRunEffectTemplate UpgradeThisCard(int levels = 1) =>
+        new DelegateTemplate(ctx =>
+            new UpgradeCardsRunEffect(RunSelectors.Instance(CardScope.Require(ctx, "UpgradeThisCard").Id), levels));
+
+    public static IRunEffectTemplate TagThisCard(RunCardTagId tag) =>
+        new DelegateTemplate(ctx =>
+            new TagCardsRunEffect(RunSelectors.Instance(CardScope.Require(ctx, "TagThisCard").Id), tag, true));
+
+    public static IRunEffectTemplate RemoveThisCard() =>
+        new DelegateTemplate(ctx =>
+            new RemoveCardsRunEffect(RunSelectors.Instance(CardScope.Require(ctx, "RemoveThisCard").Id)));
+
+    public static IRunEffectTemplate SetThisCardMemory(string key, IRunExpression<int> value) =>
+        new DelegateTemplate(ctx =>
+            new SetCardMemoryRunEffect(
+                RunSelectors.Instance(CardScope.Require(ctx, "SetThisCardMemory").Id), key, value.Evaluate(ctx)));
+
+    public static IRunEffectTemplate TransformThisCard(RunPool<CardDefinitionId> pool) =>
+        new DelegateTemplate(ctx =>
+            new TransformCardsRunEffect(RunSelectors.Instance(CardScope.Require(ctx, "TransformThisCard").Id), pool));
 
     private sealed class LiteralTemplate : IRunEffectTemplate
     {

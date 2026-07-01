@@ -18,36 +18,31 @@ public interface IRunEntityChooser
     IReadOnlyList<T> ChooseEntities<T>(IReadOnlyList<T> candidates, int count, string purpose);
 }
 
-public sealed class RunSelectorContext
-{
-    public RunState Run { get; }
-    public IRunEntityChooser? Chooser { get; }
-
-    public RunSelectorContext(RunState run, IRunEntityChooser? chooser = null)
-    {
-        ArgumentNullException.ThrowIfNull(run);
-        Run = run;
-        Chooser = chooser;
-    }
-
-    public static implicit operator RunSelectorContext(RunState run) => new(run);
-}
-
 public interface IRunSelector<out T>
 {
-    IReadOnlyList<T> Select(RunSelectorContext context);
+    IReadOnlyList<T> Select(RunEvalContext context);
 }
 
 // ── Sources ─────────────────────────────────────────────────────────────────────
 
 public sealed class DeckCardsSelector : IRunSelector<RunCardInstance>
 {
-    public IReadOnlyList<RunCardInstance> Select(RunSelectorContext context) => context.Run.Deck;
+    public IReadOnlyList<RunCardInstance> Select(RunEvalContext context) => context.Run.Deck;
 }
 
 public sealed class RelicsSelector : IRunSelector<RelicInstance>
 {
-    public IReadOnlyList<RelicInstance> Select(RunSelectorContext context) => context.Run.Relics;
+    public IReadOnlyList<RelicInstance> Select(RunEvalContext context) => context.Run.Relics;
+}
+
+// Resolves to the single card with this instance id (or empty if it is gone). Targets a specific copy by a
+// stable id, so it survives until the effect drains — the way a ForEach template targets "this card".
+public sealed class InstanceSelector : IRunSelector<RunCardInstance>
+{
+    private readonly RunCardInstanceId _id;
+    public InstanceSelector(RunCardInstanceId id) => _id = id;
+    public IReadOnlyList<RunCardInstance> Select(RunEvalContext context) =>
+        context.Run.Deck.Where(card => card.Id == _id).ToArray();
 }
 
 // ── Combinators ───────────────────────────────────────────────────────────────────
@@ -63,7 +58,7 @@ public sealed class WhereSelector<T> : IRunSelector<T>
         _inner = inner;
         _predicate = predicate;
     }
-    public IReadOnlyList<T> Select(RunSelectorContext context) =>
+    public IReadOnlyList<T> Select(RunEvalContext context) =>
         _inner.Select(context).Where(_predicate).ToArray();
 }
 
@@ -81,9 +76,9 @@ public sealed class MatchingCardSelector : IRunSelector<RunCardInstance>
         _inner = inner;
         _predicate = predicate;
     }
-    public IReadOnlyList<RunCardInstance> Select(RunSelectorContext context) =>
+    public IReadOnlyList<RunCardInstance> Select(RunEvalContext context) =>
         _inner.Select(context)
-            .Where(card => _predicate.Evaluate(new RunEvalContext(context.Run, card: card)))
+            .Where(card => _predicate.Evaluate(context.WithCard(card)))
             .ToArray();
 }
 
@@ -98,7 +93,7 @@ public sealed class TakeSelector<T> : IRunSelector<T>
         _inner = inner;
         _count = Math.Max(0, count);
     }
-    public IReadOnlyList<T> Select(RunSelectorContext context) =>
+    public IReadOnlyList<T> Select(RunEvalContext context) =>
         _inner.Select(context).Take(_count).ToArray();
 }
 
@@ -114,7 +109,7 @@ public sealed class RandomSelector<T> : IRunSelector<T>
         _inner = inner;
         _count = Math.Max(0, count);
     }
-    public IReadOnlyList<T> Select(RunSelectorContext context)
+    public IReadOnlyList<T> Select(RunEvalContext context)
     {
         var candidates = _inner.Select(context);
         if (candidates.Count == 0 || _count == 0)
@@ -139,7 +134,7 @@ public sealed class ChooseSelector<T> : IRunSelector<T>
         _count = Math.Max(0, count);
         _purpose = purpose;
     }
-    public IReadOnlyList<T> Select(RunSelectorContext context)
+    public IReadOnlyList<T> Select(RunEvalContext context)
     {
         var candidates = _inner.Select(context);
         if (candidates.Count == 0 || _count == 0)
@@ -159,6 +154,9 @@ public static class RunSelectors
 {
     public static IRunSelector<RunCardInstance> DeckCards { get; } = new DeckCardsSelector();
     public static IRunSelector<RelicInstance> Relics { get; } = new RelicsSelector();
+
+    // A specific card copy by instance id (used by ForEach templates to target "this card").
+    public static IRunSelector<RunCardInstance> Instance(RunCardInstanceId id) => new InstanceSelector(id);
 
     public static IRunSelector<T> Where<T>(this IRunSelector<T> source, Func<T, bool> predicate) =>
         new WhereSelector<T>(source, predicate);

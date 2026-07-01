@@ -9,31 +9,34 @@ namespace RogueDeck.Run;
 // relic, or a future run editor can build effects and conditions without new engine classes — exactly how
 // combat cards compose over IValueExpression. Expressions have zero engine privilege; they only read.
 
-// What an expression reads: the run, plus the triggering event when one is in scope. During normal effect
-// resolution there is no event (Event is null); during relic dispatch the reacting event is supplied, which
-// is what lets a relic compute from event data (see EventFieldExpression). A bare RunState converts to a
-// no-event context implicitly, so the many callers that only have a run stay unchanged.
+// The single context every composable block reads — expressions, selectors, effect templates. It carries the
+// run, plus whatever is in scope: the triggering event (during a reaction), the current card (under a card
+// selector filter or a ForEach), and the player chooser (when interactive selection is possible). A bare
+// RunState converts implicitly to a context with nothing else in scope, so the common callers stay terse.
 public sealed class RunEvalContext
 {
     public RunState Run { get; }
     public IRunEvent? Event { get; }
-
-    // The card currently in scope: the element under a card selector filter, or the iteration element of a
-    // ForEach. Present only in those scopes; CardValue expressions read it.
     public RunCardInstance? Card { get; }
+    public IRunEntityChooser? Chooser { get; }
 
-    public RunEvalContext(RunState run, IRunEvent? triggeringEvent = null, RunCardInstance? card = null)
+    public RunEvalContext(
+        RunState run,
+        IRunEvent? triggeringEvent = null,
+        RunCardInstance? card = null,
+        IRunEntityChooser? chooser = null)
     {
         ArgumentNullException.ThrowIfNull(run);
         Run = run;
         Event = triggeringEvent;
         Card = card;
+        Chooser = chooser;
     }
 
     public static implicit operator RunEvalContext(RunState run) => new(run);
 
-    // Derive a context with a card in scope, preserving run + event.
-    public RunEvalContext WithCard(RunCardInstance card) => new(Run, Event, card);
+    // Derive a context with a card in scope, preserving run + event + chooser.
+    public RunEvalContext WithCard(RunCardInstance card) => new(Run, Event, card, Chooser);
 }
 
 public interface IRunExpression<out TValue>
@@ -291,7 +294,7 @@ public sealed class CountExpression<T> : IRunExpression<int>
         ArgumentNullException.ThrowIfNull(selector);
         _selector = selector;
     }
-    public int Evaluate(RunEvalContext context) => _selector.Select(new RunSelectorContext(context.Run)).Count;
+    public int Evaluate(RunEvalContext context) => _selector.Select(new RunEvalContext(context.Run)).Count;
 }
 
 public sealed class SumExpression<T> : IRunExpression<int>
@@ -306,7 +309,7 @@ public sealed class SumExpression<T> : IRunExpression<int>
         _value = value;
     }
     public int Evaluate(RunEvalContext context) =>
-        _selector.Select(new RunSelectorContext(context.Run)).Sum(_value);
+        _selector.Select(new RunEvalContext(context.Run)).Sum(_value);
 }
 
 // Sum a per-card value expression over selected cards — the data-first Sum (each card is put in scope, so the
@@ -323,7 +326,7 @@ public sealed class SumCardsExpression : IRunExpression<int>
         _perCard = perCard;
     }
     public int Evaluate(RunEvalContext context) =>
-        _selector.Select(new RunSelectorContext(context.Run)).Sum(card => _perCard.Evaluate(context.WithCard(card)));
+        _selector.Select(new RunEvalContext(context.Run)).Sum(card => _perCard.Evaluate(context.WithCard(card)));
 }
 
 // ── Card values (R5) ────────────────────────────────────────────────────────────────

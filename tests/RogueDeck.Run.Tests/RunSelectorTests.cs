@@ -90,7 +90,7 @@ public class RunSelectorTests
         var run = DeckOf("a", "b", "c");
         var selector = RunSelectors.DeckCards.ChooseByPlayer(2, "remove");
 
-        var context = new RunSelectorContext(run, new FirstNChooser());
+        var context = new RunEvalContext(run, chooser: new FirstNChooser());
         var chosen = selector.Select(context);
         Assert.Equal(
             new[] { new CardDefinitionId("a"), new CardDefinitionId("b") },

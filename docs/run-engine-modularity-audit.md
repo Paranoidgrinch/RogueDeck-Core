@@ -62,6 +62,11 @@ deliberately deferred to their own foundations.) A **catalog-gap pass** is part 
   WithTag/OfKind/Upgradable shorthands are now predicates. `.Where(Func)` stays as escape.
 - **R5 done** — `CardValue` accessors (UpgradeLevel/Memory/HasTag/IsKind/Upgraded) compose with the ordinary
   combinators; `RunExpr.SumCards` is the data-first Sum over cards.
-- Remaining: R3 (data ForEach + iteration target — needs a design choice: per-card effects must target the
-  current instance, so either card-effect templates + a single-instance selector, or unify RunSelectorContext
-  and RunEvalContext to both carry Card), R6 (reward tables), catalog-gap pass, R7 (encounters as data).
+- **R3 done** — contexts unified (chose option b): `RunSelectorContext` removed; `RunEvalContext` now carries
+  Run + Event + Card + Chooser and is the single context for expressions, selectors, and templates.
+  `RunSelectors.Instance(id)` (single-copy selector, survives to drain); "this card" templates
+  (UpgradeThisCard/TagThisCard/RemoveThisCard/SetThisCardMemory/TransformThisCard); `ForEachCardRunEffect`
+  applies templates per selected card with that card in scope. `.ForEachCard(selector, templates)` sugar;
+  the lambda overload stays as escape.
+- Remaining: R6 (reward tables), catalog-gap pass (MaxHP±, relic remove/disable, consumables), R7 (encounters
+  as data). Then serialization + content registry/validation + run Sandbox UI.

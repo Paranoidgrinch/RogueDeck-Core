@@ -39,7 +39,7 @@ public sealed class RunState
     public void SetEntityChooser(IRunEntityChooser? chooser) => EntityChooser = chooser;
 
     // A selector context bound to this run and its chooser — what effect handlers pass to selectors.
-    public RunSelectorContext SelectorContext => new(this, EntityChooser);
+    public RunEvalContext SelectorContext => new(this, chooser: EntityChooser);
 
     public IReadOnlyDictionary<RunResourceId, int> Resources => _resources;
     public IReadOnlyList<RunCardInstance> Deck => _deck;

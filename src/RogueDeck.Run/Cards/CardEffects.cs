@@ -7,6 +7,26 @@ namespace RogueDeck.Run;
 // resolution via the run's chooser), snapshots the targets, then mutates each and raises a per-card event.
 // Snapshotting first means removing/transforming while iterating is safe.
 
+// Apply a block of effect templates to each selected card, with that card in scope (R3 data ForEach). Each
+// template materialises at foreach time against the per-card context, so "this card" templates target the
+// right copy and event-independent templates work too. The data-first alternative to ExpandRunEffect's lambda.
+public sealed record ForEachCardRunEffect(
+    IRunSelector<RunCardInstance> Selector, IReadOnlyList<IRunEffectTemplate> Templates) : IRunEffectRequest;
+
+public sealed class ForEachCardRunEffectHandler : RunEffectHandler<ForEachCardRunEffect>
+{
+    protected override void Resolve(RunState run, RunDefinitionRegistry registry, ForEachCardRunEffect request)
+    {
+        var scope = run.SelectorContext;
+        foreach (var card in request.Selector.Select(scope).ToArray())
+        {
+            var cardContext = scope.WithCard(card);
+            foreach (var template in request.Templates)
+                run.EnqueueEffect(template.Build(cardContext));
+        }
+    }
+}
+
 public sealed record RemoveCardsRunEffect(IRunSelector<RunCardInstance> Selector) : IRunEffectRequest;
 
 public sealed class RemoveCardsRunEffectHandler : RunEffectHandler<RemoveCardsRunEffect>

@@ -40,6 +40,7 @@ public sealed class StandardRunPackage : IRunPackage
             .RegisterEffectHandler(new TagCardsRunEffectHandler())
             .RegisterEffectHandler(new SetCardMemoryRunEffectHandler())
             .RegisterEffectHandler(new TransformCardsRunEffectHandler())
+            .RegisterEffectHandler(new ForEachCardRunEffectHandler())
             .RegisterEffectHandler(new ExpandRunEffectHandler())
             .RegisterEffectHandler(new AddCombatModifierRunEffectHandler())
             .RegisterEffectHandler(new OfferRewardRunEffectHandler())

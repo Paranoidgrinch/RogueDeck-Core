@@ -198,8 +198,13 @@ public sealed class ChoiceBuilder
     public ChoiceBuilder TransformCards(IRunSelector<RunCardInstance> selector, CardDefinitionId into) =>
         TransformCards(selector, RunPool.Uniform(into));
 
-    // Apply per-card effects to each selected card: `body` maps a card to the effects for that card. Resolved
-    // at effect time (so ChooseByPlayer selectors work) against the run's chooser-bound context.
+    // Apply effect templates to each selected card, with that card in scope (data-first; use "this card"
+    // templates like RunEffectTemplates.UpgradeThisCard, or value templates reading CardValue).
+    public ChoiceBuilder ForEachCard(
+        IRunSelector<RunCardInstance> selector, params IRunEffectTemplate[] templates) =>
+        Effect(new ForEachCardRunEffect(selector, templates));
+
+    // Escape hatch: per-card effects computed by a lambda. Prefer the template overload.
     public ChoiceBuilder ForEachCard(
         IRunSelector<RunCardInstance> selector,
         Func<RunCardInstance, IEnumerable<IRunEffectRequest>> body)
