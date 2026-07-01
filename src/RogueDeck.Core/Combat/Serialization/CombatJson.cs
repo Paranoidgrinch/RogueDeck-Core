@@ -98,12 +98,23 @@ public static class CombatJson
         registry ??= DefaultRegistry();
         var options = new JsonSerializerOptions { WriteIndented = true };
         options.Converters.Add(new JsonStringEnumConverter());
+        AddSelectorConverter(options, registry);
+        AddContextConverters<TContext>(options, registry);
+        return options;
+    }
+
+    // Target selectors are context-independent (non-generic); add this converter once per options.
+    public static void AddSelectorConverter(JsonSerializerOptions options, CombatJsonRegistry registry) =>
+        options.Converters.Add(new CombatPolymorphicConverter<ICombatantTargetSelector>(registry, typeof(object)));
+
+    // Adds the expression + node converters for one context to an existing options — lets a host (e.g. RunJson)
+    // serialize effect programs of several contexts (CardPlayContext + EnemyActionContext) in the same document.
+    public static void AddContextConverters<TContext>(JsonSerializerOptions options, CombatJsonRegistry registry)
+        where TContext : class
+    {
         options.Converters.Add(new CombatPolymorphicConverter<ICombatExpression<TContext, int>>(registry, typeof(TContext)));
         options.Converters.Add(new CombatPolymorphicConverter<ICombatExpression<TContext, bool>>(registry, typeof(TContext)));
-        // Target selectors are context-independent (non-generic); the same converter works for every context.
-        options.Converters.Add(new CombatPolymorphicConverter<ICombatantTargetSelector>(registry, typeof(TContext)));
         options.Converters.Add(new CombatPolymorphicConverter<IEffectNode<TContext>>(registry, typeof(TContext)));
-        return options;
     }
 
     public static string ToJson<T>(T value, JsonSerializerOptions options) =>

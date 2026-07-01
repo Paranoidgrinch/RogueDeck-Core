@@ -355,25 +355,14 @@
         }
     }
 
-    // The combat content library, encounter and relic are code-provided and referenced by id; the blueprint's
-    // events are registered on top.
+    // The whole combat content library (cards + enemy actions, including their effect programs) is now authored
+    // as data in the blueprint; only the relic is still code-provided by id.
     private static RunContentRegistry BuildContent(RunBlueprint blueprint)
     {
         var library = new CombatContentLibrary(
-            cards: new[]
-            {
-                new CardBlueprint("smite") { Program = Effects.Program(Effects.DealDamage(Targets.EventTarget, 6)) },
-            },
-            enemyActions: new[]
-            {
-                new EnemyActionBlueprint("slam", new ActionIntent("Slam", IntentKind.Attack))
-                {
-                    Program = new EffectProgram<EnemyActionContext>(new DealDamageNode<EnemyActionContext>(
-                        CombatantTargetSelectors.EventTarget, new ConstantExpression<EnemyActionContext>(4))),
-                },
-            });
+            cards: blueprint.Cards.Select(card => card.ToBlueprint()).ToArray(),
+            enemyActions: blueprint.EnemyActions.Select(action => action.ToBlueprint()).ToArray());
 
-        // The combat content library (card/action EffectPrograms) is code; encounters come from the blueprint.
         var builder = new RunContentRegistryBuilder()
             .RegisterRelic(StandardRelics.Bloodstone())
             .SetEncounters(new EncounterCatalog(library, blueprint.Encounters));
@@ -411,10 +400,22 @@
             new(new NodeId("fight"), StandardRunIds.CombatNode, new EncounterRef(GoblinFight)),
         });
 
+        var smite = new CardBlueprint("smite")
+        {
+            Program = Effects.Program(Effects.DealDamage(Targets.EventTarget, 6)),
+        };
+        var slam = new EnemyActionBlueprint("slam", new ActionIntent("Slam", IntentKind.Attack))
+        {
+            Program = new EffectProgram<EnemyActionContext>(new DealDamageNode<EnemyActionContext>(
+                CombatantTargetSelectors.EventTarget, new ConstantExpression<EnemyActionContext>(4))),
+        };
+
         return new RunBlueprint(
             Enumerable.Repeat(new CardDefinitionId("smite"), 5).ToList(),
             new Dictionary<string, EventScript> { ["shrine"] = shrine, ["purge"] = purge },
             new[] { encounter },
+            new[] { CardData.From(smite) },
+            new[] { EnemyActionData.From(slam) },
             map);
     }
 }

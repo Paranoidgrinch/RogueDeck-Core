@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using RogueDeck.Core.Combat;
 
 namespace RogueDeck.Run;
 
@@ -96,6 +97,12 @@ public static class RunJson
         options.Converters.Add(new PolymorphicRunJsonConverter<IRunNodePayload>(registry));
         options.Converters.Add(new NodeJsonConverter());
         options.Converters.Add(new EventScriptJsonConverter());
+
+        // Combat effect programs carried by the blueprint's cards / enemy actions (both contexts).
+        var combatRegistry = CombatJson.DefaultRegistry();
+        CombatJson.AddSelectorConverter(options, combatRegistry);
+        CombatJson.AddContextConverters<CardPlayContext>(options, combatRegistry);
+        CombatJson.AddContextConverters<EnemyActionContext>(options, combatRegistry);
         return options;
     }
 

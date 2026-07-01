@@ -48,10 +48,25 @@ public class RunBlueprintTests
             new(new NodeId("fight"), StandardRunIds.CombatNode, new EncounterRef(GoblinFight)),
         });
 
+        var smite = new CardBlueprint("smite")
+        {
+            Program = new EffectProgram<CardPlayContext>(
+                new DealDamageNode<CardPlayContext>(
+                    new EventTargetCombatantTargetSelector(), new ConstantExpression<CardPlayContext>(6))),
+        };
+        var slam = new EnemyActionBlueprint("slam", new ActionIntent("Slam", IntentKind.Attack))
+        {
+            Program = new EffectProgram<EnemyActionContext>(
+                new DealDamageNode<EnemyActionContext>(
+                    new EventTargetCombatantTargetSelector(), new ConstantExpression<EnemyActionContext>(4))),
+        };
+
         return new RunBlueprint(
             Enumerable.Repeat(new CardDefinitionId("smite"), 5).ToList(),
             new Dictionary<string, EventScript> { ["shrine"] = shrine },
             new[] { encounter },
+            new[] { CardData.From(smite) },
+            new[] { EnemyActionData.From(slam) },
             map);
     }
 
