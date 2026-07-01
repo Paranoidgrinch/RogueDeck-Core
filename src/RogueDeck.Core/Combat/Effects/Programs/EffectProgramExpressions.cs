@@ -238,8 +238,8 @@ public sealed class AbsExpression<TContext> : ICombatExpression<TContext, int>
 public sealed class AddExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatExpression<TContext, int> _left;
-    private readonly ICombatExpression<TContext, int> _right;
+    public ICombatExpression<TContext, int> Left { get; }
+    public ICombatExpression<TContext, int> Right { get; }
 
     public AddExpression(
         ICombatExpression<TContext, int> left,
@@ -248,15 +248,15 @@ public sealed class AddExpression<TContext> : ICombatExpression<TContext, int>
         ArgumentNullException.ThrowIfNull(left);
         ArgumentNullException.ThrowIfNull(right);
 
-        _left = left;
-        _right = right;
+        Left = left;
+        Right = right;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat) =>
-        ArithmeticSaturation.Saturate((long)_left.Evaluate(context, combat) + _right.Evaluate(context, combat));
+        ArithmeticSaturation.Saturate((long)Left.Evaluate(context, combat) + Right.Evaluate(context, combat));
 
     public IEnumerable<IResultKeyConsumer> GetAllConsumers() =>
-        _left.GetAllConsumers().Concat(_right.GetAllConsumers());
+        Left.GetAllConsumers().Concat(Right.GetAllConsumers());
 }
 
 public sealed class SubtractExpression<TContext> : ICombatExpression<TContext, int>
@@ -286,8 +286,8 @@ public sealed class SubtractExpression<TContext> : ICombatExpression<TContext, i
 public sealed class MultiplyExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatExpression<TContext, int> _left;
-    private readonly ICombatExpression<TContext, int> _right;
+    public ICombatExpression<TContext, int> Left { get; }
+    public ICombatExpression<TContext, int> Right { get; }
 
     public MultiplyExpression(
         ICombatExpression<TContext, int> left,
@@ -296,15 +296,15 @@ public sealed class MultiplyExpression<TContext> : ICombatExpression<TContext, i
         ArgumentNullException.ThrowIfNull(left);
         ArgumentNullException.ThrowIfNull(right);
 
-        _left = left;
-        _right = right;
+        Left = left;
+        Right = right;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat) =>
-        ArithmeticSaturation.Saturate((long)_left.Evaluate(context, combat) * _right.Evaluate(context, combat));
+        ArithmeticSaturation.Saturate((long)Left.Evaluate(context, combat) * Right.Evaluate(context, combat));
 
     public IEnumerable<IResultKeyConsumer> GetAllConsumers() =>
-        _left.GetAllConsumers().Concat(_right.GetAllConsumers());
+        Left.GetAllConsumers().Concat(Right.GetAllConsumers());
 }
 
 public sealed class MinExpression<TContext> : ICombatExpression<TContext, int>
