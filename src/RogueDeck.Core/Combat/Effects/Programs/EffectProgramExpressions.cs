@@ -67,12 +67,12 @@ public sealed class PreviousOutcomeFieldExpression<TContext, TOutcome>
     : ICombatExpression<TContext, int>, IResultKeyConsumer
     where TContext : class
 {
-    private readonly EffectResultKey<OrderedTargetOutcomes<TOutcome>> _key;
-    private readonly Func<TOutcome, int> _field;
-    private readonly int _index;
+    public EffectResultKey<OrderedTargetOutcomes<TOutcome>> Key { get; }
+    public Func<TOutcome, int> Field { get; }
+    public int Index { get; }
 
-    public string ResultKeyName => _key.Name;
-    public Type ResultKeyType => _key.GetType().GenericTypeArguments[0];
+    public string ResultKeyName => Key.Name;
+    public Type ResultKeyType => Key.GetType().GenericTypeArguments[0];
     public bool RequiresSingleTargetProducer => true;
 
     public PreviousOutcomeFieldExpression(
@@ -83,18 +83,18 @@ public sealed class PreviousOutcomeFieldExpression<TContext, TOutcome>
         ArgumentNullException.ThrowIfNull(key);
         ArgumentNullException.ThrowIfNull(field);
 
-        _key = key;
-        _field = field;
-        _index = index;
+        Key = key;
+        Field = field;
+        Index = index;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
-        var outcomes = context.Get(_key);
-        if (_index < 0 || _index >= outcomes.Results.Count)
+        var outcomes = context.Get(Key);
+        if (Index < 0 || Index >= outcomes.Results.Count)
             throw new InvalidOperationException(
-                $"Result key '{_key.Name}' has {outcomes.Results.Count} targets; index {_index} is out of range.");
-        return _field(outcomes.Results[_index].Outcome);
+                $"Result key '{Key.Name}' has {outcomes.Results.Count} targets; index {Index} is out of range.");
+        return Field(outcomes.Results[Index].Outcome);
     }
 
     public IEnumerable<IResultKeyConsumer> GetAllConsumers() => [this];
@@ -106,12 +106,12 @@ public sealed class PreviousOutcomeBoolFieldExpression<TContext, TOutcome>
     : ICombatExpression<TContext, bool>, IResultKeyConsumer
     where TContext : class
 {
-    private readonly EffectResultKey<OrderedTargetOutcomes<TOutcome>> _key;
-    private readonly Func<TOutcome, bool> _field;
-    private readonly int _index;
+    public EffectResultKey<OrderedTargetOutcomes<TOutcome>> Key { get; }
+    public Func<TOutcome, bool> Field { get; }
+    public int Index { get; }
 
-    public string ResultKeyName => _key.Name;
-    public Type ResultKeyType => _key.GetType().GenericTypeArguments[0];
+    public string ResultKeyName => Key.Name;
+    public Type ResultKeyType => Key.GetType().GenericTypeArguments[0];
     public bool RequiresSingleTargetProducer => true;
 
     public PreviousOutcomeBoolFieldExpression(
@@ -122,18 +122,18 @@ public sealed class PreviousOutcomeBoolFieldExpression<TContext, TOutcome>
         ArgumentNullException.ThrowIfNull(key);
         ArgumentNullException.ThrowIfNull(field);
 
-        _key = key;
-        _field = field;
-        _index = index;
+        Key = key;
+        Field = field;
+        Index = index;
     }
 
     public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
-        var outcomes = context.Get(_key);
-        if (_index < 0 || _index >= outcomes.Results.Count)
+        var outcomes = context.Get(Key);
+        if (Index < 0 || Index >= outcomes.Results.Count)
             throw new InvalidOperationException(
-                $"Result key '{_key.Name}' has {outcomes.Results.Count} targets; index {_index} is out of range.");
-        return _field(outcomes.Results[_index].Outcome);
+                $"Result key '{Key.Name}' has {outcomes.Results.Count} targets; index {Index} is out of range.");
+        return Field(outcomes.Results[Index].Outcome);
     }
 
     public IEnumerable<IResultKeyConsumer> GetAllConsumers() => [this];
@@ -145,11 +145,11 @@ public sealed class PreviousOutcomeAnyTargetMatchesExpression<TContext, TOutcome
     : ICombatExpression<TContext, bool>, IResultKeyConsumer
     where TContext : class
 {
-    private readonly EffectResultKey<OrderedTargetOutcomes<TOutcome>> _key;
-    private readonly Func<TOutcome, bool> _predicate;
+    public EffectResultKey<OrderedTargetOutcomes<TOutcome>> Key { get; }
+    public Func<TOutcome, bool> Predicate { get; }
 
-    public string ResultKeyName => _key.Name;
-    public Type ResultKeyType => _key.GetType().GenericTypeArguments[0];
+    public string ResultKeyName => Key.Name;
+    public Type ResultKeyType => Key.GetType().GenericTypeArguments[0];
 
     public PreviousOutcomeAnyTargetMatchesExpression(
         EffectResultKey<OrderedTargetOutcomes<TOutcome>> key,
@@ -158,14 +158,14 @@ public sealed class PreviousOutcomeAnyTargetMatchesExpression<TContext, TOutcome
         ArgumentNullException.ThrowIfNull(key);
         ArgumentNullException.ThrowIfNull(predicate);
 
-        _key = key;
-        _predicate = predicate;
+        Key = key;
+        Predicate = predicate;
     }
 
     public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
-        var outcomes = context.Get(_key);
-        return outcomes.Results.Any(r => _predicate(r.Outcome));
+        var outcomes = context.Get(Key);
+        return outcomes.Results.Any(r => Predicate(r.Outcome));
     }
 
     public IEnumerable<IResultKeyConsumer> GetAllConsumers() => [this];
@@ -177,11 +177,11 @@ public sealed class PreviousOutcomeSumExpression<TContext, TOutcome>
     : ICombatExpression<TContext, int>, IResultKeyConsumer
     where TContext : class
 {
-    private readonly EffectResultKey<OrderedTargetOutcomes<TOutcome>> _key;
-    private readonly Func<TOutcome, int> _field;
+    public EffectResultKey<OrderedTargetOutcomes<TOutcome>> Key { get; }
+    public Func<TOutcome, int> Field { get; }
 
-    public string ResultKeyName => _key.Name;
-    public Type ResultKeyType => _key.GetType().GenericTypeArguments[0];
+    public string ResultKeyName => Key.Name;
+    public Type ResultKeyType => Key.GetType().GenericTypeArguments[0];
 
     public PreviousOutcomeSumExpression(
         EffectResultKey<OrderedTargetOutcomes<TOutcome>> key,
@@ -190,14 +190,14 @@ public sealed class PreviousOutcomeSumExpression<TContext, TOutcome>
         ArgumentNullException.ThrowIfNull(key);
         ArgumentNullException.ThrowIfNull(field);
 
-        _key = key;
-        _field = field;
+        Key = key;
+        Field = field;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
-        var outcomes = context.Get(_key);
-        return ArithmeticSaturation.Saturate(outcomes.Results.Sum(r => (long)_field(r.Outcome)));
+        var outcomes = context.Get(Key);
+        return ArithmeticSaturation.Saturate(outcomes.Results.Sum(r => (long)Field(r.Outcome)));
     }
 
     public IEnumerable<IResultKeyConsumer> GetAllConsumers() => [this];
@@ -219,18 +219,18 @@ internal static class ArithmeticSaturation
 public sealed class AbsExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatExpression<TContext, int> _operand;
+    public ICombatExpression<TContext, int> Operand { get; }
 
     public AbsExpression(ICombatExpression<TContext, int> operand)
     {
         ArgumentNullException.ThrowIfNull(operand);
-        _operand = operand;
+        Operand = operand;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat) =>
-        ArithmeticSaturation.Saturate(Math.Abs((long)_operand.Evaluate(context, combat)));
+        ArithmeticSaturation.Saturate(Math.Abs((long)Operand.Evaluate(context, combat)));
 
-    public IEnumerable<IResultKeyConsumer> GetAllConsumers() => _operand.GetAllConsumers();
+    public IEnumerable<IResultKeyConsumer> GetAllConsumers() => Operand.GetAllConsumers();
 }
 
 // ── Binary value expressions ──────────────────────────────────────────────────
@@ -262,8 +262,8 @@ public sealed class AddExpression<TContext> : ICombatExpression<TContext, int>
 public sealed class SubtractExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatExpression<TContext, int> _left;
-    private readonly ICombatExpression<TContext, int> _right;
+    public ICombatExpression<TContext, int> Left { get; }
+    public ICombatExpression<TContext, int> Right { get; }
 
     public SubtractExpression(
         ICombatExpression<TContext, int> left,
@@ -272,15 +272,15 @@ public sealed class SubtractExpression<TContext> : ICombatExpression<TContext, i
         ArgumentNullException.ThrowIfNull(left);
         ArgumentNullException.ThrowIfNull(right);
 
-        _left = left;
-        _right = right;
+        Left = left;
+        Right = right;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat) =>
-        ArithmeticSaturation.Saturate((long)_left.Evaluate(context, combat) - _right.Evaluate(context, combat));
+        ArithmeticSaturation.Saturate((long)Left.Evaluate(context, combat) - Right.Evaluate(context, combat));
 
     public IEnumerable<IResultKeyConsumer> GetAllConsumers() =>
-        _left.GetAllConsumers().Concat(_right.GetAllConsumers());
+        Left.GetAllConsumers().Concat(Right.GetAllConsumers());
 }
 
 public sealed class MultiplyExpression<TContext> : ICombatExpression<TContext, int>
@@ -310,8 +310,8 @@ public sealed class MultiplyExpression<TContext> : ICombatExpression<TContext, i
 public sealed class MinExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatExpression<TContext, int> _left;
-    private readonly ICombatExpression<TContext, int> _right;
+    public ICombatExpression<TContext, int> Left { get; }
+    public ICombatExpression<TContext, int> Right { get; }
 
     public MinExpression(
         ICombatExpression<TContext, int> left,
@@ -320,22 +320,22 @@ public sealed class MinExpression<TContext> : ICombatExpression<TContext, int>
         ArgumentNullException.ThrowIfNull(left);
         ArgumentNullException.ThrowIfNull(right);
 
-        _left = left;
-        _right = right;
+        Left = left;
+        Right = right;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat) =>
-        Math.Min(_left.Evaluate(context, combat), _right.Evaluate(context, combat));
+        Math.Min(Left.Evaluate(context, combat), Right.Evaluate(context, combat));
 
     public IEnumerable<IResultKeyConsumer> GetAllConsumers() =>
-        _left.GetAllConsumers().Concat(_right.GetAllConsumers());
+        Left.GetAllConsumers().Concat(Right.GetAllConsumers());
 }
 
 public sealed class MaxExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatExpression<TContext, int> _left;
-    private readonly ICombatExpression<TContext, int> _right;
+    public ICombatExpression<TContext, int> Left { get; }
+    public ICombatExpression<TContext, int> Right { get; }
 
     public MaxExpression(
         ICombatExpression<TContext, int> left,
@@ -344,15 +344,15 @@ public sealed class MaxExpression<TContext> : ICombatExpression<TContext, int>
         ArgumentNullException.ThrowIfNull(left);
         ArgumentNullException.ThrowIfNull(right);
 
-        _left = left;
-        _right = right;
+        Left = left;
+        Right = right;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat) =>
-        Math.Max(_left.Evaluate(context, combat), _right.Evaluate(context, combat));
+        Math.Max(Left.Evaluate(context, combat), Right.Evaluate(context, combat));
 
     public IEnumerable<IResultKeyConsumer> GetAllConsumers() =>
-        _left.GetAllConsumers().Concat(_right.GetAllConsumers());
+        Left.GetAllConsumers().Concat(Right.GetAllConsumers());
 }
 
 // ── Comparison expression ─────────────────────────────────────────────────────
@@ -370,9 +370,9 @@ public enum ComparisonOperator
 public sealed class ComparisonExpression<TContext> : ICombatExpression<TContext, bool>
     where TContext : class
 {
-    private readonly ICombatExpression<TContext, int> _left;
-    private readonly ComparisonOperator _op;
-    private readonly ICombatExpression<TContext, int> _right;
+    public ICombatExpression<TContext, int> Left { get; }
+    public ComparisonOperator Op { get; }
+    public ICombatExpression<TContext, int> Right { get; }
 
     public ComparisonExpression(
         ICombatExpression<TContext, int> left,
@@ -382,17 +382,17 @@ public sealed class ComparisonExpression<TContext> : ICombatExpression<TContext,
         ArgumentNullException.ThrowIfNull(left);
         ArgumentNullException.ThrowIfNull(right);
 
-        _left = left;
-        _op = op;
-        _right = right;
+        Left = left;
+        Op = op;
+        Right = right;
     }
 
     public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
-        var l = _left.Evaluate(context, combat);
-        var r = _right.Evaluate(context, combat);
+        var l = Left.Evaluate(context, combat);
+        var r = Right.Evaluate(context, combat);
 
-        return _op switch
+        return Op switch
         {
             ComparisonOperator.Equal => l == r,
             ComparisonOperator.NotEqual => l != r,
@@ -401,12 +401,12 @@ public sealed class ComparisonExpression<TContext> : ICombatExpression<TContext,
             ComparisonOperator.Greater => l > r,
             ComparisonOperator.GreaterOrEqual => l >= r,
             _ => throw new InvalidOperationException(
-                                                     $"Unknown comparison operator '{_op}'."),
+                                                     $"Unknown comparison operator '{Op}'."),
         };
     }
 
     public IEnumerable<IResultKeyConsumer> GetAllConsumers() =>
-        _left.GetAllConsumers().Concat(_right.GetAllConsumers());
+        Left.GetAllConsumers().Concat(Right.GetAllConsumers());
 }
 
 // ── Boolean expressions ───────────────────────────────────────────────────────
@@ -414,8 +414,8 @@ public sealed class ComparisonExpression<TContext> : ICombatExpression<TContext,
 public sealed class AndExpression<TContext> : ICombatExpression<TContext, bool>
     where TContext : class
 {
-    private readonly ICombatExpression<TContext, bool> _left;
-    private readonly ICombatExpression<TContext, bool> _right;
+    public ICombatExpression<TContext, bool> Left { get; }
+    public ICombatExpression<TContext, bool> Right { get; }
 
     public AndExpression(
         ICombatExpression<TContext, bool> left,
@@ -424,22 +424,22 @@ public sealed class AndExpression<TContext> : ICombatExpression<TContext, bool>
         ArgumentNullException.ThrowIfNull(left);
         ArgumentNullException.ThrowIfNull(right);
 
-        _left = left;
-        _right = right;
+        Left = left;
+        Right = right;
     }
 
     public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat) =>
-        _left.Evaluate(context, combat) && _right.Evaluate(context, combat);
+        Left.Evaluate(context, combat) && Right.Evaluate(context, combat);
 
     public IEnumerable<IResultKeyConsumer> GetAllConsumers() =>
-        _left.GetAllConsumers().Concat(_right.GetAllConsumers());
+        Left.GetAllConsumers().Concat(Right.GetAllConsumers());
 }
 
 public sealed class OrExpression<TContext> : ICombatExpression<TContext, bool>
     where TContext : class
 {
-    private readonly ICombatExpression<TContext, bool> _left;
-    private readonly ICombatExpression<TContext, bool> _right;
+    public ICombatExpression<TContext, bool> Left { get; }
+    public ICombatExpression<TContext, bool> Right { get; }
 
     public OrExpression(
         ICombatExpression<TContext, bool> left,
@@ -448,32 +448,32 @@ public sealed class OrExpression<TContext> : ICombatExpression<TContext, bool>
         ArgumentNullException.ThrowIfNull(left);
         ArgumentNullException.ThrowIfNull(right);
 
-        _left = left;
-        _right = right;
+        Left = left;
+        Right = right;
     }
 
     public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat) =>
-        _left.Evaluate(context, combat) || _right.Evaluate(context, combat);
+        Left.Evaluate(context, combat) || Right.Evaluate(context, combat);
 
     public IEnumerable<IResultKeyConsumer> GetAllConsumers() =>
-        _left.GetAllConsumers().Concat(_right.GetAllConsumers());
+        Left.GetAllConsumers().Concat(Right.GetAllConsumers());
 }
 
 public sealed class NotExpression<TContext> : ICombatExpression<TContext, bool>
     where TContext : class
 {
-    private readonly ICombatExpression<TContext, bool> _operand;
+    public ICombatExpression<TContext, bool> Operand { get; }
 
     public NotExpression(ICombatExpression<TContext, bool> operand)
     {
         ArgumentNullException.ThrowIfNull(operand);
-        _operand = operand;
+        Operand = operand;
     }
 
     public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat) =>
-        !_operand.Evaluate(context, combat);
+        !Operand.Evaluate(context, combat);
 
-    public IEnumerable<IResultKeyConsumer> GetAllConsumers() => _operand.GetAllConsumers();
+    public IEnumerable<IResultKeyConsumer> GetAllConsumers() => Operand.GetAllConsumers();
 }
 
 // ── Iteration-target expressions ──────────────────────────────────────────────
@@ -482,11 +482,11 @@ public sealed class IterationTargetHasStatusExpression<TContext>
     : ICombatExpression<TContext, bool>
     where TContext : class
 {
-    private readonly StatusDefinitionId _statusDefinitionId;
+    public StatusDefinitionId StatusDefinitionId { get; }
 
     public IterationTargetHasStatusExpression(StatusDefinitionId statusDefinitionId)
     {
-        _statusDefinitionId = statusDefinitionId;
+        StatusDefinitionId = statusDefinitionId;
     }
 
     public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
@@ -498,7 +498,7 @@ public sealed class IterationTargetHasStatusExpression<TContext>
             combatant is null || !combatant.IsAlive)
             return false;
 
-        return combatant.Statuses.Any(s => s.DefinitionId == _statusDefinitionId);
+        return combatant.Statuses.Any(s => s.DefinitionId == StatusDefinitionId);
     }
 }
 
@@ -506,11 +506,11 @@ public sealed class IterationTargetStatusStacksExpression<TContext>
     : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly StatusDefinitionId _statusDefinitionId;
+    public StatusDefinitionId StatusDefinitionId { get; }
 
     public IterationTargetStatusStacksExpression(StatusDefinitionId statusDefinitionId)
     {
-        _statusDefinitionId = statusDefinitionId;
+        StatusDefinitionId = statusDefinitionId;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
@@ -522,7 +522,7 @@ public sealed class IterationTargetStatusStacksExpression<TContext>
             return 0;
 
         return ArithmeticSaturation.Saturate(combatant.Statuses
-            .Where(s => s.DefinitionId == _statusDefinitionId)
+            .Where(s => s.DefinitionId == StatusDefinitionId)
             .Sum(s => (long)s.Stacks));
     }
 }
@@ -532,18 +532,18 @@ public sealed class IterationTargetStatusStacksExpression<TContext>
 public sealed class NegateExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatExpression<TContext, int> _operand;
+    public ICombatExpression<TContext, int> Operand { get; }
 
     public NegateExpression(ICombatExpression<TContext, int> operand)
     {
         ArgumentNullException.ThrowIfNull(operand);
-        _operand = operand;
+        Operand = operand;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat) =>
-        ArithmeticSaturation.Saturate(-(long)_operand.Evaluate(context, combat));
+        ArithmeticSaturation.Saturate(-(long)Operand.Evaluate(context, combat));
 
-    public IEnumerable<IResultKeyConsumer> GetAllConsumers() => _operand.GetAllConsumers();
+    public IEnumerable<IResultKeyConsumer> GetAllConsumers() => Operand.GetAllConsumers();
 }
 
 public enum DivideByZeroPolicy { ReturnZero, Fault }
@@ -551,9 +551,9 @@ public enum DivideByZeroPolicy { ReturnZero, Fault }
 public sealed class DivideExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatExpression<TContext, int> _dividend;
-    private readonly ICombatExpression<TContext, int> _divisor;
-    private readonly DivideByZeroPolicy _zeroPolicy;
+    public ICombatExpression<TContext, int> Dividend { get; }
+    public ICombatExpression<TContext, int> Divisor { get; }
+    public DivideByZeroPolicy ZeroPolicy { get; }
 
     public DivideExpression(
         ICombatExpression<TContext, int> dividend,
@@ -562,34 +562,34 @@ public sealed class DivideExpression<TContext> : ICombatExpression<TContext, int
     {
         ArgumentNullException.ThrowIfNull(dividend);
         ArgumentNullException.ThrowIfNull(divisor);
-        _dividend = dividend;
-        _divisor = divisor;
-        _zeroPolicy = zeroPolicy;
+        Dividend = dividend;
+        Divisor = divisor;
+        ZeroPolicy = zeroPolicy;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
-        var d = _divisor.Evaluate(context, combat);
+        var d = Divisor.Evaluate(context, combat);
         if (d == 0)
         {
-            if (_zeroPolicy == DivideByZeroPolicy.Fault)
+            if (ZeroPolicy == DivideByZeroPolicy.Fault)
                 throw new InvalidOperationException("DivideExpression: divisor evaluated to zero.");
             return 0;
         }
         // (long) division avoids the int.MinValue / -1 overflow; saturate back into the int range.
-        return ArithmeticSaturation.Saturate((long)_dividend.Evaluate(context, combat) / d);
+        return ArithmeticSaturation.Saturate((long)Dividend.Evaluate(context, combat) / d);
     }
 
     public IEnumerable<IResultKeyConsumer> GetAllConsumers() =>
-        _dividend.GetAllConsumers().Concat(_divisor.GetAllConsumers());
+        Dividend.GetAllConsumers().Concat(Divisor.GetAllConsumers());
 }
 
 public sealed class RemainderExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatExpression<TContext, int> _dividend;
-    private readonly ICombatExpression<TContext, int> _divisor;
-    private readonly DivideByZeroPolicy _zeroPolicy;
+    public ICombatExpression<TContext, int> Dividend { get; }
+    public ICombatExpression<TContext, int> Divisor { get; }
+    public DivideByZeroPolicy ZeroPolicy { get; }
 
     public RemainderExpression(
         ICombatExpression<TContext, int> dividend,
@@ -598,33 +598,33 @@ public sealed class RemainderExpression<TContext> : ICombatExpression<TContext, 
     {
         ArgumentNullException.ThrowIfNull(dividend);
         ArgumentNullException.ThrowIfNull(divisor);
-        _dividend = dividend;
-        _divisor = divisor;
-        _zeroPolicy = zeroPolicy;
+        Dividend = dividend;
+        Divisor = divisor;
+        ZeroPolicy = zeroPolicy;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
-        var d = _divisor.Evaluate(context, combat);
+        var d = Divisor.Evaluate(context, combat);
         if (d == 0)
         {
-            if (_zeroPolicy == DivideByZeroPolicy.Fault)
+            if (ZeroPolicy == DivideByZeroPolicy.Fault)
                 throw new InvalidOperationException("RemainderExpression: divisor evaluated to zero.");
             return 0;
         }
-        return _dividend.Evaluate(context, combat) % d;
+        return Dividend.Evaluate(context, combat) % d;
     }
 
     public IEnumerable<IResultKeyConsumer> GetAllConsumers() =>
-        _dividend.GetAllConsumers().Concat(_divisor.GetAllConsumers());
+        Dividend.GetAllConsumers().Concat(Divisor.GetAllConsumers());
 }
 
 public sealed class ClampExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatExpression<TContext, int> _value;
-    private readonly ICombatExpression<TContext, int> _min;
-    private readonly ICombatExpression<TContext, int> _max;
+    public ICombatExpression<TContext, int> Value { get; }
+    public ICombatExpression<TContext, int> Min { get; }
+    public ICombatExpression<TContext, int> Max { get; }
 
     public ClampExpression(
         ICombatExpression<TContext, int> value,
@@ -634,21 +634,21 @@ public sealed class ClampExpression<TContext> : ICombatExpression<TContext, int>
         ArgumentNullException.ThrowIfNull(value);
         ArgumentNullException.ThrowIfNull(min);
         ArgumentNullException.ThrowIfNull(max);
-        _value = value;
-        _min = min;
-        _max = max;
+        Value = value;
+        Min = min;
+        Max = max;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat) =>
         Math.Clamp(
-            _value.Evaluate(context, combat),
-            _min.Evaluate(context, combat),
-            _max.Evaluate(context, combat));
+            Value.Evaluate(context, combat),
+            Min.Evaluate(context, combat),
+            Max.Evaluate(context, combat));
 
     public IEnumerable<IResultKeyConsumer> GetAllConsumers() =>
-        _value.GetAllConsumers()
-              .Concat(_min.GetAllConsumers())
-              .Concat(_max.GetAllConsumers());
+        Value.GetAllConsumers()
+              .Concat(Min.GetAllConsumers())
+              .Concat(Max.GetAllConsumers());
 }
 
 // ── Combat-value expressions ──────────────────────────────────────────────────
@@ -656,18 +656,18 @@ public sealed class ClampExpression<TContext> : ICombatExpression<TContext, int>
 public sealed class CombatantCurrentHealthExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatantTargetSelector _selector;
+    public ICombatantTargetSelector Selector { get; }
 
     public CombatantCurrentHealthExpression(ICombatantTargetSelector selector)
     {
         ArgumentNullException.ThrowIfNull(selector);
-        _selector = ScalarTargetExpression.RequireSingleSelector(selector);
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
         var selCtx = context.GetTargetSelectionContext();
-        var targets = _selector.ResolveTargets(selCtx);
+        var targets = Selector.ResolveTargets(selCtx);
         if (targets.Count == 0) return 0;
         return combat.TryGetCombatant(ScalarTargetExpression.RequireSingle(targets), out var c) ? c!.Health.Current : 0;
     }
@@ -676,18 +676,18 @@ public sealed class CombatantCurrentHealthExpression<TContext> : ICombatExpressi
 public sealed class CombatantMaxHealthExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatantTargetSelector _selector;
+    public ICombatantTargetSelector Selector { get; }
 
     public CombatantMaxHealthExpression(ICombatantTargetSelector selector)
     {
         ArgumentNullException.ThrowIfNull(selector);
-        _selector = ScalarTargetExpression.RequireSingleSelector(selector);
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
         var selCtx = context.GetTargetSelectionContext();
-        var targets = _selector.ResolveTargets(selCtx);
+        var targets = Selector.ResolveTargets(selCtx);
         if (targets.Count == 0) return 0;
         return combat.TryGetCombatant(ScalarTargetExpression.RequireSingle(targets), out var c) ? c!.Health.Max : 0;
     }
@@ -696,18 +696,18 @@ public sealed class CombatantMaxHealthExpression<TContext> : ICombatExpression<T
 public sealed class CombatantMissingHealthExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatantTargetSelector _selector;
+    public ICombatantTargetSelector Selector { get; }
 
     public CombatantMissingHealthExpression(ICombatantTargetSelector selector)
     {
         ArgumentNullException.ThrowIfNull(selector);
-        _selector = ScalarTargetExpression.RequireSingleSelector(selector);
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
         var selCtx = context.GetTargetSelectionContext();
-        var targets = _selector.ResolveTargets(selCtx);
+        var targets = Selector.ResolveTargets(selCtx);
         if (targets.Count == 0) return 0;
         return combat.TryGetCombatant(ScalarTargetExpression.RequireSingle(targets), out var c)
             ? c!.Health.Max - c.Health.Current
@@ -718,25 +718,25 @@ public sealed class CombatantMissingHealthExpression<TContext> : ICombatExpressi
 public sealed class CombatantStatusStacksExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatantTargetSelector _selector;
-    private readonly StatusDefinitionId _statusId;
+    public ICombatantTargetSelector Selector { get; }
+    public StatusDefinitionId StatusId { get; }
 
     public CombatantStatusStacksExpression(
         ICombatantTargetSelector selector,
         StatusDefinitionId statusId)
     {
         ArgumentNullException.ThrowIfNull(selector);
-        _selector = ScalarTargetExpression.RequireSingleSelector(selector);
-        _statusId = statusId;
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
+        StatusId = statusId;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
         var selCtx = context.GetTargetSelectionContext();
-        var targets = _selector.ResolveTargets(selCtx);
+        var targets = Selector.ResolveTargets(selCtx);
         if (targets.Count == 0) return 0;
         if (!combat.TryGetCombatant(ScalarTargetExpression.RequireSingle(targets), out var c) || c is null) return 0;
-        return ArithmeticSaturation.Saturate(c.Statuses.Where(s => s.DefinitionId == _statusId).Sum(s => (long)s.Stacks));
+        return ArithmeticSaturation.Saturate(c.Statuses.Where(s => s.DefinitionId == StatusId).Sum(s => (long)s.Stacks));
     }
 }
 
@@ -746,28 +746,28 @@ public sealed class CombatantStatusStacksExpression<TContext> : ICombatExpressio
 public sealed class CombatantStacksByPolarityExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatantTargetSelector _selector;
-    private readonly StatusPolarity _polarity;
+    public ICombatantTargetSelector Selector { get; }
+    public StatusPolarity Polarity { get; }
 
     public CombatantStacksByPolarityExpression(
         ICombatantTargetSelector selector,
         StatusPolarity polarity)
     {
         ArgumentNullException.ThrowIfNull(selector);
-        _selector = ScalarTargetExpression.RequireSingleSelector(selector);
-        _polarity = polarity;
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
+        Polarity = polarity;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
         var selCtx = context.GetTargetSelectionContext();
-        var targets = _selector.ResolveTargets(selCtx);
+        var targets = Selector.ResolveTargets(selCtx);
         if (targets.Count == 0) return 0;
         if (!combat.TryGetCombatant(ScalarTargetExpression.RequireSingle(targets), out var c) || c is null) return 0;
         var registry = combat.DefinitionRegistry;
         if (registry is null) return 0;
         return ArithmeticSaturation.Saturate(c.Statuses
-            .Where(s => registry.TryGetStatus(s.DefinitionId, out var def) && def is not null && def.Polarity == _polarity)
+            .Where(s => registry.TryGetStatus(s.DefinitionId, out var def) && def is not null && def.Polarity == Polarity)
             .Sum(s => (long)s.Stacks));
     }
 }
@@ -775,25 +775,25 @@ public sealed class CombatantStacksByPolarityExpression<TContext> : ICombatExpre
 public sealed class CombatantCurrentResourceExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatantTargetSelector _selector;
-    private readonly ResourceId _resourceId;
+    public ICombatantTargetSelector Selector { get; }
+    public ResourceId ResourceId { get; }
 
     public CombatantCurrentResourceExpression(
         ICombatantTargetSelector selector,
         ResourceId resourceId)
     {
         ArgumentNullException.ThrowIfNull(selector);
-        _selector = ScalarTargetExpression.RequireSingleSelector(selector);
-        _resourceId = resourceId;
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
+        ResourceId = resourceId;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
         var selCtx = context.GetTargetSelectionContext();
-        var targets = _selector.ResolveTargets(selCtx);
+        var targets = Selector.ResolveTargets(selCtx);
         if (targets.Count == 0) return 0;
         if (!combat.TryGetCombatant(ScalarTargetExpression.RequireSingle(targets), out var c) || c is null) return 0;
-        return c.Resources.TryGetValue(_resourceId, out var pool) ? pool.Current : 0;
+        return c.Resources.TryGetValue(ResourceId, out var pool) ? pool.Current : 0;
     }
 }
 
@@ -839,43 +839,43 @@ public sealed class ContextValueExpression<TContext>(Func<TContext, int> read)
 public sealed class TargetHasStatusExpression<TContext> : ICombatExpression<TContext, bool>
     where TContext : class
 {
-    private readonly ICombatantTargetSelector _selector;
-    private readonly StatusDefinitionId _statusId;
+    public ICombatantTargetSelector Selector { get; }
+    public StatusDefinitionId StatusId { get; }
 
     public TargetHasStatusExpression(
         ICombatantTargetSelector selector,
         StatusDefinitionId statusId)
     {
         ArgumentNullException.ThrowIfNull(selector);
-        _selector = ScalarTargetExpression.RequireSingleSelector(selector);
-        _statusId = statusId;
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
+        StatusId = statusId;
     }
 
     public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
         var selCtx = context.GetTargetSelectionContext();
-        var targets = _selector.ResolveTargets(selCtx);
+        var targets = Selector.ResolveTargets(selCtx);
         if (targets.Count == 0) return false;
         if (!combat.TryGetCombatant(ScalarTargetExpression.RequireSingle(targets), out var c) || c is null) return false;
-        return c.Statuses.Any(s => s.DefinitionId == _statusId);
+        return c.Statuses.Any(s => s.DefinitionId == StatusId);
     }
 }
 
 public sealed class TargetIsAliveExpression<TContext> : ICombatExpression<TContext, bool>
     where TContext : class
 {
-    private readonly ICombatantTargetSelector _selector;
+    public ICombatantTargetSelector Selector { get; }
 
     public TargetIsAliveExpression(ICombatantTargetSelector selector)
     {
         ArgumentNullException.ThrowIfNull(selector);
-        _selector = ScalarTargetExpression.RequireSingleSelector(selector);
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
     }
 
     public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
         var selCtx = context.GetTargetSelectionContext();
-        var targets = _selector.ResolveTargets(selCtx);
+        var targets = Selector.ResolveTargets(selCtx);
         if (targets.Count == 0) return false;
         return combat.TryGetCombatant(ScalarTargetExpression.RequireSingle(targets), out var c) && c is { IsAlive: true };
     }
@@ -886,18 +886,18 @@ public sealed class TargetIsAliveExpression<TContext> : ICombatExpression<TConte
 public sealed class SignExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatExpression<TContext, int> _operand;
+    public ICombatExpression<TContext, int> Operand { get; }
 
     public SignExpression(ICombatExpression<TContext, int> operand)
     {
         ArgumentNullException.ThrowIfNull(operand);
-        _operand = operand;
+        Operand = operand;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat) =>
-        Math.Sign(_operand.Evaluate(context, combat));
+        Math.Sign(Operand.Evaluate(context, combat));
 
-    public IEnumerable<IResultKeyConsumer> GetAllConsumers() => _operand.GetAllConsumers();
+    public IEnumerable<IResultKeyConsumer> GetAllConsumers() => Operand.GetAllConsumers();
 }
 
 // ── Combatant health percentage ───────────────────────────────────────────────
@@ -905,18 +905,18 @@ public sealed class SignExpression<TContext> : ICombatExpression<TContext, int>
 public sealed class CombatantHealthPercentageExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatantTargetSelector _selector;
+    public ICombatantTargetSelector Selector { get; }
 
     public CombatantHealthPercentageExpression(ICombatantTargetSelector selector)
     {
         ArgumentNullException.ThrowIfNull(selector);
-        _selector = ScalarTargetExpression.RequireSingleSelector(selector);
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
         var selCtx = context.GetTargetSelectionContext();
-        var targets = _selector.ResolveTargets(selCtx);
+        var targets = Selector.ResolveTargets(selCtx);
         if (targets.Count == 0) return 0;
         if (!combat.TryGetCombatant(ScalarTargetExpression.RequireSingle(targets), out var c) || c is null) return 0;
         if (c.Health.Max == 0) return 0;
@@ -929,25 +929,25 @@ public sealed class CombatantHealthPercentageExpression<TContext> : ICombatExpre
 public sealed class CombatantDefensivePoolExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatantTargetSelector _selector;
-    private readonly DefensivePoolId _poolId;
+    public ICombatantTargetSelector Selector { get; }
+    public DefensivePoolId PoolId { get; }
 
     public CombatantDefensivePoolExpression(
         ICombatantTargetSelector selector,
         DefensivePoolId poolId)
     {
         ArgumentNullException.ThrowIfNull(selector);
-        _selector = ScalarTargetExpression.RequireSingleSelector(selector);
-        _poolId = poolId;
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
+        PoolId = poolId;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
         var selCtx = context.GetTargetSelectionContext();
-        var targets = _selector.ResolveTargets(selCtx);
+        var targets = Selector.ResolveTargets(selCtx);
         if (targets.Count == 0) return 0;
         if (!combat.TryGetCombatant(ScalarTargetExpression.RequireSingle(targets), out var c) || c is null) return 0;
-        return c.DefensivePools.TryGetValue(_poolId, out var pool) ? pool.Current : 0;
+        return c.DefensivePools.TryGetValue(PoolId, out var pool) ? pool.Current : 0;
     }
 }
 
@@ -958,26 +958,26 @@ public sealed class CombatantDefensivePoolExpression<TContext> : ICombatExpressi
 public sealed class CombatantZoneCardCountExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatantTargetSelector _selector;
-    private readonly CardZone _zone;
+    public ICombatantTargetSelector Selector { get; }
+    public CardZone Zone { get; }
 
     public CombatantZoneCardCountExpression(
         ICombatantTargetSelector selector,
         CardZone zone)
     {
         ArgumentNullException.ThrowIfNull(selector);
-        _selector = ScalarTargetExpression.RequireSingleSelector(selector);
-        _zone = zone;
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
+        Zone = zone;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
         var selCtx = context.GetTargetSelectionContext();
-        var targets = _selector.ResolveTargets(selCtx);
+        var targets = Selector.ResolveTargets(selCtx);
         if (targets.Count == 0) return 0;
         var id = ScalarTargetExpression.RequireSingle(targets);
         if (!combat.TryGetCombatant(id, out var c) || c is null) return 0;
-        return combat.GetCardZones(id).GetCardsInZone(_zone).Count;
+        return combat.GetCardZones(id).GetCardsInZone(Zone).Count;
     }
 }
 
@@ -986,50 +986,50 @@ public sealed class CombatantZoneCardCountExpression<TContext> : ICombatExpressi
 public sealed class CombatantMaxResourceExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatantTargetSelector _selector;
-    private readonly ResourceId _resourceId;
+    public ICombatantTargetSelector Selector { get; }
+    public ResourceId ResourceId { get; }
 
     public CombatantMaxResourceExpression(
         ICombatantTargetSelector selector,
         ResourceId resourceId)
     {
         ArgumentNullException.ThrowIfNull(selector);
-        _selector = ScalarTargetExpression.RequireSingleSelector(selector);
-        _resourceId = resourceId;
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
+        ResourceId = resourceId;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
         var selCtx = context.GetTargetSelectionContext();
-        var targets = _selector.ResolveTargets(selCtx);
+        var targets = Selector.ResolveTargets(selCtx);
         if (targets.Count == 0) return 0;
         if (!combat.TryGetCombatant(ScalarTargetExpression.RequireSingle(targets), out var c) || c is null) return 0;
-        return c.Resources.TryGetValue(_resourceId, out var pool) ? pool.Max ?? 0 : 0;
+        return c.Resources.TryGetValue(ResourceId, out var pool) ? pool.Max ?? 0 : 0;
     }
 }
 
 public sealed class CombatantMissingResourceExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatantTargetSelector _selector;
-    private readonly ResourceId _resourceId;
+    public ICombatantTargetSelector Selector { get; }
+    public ResourceId ResourceId { get; }
 
     public CombatantMissingResourceExpression(
         ICombatantTargetSelector selector,
         ResourceId resourceId)
     {
         ArgumentNullException.ThrowIfNull(selector);
-        _selector = ScalarTargetExpression.RequireSingleSelector(selector);
-        _resourceId = resourceId;
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
+        ResourceId = resourceId;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
         var selCtx = context.GetTargetSelectionContext();
-        var targets = _selector.ResolveTargets(selCtx);
+        var targets = Selector.ResolveTargets(selCtx);
         if (targets.Count == 0) return 0;
         if (!combat.TryGetCombatant(ScalarTargetExpression.RequireSingle(targets), out var c) || c is null) return 0;
-        if (!c.Resources.TryGetValue(_resourceId, out var pool)) return 0;
+        if (!c.Resources.TryGetValue(ResourceId, out var pool)) return 0;
         return (pool.Max ?? pool.Current) - pool.Current;
     }
 }
@@ -1039,26 +1039,26 @@ public sealed class CombatantMissingResourceExpression<TContext> : ICombatExpres
 public sealed class CombatantStatusDurationExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatantTargetSelector _selector;
-    private readonly StatusDefinitionId _statusId;
+    public ICombatantTargetSelector Selector { get; }
+    public StatusDefinitionId StatusId { get; }
 
     public CombatantStatusDurationExpression(
         ICombatantTargetSelector selector,
         StatusDefinitionId statusId)
     {
         ArgumentNullException.ThrowIfNull(selector);
-        _selector = ScalarTargetExpression.RequireSingleSelector(selector);
-        _statusId = statusId;
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
+        StatusId = statusId;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
         var selCtx = context.GetTargetSelectionContext();
-        var targets = _selector.ResolveTargets(selCtx);
+        var targets = Selector.ResolveTargets(selCtx);
         if (targets.Count == 0) return 0;
         if (!combat.TryGetCombatant(ScalarTargetExpression.RequireSingle(targets), out var c) || c is null) return 0;
         return ArithmeticSaturation.Saturate(c.Statuses
-                .Where(s => s.DefinitionId == _statusId)
+                .Where(s => s.DefinitionId == StatusId)
                 .Sum(s => (long)s.DurationTurns));
     }
 }
@@ -1066,26 +1066,26 @@ public sealed class CombatantStatusDurationExpression<TContext> : ICombatExpress
 public sealed class CombatantStatusChargesExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatantTargetSelector _selector;
-    private readonly StatusDefinitionId _statusId;
+    public ICombatantTargetSelector Selector { get; }
+    public StatusDefinitionId StatusId { get; }
 
     public CombatantStatusChargesExpression(
         ICombatantTargetSelector selector,
         StatusDefinitionId statusId)
     {
         ArgumentNullException.ThrowIfNull(selector);
-        _selector = ScalarTargetExpression.RequireSingleSelector(selector);
-        _statusId = statusId;
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
+        StatusId = statusId;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
         var selCtx = context.GetTargetSelectionContext();
-        var targets = _selector.ResolveTargets(selCtx);
+        var targets = Selector.ResolveTargets(selCtx);
         if (targets.Count == 0) return 0;
         if (!combat.TryGetCombatant(ScalarTargetExpression.RequireSingle(targets), out var c) || c is null) return 0;
         return ArithmeticSaturation.Saturate(c.Statuses
-                .Where(s => s.DefinitionId == _statusId)
+                .Where(s => s.DefinitionId == StatusId)
                 .Sum(s => (long)s.Charges));
     }
 }
@@ -1095,18 +1095,18 @@ public sealed class CombatantStatusChargesExpression<TContext> : ICombatExpressi
 public sealed class TargetDownedExpression<TContext> : ICombatExpression<TContext, bool>
     where TContext : class
 {
-    private readonly ICombatantTargetSelector _selector;
+    public ICombatantTargetSelector Selector { get; }
 
     public TargetDownedExpression(ICombatantTargetSelector selector)
     {
         ArgumentNullException.ThrowIfNull(selector);
-        _selector = ScalarTargetExpression.RequireSingleSelector(selector);
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
     }
 
     public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
         var selCtx = context.GetTargetSelectionContext();
-        var targets = _selector.ResolveTargets(selCtx);
+        var targets = Selector.ResolveTargets(selCtx);
         if (targets.Count == 0) return false;
         return combat.TryGetCombatant(ScalarTargetExpression.RequireSingle(targets), out var c) && c is { IsAlive: false };
     }
@@ -1115,18 +1115,18 @@ public sealed class TargetDownedExpression<TContext> : ICombatExpression<TContex
 public sealed class TargetExistsExpression<TContext> : ICombatExpression<TContext, bool>
     where TContext : class
 {
-    private readonly ICombatantTargetSelector _selector;
+    public ICombatantTargetSelector Selector { get; }
 
     public TargetExistsExpression(ICombatantTargetSelector selector)
     {
         ArgumentNullException.ThrowIfNull(selector);
-        _selector = selector;
+        Selector = selector;
     }
 
     public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
         var selCtx = context.GetTargetSelectionContext();
-        return _selector.ResolveTargets(selCtx).Count > 0;
+        return Selector.ResolveTargets(selCtx).Count > 0;
     }
 }
 
@@ -1139,8 +1139,8 @@ public sealed class TargetExistsExpression<TContext> : ICombatExpression<TContex
 public sealed class SumOverTargetsExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatantTargetSelector _selector;
-    private readonly ICombatExpression<TContext, int> _perTargetExpr;
+    public ICombatantTargetSelector Selector { get; }
+    public ICombatExpression<TContext, int> PerTargetExpr { get; }
 
     public SumOverTargetsExpression(
         ICombatantTargetSelector selector,
@@ -1148,14 +1148,14 @@ public sealed class SumOverTargetsExpression<TContext> : ICombatExpression<TCont
     {
         ArgumentNullException.ThrowIfNull(selector);
         ArgumentNullException.ThrowIfNull(perTargetExpr);
-        _selector = selector;
-        _perTargetExpr = perTargetExpr;
+        Selector = selector;
+        PerTargetExpr = perTargetExpr;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
         var selCtx = context.GetTargetSelectionContext();
-        var targets = _selector.ResolveTargets(selCtx);
+        var targets = Selector.ResolveTargets(selCtx);
         if (targets.Count == 0) return 0;
 
         var total = 0;
@@ -1164,7 +1164,7 @@ public sealed class SumOverTargetsExpression<TContext> : ICombatExpression<TCont
             context.PushIterationTarget(id);
             try
             {
-                total += _perTargetExpr.Evaluate(context, combat);
+                total += PerTargetExpr.Evaluate(context, combat);
             }
             finally
             {
@@ -1175,32 +1175,32 @@ public sealed class SumOverTargetsExpression<TContext> : ICombatExpression<TCont
     }
 
     public IEnumerable<IResultKeyConsumer> GetAllConsumers() =>
-        _perTargetExpr.GetAllConsumers();
+        PerTargetExpr.GetAllConsumers();
 }
 
 public sealed class CountTargetsExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatantTargetSelector _selector;
+    public ICombatantTargetSelector Selector { get; }
 
     public CountTargetsExpression(ICombatantTargetSelector selector)
     {
         ArgumentNullException.ThrowIfNull(selector);
-        _selector = selector;
+        Selector = selector;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
         var selCtx = context.GetTargetSelectionContext();
-        return _selector.ResolveTargets(selCtx).Count;
+        return Selector.ResolveTargets(selCtx).Count;
     }
 }
 
 public sealed class AnyTargetMatchesExpression<TContext> : ICombatExpression<TContext, bool>
     where TContext : class
 {
-    private readonly ICombatantTargetSelector _selector;
-    private readonly ICombatExpression<TContext, bool> _predicate;
+    public ICombatantTargetSelector Selector { get; }
+    public ICombatExpression<TContext, bool> Predicate { get; }
 
     public AnyTargetMatchesExpression(
         ICombatantTargetSelector selector,
@@ -1208,14 +1208,14 @@ public sealed class AnyTargetMatchesExpression<TContext> : ICombatExpression<TCo
     {
         ArgumentNullException.ThrowIfNull(selector);
         ArgumentNullException.ThrowIfNull(predicate);
-        _selector = selector;
-        _predicate = predicate;
+        Selector = selector;
+        Predicate = predicate;
     }
 
     public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
         var selCtx = context.GetTargetSelectionContext();
-        var targets = _selector.ResolveTargets(selCtx);
+        var targets = Selector.ResolveTargets(selCtx);
         if (targets.Count == 0) return false;
 
         foreach (var id in targets)
@@ -1223,7 +1223,7 @@ public sealed class AnyTargetMatchesExpression<TContext> : ICombatExpression<TCo
             context.PushIterationTarget(id);
             try
             {
-                if (_predicate.Evaluate(context, combat)) return true;
+                if (Predicate.Evaluate(context, combat)) return true;
             }
             finally
             {
@@ -1234,14 +1234,14 @@ public sealed class AnyTargetMatchesExpression<TContext> : ICombatExpression<TCo
     }
 
     public IEnumerable<IResultKeyConsumer> GetAllConsumers() =>
-        _predicate.GetAllConsumers();
+        Predicate.GetAllConsumers();
 }
 
 public sealed class AllTargetsMatchExpression<TContext> : ICombatExpression<TContext, bool>
     where TContext : class
 {
-    private readonly ICombatantTargetSelector _selector;
-    private readonly ICombatExpression<TContext, bool> _predicate;
+    public ICombatantTargetSelector Selector { get; }
+    public ICombatExpression<TContext, bool> Predicate { get; }
 
     public AllTargetsMatchExpression(
         ICombatantTargetSelector selector,
@@ -1249,14 +1249,14 @@ public sealed class AllTargetsMatchExpression<TContext> : ICombatExpression<TCon
     {
         ArgumentNullException.ThrowIfNull(selector);
         ArgumentNullException.ThrowIfNull(predicate);
-        _selector = selector;
-        _predicate = predicate;
+        Selector = selector;
+        Predicate = predicate;
     }
 
     public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
         var selCtx = context.GetTargetSelectionContext();
-        var targets = _selector.ResolveTargets(selCtx);
+        var targets = Selector.ResolveTargets(selCtx);
         if (targets.Count == 0) return false;
 
         foreach (var id in targets)
@@ -1264,7 +1264,7 @@ public sealed class AllTargetsMatchExpression<TContext> : ICombatExpression<TCon
             context.PushIterationTarget(id);
             try
             {
-                if (!_predicate.Evaluate(context, combat)) return false;
+                if (!Predicate.Evaluate(context, combat)) return false;
             }
             finally
             {
@@ -1275,7 +1275,7 @@ public sealed class AllTargetsMatchExpression<TContext> : ICombatExpression<TCon
     }
 
     public IEnumerable<IResultKeyConsumer> GetAllConsumers() =>
-        _predicate.GetAllConsumers();
+        Predicate.GetAllConsumers();
 }
 
 // ── Turn-stat expressions ─────────────────────────────────────────────────────
@@ -1283,18 +1283,18 @@ public sealed class AllTargetsMatchExpression<TContext> : ICombatExpression<TCon
 public sealed class CardsPlayedThisTurnExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatantTargetSelector _selector;
+    public ICombatantTargetSelector Selector { get; }
 
     public CardsPlayedThisTurnExpression(ICombatantTargetSelector selector)
     {
         ArgumentNullException.ThrowIfNull(selector);
-        _selector = ScalarTargetExpression.RequireSingleSelector(selector);
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
         var selCtx = context.GetTargetSelectionContext();
-        var targets = _selector.ResolveTargets(selCtx);
+        var targets = Selector.ResolveTargets(selCtx);
         if (targets.Count == 0) return 0;
         return combat.GetCardPlayTurnStats(ScalarTargetExpression.RequireSingle(targets)).CardsPlayedThisTurn;
     }
@@ -1303,18 +1303,18 @@ public sealed class CardsPlayedThisTurnExpression<TContext> : ICombatExpression<
 public sealed class DamageDealtThisTurnExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatantTargetSelector _selector;
+    public ICombatantTargetSelector Selector { get; }
 
     public DamageDealtThisTurnExpression(ICombatantTargetSelector selector)
     {
         ArgumentNullException.ThrowIfNull(selector);
-        _selector = ScalarTargetExpression.RequireSingleSelector(selector);
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
         var selCtx = context.GetTargetSelectionContext();
-        var targets = _selector.ResolveTargets(selCtx);
+        var targets = Selector.ResolveTargets(selCtx);
         if (targets.Count == 0) return 0;
         return combat.GetCardPlayTurnStats(ScalarTargetExpression.RequireSingle(targets)).DamageDealtThisTurn;
     }
@@ -1323,18 +1323,18 @@ public sealed class DamageDealtThisTurnExpression<TContext> : ICombatExpression<
 public sealed class ResourceGainedThisTurnExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICombatantTargetSelector _selector;
+    public ICombatantTargetSelector Selector { get; }
 
     public ResourceGainedThisTurnExpression(ICombatantTargetSelector selector)
     {
         ArgumentNullException.ThrowIfNull(selector);
-        _selector = ScalarTargetExpression.RequireSingleSelector(selector);
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
         var selCtx = context.GetTargetSelectionContext();
-        var targets = _selector.ResolveTargets(selCtx);
+        var targets = Selector.ResolveTargets(selCtx);
         if (targets.Count == 0) return 0;
         return combat.GetCardPlayTurnStats(ScalarTargetExpression.RequireSingle(targets)).ResourceGainedThisTurn;
     }
@@ -1398,19 +1398,19 @@ public sealed class TriggerEventCardInstanceExpression<TContext>
 public sealed class CardCostExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
-    private readonly ICardInstanceExpression<TContext> _card;
-    private readonly ResourceId _resource;
+    public ICardInstanceExpression<TContext> Card { get; }
+    public ResourceId Resource { get; }
 
     public CardCostExpression(ICardInstanceExpression<TContext> card, ResourceId resource)
     {
         ArgumentNullException.ThrowIfNull(card);
-        _card = card;
-        _resource = resource;
+        Card = card;
+        Resource = resource;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
-        if (_card.Evaluate(context, combat) is not { } instanceId)
+        if (Card.Evaluate(context, combat) is not { } instanceId)
             return 0;
         if (combat.DefinitionRegistry is not { } registry)
             return 0;
@@ -1427,7 +1427,7 @@ public sealed class CardCostExpression<TContext> : ICombatExpression<TContext, i
             return 0;
 
         foreach (var cost in def.Costs)
-            if (cost.ResourceId == _resource)
+            if (cost.ResourceId == Resource)
                 return cost.Amount;
         return 0;
     }
