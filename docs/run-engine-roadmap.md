@@ -76,4 +76,9 @@ first); pure-content ideas (rival run, deck-as-dungeon, living-deck events, etc.
 - Phase G: done — G1 bridge owns deck projection + relic combat face (b); G2 pending combat modifiers
   (IRunCombatModifier + RunCombat helpers, "write a future combat"); G3 upgrade-suffix deck mapper. Reward
   profiles carried to H.
-- Phase H: next — rewards system.
+- Phase H: done — H1 reward offers + OfferRewardRunEffect (chooser picks; pool generation); H2 reward
+  modifiers with a lifetime (reshape future rewards, expire after N).
+
+**Phases A–H complete.** The run engine covers: generalized trigger substrate, flags/counters, scheduler,
+costs, expression/effect vocabulary, card instances + selectors, combat bridge, and rewards. Deferred (needs
+its own foundations): map mutation / branching, a dedicated quest layer, and pure-content event designs.

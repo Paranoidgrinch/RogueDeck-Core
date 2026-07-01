@@ -16,6 +16,7 @@ public sealed class RunState
     private readonly HashSet<RunFlagId> _flags = new();
     private readonly Dictionary<RunCounterId, int> _counters = new();
     private readonly List<IRunCombatModifier> _pendingCombatModifiers = new();
+    private readonly List<RewardModifierRegistration> _rewardModifiers = new();
     private readonly Queue<IRunEffectRequest> _effects = new();
     private readonly Queue<IRunEvent> _undispatched = new();
     private readonly List<IRunEvent> _history = new();
@@ -47,6 +48,7 @@ public sealed class RunState
     public IReadOnlyCollection<RunFlagId> Flags => _flags;
     public IReadOnlyDictionary<RunCounterId, int> Counters => _counters;
     public IReadOnlyList<IRunCombatModifier> PendingCombatModifiers => _pendingCombatModifiers;
+    public int ActiveRewardModifierCount => _rewardModifiers.Count;
     public IReadOnlyList<IRunEvent> EventHistory => _history;
     public IReadOnlyList<RunLogEntry> Log => _log;
 
@@ -140,6 +142,34 @@ public sealed class RunState
         var taken = _pendingCombatModifiers.ToArray();
         _pendingCombatModifiers.Clear();
         return taken;
+    }
+
+    // Register a reward modifier for the next `rewardCount` rewards (>= 1).
+    public void AddRewardModifier(IRunRewardModifier modifier, int rewardCount)
+    {
+        ArgumentNullException.ThrowIfNull(modifier);
+        if (rewardCount < 1)
+            throw new ArgumentOutOfRangeException(nameof(rewardCount), rewardCount, "Reward count must be >= 1.");
+        _rewardModifiers.Add(new RewardModifierRegistration(modifier, rewardCount));
+    }
+
+    // Apply the active reward modifiers (in registration order) to a reward's offers, then age them one
+    // reward and drop the expired. Called by OfferRewardRunEffect for each reward.
+    public void ApplyRewardModifiers(List<RewardOffer> offers)
+    {
+        ArgumentNullException.ThrowIfNull(offers);
+
+        foreach (var registration in _rewardModifiers.ToArray())
+            registration.Modifier.Apply(offers, this);
+
+        for (var i = _rewardModifiers.Count - 1; i >= 0; i--)
+        {
+            var next = _rewardModifiers[i] with { RemainingRewards = _rewardModifiers[i].RemainingRewards - 1 };
+            if (next.RemainingRewards <= 0)
+                _rewardModifiers.RemoveAt(i);
+            else
+                _rewardModifiers[i] = next;
+        }
     }
 
     public void SetResult(RunResult result) => Result = result;

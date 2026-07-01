@@ -26,7 +26,8 @@ public sealed class OfferRewardRunEffectHandler : RunEffectHandler<OfferRewardRu
     protected override void Resolve(RunState run, RunDefinitionRegistry registry, OfferRewardRunEffect request)
     {
         var offers = request.GenerateOffers(run).ToList();
-        // Phase H2 applies the run's reward modifiers to `offers` here.
+        // Active reward modifiers reshape the offers (add/transform) before the player sees them.
+        run.ApplyRewardModifiers(offers);
         if (offers.Count == 0)
             return;
 
@@ -47,6 +48,56 @@ public sealed class OfferRewardRunEffectHandler : RunEffectHandler<OfferRewardRu
             run.RaiseEvent(new RewardChosenRunEvent(request.Reward, offer.Id));
         }
     }
+}
+
+// Alters the offers of future rewards (idea doc §13.15) — add a cursed choice, upgrade what is offered,
+// guarantee a rarity. Mutates the offer list in place before the player picks. Held on RunState with a
+// lifetime (applies to the next N rewards), the reward-layer counterpart of G's pending combat modifiers.
+public interface IRunRewardModifier
+{
+    void Apply(List<RewardOffer> offers, RunState run);
+}
+
+// A reward modifier plus how many more rewards it affects — RunState ages this down and drops it at zero.
+internal sealed record RewardModifierRegistration(IRunRewardModifier Modifier, int RemainingRewards);
+
+public sealed class DelegateRunRewardModifier : IRunRewardModifier
+{
+    private readonly Action<List<RewardOffer>, RunState> _apply;
+    public DelegateRunRewardModifier(Action<List<RewardOffer>, RunState> apply)
+    {
+        ArgumentNullException.ThrowIfNull(apply);
+        _apply = apply;
+    }
+    public void Apply(List<RewardOffer> offers, RunState run) => _apply(offers, run);
+}
+
+public static class RewardModifiers
+{
+    public static IRunRewardModifier Custom(Action<List<RewardOffer>, RunState> apply) =>
+        new DelegateRunRewardModifier(apply);
+
+    // Append an extra offer to every affected reward (e.g. a tempting cursed choice).
+    public static IRunRewardModifier AddOffer(RewardOffer offer) =>
+        Custom((offers, _) => offers.Add(offer));
+
+    // Replace each offer via a mapping (e.g. mark all offered cards as upgraded).
+    public static IRunRewardModifier TransformEach(Func<RewardOffer, RewardOffer> map) =>
+        Custom((offers, _) =>
+        {
+            for (var i = 0; i < offers.Count; i++)
+                offers[i] = map(offers[i]);
+        });
+}
+
+// Register a reward modifier for the next `RewardCount` rewards (idea doc: "for the next N rewards …").
+public sealed record AddRewardModifierRunEffect(IRunRewardModifier Modifier, int RewardCount = 1)
+    : IRunEffectRequest;
+
+public sealed class AddRewardModifierRunEffectHandler : RunEffectHandler<AddRewardModifierRunEffect>
+{
+    protected override void Resolve(RunState run, RunDefinitionRegistry registry, AddRewardModifierRunEffect request) =>
+        run.AddRewardModifier(request.Modifier, request.RewardCount);
 }
 
 // Readable offer construction.

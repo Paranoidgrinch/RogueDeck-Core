@@ -226,6 +226,10 @@ public sealed class ChoiceBuilder
         RewardId reward, Func<RunState, IReadOnlyList<RewardOffer>> generate, int pickCount = 1) =>
         Effect(new OfferRewardRunEffect(reward, generate, pickCount));
 
+    // Register a reward modifier for the next `rewardCount` rewards (e.g. RewardModifiers.AddOffer(...)).
+    public ChoiceBuilder AddRewardModifier(IRunRewardModifier modifier, int rewardCount = 1) =>
+        Effect(new AddRewardModifierRunEffect(modifier, rewardCount));
+
     // Draw one bundle of effects from a weighted pool (a random outcome).
     public ChoiceBuilder DrawEffects(RunPool<IReadOnlyList<IRunEffectRequest>> pool) =>
         Effect(new DrawEffectsRunEffect(pool));
