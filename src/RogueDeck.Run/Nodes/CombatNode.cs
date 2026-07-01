@@ -48,6 +48,71 @@ public sealed class ScriptedCombatDriver : ICombatDriver
     }
 }
 
+// Plays a combat headlessly with a deterministic default policy — no authored script. The hero plays each
+// card in hand (targeting the first living enemy) until it can play no more, then ends the turn; enemies
+// cycle their action list per round. This lets a data-defined encounter run to a result without a hand-written
+// script, and is the basis for headless run simulation / balancing. A round cap guards against a stalemate.
+public sealed class AutoPlayCombatDriver : ICombatDriver
+{
+    private readonly int _maxRounds;
+
+    public AutoPlayCombatDriver(int maxRounds = 200)
+    {
+        if (maxRounds <= 0)
+            throw new ArgumentOutOfRangeException(nameof(maxRounds));
+        _maxRounds = maxRounds;
+    }
+
+    public CombatDriveResult Drive(Playthrough playthrough)
+    {
+        ArgumentNullException.ThrowIfNull(playthrough);
+
+        var compiled = playthrough.Blueprint.Compile();
+        var combat = new InteractiveCombat(
+            compiled, CyclingEnemyIntent(compiled), playthrough.CombatId, playthrough.RandomSeed);
+
+        var rounds = 0;
+        while (!combat.IsOver && combat.IsHeroTurn && rounds++ < _maxRounds)
+        {
+            foreach (var card in combat.Hand.ToArray())
+            {
+                combat.PlayCard(card.Id, FirstAliveEnemy(combat, compiled));
+                if (combat.IsOver)
+                    break;
+            }
+
+            if (combat.IsOver)
+                break;
+
+            combat.EndTurn(); // enemies act, then the hero's next turn starts
+        }
+
+        var remaining = combat.State.TryGetCombatant(compiled.Hero.CombatantId, out var hero) && hero is not null
+            ? hero.Health.Current
+            : 0;
+        return new CombatDriveResult(combat.Result, remaining);
+    }
+
+    // Each enemy acts the next action in its list, cycling by round (round is 1-based).
+    private static Func<CombatantId, int, EnemyActionDefinitionId?> CyclingEnemyIntent(CompiledScenario compiled)
+    {
+        var byId = compiled.Enemies.ToDictionary(enemy => enemy.CombatantId);
+        return (enemyId, round) =>
+            byId.TryGetValue(enemyId, out var enemy) && enemy.Actions.Count > 0
+                ? enemy.Actions[(round - 1) % enemy.Actions.Count]
+                : (EnemyActionDefinitionId?)null;
+    }
+
+    private static CombatantId? FirstAliveEnemy(InteractiveCombat combat, CompiledScenario compiled)
+    {
+        foreach (var enemy in compiled.Enemies)
+            if (combat.State.TryGetCombatant(enemy.CombatantId, out var combatant)
+                && combatant is not null && combatant.Health.Current > 0)
+                return enemy.CombatantId;
+        return null;
+    }
+}
+
 public sealed class CombatNodeResolver : INodeResolver
 {
     private readonly ICombatDriver _driver;

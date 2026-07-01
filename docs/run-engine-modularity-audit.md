@@ -73,5 +73,9 @@ deliberately deferred to their own foundations.) A **catalog-gap pass** is part 
 - **Catalog-gap (partial) done** — `ChangeMaxHealthRunEffect` (GainMaxHealth heals too; LoseMaxHealth caps,
   min 1) and `RemoveRelicRunEffect`. Still open: relic disable (needs per-relic active state) and consumables
   (a run inventory of one-shot items) — each its own slice.
-- Remaining: R7 (encounters as data → kill CombatNodePayload Func; needs combat content addressable by id),
-  relic-disable + consumables. Then serialization + content registry/validation + run Sandbox UI.
+- **R7a done** — `AutoPlayCombatDriver`: plays a combat headlessly with no authored script (hero plays hand
+  at the first living enemy; enemies cycle their actions; round cap guards stalemate), on top of the existing
+  `InteractiveCombat`. Removes the script dependency and enables headless run simulation.
+- Remaining: R7b (EncounterDefinition as data + run encounter registry → node references an EncounterId; kill
+  the CombatNodePayload Func for content), relic-disable + consumables. Then serialization + content registry/
+  validation + run Sandbox UI.
