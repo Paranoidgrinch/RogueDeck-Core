@@ -148,7 +148,14 @@ public static class CombatJson
          .Register("combatantMissingHealth", typeof(CombatantMissingHealthExpression<>))
          .Register("combatantHealthPercentage", typeof(CombatantHealthPercentageExpression<>))
          .Register("combatantCurrentResource", typeof(CombatantCurrentResourceExpression<>))
-         .Register("combatantStatusStacks", typeof(CombatantStatusStacksExpression<>));
+         .Register("combatantMaxResource", typeof(CombatantMaxResourceExpression<>))
+         .Register("combatantMissingResource", typeof(CombatantMissingResourceExpression<>))
+         .Register("combatantDefensivePool", typeof(CombatantDefensivePoolExpression<>))
+         .Register("combatantZoneCardCount", typeof(CombatantZoneCardCountExpression<>))
+         .Register("combatantStatusStacks", typeof(CombatantStatusStacksExpression<>))
+         .Register("combatantStatusDuration", typeof(CombatantStatusDurationExpression<>))
+         .Register("combatantStatusCharges", typeof(CombatantStatusChargesExpression<>))
+         .Register("combatantStacksByPolarity", typeof(CombatantStacksByPolarityExpression<>));
 
         // bool condition expressions.
         r.Register("compare", typeof(ComparisonExpression<>))
@@ -185,13 +192,29 @@ public static class CombatJson
     {
         r.Register("node.dealDamage", typeof(DealDamageNode<>))
          .Register("node.heal", typeof(HealNode<>))
+         .Register("node.modifyMaxHealth", typeof(ModifyMaxHealthNode<>))
+         .Register("node.setHealth", typeof(SetHealthNode<>))
          .Register("node.gainBlock", typeof(GainBlockNode<>))
+         .Register("node.modifyDefensivePool", typeof(ModifyDefensivePoolNode<>))
          .Register("node.gainResource", typeof(GainResourceNode<>))
+         .Register("node.loseResource", typeof(LoseResourceNode<>))
+         .Register("node.refillResource", typeof(RefillResourceNode<>))
+         .Register("node.modifyResource", typeof(ModifyResourceNode<>))
          .Register("node.applyStatus", typeof(ApplyStatusNode<>))
+         .Register("node.removeStatus", typeof(RemoveStatusNode<>))
+         .Register("node.removeStatusesByPolarity", typeof(RemoveStatusesByPolarityNode<>))
+         .Register("node.modifyStatusStacks", typeof(ModifyStatusStacksNode<>))
+         .Register("node.modifyStatusDuration", typeof(ModifyStatusDurationNode<>))
+         .Register("node.modifyStatusCharges", typeof(ModifyStatusChargesNode<>))
+         .Register("node.drawCards", typeof(DrawCardsNode<>))
+         .Register("node.moveAllCardsFromZone", typeof(MoveAllCardsFromZoneNode<>))
          // Composite / control-flow nodes (nest child nodes).
          .Register("node.sequence", typeof(SequenceEffectNode<>))
          .Register("node.conditional", typeof(ConditionalEffectNode<>))
          .Register("node.forEachTarget", typeof(ForEachTargetEffectNode<>))
+         .Register("node.repeat", typeof(RepeatEffectNode<>))
+         .Register("node.repeatUntil", typeof(RepeatUntilEffectNode<>))
+         .Register("node.randomTargets", typeof(RandomTargetSelectionNode<>))
          .Register("node.noOp", typeof(NoOpEffectNode<>));
     }
 }
