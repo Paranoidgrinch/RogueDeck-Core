@@ -68,58 +68,91 @@ public interface IRunEffectTemplate
     IRunEffectRequest Build(RunEvalContext context);
 }
 
-// Readable template construction. Literal wraps a fixed, event-independent effect; the others compute a value
-// from the context (run + triggering event) at dispatch.
+// Concrete, serializable templates. Each is data (public properties), so a triggered program's effects can be
+// serialized. "This card" templates target the card in scope (a ForEach element) by its instance id so the
+// produced effect survives to drain; evaluating one without a card in scope is an author error.
+
+public sealed record LiteralEffectTemplate(IRunEffectRequest Effect) : IRunEffectTemplate
+{
+    public IRunEffectRequest Build(RunEvalContext context) => Effect;
+}
+
+public sealed record GainResourceTemplate(RunResourceId Resource, IRunExpression<int> Amount) : IRunEffectTemplate
+{
+    public IRunEffectRequest Build(RunEvalContext context) =>
+        new ChangeResourceRunEffect(Resource, Amount.Evaluate(context));
+}
+
+public sealed record HealTemplate(IRunExpression<int> Amount) : IRunEffectTemplate
+{
+    public IRunEffectRequest Build(RunEvalContext context) => new HealRunEffect(Amount.Evaluate(context));
+}
+
+public sealed record DamageTemplate(IRunExpression<int> Amount) : IRunEffectTemplate
+{
+    public IRunEffectRequest Build(RunEvalContext context) => new ApplyRunDamageRunEffect(Amount.Evaluate(context));
+}
+
+public sealed record UpgradeThisCardTemplate(int Levels = 1) : IRunEffectTemplate
+{
+    public IRunEffectRequest Build(RunEvalContext context) =>
+        new UpgradeCardsRunEffect(RunSelectors.Instance(CardScope.Require(context, "UpgradeThisCard").Id), Levels);
+}
+
+public sealed record TagThisCardTemplate(RunCardTagId Tag) : IRunEffectTemplate
+{
+    public IRunEffectRequest Build(RunEvalContext context) =>
+        new TagCardsRunEffect(RunSelectors.Instance(CardScope.Require(context, "TagThisCard").Id), Tag, true);
+}
+
+public sealed record RemoveThisCardTemplate : IRunEffectTemplate
+{
+    public IRunEffectRequest Build(RunEvalContext context) =>
+        new RemoveCardsRunEffect(RunSelectors.Instance(CardScope.Require(context, "RemoveThisCard").Id));
+}
+
+public sealed record SetThisCardMemoryTemplate(string Key, IRunExpression<int> Value) : IRunEffectTemplate
+{
+    public IRunEffectRequest Build(RunEvalContext context) =>
+        new SetCardMemoryRunEffect(
+            RunSelectors.Instance(CardScope.Require(context, "SetThisCardMemory").Id), Key, Value.Evaluate(context));
+}
+
+public sealed record TransformThisCardTemplate(RunPool<CardDefinitionId> Pool) : IRunEffectTemplate
+{
+    public IRunEffectRequest Build(RunEvalContext context) =>
+        new TransformCardsRunEffect(RunSelectors.Instance(CardScope.Require(context, "TransformThisCard").Id), Pool);
+}
+
+// Escape: an arbitrary template computed by a lambda (not serializable).
+public sealed class CustomEffectTemplate : IRunEffectTemplate
+{
+    private readonly Func<RunEvalContext, IRunEffectRequest> _build;
+    public CustomEffectTemplate(Func<RunEvalContext, IRunEffectRequest> build)
+    {
+        ArgumentNullException.ThrowIfNull(build);
+        _build = build;
+    }
+    public IRunEffectRequest Build(RunEvalContext context) => _build(context);
+}
+
+// Readable template construction, returning the concrete data templates.
 public static class RunEffectTemplates
 {
-    public static IRunEffectTemplate Literal(IRunEffectRequest effect) => new LiteralTemplate(effect);
+    public static IRunEffectTemplate Literal(IRunEffectRequest effect) => new LiteralEffectTemplate(effect);
     public static IRunEffectTemplate GainResource(RunResourceId resource, IRunExpression<int> amount) =>
-        new DelegateTemplate(ctx => new ChangeResourceRunEffect(resource, amount.Evaluate(ctx)));
-    public static IRunEffectTemplate Heal(IRunExpression<int> amount) =>
-        new DelegateTemplate(ctx => new HealRunEffect(amount.Evaluate(ctx)));
-    public static IRunEffectTemplate Damage(IRunExpression<int> amount) =>
-        new DelegateTemplate(ctx => new ApplyRunDamageRunEffect(amount.Evaluate(ctx)));
-
-    // "This card" templates — target the card in scope (a ForEach element) by its instance id, so the produced
-    // effect survives to drain. Evaluating one without a card in scope is an author error.
-    public static IRunEffectTemplate UpgradeThisCard(int levels = 1) =>
-        new DelegateTemplate(ctx =>
-            new UpgradeCardsRunEffect(RunSelectors.Instance(CardScope.Require(ctx, "UpgradeThisCard").Id), levels));
-
-    public static IRunEffectTemplate TagThisCard(RunCardTagId tag) =>
-        new DelegateTemplate(ctx =>
-            new TagCardsRunEffect(RunSelectors.Instance(CardScope.Require(ctx, "TagThisCard").Id), tag, true));
-
-    public static IRunEffectTemplate RemoveThisCard() =>
-        new DelegateTemplate(ctx =>
-            new RemoveCardsRunEffect(RunSelectors.Instance(CardScope.Require(ctx, "RemoveThisCard").Id)));
-
+        new GainResourceTemplate(resource, amount);
+    public static IRunEffectTemplate Heal(IRunExpression<int> amount) => new HealTemplate(amount);
+    public static IRunEffectTemplate Damage(IRunExpression<int> amount) => new DamageTemplate(amount);
+    public static IRunEffectTemplate UpgradeThisCard(int levels = 1) => new UpgradeThisCardTemplate(levels);
+    public static IRunEffectTemplate TagThisCard(RunCardTagId tag) => new TagThisCardTemplate(tag);
+    public static IRunEffectTemplate RemoveThisCard() => new RemoveThisCardTemplate();
     public static IRunEffectTemplate SetThisCardMemory(string key, IRunExpression<int> value) =>
-        new DelegateTemplate(ctx =>
-            new SetCardMemoryRunEffect(
-                RunSelectors.Instance(CardScope.Require(ctx, "SetThisCardMemory").Id), key, value.Evaluate(ctx)));
-
+        new SetThisCardMemoryTemplate(key, value);
     public static IRunEffectTemplate TransformThisCard(RunPool<CardDefinitionId> pool) =>
-        new DelegateTemplate(ctx =>
-            new TransformCardsRunEffect(RunSelectors.Instance(CardScope.Require(ctx, "TransformThisCard").Id), pool));
-
-    private sealed class LiteralTemplate : IRunEffectTemplate
-    {
-        private readonly IRunEffectRequest _effect;
-        public LiteralTemplate(IRunEffectRequest effect)
-        {
-            ArgumentNullException.ThrowIfNull(effect);
-            _effect = effect;
-        }
-        public IRunEffectRequest Build(RunEvalContext context) => _effect;
-    }
-
-    private sealed class DelegateTemplate : IRunEffectTemplate
-    {
-        private readonly Func<RunEvalContext, IRunEffectRequest> _build;
-        public DelegateTemplate(Func<RunEvalContext, IRunEffectRequest> build) => _build = build;
-        public IRunEffectRequest Build(RunEvalContext context) => _build(context);
-    }
+        new TransformThisCardTemplate(pool);
+    public static IRunEffectTemplate Custom(Func<RunEvalContext, IRunEffectRequest> build) =>
+        new CustomEffectTemplate(build);
 }
 
 // A triggered program expressed as data: event type (via TEvent), optional condition, and effect templates.

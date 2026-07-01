@@ -41,6 +41,12 @@ public sealed class RunState
 
     public void SetEntityChooser(IRunEntityChooser? chooser) => EntityChooser = chooser;
 
+    // The run's content catalog, if any — a run-scoped collaborator (like the chooser) so id-referencing
+    // effects (e.g. grant relic by id) can resolve content during resolution.
+    public RunContentRegistry? Content { get; private set; }
+
+    public void SetContent(RunContentRegistry? content) => Content = content;
+
     // A selector context bound to this run and its chooser — what effect handlers pass to selectors.
     public RunEvalContext SelectorContext => new(this, chooser: EntityChooser);
 

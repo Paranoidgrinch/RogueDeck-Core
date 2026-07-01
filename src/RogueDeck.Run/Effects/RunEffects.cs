@@ -89,6 +89,25 @@ public sealed class RemoveRelicRunEffectHandler : RunEffectHandler<RemoveRelicRu
     }
 }
 
+// Grant a relic by id, resolving its definition from the run's content catalog — the serializable,
+// data-first way to grant a relic (AddRelicRunEffect embeds a RelicInstance and is an escape).
+public sealed record AddRelicByIdRunEffect(RelicId Relic) : IRunEffectRequest;
+
+public sealed class AddRelicByIdRunEffectHandler : RunEffectHandler<AddRelicByIdRunEffect>
+{
+    protected override void Resolve(RunState run, RunDefinitionRegistry registry, AddRelicByIdRunEffect request)
+    {
+        if (run.Content is null)
+            throw new InvalidOperationException(
+                $"Cannot grant relic '{request.Relic}' by id: the run has no content catalog.");
+
+        var definition = run.Content.GetRelic(request.Relic);
+        run.AddRelic(new RelicInstance(definition));
+        run.AddLog(StandardRunLogTypes.RelicAcquired, $"Acquired relic '{definition.Id}' (by id).");
+        run.RaiseEvent(new RelicAcquiredRunEvent(definition.Id));
+    }
+}
+
 // Disable a relic for the next `Combats` resolved combats, then it re-enables itself. Reuses the scheduler:
 // disabling installs a one-shot "after N combats -> enable" consequence. A disabled relic neither reacts nor
 // contributes to combat.

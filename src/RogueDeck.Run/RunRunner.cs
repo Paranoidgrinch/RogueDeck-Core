@@ -9,11 +9,13 @@ public sealed class RunRunner
     private readonly RunDefinitionRegistry _registry;
     private readonly IRunChoiceProvider _choices;
     private readonly RunEffectProcessor _processor;
+    private readonly RunContentRegistry? _content;
 
     public RunRunner(
         RunDefinitionRegistry registry,
         IRunChoiceProvider choices,
-        RunEffectProcessor? processor = null)
+        RunEffectProcessor? processor = null,
+        RunContentRegistry? content = null)
     {
         ArgumentNullException.ThrowIfNull(registry);
         ArgumentNullException.ThrowIfNull(choices);
@@ -21,6 +23,7 @@ public sealed class RunRunner
         _registry = registry;
         _choices = choices;
         _processor = processor ?? new RunEffectProcessor();
+        _content = content;
     }
 
     public void Run(RunState run)
@@ -33,6 +36,7 @@ public sealed class RunRunner
         // effects (e.g. ChooseByPlayer card removal) can offer choices during effect resolution.
         if (_choices is IRunEntityChooser chooser)
             run.SetEntityChooser(chooser);
+        run.SetContent(_content);
 
         run.AddLog(StandardRunLogTypes.RunStarted, $"Run '{run.Id}' started.");
         run.RaiseEvent(new RunStartedRunEvent(run.Id));

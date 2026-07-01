@@ -107,6 +107,11 @@ Endgame remaining: **serialization** (multi-slice) + a run Sandbox UI. Serializa
 selectors, reward sources — round-trips as JSON. Non-serializable by design (escapes / content objects):
 Func-backed nodes (`.Where`, `EventValue`, `Custom` modifiers, `ExpandRunEffect`), and effects that embed
 content objects (`AddRelic` embeds a RelicInstance; `InstallRunProgram`; `AddRewardModifier`/`AddCombatModifier`).
-Remaining serialization follow-ups: triggered-program (relic reaction) serialization needs concrete public
-effect-template types; granting relics/programs should move to id references. Combat card EffectPrograms remain
-combat-authoring (referenced by id).
+Follow-ups delivered: effect-templates are now concrete public serializable types (LiteralEffectTemplate,
+GainResource/Heal/Damage, and the "this card" templates), so ForEachCard serializes; a Custom template stays as
+the escape. Granting a relic is now data via AddRelicByIdRunEffect (resolves from the run's content catalog,
+which RunState carries run-scoped like the chooser); AddRelicRunEffect(RelicInstance) stays as the escape.
+
+Combat card EffectPrograms remain combat-authoring (referenced by id). Remaining endgame: a run Sandbox UI.
+Note: full relic *definition* serialization is intentionally out (a relic's combat contributions are combat
+content) — relics are authored, then referenced/granted by id.

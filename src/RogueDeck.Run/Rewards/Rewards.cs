@@ -172,6 +172,10 @@ public static class Rewards
     public static RewardOffer Relic(RelicInstance relic, string? id = null) =>
         new(id ?? relic.Id.ToString(), new IRunEffectRequest[] { new AddRelicRunEffect(relic) });
 
+    // Grant a relic by id (resolved from the run's content catalog) — the serializable form.
+    public static RewardOffer Relic(RelicId relic, string? id = null) =>
+        new(id ?? relic.ToString(), new IRunEffectRequest[] { new AddRelicByIdRunEffect(relic) });
+
     public static RewardOffer Resource(RunResourceId resource, int amount, string? id = null) =>
         new(id ?? $"{resource}-{amount}", new IRunEffectRequest[] { new ChangeResourceRunEffect(resource, amount) });
 

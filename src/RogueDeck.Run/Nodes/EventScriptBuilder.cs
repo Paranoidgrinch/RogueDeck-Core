@@ -130,6 +130,9 @@ public sealed class ChoiceBuilder
         return Effect(new ChangeMaxHealthRunEffect(-amount));
     }
 
+    // Grant a relic by id (resolved from the run's content catalog).
+    public ChoiceBuilder AddRelic(RelicId relic) => Effect(new AddRelicByIdRunEffect(relic));
+
     public ChoiceBuilder RemoveRelic(RelicId relic) => Effect(new RemoveRelicRunEffect(relic));
 
     public ChoiceBuilder DisableRelic(RelicId relic, int combats) =>

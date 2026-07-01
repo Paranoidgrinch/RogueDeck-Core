@@ -75,6 +75,7 @@ public static class RunJson
         var registry = new RunJsonRegistry();
         RegisterExpressions(registry);
         RegisterSelectors(registry);
+        RegisterTemplates(registry);
         RegisterEffects(registry);
         RegisterRewards(registry);
         return registry;
@@ -88,6 +89,7 @@ public static class RunJson
         options.Converters.Add(new PolymorphicRunJsonConverter<IRunExpression<int>>(registry));
         options.Converters.Add(new PolymorphicRunJsonConverter<IRunExpression<bool>>(registry));
         options.Converters.Add(new PolymorphicRunJsonConverter<IRunSelector<RunCardInstance>>(registry));
+        options.Converters.Add(new PolymorphicRunJsonConverter<IRunEffectTemplate>(registry));
         options.Converters.Add(new PolymorphicRunJsonConverter<IRunEffectRequest>(registry));
         options.Converters.Add(new PolymorphicRunJsonConverter<IRewardSource>(registry));
         return options;
@@ -150,6 +152,20 @@ public static class RunJson
          .Register("sel.choose", typeof(ChooseSelector<RunCardInstance>));
     }
 
+    // Effect templates (materialise a concrete effect at dispatch). CustomEffectTemplate is a Func escape.
+    private static void RegisterTemplates(RunJsonRegistry r)
+    {
+        r.Register("tpl.literal", typeof(LiteralEffectTemplate))
+         .Register("tpl.gainResource", typeof(GainResourceTemplate))
+         .Register("tpl.heal", typeof(HealTemplate))
+         .Register("tpl.damage", typeof(DamageTemplate))
+         .Register("tpl.upgradeThisCard", typeof(UpgradeThisCardTemplate))
+         .Register("tpl.tagThisCard", typeof(TagThisCardTemplate))
+         .Register("tpl.removeThisCard", typeof(RemoveThisCardTemplate))
+         .Register("tpl.setThisCardMemory", typeof(SetThisCardMemoryTemplate))
+         .Register("tpl.transformThisCard", typeof(TransformThisCardTemplate));
+    }
+
     // Data effects. Nested effect lists, expressions, selectors and pools recurse through their converters.
     // Effects that embed code or content objects (AddRelic/InstallProgram/ExpandRunEffect/ForEachCard/
     // AddRewardModifier/AddCombatModifier) are escapes and are not registered.
@@ -160,6 +176,7 @@ public static class RunJson
          .Register("fx.heal", typeof(HealRunEffect))
          .Register("fx.changeMaxHealth", typeof(ChangeMaxHealthRunEffect))
          .Register("fx.addCard", typeof(AddCardToDeckRunEffect))
+         .Register("fx.addRelicById", typeof(AddRelicByIdRunEffect))
          .Register("fx.removeRelic", typeof(RemoveRelicRunEffect))
          .Register("fx.disableRelic", typeof(DisableRelicRunEffect))
          .Register("fx.enableRelic", typeof(EnableRelicRunEffect))
@@ -182,7 +199,8 @@ public static class RunJson
          .Register("fx.upgradeCards", typeof(UpgradeCardsRunEffect))
          .Register("fx.tagCards", typeof(TagCardsRunEffect))
          .Register("fx.setCardMemory", typeof(SetCardMemoryRunEffect))
-         .Register("fx.transformCards", typeof(TransformCardsRunEffect));
+         .Register("fx.transformCards", typeof(TransformCardsRunEffect))
+         .Register("fx.forEachCard", typeof(ForEachCardRunEffect));
     }
 
     // Reward sources. The Func-backed DelegateRewardSource is an escape.
