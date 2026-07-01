@@ -107,6 +107,26 @@ public sealed class EventFieldExpression<TEvent> : IRunExpression<int>
     }
 }
 
+// Reads a bool off the triggering event (e.g. "combat was a victory"). Like EventFieldExpression, valid only
+// while a matching event is in context.
+public sealed class EventBoolFieldExpression<TEvent> : IRunExpression<bool>
+    where TEvent : IRunEvent
+{
+    private readonly Func<TEvent, bool> _field;
+    public EventBoolFieldExpression(Func<TEvent, bool> field)
+    {
+        ArgumentNullException.ThrowIfNull(field);
+        _field = field;
+    }
+    public bool Evaluate(RunEvalContext context)
+    {
+        if (context.Event is not TEvent typed)
+            throw new InvalidOperationException(
+                $"An event predicate for '{typeof(TEvent).Name}' was evaluated without a matching event in context.");
+        return _field(typed);
+    }
+}
+
 // ── Value combinators ───────────────────────────────────────────────────────────
 
 public sealed class AddExpression : IRunExpression<int>

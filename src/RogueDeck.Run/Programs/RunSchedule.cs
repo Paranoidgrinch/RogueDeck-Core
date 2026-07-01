@@ -46,7 +46,19 @@ public static class RunSchedule
         }));
     }
 
-    // Fire the first time `isDue` holds for a matching event.
+    // Fire the first time the condition holds for a matching event. The condition is a data expression
+    // evaluated with the event in context (read event fields via RunEventValues), so no lambda is needed.
+    public static InstalledRunProgram When<TEvent>(
+        RunProgramId id, IRunExpression<bool> condition, params IRunEffectRequest[] effects) where TEvent : IRunEvent
+    {
+        ArgumentNullException.ThrowIfNull(condition);
+        ArgumentNullException.ThrowIfNull(effects);
+
+        return new InstalledRunProgram(id, new TriggeredRunEffect<TEvent>((evt, run) =>
+            condition.Evaluate(new RunEvalContext(run, evt)) ? Due(id, effects) : Array.Empty<IRunEffectRequest>()));
+    }
+
+    // Escape hatch: fire the first time an arbitrary predicate holds. Prefer the expression overload.
     public static InstalledRunProgram When<TEvent>(
         RunProgramId id, Func<TEvent, bool> isDue, params IRunEffectRequest[] effects) where TEvent : IRunEvent
     {
