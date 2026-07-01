@@ -34,6 +34,24 @@
                     }
                 </div>
             }
+            else if (session.IsAwaitingEntities && session.PendingEntities is { } request)
+            {
+                <h2>@request.Purpose</h2>
+                <p class="muted">Pick @request.Count.</p>
+                <div class="choices">
+                    @for (var i = 0; i < request.Displays.Count; i++)
+                    {
+                        var index = i;
+                        <button class="play @(_selected.Contains(index) ? "active" : "")"
+                                @onclick="() => ToggleEntity(index)">
+                            @request.Displays[index]
+                        </button>
+                    }
+                </div>
+                <button class="play" disabled="@(_selected.Count != request.Count)" @onclick="ConfirmEntities">
+                    Confirm (@_selected.Count/@request.Count)
+                </button>
+            }
             else if (session.IsComplete)
             {
                 <h2>Run complete</h2>
@@ -76,13 +94,37 @@
 @code {
     private static readonly EncounterId GoblinFight = new("goblin-fight");
     private static readonly EventId Shrine = new("shrine");
+    private static readonly EventId Purge = new("purge");
 
     private int _seed = 1;
     private InteractiveRunSession? _session;
+    private readonly HashSet<int> _selected = new();
+
+    private void ToggleEntity(int index)
+    {
+        var count = _session?.PendingEntities?.Count ?? 0;
+        if (_selected.Contains(index))
+            _selected.Remove(index);
+        else
+        {
+            if (count == 1)
+                _selected.Clear();
+            if (_selected.Count < count)
+                _selected.Add(index);
+        }
+    }
+
+    private void ConfirmEntities()
+    {
+        var indices = _selected.ToList();
+        _selected.Clear();
+        _session?.PickEntities(indices);
+    }
 
     private void Start()
     {
         DisposeSession();
+        _selected.Clear();
 
         var content = BuildContent();
         var builder = new RunDefinitionRegistryBuilder();
@@ -92,6 +134,7 @@
         var map = new RunMap(new Node[]
         {
             new(new NodeId("shrine"), StandardRunIds.EventNode, new EventRef(Shrine)),
+            new(new NodeId("purge"), StandardRunIds.EventNode, new EventRef(Purge)),
             new(new NodeId("fight"), StandardRunIds.CombatNode, new EncounterRef(GoblinFight)),
         });
 
@@ -146,8 +189,17 @@
                 .Choice("leave", c => c.TextKey("Leave it be")))
             .Build();
 
+        var purge = new EventScriptBuilder("purge")
+            .Situation("purge", "A purifying flame offers to burn one card away.", s => s
+                .Choice("purge", c => c
+                    .TextKey("Burn a card (choose one)")
+                    .RemoveCards(RunSelectors.DeckCards.ChooseByPlayer(1, "Choose a card to remove")))
+                .Choice("keep", c => c.TextKey("Keep your deck intact")))
+            .Build();
+
         return new RunContentRegistryBuilder()
             .RegisterEvent(Shrine, shrine)
+            .RegisterEvent(Purge, purge)
             .RegisterRelic(StandardRelics.Bloodstone())
             .SetEncounters(new EncounterCatalog(library, new[] { encounter }))
             .Build();

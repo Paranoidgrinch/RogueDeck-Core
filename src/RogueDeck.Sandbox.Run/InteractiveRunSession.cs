@@ -14,13 +14,16 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
     private readonly RunDefinitionRegistry _registry;
     private readonly RunContentRegistry? _content;
     private TaskCompletionSource<EventChoice>? _pending;
+    private TaskCompletionSource<IReadOnlyList<int>>? _pendingEntities;
     private volatile bool _disposed;
 
     public RunState Run => _run;
     public EventSituation? PendingSituation { get; private set; }
     public IReadOnlyList<EventChoice> PendingChoices { get; private set; } = Array.Empty<EventChoice>();
+    public EntitySelectionRequest? PendingEntities { get; private set; }
     public bool IsComplete { get; private set; }
     public bool IsAwaitingChoice => PendingSituation is not null;
+    public bool IsAwaitingEntities => PendingEntities is not null;
     public string? Error { get; private set; }
 
     // Raised (on the background thread) when a choice is needed or the run finished; the UI marshals it.
@@ -98,18 +101,68 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
         tcs.SetResult(choice);
     }
 
-    public IReadOnlyList<T> ChooseEntities<T>(IReadOnlyList<T> candidates, int count, string purpose) =>
-        candidates.Take(count).ToArray();
+    // IRunEntityChooser — parks the background run thread until the UI selects entities (e.g. cards to remove).
+    public IReadOnlyList<T> ChooseEntities<T>(IReadOnlyList<T> candidates, int count, string purpose)
+    {
+        if (candidates.Count == 0 || count <= 0)
+            return Array.Empty<T>();
+
+        TaskCompletionSource<IReadOnlyList<int>> tcs;
+        lock (_gate)
+        {
+            if (_disposed)
+                throw new OperationCanceledException();
+            tcs = new TaskCompletionSource<IReadOnlyList<int>>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _pendingEntities = tcs;
+            PendingEntities = new EntitySelectionRequest(
+                purpose, Math.Min(count, candidates.Count), candidates.Select(c => Display(c)).ToArray());
+        }
+        Changed?.Invoke();
+
+        var indices = tcs.Task.GetAwaiter().GetResult();
+        return indices.Select(i => candidates[i]).ToArray();
+    }
+
+    // Called by the UI when the player confirms an entity selection (indices into PendingEntities.Displays).
+    public void PickEntities(IReadOnlyList<int> indices)
+    {
+        TaskCompletionSource<IReadOnlyList<int>>? tcs;
+        lock (_gate)
+        {
+            tcs = _pendingEntities;
+            if (tcs is null)
+                return;
+            _pendingEntities = null;
+            PendingEntities = null;
+        }
+        tcs.SetResult(indices);
+    }
+
+    private static string Display(object? candidate) => candidate switch
+    {
+        RunCardInstance card => card.UpgradeLevel > 0
+            ? $"{card.DefinitionId} +{card.UpgradeLevel}"
+            : card.DefinitionId.ToString(),
+        RelicInstance relic => relic.Id.ToString(),
+        _ => candidate?.ToString() ?? "?",
+    };
 
     public void Dispose()
     {
-        TaskCompletionSource<EventChoice>? tcs;
+        TaskCompletionSource<EventChoice>? choice;
+        TaskCompletionSource<IReadOnlyList<int>>? entities;
         lock (_gate)
         {
             _disposed = true;
-            tcs = _pending;
+            choice = _pending;
+            entities = _pendingEntities;
             _pending = null;
+            _pendingEntities = null;
         }
-        tcs?.TrySetCanceled();
+        choice?.TrySetCanceled();
+        entities?.TrySetCanceled();
     }
 }
+
+// A pending entity selection surfaced to the UI: what for, how many to pick, and the display strings.
+public sealed record EntitySelectionRequest(string Purpose, int Count, IReadOnlyList<string> Displays);
