@@ -67,6 +67,26 @@ public sealed class WhereSelector<T> : IRunSelector<T>
         _inner.Select(context).Where(_predicate).ToArray();
 }
 
+// Keeps the cards matching a data predicate — the current card is put in scope so the predicate reads it via
+// CardValue. The data-first alternative to Where(lambda): compose tag/kind/upgrade/memory checks with the
+// ordinary combinators, no code.
+public sealed class MatchingCardSelector : IRunSelector<RunCardInstance>
+{
+    private readonly IRunSelector<RunCardInstance> _inner;
+    private readonly IRunExpression<bool> _predicate;
+    public MatchingCardSelector(IRunSelector<RunCardInstance> inner, IRunExpression<bool> predicate)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        ArgumentNullException.ThrowIfNull(predicate);
+        _inner = inner;
+        _predicate = predicate;
+    }
+    public IReadOnlyList<RunCardInstance> Select(RunSelectorContext context) =>
+        _inner.Select(context)
+            .Where(card => _predicate.Evaluate(new RunEvalContext(context.Run, card: card)))
+            .ToArray();
+}
+
 // The first `count` in source order (fewer if there are not enough). Deterministic; no RNG.
 public sealed class TakeSelector<T> : IRunSelector<T>
 {
@@ -153,16 +173,21 @@ public static class RunSelectors
         this IRunSelector<T> source, int count, string purpose = "select") =>
         new ChooseSelector<T>(source, count, purpose);
 
-    // Card filter shorthands.
+    // Keep the cards matching a data predicate (compose with CardValue + the ordinary combinators).
+    public static IRunSelector<RunCardInstance> Matching(
+        this IRunSelector<RunCardInstance> source, IRunExpression<bool> predicate) =>
+        new MatchingCardSelector(source, predicate);
+
+    // Card filter shorthands, expressed as data predicates over Matching.
     public static IRunSelector<RunCardInstance> WithTag(
         this IRunSelector<RunCardInstance> source, RunCardTagId tag) =>
-        source.Where(card => card.HasTag(tag));
+        source.Matching(CardValue.HasTag(tag));
 
     public static IRunSelector<RunCardInstance> OfKind(
         this IRunSelector<RunCardInstance> source, CardDefinitionId definition) =>
-        source.Where(card => card.DefinitionId == definition);
+        source.Matching(CardValue.IsKind(definition));
 
     public static IRunSelector<RunCardInstance> Upgradable(
         this IRunSelector<RunCardInstance> source, int maxLevel = 1) =>
-        source.Where(card => card.UpgradeLevel < maxLevel);
+        source.Matching(RunExpr.LessThan(CardValue.UpgradeLevel, RunExpr.Const(maxLevel)));
 }

@@ -1,3 +1,5 @@
+using RogueDeck.Core.Combat;
+
 namespace RogueDeck.Run;
 
 // The run-layer expression vocabulary — the composable pendant of the combat layer's
@@ -16,14 +18,22 @@ public sealed class RunEvalContext
     public RunState Run { get; }
     public IRunEvent? Event { get; }
 
-    public RunEvalContext(RunState run, IRunEvent? triggeringEvent = null)
+    // The card currently in scope: the element under a card selector filter, or the iteration element of a
+    // ForEach. Present only in those scopes; CardValue expressions read it.
+    public RunCardInstance? Card { get; }
+
+    public RunEvalContext(RunState run, IRunEvent? triggeringEvent = null, RunCardInstance? card = null)
     {
         ArgumentNullException.ThrowIfNull(run);
         Run = run;
         Event = triggeringEvent;
+        Card = card;
     }
 
     public static implicit operator RunEvalContext(RunState run) => new(run);
+
+    // Derive a context with a card in scope, preserving run + event.
+    public RunEvalContext WithCard(RunCardInstance card) => new(Run, Event, card);
 }
 
 public interface IRunExpression<out TValue>
@@ -299,6 +309,72 @@ public sealed class SumExpression<T> : IRunExpression<int>
         _selector.Select(new RunSelectorContext(context.Run)).Sum(_value);
 }
 
+// Sum a per-card value expression over selected cards — the data-first Sum (each card is put in scope, so the
+// value expression reads it via CardValue).
+public sealed class SumCardsExpression : IRunExpression<int>
+{
+    private readonly IRunSelector<RunCardInstance> _selector;
+    private readonly IRunExpression<int> _perCard;
+    public SumCardsExpression(IRunSelector<RunCardInstance> selector, IRunExpression<int> perCard)
+    {
+        ArgumentNullException.ThrowIfNull(selector);
+        ArgumentNullException.ThrowIfNull(perCard);
+        _selector = selector;
+        _perCard = perCard;
+    }
+    public int Evaluate(RunEvalContext context) =>
+        _selector.Select(new RunSelectorContext(context.Run)).Sum(card => _perCard.Evaluate(context.WithCard(card)));
+}
+
+// ── Card values (R5) ────────────────────────────────────────────────────────────────
+// Read per-card state of the card currently in scope (a selector filter element or a ForEach element).
+// Combine freely with the ordinary combinators (comparison/And/Or/…) to build filter predicates as data.
+// Evaluating one outside a card scope is an author error and throws.
+
+internal static class CardScope
+{
+    public static RunCardInstance Require(RunEvalContext context, string what) =>
+        context.Card ?? throw new InvalidOperationException(
+            $"{what} was evaluated without a card in context — use it inside a card selector filter (.Matching) or a ForEach.");
+}
+
+public sealed class CardUpgradeLevelExpression : IRunExpression<int>
+{
+    public int Evaluate(RunEvalContext context) => CardScope.Require(context, "CardValue.UpgradeLevel").UpgradeLevel;
+}
+
+public sealed class CardMemoryExpression : IRunExpression<int>
+{
+    private readonly string _key;
+    public CardMemoryExpression(string key) => _key = key;
+    public int Evaluate(RunEvalContext context) => CardScope.Require(context, "CardValue.Memory").GetMemory(_key);
+}
+
+public sealed class CardHasTagExpression : IRunExpression<bool>
+{
+    private readonly RunCardTagId _tag;
+    public CardHasTagExpression(RunCardTagId tag) => _tag = tag;
+    public bool Evaluate(RunEvalContext context) => CardScope.Require(context, "CardValue.HasTag").HasTag(_tag);
+}
+
+public sealed class CardIsKindExpression : IRunExpression<bool>
+{
+    private readonly CardDefinitionId _definition;
+    public CardIsKindExpression(CardDefinitionId definition) => _definition = definition;
+    public bool Evaluate(RunEvalContext context) =>
+        CardScope.Require(context, "CardValue.IsKind").DefinitionId == _definition;
+}
+
+public static class CardValue
+{
+    public static IRunExpression<int> UpgradeLevel { get; } = new CardUpgradeLevelExpression();
+    public static IRunExpression<int> Memory(string key) => new CardMemoryExpression(key);
+    public static IRunExpression<bool> HasTag(RunCardTagId tag) => new CardHasTagExpression(tag);
+    public static IRunExpression<bool> IsKind(CardDefinitionId definition) => new CardIsKindExpression(definition);
+    public static IRunExpression<bool> Upgraded { get; } =
+        new RunComparisonExpression(UpgradeLevel, RunComparisonOperator.GreaterThan, new RunConstantExpression(0));
+}
+
 // ── Random / pool draws ───────────────────────────────────────────────────────────
 // These are the one impure corner of the vocabulary: evaluating them advances the run RNG (RunState.NextRandom),
 // so the result is not referentially transparent — evaluate each once per decision. The run seed still makes
@@ -470,6 +546,11 @@ public static class RunExpr
     public static IRunExpression<int> Count<T>(IRunSelector<T> selector) => new CountExpression<T>(selector);
     public static IRunExpression<int> Sum<T>(IRunSelector<T> selector, Func<T, int> value) =>
         new SumExpression<T>(selector, value);
+
+    // Data-first sum over cards: the per-card value is an expression (reads each card via CardValue).
+    public static IRunExpression<int> SumCards(
+        IRunSelector<RunCardInstance> selector, IRunExpression<int> perCard) =>
+        new SumCardsExpression(selector, perCard);
 
     // Conditions
     public static IRunExpression<bool> True { get; } = new RunConstantBoolExpression(true);

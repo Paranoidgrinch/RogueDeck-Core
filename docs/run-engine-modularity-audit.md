@@ -58,5 +58,10 @@ deliberately deferred to their own foundations.) A **catalog-gap pass** is part 
   read the event at dispatch). `StandardRelics` (Bloodstone/Leech) now authored declaratively; the old
   `RelicPrograms.GainResourceOn` and the `TriggeredRunEffect` lambda are no longer needed for content
   (the lambda stays only as an internal/escape mechanism).
-- Remaining: R4 (selector filter vocabulary), R3 (data ForEach + iteration target), R6 (reward tables),
-  R5 rest (entity value accessors: CardValue.*), catalog-gap pass, R7 (encounters as data).
+- **R4 done** — `RunEvalContext.Card` (card in scope) + `.Matching(IRunExpression<bool>)` selector; the
+  WithTag/OfKind/Upgradable shorthands are now predicates. `.Where(Func)` stays as escape.
+- **R5 done** — `CardValue` accessors (UpgradeLevel/Memory/HasTag/IsKind/Upgraded) compose with the ordinary
+  combinators; `RunExpr.SumCards` is the data-first Sum over cards.
+- Remaining: R3 (data ForEach + iteration target — needs a design choice: per-card effects must target the
+  current instance, so either card-effect templates + a single-instance selector, or unify RunSelectorContext
+  and RunEvalContext to both carry Card), R6 (reward tables), catalog-gap pass, R7 (encounters as data).
