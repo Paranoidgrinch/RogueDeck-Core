@@ -25,7 +25,8 @@ public sealed class StandardRunPackage : IRunPackage
             .RegisterEffectHandler(new GrantRewardRunEffectHandler())
             .RegisterEffectHandler(new ComputedResourceRunEffectHandler())
             .RegisterEffectHandler(new ConditionalRunEffectHandler())
-            .RegisterEffectHandler(new DrawEffectsRunEffectHandler());
+            .RegisterEffectHandler(new DrawEffectsRunEffectHandler())
+            .RegisterEffectHandler(new DrawManyEffectsRunEffectHandler());
 
         builder
             .RegisterResolver(new CombatNodeResolver(_combatDriver))

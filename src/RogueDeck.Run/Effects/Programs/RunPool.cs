@@ -52,6 +52,44 @@ public sealed class RunPool<T>
         // Unreachable: roll < totalWeight and the weights sum to totalWeight.
         throw new InvalidOperationException("Pool draw fell through; weights are inconsistent.");
     }
+
+    // Draw `count` DISTINCT entries without replacement, each pick weighted over the entries not yet taken
+    // (a chosen entry is removed before the next pick, so weights re-normalise). Consumes one RNG step per
+    // pick, so the run seed reproduces the whole selection. count must be in [0, Entries.Count]; count 0
+    // returns empty. Distinctness is by entry position — two entries with equal Value may both be drawn.
+    public IReadOnlyList<T> DrawMany(RunState run, int count)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        if (count < 0 || count > _entries.Count)
+            throw new ArgumentOutOfRangeException(
+                nameof(count), count, $"Draw count must be in [0, {_entries.Count}].");
+
+        if (count == 0)
+            return Array.Empty<T>();
+
+        var remaining = new List<Entry>(_entries);
+        var remainingWeight = _totalWeight;
+        var result = new List<T>(count);
+
+        for (var picked = 0; picked < count; picked++)
+        {
+            var roll = run.NextRandom(remainingWeight);
+            var cumulative = 0;
+            for (var i = 0; i < remaining.Count; i++)
+            {
+                cumulative += remaining[i].Weight;
+                if (roll < cumulative)
+                {
+                    result.Add(remaining[i].Value);
+                    remainingWeight -= remaining[i].Weight;
+                    remaining.RemoveAt(i);
+                    break;
+                }
+            }
+        }
+
+        return result;
+    }
 }
 
 // Readable pool construction, the pool counterpart of the RunExpr facade.

@@ -57,3 +57,18 @@ public sealed class DrawEffectsRunEffectHandler : RunEffectHandler<DrawEffectsRu
             run.EnqueueEffect(effect);
     }
 }
+
+// Draw `Count` DISTINCT bundles from the pool (without replacement) and enqueue all of them — "pick N
+// different rewards". Count must be within the pool size (validated by RunPool.DrawMany).
+public sealed record DrawManyEffectsRunEffect(RunPool<IReadOnlyList<IRunEffectRequest>> Pool, int Count)
+    : IRunEffectRequest;
+
+public sealed class DrawManyEffectsRunEffectHandler : RunEffectHandler<DrawManyEffectsRunEffect>
+{
+    protected override void Resolve(RunState run, RunDefinitionRegistry registry, DrawManyEffectsRunEffect request)
+    {
+        foreach (var bundle in request.Pool.DrawMany(run, request.Count))
+            foreach (var effect in bundle)
+                run.EnqueueEffect(effect);
+    }
+}

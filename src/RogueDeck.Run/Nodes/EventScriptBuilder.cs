@@ -124,6 +124,10 @@ public sealed class ChoiceBuilder
     public ChoiceBuilder DrawEffects(RunPool<IReadOnlyList<IRunEffectRequest>> pool) =>
         Effect(new DrawEffectsRunEffect(pool));
 
+    // Draw `count` distinct bundles from a weighted pool (pick N different rewards).
+    public ChoiceBuilder DrawManyEffects(RunPool<IReadOnlyList<IRunEffectRequest>> pool, int count) =>
+        Effect(new DrawManyEffectsRunEffect(pool, count));
+
     // The choice is only offered when the run still holds at least `min` of the resource (e.g. shop price).
     public ChoiceBuilder RequireResource(RunResourceId resource, int min) =>
         Require(RunExpr.HasResource(resource, min));
