@@ -21,6 +21,17 @@
         {
             <p class="error">@_error</p>
         }
+
+        <h2>Headless balancing</h2>
+        <p class="muted">Auto-play the blueprint over many seeds (choices auto-pick the first option) and tally outcomes.</p>
+        <div class="run-bar">
+            <label>Runs <input type="number" @bind="_simRuns" style="width:6rem" /></label>
+            <button class="play" @onclick="Simulate">Simulate</button>
+        </div>
+        @if (_simSummary is not null)
+        {
+            <p class="muted">@_simSummary</p>
+        }
     </section>
 
     @if (_session is { } session)
@@ -108,6 +119,8 @@
     private InteractiveRunSession? _session;
     private string? _error;
     private readonly HashSet<int> _selected = new();
+    private int _simRuns = 50;
+    private string? _simSummary;
 
     protected override void OnInitialized() => _json = RunJson.ToJson(DemoBlueprint(), _options);
 
@@ -138,6 +151,43 @@
         catch (Exception ex)
         {
             _error = $"{ex.GetType().Name}: {ex.Message}";
+        }
+    }
+
+    // Headless balancing: auto-play the blueprint over many seeds and summarise outcomes.
+    private void Simulate()
+    {
+        _simSummary = null;
+        try
+        {
+            var blueprint = RunJson.FromJson<RunBlueprint>(_json, _options);
+            var content = BuildContent(blueprint);
+            var defs = new RunDefinitionRegistryBuilder();
+            new StandardRunPackage(new AutoPlayCombatDriver(), content).RegisterDefinitions(defs);
+            var registry = defs.Build();
+
+            var runs = Math.Clamp(_simRuns, 1, 1000);
+            var wins = 0;
+            long totalHp = 0;
+            long totalGold = 0;
+            for (var seed = 1; seed <= runs; seed++)
+            {
+                var run = new RunState(new RunId($"sim{seed}"), new HealthState(30, 40), blueprint.Map, randomSeed: seed);
+                foreach (var card in blueprint.Deck)
+                    run.AddDeckCard(card);
+                new RunRunner(registry, new ScriptedChoiceProvider(), content: content).Run(run);
+                if (run.Result == RunResult.Victory)
+                    wins++;
+                totalHp += run.Health.Current;
+                totalGold += run.GetResource(StandardRunIds.Gold);
+            }
+
+            _simSummary = $"{runs} runs — {100.0 * wins / runs:0.#}% victory, " +
+                $"avg HP {(double)totalHp / runs:0.#}, avg gold {(double)totalGold / runs:0.#}";
+        }
+        catch (Exception ex)
+        {
+            _simSummary = $"Error: {ex.GetType().Name}: {ex.Message}";
         }
     }
 
