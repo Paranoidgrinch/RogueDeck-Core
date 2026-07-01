@@ -176,6 +176,7 @@ public static class CombatJson
          .Register("node.heal", typeof(HealNode<>))
          .Register("node.gainBlock", typeof(GainBlockNode<>))
          .Register("node.gainResource", typeof(GainResourceNode<>))
+         .Register("node.applyStatus", typeof(ApplyStatusNode<>))
          // Composite / control-flow nodes (nest child nodes).
          .Register("node.sequence", typeof(SequenceEffectNode<>))
          .Register("node.conditional", typeof(ConditionalEffectNode<>))
