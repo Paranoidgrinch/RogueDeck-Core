@@ -73,11 +73,24 @@ public sealed class ExpandRunEffectHandler : RunEffectHandler<ExpandRunEffect>
 
 // Evaluate a condition against current run state and enqueue one branch of effects. The unchosen branch is
 // never enqueued, so branching is real (not both-with-a-guard). Either branch may be empty.
-public sealed record ConditionalRunEffect(
-    IRunExpression<bool> Condition,
-    IReadOnlyList<IRunEffectRequest> WhenTrue,
-    IReadOnlyList<IRunEffectRequest> WhenFalse) : IRunEffectRequest
+public sealed record ConditionalRunEffect : IRunEffectRequest
 {
+    public IRunExpression<bool> Condition { get; }
+    public IReadOnlyList<IRunEffectRequest> WhenTrue { get; }
+    public IReadOnlyList<IRunEffectRequest> WhenFalse { get; }
+
+    // The full constructor is the one JSON uses (the type has a second, convenience ctor).
+    [System.Text.Json.Serialization.JsonConstructor]
+    public ConditionalRunEffect(
+        IRunExpression<bool> condition,
+        IReadOnlyList<IRunEffectRequest> whenTrue,
+        IReadOnlyList<IRunEffectRequest> whenFalse)
+    {
+        Condition = condition;
+        WhenTrue = whenTrue;
+        WhenFalse = whenFalse;
+    }
+
     public ConditionalRunEffect(IRunExpression<bool> condition, params IRunEffectRequest[] whenTrue)
         : this(condition, whenTrue, Array.Empty<IRunEffectRequest>())
     {

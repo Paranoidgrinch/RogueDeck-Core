@@ -61,11 +61,21 @@ public static class RewardTable
 
 // Offer a reward: generate the offers from a data source, apply reward modifiers, let the player pick
 // PickCount, and grant the chosen offers. A fixed offer list is a convenience overload.
-public sealed record OfferRewardRunEffect(
-    RewardId Reward,
-    IRewardSource Source,
-    int PickCount = 1) : IRunEffectRequest
+public sealed record OfferRewardRunEffect : IRunEffectRequest
 {
+    public RewardId Reward { get; }
+    public IRewardSource Source { get; }
+    public int PickCount { get; }
+
+    // The source constructor is the one JSON uses (the type has a second, fixed-offers convenience ctor).
+    [System.Text.Json.Serialization.JsonConstructor]
+    public OfferRewardRunEffect(RewardId reward, IRewardSource source, int pickCount = 1)
+    {
+        Reward = reward;
+        Source = source;
+        PickCount = pickCount;
+    }
+
     public OfferRewardRunEffect(RewardId reward, IReadOnlyList<RewardOffer> offers, int pickCount = 1)
         : this(reward, new FixedRewardSource(offers), pickCount)
     {

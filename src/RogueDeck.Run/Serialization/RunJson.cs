@@ -74,6 +74,9 @@ public static class RunJson
     {
         var registry = new RunJsonRegistry();
         RegisterExpressions(registry);
+        RegisterSelectors(registry);
+        RegisterEffects(registry);
+        RegisterRewards(registry);
         return registry;
     }
 
@@ -84,6 +87,9 @@ public static class RunJson
         options.Converters.Add(new JsonStringEnumConverter());
         options.Converters.Add(new PolymorphicRunJsonConverter<IRunExpression<int>>(registry));
         options.Converters.Add(new PolymorphicRunJsonConverter<IRunExpression<bool>>(registry));
+        options.Converters.Add(new PolymorphicRunJsonConverter<IRunSelector<RunCardInstance>>(registry));
+        options.Converters.Add(new PolymorphicRunJsonConverter<IRunEffectRequest>(registry));
+        options.Converters.Add(new PolymorphicRunJsonConverter<IRewardSource>(registry));
         return options;
     }
 
@@ -128,5 +134,59 @@ public static class RunJson
          .Register("flag", typeof(FlagSetExpression))
          .Register("card.hasTag", typeof(CardHasTagExpression))
          .Register("card.isKind", typeof(CardIsKindExpression));
+    }
+
+    // Card selectors. Only the card closing is registered (no effect consumes a relic selector yet). The
+    // Func-backed WhereSelector is an escape.
+    private static void RegisterSelectors(RunJsonRegistry r)
+    {
+        r.Register("sel.deckCards", typeof(DeckCardsSelector))
+         .Register("sel.instance", typeof(InstanceSelector))
+         .Register("sel.matching", typeof(MatchingCardSelector))
+         .Register("sel.take", typeof(TakeSelector<RunCardInstance>))
+         .Register("sel.random", typeof(RandomSelector<RunCardInstance>))
+         .Register("sel.choose", typeof(ChooseSelector<RunCardInstance>));
+    }
+
+    // Data effects. Nested effect lists, expressions, selectors and pools recurse through their converters.
+    // Effects that embed code or content objects (AddRelic/InstallProgram/ExpandRunEffect/ForEachCard/
+    // AddRewardModifier/AddCombatModifier) are escapes and are not registered.
+    private static void RegisterEffects(RunJsonRegistry r)
+    {
+        r.Register("fx.changeResource", typeof(ChangeResourceRunEffect))
+         .Register("fx.damage", typeof(ApplyRunDamageRunEffect))
+         .Register("fx.heal", typeof(HealRunEffect))
+         .Register("fx.changeMaxHealth", typeof(ChangeMaxHealthRunEffect))
+         .Register("fx.addCard", typeof(AddCardToDeckRunEffect))
+         .Register("fx.removeRelic", typeof(RemoveRelicRunEffect))
+         .Register("fx.disableRelic", typeof(DisableRelicRunEffect))
+         .Register("fx.enableRelic", typeof(EnableRelicRunEffect))
+         .Register("fx.setFlag", typeof(SetFlagRunEffect))
+         .Register("fx.incrementCounter", typeof(IncrementCounterRunEffect))
+         .Register("fx.setCounter", typeof(SetCounterRunEffect))
+         .Register("fx.uninstallProgram", typeof(UninstallRunProgramRunEffect))
+         .Register("fx.useConsumable", typeof(UseConsumableRunEffect))
+         .Register("fx.computedResource", typeof(ComputedResourceRunEffect))
+         .Register("fx.computedHeal", typeof(ComputedHealRunEffect))
+         .Register("fx.computedDamage", typeof(ComputedDamageRunEffect))
+         .Register("fx.conditional", typeof(ConditionalRunEffect))
+         .Register("fx.repeat", typeof(RepeatRunEffect))
+         .Register("fx.drawEffects", typeof(DrawEffectsRunEffect))
+         .Register("fx.drawManyEffects", typeof(DrawManyEffectsRunEffect))
+         .Register("fx.grantReward", typeof(GrantRewardRunEffect))
+         .Register("fx.offerReward", typeof(OfferRewardRunEffect))
+         .Register("fx.addConsumable", typeof(AddConsumableRunEffect))
+         .Register("fx.removeCards", typeof(RemoveCardsRunEffect))
+         .Register("fx.upgradeCards", typeof(UpgradeCardsRunEffect))
+         .Register("fx.tagCards", typeof(TagCardsRunEffect))
+         .Register("fx.setCardMemory", typeof(SetCardMemoryRunEffect))
+         .Register("fx.transformCards", typeof(TransformCardsRunEffect));
+    }
+
+    // Reward sources. The Func-backed DelegateRewardSource is an escape.
+    private static void RegisterRewards(RunJsonRegistry r)
+    {
+        r.Register("reward.fixed", typeof(FixedRewardSource))
+         .Register("reward.pool", typeof(PoolRewardSource));
     }
 }
