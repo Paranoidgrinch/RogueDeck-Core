@@ -438,19 +438,27 @@ public sealed record ExplicitCombatantTargetSelector(CombatantId TargetId)
 
 public sealed class UnionCombatantTargetSelector : ICombatantTargetSelector
 {
-    public IReadOnlyCollection<ICombatantTargetSelector> Selectors { get; }
+    public IReadOnlyList<ICombatantTargetSelector> Selectors { get; }
 
-    public UnionCombatantTargetSelector(params ICombatantTargetSelector[] selectors)
+    // The list constructor is the one JSON uses (its parameter type matches the property, which a params
+    // array does not); the params overload delegates to it.
+    [System.Text.Json.Serialization.JsonConstructor]
+    public UnionCombatantTargetSelector(IReadOnlyList<ICombatantTargetSelector> selectors)
     {
         ArgumentNullException.ThrowIfNull(selectors);
 
-        if (selectors.Length == 0)
+        if (selectors.Count == 0)
             throw new ArgumentException("At least one selector is required.", nameof(selectors));
 
         if (selectors.Any(selector => selector is null))
             throw new ArgumentException("Selectors cannot contain null.", nameof(selectors));
 
         Selectors = selectors.ToArray();
+    }
+
+    public UnionCombatantTargetSelector(params ICombatantTargetSelector[] selectors)
+        : this((IReadOnlyList<ICombatantTargetSelector>)selectors)
+    {
     }
 
     public IReadOnlyCollection<CombatantId> ResolveTargets(CombatantTargetSelectionContext context)

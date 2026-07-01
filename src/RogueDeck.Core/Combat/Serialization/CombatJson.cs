@@ -86,6 +86,7 @@ public static class CombatJson
     {
         var registry = new CombatJsonRegistry();
         RegisterExpressions(registry);
+        RegisterSelectors(registry);
         return registry;
     }
 
@@ -98,6 +99,8 @@ public static class CombatJson
         options.Converters.Add(new JsonStringEnumConverter());
         options.Converters.Add(new CombatPolymorphicConverter<ICombatExpression<TContext, int>>(registry, typeof(TContext)));
         options.Converters.Add(new CombatPolymorphicConverter<ICombatExpression<TContext, bool>>(registry, typeof(TContext)));
+        // Target selectors are context-independent (non-generic); the same converter works for every context.
+        options.Converters.Add(new CombatPolymorphicConverter<ICombatantTargetSelector>(registry, typeof(TContext)));
         return options;
     }
 
@@ -132,5 +135,22 @@ public static class CombatJson
          .Register("and", typeof(AndExpression<>))
          .Register("or", typeof(OrExpression<>))
          .Register("not", typeof(NotExpression<>));
+    }
+
+    // Combatant target selectors (context-independent, non-generic). Registered as concrete types.
+    private static void RegisterSelectors(CombatJsonRegistry r)
+    {
+        r.Register("sel.source", typeof(SourceCombatantTargetSelector))
+         .Register("sel.sourceIncludingDowned", typeof(SourceIncludingDownedCombatantTargetSelector))
+         .Register("sel.eventTarget", typeof(EventTargetCombatantTargetSelector))
+         .Register("sel.allAllies", typeof(AllAlliesOfSourceCombatantTargetSelector))
+         .Register("sel.allEnemies", typeof(AllEnemiesOfSourceCombatantTargetSelector))
+         .Register("sel.allDamagedAllies", typeof(AllDamagedAlliesOfSourceCombatantTargetSelector))
+         .Register("sel.iterationTarget", typeof(IterationTargetCombatantTargetSelector))
+         .Register("sel.lowestHealthEnemy", typeof(LowestHealthEnemyOfSourceCombatantTargetSelector))
+         .Register("sel.highestHealthEnemy", typeof(HighestHealthEnemyOfSourceCombatantTargetSelector))
+         .Register("sel.lowestHealthAlly", typeof(LowestHealthAllyOfSourceCombatantTargetSelector))
+         .Register("sel.highestHealthAlly", typeof(HighestHealthAllyOfSourceCombatantTargetSelector))
+         .Register("sel.union", typeof(UnionCombatantTargetSelector));
     }
 }
