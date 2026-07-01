@@ -56,6 +56,21 @@ public sealed class RepeatRunEffectHandler : RunEffectHandler<RepeatRunEffect>
     }
 }
 
+// Expand a set of effects computed from run state at resolve time, then enqueue them. The non-generic
+// substrate for ForEach-over-a-selector: the closure resolves a selector against the run and produces one
+// block of effects per element, so no per-element-type handler is needed. Authored ergonomically via
+// ChoiceBuilder.ForEachCard.
+public sealed record ExpandRunEffect(Func<RunState, IEnumerable<IRunEffectRequest>> Expand) : IRunEffectRequest;
+
+public sealed class ExpandRunEffectHandler : RunEffectHandler<ExpandRunEffect>
+{
+    protected override void Resolve(RunState run, RunDefinitionRegistry registry, ExpandRunEffect request)
+    {
+        foreach (var effect in request.Expand(run))
+            run.EnqueueEffect(effect);
+    }
+}
+
 // Evaluate a condition against current run state and enqueue one branch of effects. The unchosen branch is
 // never enqueued, so branching is real (not both-with-a-guard). Either branch may be empty.
 public sealed record ConditionalRunEffect(

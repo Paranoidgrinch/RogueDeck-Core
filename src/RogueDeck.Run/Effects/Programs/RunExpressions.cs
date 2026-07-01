@@ -248,6 +248,37 @@ public sealed class NegateExpression : IRunExpression<int>
     public int Evaluate(RunEvalContext context) => -_inner.Evaluate(context);
 }
 
+// ── Aggregates over selectors ───────────────────────────────────────────────────────
+// Turn a selection into a number — "how many curses", "total upgrade levels". Evaluated with a NO-CHOOSER
+// selector context on purpose: an aggregate is a pure read, so a ChooseByPlayer selector inside one is an
+// author error (it would prompt the player just to count) and throws.
+
+public sealed class CountExpression<T> : IRunExpression<int>
+{
+    private readonly IRunSelector<T> _selector;
+    public CountExpression(IRunSelector<T> selector)
+    {
+        ArgumentNullException.ThrowIfNull(selector);
+        _selector = selector;
+    }
+    public int Evaluate(RunEvalContext context) => _selector.Select(new RunSelectorContext(context.Run)).Count;
+}
+
+public sealed class SumExpression<T> : IRunExpression<int>
+{
+    private readonly IRunSelector<T> _selector;
+    private readonly Func<T, int> _value;
+    public SumExpression(IRunSelector<T> selector, Func<T, int> value)
+    {
+        ArgumentNullException.ThrowIfNull(selector);
+        ArgumentNullException.ThrowIfNull(value);
+        _selector = selector;
+        _value = value;
+    }
+    public int Evaluate(RunEvalContext context) =>
+        _selector.Select(new RunSelectorContext(context.Run)).Sum(_value);
+}
+
 // ── Random / pool draws ───────────────────────────────────────────────────────────
 // These are the one impure corner of the vocabulary: evaluating them advances the run RNG (RunState.NextRandom),
 // so the result is not referentially transparent — evaluate each once per decision. The run seed still makes
@@ -414,6 +445,11 @@ public static class RunExpr
     public static IRunExpression<int> RandomRange(int minInclusive, int maxInclusive) =>
         RandomRange(Const(minInclusive), Const(maxInclusive));
     public static IRunExpression<int> Pool(RunPool<int> pool) => new PoolValueExpression(pool);
+
+    // Aggregates over a selector (deterministic; no player choice — see CountExpression).
+    public static IRunExpression<int> Count<T>(IRunSelector<T> selector) => new CountExpression<T>(selector);
+    public static IRunExpression<int> Sum<T>(IRunSelector<T> selector, Func<T, int> value) =>
+        new SumExpression<T>(selector, value);
 
     // Conditions
     public static IRunExpression<bool> True { get; } = new RunConstantBoolExpression(true);

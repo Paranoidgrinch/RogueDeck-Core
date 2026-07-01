@@ -198,6 +198,17 @@ public sealed class ChoiceBuilder
     public ChoiceBuilder TransformCards(IRunSelector<RunCardInstance> selector, CardDefinitionId into) =>
         TransformCards(selector, RunPool.Uniform(into));
 
+    // Apply per-card effects to each selected card: `body` maps a card to the effects for that card. Resolved
+    // at effect time (so ChooseByPlayer selectors work) against the run's chooser-bound context.
+    public ChoiceBuilder ForEachCard(
+        IRunSelector<RunCardInstance> selector,
+        Func<RunCardInstance, IEnumerable<IRunEffectRequest>> body)
+    {
+        ArgumentNullException.ThrowIfNull(selector);
+        ArgumentNullException.ThrowIfNull(body);
+        return Effect(new ExpandRunEffect(run => selector.Select(run.SelectorContext).SelectMany(body)));
+    }
+
     // Install a scheduled consequence (built via RunSchedule) that fires later in the run.
     public ChoiceBuilder Schedule(InstalledRunProgram program) =>
         Effect(new InstallRunProgramRunEffect(program));

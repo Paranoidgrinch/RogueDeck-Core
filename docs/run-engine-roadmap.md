@@ -69,5 +69,10 @@ first); pure-content ideas (rival run, deck-as-dungeon, living-deck events, etc.
 - Phase B: done — flags & counters state vocabulary.
 - Phase C: done — scheduler via installed programs (RunSchedule).
 - Phase D: done — costs on choices (RunCost = canPay + pay).
-- Phase E: done — Divide/Abs/Negate, computed Heal/Damage, Repeat effect (ForEach lands with F).
-- Phase F: next (large; needs discussion) — card instance model + selectors.
+- Phase E: done — Divide/Abs/Negate, computed Heal/Damage, Repeat effect.
+- Phase F: done — F1 card instance model; F2 selectors; F3 selector-based card effects + chooser wiring;
+  F4 Count/Sum aggregates + ForEach (ExpandRunEffect). Decisions: instance state is run-side only; upgrade→
+  combat wiring deferred to G; player choice via IRunEntityChooser bound to the choice provider.
+- Phase G: next — combat bridge (CombatSetup modifiers, reward profiles, relic combat-injection face b,
+  upgrade/tag → combat).
+- Phase H: rewards system.
