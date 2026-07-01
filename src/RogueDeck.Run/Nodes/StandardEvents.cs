@@ -13,7 +13,7 @@ public static class StandardEvents
             .Situation("rest", "event.rest", situation => situation
                 .Choice("rest", choice => choice
                     .TextKey("event.rest.heal")
-                    .Effect(new HealRunEffect(healAmount)))
+                    .Heal(healAmount))
                 .Choice("leave", choice => choice.TextKey("event.rest.leave")))
             .Build();
     }
@@ -44,7 +44,8 @@ public static class StandardEvents
                 foreach (var item in items)
                     situation.Choice(item.Id, choice => choice
                         .RequireResource(item.Currency, item.Price)
-                        .Effects(new ChangeResourceRunEffect(item.Currency, -item.Price), item.Payload)
+                        .SpendResource(item.Currency, item.Price)
+                        .Effect(item.Payload)
                         .Then("shop"));
 
                 situation.Choice("leave", choice => choice.TextKey("event.shop.leave"));

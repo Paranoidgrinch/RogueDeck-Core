@@ -91,6 +91,39 @@ public sealed class ChoiceBuilder
         return this;
     }
 
+    // ── Readable effect sugar ──────────────────────────────────────────────────────
+    // Thin wrappers over the standard/program effects so hand-authored events read like intent rather than
+    // like queue plumbing. Each just appends an effect; they add no semantics of their own.
+
+    public ChoiceBuilder GainResource(RunResourceId resource, int amount) =>
+        Effect(new ChangeResourceRunEffect(resource, amount));
+
+    // Gain a resource by an amount computed from run state at resolve time.
+    public ChoiceBuilder GainResource(RunResourceId resource, IRunExpression<int> amount) =>
+        Effect(new ComputedResourceRunEffect(resource, amount));
+
+    public ChoiceBuilder SpendResource(RunResourceId resource, int amount)
+    {
+        if (amount < 0)
+            throw new ArgumentOutOfRangeException(nameof(amount), "Spend amount must be non-negative.");
+        return Effect(new ChangeResourceRunEffect(resource, -amount));
+    }
+
+    public ChoiceBuilder Heal(int amount) => Effect(new HealRunEffect(amount));
+
+    public ChoiceBuilder Damage(int amount) => Effect(new ApplyRunDamageRunEffect(amount));
+
+    // Branch on a condition expression: enqueue one arm of effects. Omit whenFalse for a "do nothing" else.
+    public ChoiceBuilder Conditional(
+        IRunExpression<bool> condition,
+        IRunEffectRequest[] whenTrue,
+        IRunEffectRequest[]? whenFalse = null) =>
+        Effect(new ConditionalRunEffect(condition, whenTrue, whenFalse ?? Array.Empty<IRunEffectRequest>()));
+
+    // Draw one bundle of effects from a weighted pool (a random outcome).
+    public ChoiceBuilder DrawEffects(RunPool<IReadOnlyList<IRunEffectRequest>> pool) =>
+        Effect(new DrawEffectsRunEffect(pool));
+
     // The choice is only offered when the run still holds at least `min` of the resource (e.g. shop price).
     public ChoiceBuilder RequireResource(RunResourceId resource, int min) =>
         Require(RunExpr.HasResource(resource, min));
