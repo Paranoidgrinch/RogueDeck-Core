@@ -15,6 +15,7 @@ public sealed class RunState
     private readonly List<InstalledRunProgram> _installedPrograms = new();
     private readonly HashSet<RunFlagId> _flags = new();
     private readonly Dictionary<RunCounterId, int> _counters = new();
+    private readonly List<IRunCombatModifier> _pendingCombatModifiers = new();
     private readonly Queue<IRunEffectRequest> _effects = new();
     private readonly Queue<IRunEvent> _undispatched = new();
     private readonly List<IRunEvent> _history = new();
@@ -45,6 +46,7 @@ public sealed class RunState
     public IReadOnlyList<InstalledRunProgram> InstalledPrograms => _installedPrograms;
     public IReadOnlyCollection<RunFlagId> Flags => _flags;
     public IReadOnlyDictionary<RunCounterId, int> Counters => _counters;
+    public IReadOnlyList<IRunCombatModifier> PendingCombatModifiers => _pendingCombatModifiers;
     public IReadOnlyList<IRunEvent> EventHistory => _history;
     public IReadOnlyList<RunLogEntry> Log => _log;
 
@@ -123,6 +125,22 @@ public sealed class RunState
         _counters.TryGetValue(counter, out var value) ? value : 0;
 
     public void SetCounter(RunCounterId counter, int value) => _counters[counter] = value;
+
+    // Queue a modifier for the next combat that spawns (e.g. "the next fight starts with the hero Vulnerable").
+    public void AddPendingCombatModifier(IRunCombatModifier modifier)
+    {
+        ArgumentNullException.ThrowIfNull(modifier);
+        _pendingCombatModifiers.Add(modifier);
+    }
+
+    // Take and clear the pending combat modifiers — the bridge calls this once when a combat spawns, so each
+    // modifier applies to exactly one fight.
+    public IReadOnlyList<IRunCombatModifier> ConsumePendingCombatModifiers()
+    {
+        var taken = _pendingCombatModifiers.ToArray();
+        _pendingCombatModifiers.Clear();
+        return taken;
+    }
 
     public void SetResult(RunResult result) => Result = result;
 

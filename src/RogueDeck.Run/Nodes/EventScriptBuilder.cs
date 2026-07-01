@@ -209,6 +209,10 @@ public sealed class ChoiceBuilder
         return Effect(new ExpandRunEffect(run => selector.Select(run.SelectorContext).SelectMany(body)));
     }
 
+    // Queue a modifier for the next combat (e.g. RunCombat.HeroStartsWithStatus(...)).
+    public ChoiceBuilder ModifyNextCombat(IRunCombatModifier modifier) =>
+        Effect(new AddCombatModifierRunEffect(modifier));
+
     // Install a scheduled consequence (built via RunSchedule) that fires later in the run.
     public ChoiceBuilder Schedule(InstalledRunProgram program) =>
         Effect(new InstallRunProgramRunEffect(program));

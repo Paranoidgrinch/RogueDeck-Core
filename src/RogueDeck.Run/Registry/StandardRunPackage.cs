@@ -40,7 +40,8 @@ public sealed class StandardRunPackage : IRunPackage
             .RegisterEffectHandler(new TagCardsRunEffectHandler())
             .RegisterEffectHandler(new SetCardMemoryRunEffectHandler())
             .RegisterEffectHandler(new TransformCardsRunEffectHandler())
-            .RegisterEffectHandler(new ExpandRunEffectHandler());
+            .RegisterEffectHandler(new ExpandRunEffectHandler())
+            .RegisterEffectHandler(new AddCombatModifierRunEffectHandler());
 
         builder
             .RegisterResolver(new CombatNodeResolver(_combatDriver))

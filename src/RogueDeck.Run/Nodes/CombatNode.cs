@@ -110,5 +110,10 @@ public sealed class CombatNodeResolver : INodeResolver
         foreach (var relic in run.Relics)
             foreach (var contribution in relic.Definition.CombatContributions)
                 blueprint.TriggeredPrograms.Add(contribution);
+
+        // Pending combat modifiers apply last so a "next fight" consequence can override the encounter, and
+        // are consumed here so each affects exactly one fight.
+        foreach (var modifier in run.ConsumePendingCombatModifiers())
+            modifier.Apply(blueprint, run);
     }
 }

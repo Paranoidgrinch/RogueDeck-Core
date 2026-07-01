@@ -73,6 +73,7 @@ first); pure-content ideas (rival run, deck-as-dungeon, living-deck events, etc.
 - Phase F: done — F1 card instance model; F2 selectors; F3 selector-based card effects + chooser wiring;
   F4 Count/Sum aggregates + ForEach (ExpandRunEffect). Decisions: instance state is run-side only; upgrade→
   combat wiring deferred to G; player choice via IRunEntityChooser bound to the choice provider.
-- Phase G: next — combat bridge (CombatSetup modifiers, reward profiles, relic combat-injection face b,
-  upgrade/tag → combat).
-- Phase H: rewards system.
+- Phase G: done — G1 bridge owns deck projection + relic combat face (b); G2 pending combat modifiers
+  (IRunCombatModifier + RunCombat helpers, "write a future combat"); G3 upgrade-suffix deck mapper. Reward
+  profiles carried to H.
+- Phase H: next — rewards system.
