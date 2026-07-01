@@ -3,15 +3,32 @@ namespace RogueDeck.Run;
 // The run-layer expression vocabulary — the composable pendant of the combat layer's
 // EffectProgramExpressions, one etage up. A run effect's value or condition no longer has to be a fixed
 // literal (ChangeResourceRunEffect's int Delta) or an opaque delegate (EventChoice's Func<RunState,bool>):
-// it can be a *tree of data* evaluated against the current RunState. Because the tree is data, an author,
-// a relic, or a future run editor can build effects and conditions without new engine classes — exactly
-// how combat cards compose over IValueExpression. Expressions have zero engine privilege; they only read.
-//
-// The context is RunState alone for now. When a consumer needs the triggering event (a relic reading event
-// data), widen this to a small RunEvalContext — no consumer needs it yet, so it is not introduced early.
+// it can be a *tree of data* evaluated against a RunEvalContext. Because the tree is data, an author, a
+// relic, or a future run editor can build effects and conditions without new engine classes — exactly how
+// combat cards compose over IValueExpression. Expressions have zero engine privilege; they only read.
+
+// What an expression reads: the run, plus the triggering event when one is in scope. During normal effect
+// resolution there is no event (Event is null); during relic dispatch the reacting event is supplied, which
+// is what lets a relic compute from event data (see EventFieldExpression). A bare RunState converts to a
+// no-event context implicitly, so the many callers that only have a run stay unchanged.
+public sealed class RunEvalContext
+{
+    public RunState Run { get; }
+    public IRunEvent? Event { get; }
+
+    public RunEvalContext(RunState run, IRunEvent? triggeringEvent = null)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        Run = run;
+        Event = triggeringEvent;
+    }
+
+    public static implicit operator RunEvalContext(RunState run) => new(run);
+}
+
 public interface IRunExpression<out TValue>
 {
-    TValue Evaluate(RunState run);
+    TValue Evaluate(RunEvalContext context);
 }
 
 // ── Value leaves ────────────────────────────────────────────────────────────────
@@ -20,39 +37,60 @@ public sealed class RunConstantExpression : IRunExpression<int>
 {
     public int Value { get; }
     public RunConstantExpression(int value) => Value = value;
-    public int Evaluate(RunState run) => Value;
+    public int Evaluate(RunEvalContext context) => Value;
 }
 
 public sealed class ResourceValueExpression : IRunExpression<int>
 {
     private readonly RunResourceId _resource;
     public ResourceValueExpression(RunResourceId resource) => _resource = resource;
-    public int Evaluate(RunState run) => run.GetResource(_resource);
+    public int Evaluate(RunEvalContext context) => context.Run.GetResource(_resource);
 }
 
 public sealed class CurrentHealthExpression : IRunExpression<int>
 {
-    public int Evaluate(RunState run) => run.Health.Current;
+    public int Evaluate(RunEvalContext context) => context.Run.Health.Current;
 }
 
 public sealed class MaxHealthExpression : IRunExpression<int>
 {
-    public int Evaluate(RunState run) => run.Health.Max;
+    public int Evaluate(RunEvalContext context) => context.Run.Health.Max;
 }
 
 public sealed class MissingHealthExpression : IRunExpression<int>
 {
-    public int Evaluate(RunState run) => run.Health.Max - run.Health.Current;
+    public int Evaluate(RunEvalContext context) => context.Run.Health.Max - context.Run.Health.Current;
 }
 
 public sealed class DeckSizeExpression : IRunExpression<int>
 {
-    public int Evaluate(RunState run) => run.Deck.Count;
+    public int Evaluate(RunEvalContext context) => context.Run.Deck.Count;
 }
 
 public sealed class RelicCountExpression : IRunExpression<int>
 {
-    public int Evaluate(RunState run) => run.Relics.Count;
+    public int Evaluate(RunEvalContext context) => context.Run.Relics.Count;
+}
+
+// Reads an int field off the triggering event. Only meaningful while an event of the expected type is in
+// context (relic dispatch); evaluating it outside that scope is an author error and throws.
+public sealed class EventFieldExpression<TEvent> : IRunExpression<int>
+    where TEvent : IRunEvent
+{
+    private readonly Func<TEvent, int> _field;
+    public EventFieldExpression(Func<TEvent, int> field)
+    {
+        ArgumentNullException.ThrowIfNull(field);
+        _field = field;
+    }
+    public int Evaluate(RunEvalContext context)
+    {
+        if (context.Event is not TEvent typed)
+            throw new InvalidOperationException(
+                $"EventValue<{typeof(TEvent).Name}> was evaluated without a matching '{typeof(TEvent).Name}' " +
+                "in the context — it is only valid during a reaction to that event.");
+        return _field(typed);
+    }
 }
 
 // ── Value combinators ───────────────────────────────────────────────────────────
@@ -68,7 +106,7 @@ public sealed class AddExpression : IRunExpression<int>
         _left = left;
         _right = right;
     }
-    public int Evaluate(RunState run) => _left.Evaluate(run) + _right.Evaluate(run);
+    public int Evaluate(RunEvalContext context) => _left.Evaluate(context) + _right.Evaluate(context);
 }
 
 public sealed class SubtractExpression : IRunExpression<int>
@@ -82,7 +120,7 @@ public sealed class SubtractExpression : IRunExpression<int>
         _left = left;
         _right = right;
     }
-    public int Evaluate(RunState run) => _left.Evaluate(run) - _right.Evaluate(run);
+    public int Evaluate(RunEvalContext context) => _left.Evaluate(context) - _right.Evaluate(context);
 }
 
 public sealed class MultiplyExpression : IRunExpression<int>
@@ -96,7 +134,7 @@ public sealed class MultiplyExpression : IRunExpression<int>
         _left = left;
         _right = right;
     }
-    public int Evaluate(RunState run) => _left.Evaluate(run) * _right.Evaluate(run);
+    public int Evaluate(RunEvalContext context) => _left.Evaluate(context) * _right.Evaluate(context);
 }
 
 public sealed class MinExpression : IRunExpression<int>
@@ -110,7 +148,7 @@ public sealed class MinExpression : IRunExpression<int>
         _left = left;
         _right = right;
     }
-    public int Evaluate(RunState run) => Math.Min(_left.Evaluate(run), _right.Evaluate(run));
+    public int Evaluate(RunEvalContext context) => Math.Min(_left.Evaluate(context), _right.Evaluate(context));
 }
 
 public sealed class MaxExpression : IRunExpression<int>
@@ -124,7 +162,7 @@ public sealed class MaxExpression : IRunExpression<int>
         _left = left;
         _right = right;
     }
-    public int Evaluate(RunState run) => Math.Max(_left.Evaluate(run), _right.Evaluate(run));
+    public int Evaluate(RunEvalContext context) => Math.Max(_left.Evaluate(context), _right.Evaluate(context));
 }
 
 // Clamps value into [min, max]. min must not exceed max (a construction-time author error).
@@ -142,14 +180,14 @@ public sealed class ClampExpression : IRunExpression<int>
         _min = min;
         _max = max;
     }
-    public int Evaluate(RunState run)
+    public int Evaluate(RunEvalContext context)
     {
-        var min = _min.Evaluate(run);
-        var max = _max.Evaluate(run);
+        var min = _min.Evaluate(context);
+        var max = _max.Evaluate(context);
         if (min > max)
             throw new InvalidOperationException(
                 $"Clamp min ({min}) exceeds max ({max}).");
-        return Math.Clamp(_value.Evaluate(run), min, max);
+        return Math.Clamp(_value.Evaluate(context), min, max);
     }
 }
 
@@ -171,13 +209,13 @@ public sealed class RandomRangeExpression : IRunExpression<int>
         _minInclusive = minInclusive;
         _maxInclusive = maxInclusive;
     }
-    public int Evaluate(RunState run)
+    public int Evaluate(RunEvalContext context)
     {
-        var min = _minInclusive.Evaluate(run);
-        var max = _maxInclusive.Evaluate(run);
+        var min = _minInclusive.Evaluate(context);
+        var max = _maxInclusive.Evaluate(context);
         if (min > max)
             throw new InvalidOperationException($"RandomRange min ({min}) exceeds max ({max}).");
-        return min + run.NextRandom(max - min + 1);
+        return min + context.Run.NextRandom(max - min + 1);
     }
 }
 
@@ -190,7 +228,7 @@ public sealed class PoolValueExpression : IRunExpression<int>
         ArgumentNullException.ThrowIfNull(pool);
         _pool = pool;
     }
-    public int Evaluate(RunState run) => _pool.Draw(run);
+    public int Evaluate(RunEvalContext context) => _pool.Draw(context.Run);
 }
 
 // ── Conditions ──────────────────────────────────────────────────────────────────
@@ -209,7 +247,7 @@ public sealed class RunConstantBoolExpression : IRunExpression<bool>
 {
     public bool Value { get; }
     public RunConstantBoolExpression(bool value) => Value = value;
-    public bool Evaluate(RunState run) => Value;
+    public bool Evaluate(RunEvalContext context) => Value;
 }
 
 public sealed class RunComparisonExpression : IRunExpression<bool>
@@ -226,10 +264,10 @@ public sealed class RunComparisonExpression : IRunExpression<bool>
         _op = op;
         _right = right;
     }
-    public bool Evaluate(RunState run)
+    public bool Evaluate(RunEvalContext context)
     {
-        var l = _left.Evaluate(run);
-        var r = _right.Evaluate(run);
+        var l = _left.Evaluate(context);
+        var r = _right.Evaluate(context);
         return _op switch
         {
             RunComparisonOperator.Equal => l == r,
@@ -238,7 +276,7 @@ public sealed class RunComparisonExpression : IRunExpression<bool>
             RunComparisonOperator.LessOrEqual => l <= r,
             RunComparisonOperator.GreaterThan => l > r,
             RunComparisonOperator.GreaterOrEqual => l >= r,
-            _ => throw new ArgumentOutOfRangeException(nameof(run), _op, "Unknown comparison operator.")
+            _ => throw new ArgumentOutOfRangeException(nameof(context), _op, "Unknown comparison operator.")
         };
     }
 }
@@ -255,7 +293,7 @@ public sealed class AndExpression : IRunExpression<bool>
         _right = right;
     }
     // Short-circuits, matching &&: the right expression is not evaluated when the left is false.
-    public bool Evaluate(RunState run) => _left.Evaluate(run) && _right.Evaluate(run);
+    public bool Evaluate(RunEvalContext context) => _left.Evaluate(context) && _right.Evaluate(context);
 }
 
 public sealed class OrExpression : IRunExpression<bool>
@@ -269,7 +307,7 @@ public sealed class OrExpression : IRunExpression<bool>
         _left = left;
         _right = right;
     }
-    public bool Evaluate(RunState run) => _left.Evaluate(run) || _right.Evaluate(run);
+    public bool Evaluate(RunEvalContext context) => _left.Evaluate(context) || _right.Evaluate(context);
 }
 
 public sealed class NotExpression : IRunExpression<bool>
@@ -280,7 +318,7 @@ public sealed class NotExpression : IRunExpression<bool>
         ArgumentNullException.ThrowIfNull(inner);
         _inner = inner;
     }
-    public bool Evaluate(RunState run) => !_inner.Evaluate(run);
+    public bool Evaluate(RunEvalContext context) => !_inner.Evaluate(context);
 }
 
 // ── Authoring facade ──────────────────────────────────────────────────────────────
@@ -296,6 +334,10 @@ public static class RunExpr
     public static IRunExpression<int> MissingHealth { get; } = new MissingHealthExpression();
     public static IRunExpression<int> DeckSize { get; } = new DeckSizeExpression();
     public static IRunExpression<int> RelicCount { get; } = new RelicCountExpression();
+
+    // Reads a field off the triggering event — valid only inside a reaction to that event.
+    public static IRunExpression<int> EventValue<TEvent>(Func<TEvent, int> field) where TEvent : IRunEvent =>
+        new EventFieldExpression<TEvent>(field);
 
     public static IRunExpression<int> Add(IRunExpression<int> l, IRunExpression<int> r) => new AddExpression(l, r);
     public static IRunExpression<int> Subtract(IRunExpression<int> l, IRunExpression<int> r) => new SubtractExpression(l, r);

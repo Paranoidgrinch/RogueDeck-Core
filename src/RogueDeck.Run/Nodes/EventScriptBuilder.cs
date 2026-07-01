@@ -137,7 +137,7 @@ public sealed class ChoiceBuilder
     public ChoiceBuilder Require(IRunExpression<bool> condition)
     {
         ArgumentNullException.ThrowIfNull(condition);
-        return Require(condition.Evaluate);
+        return Require(run => condition.Evaluate(run));
     }
 
     public ChoiceBuilder Require(Func<RunState, bool> requirement)

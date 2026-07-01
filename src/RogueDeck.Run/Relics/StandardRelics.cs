@@ -20,4 +20,18 @@ public static class StandardRelics
                         ? new IRunEffectRequest[] { new HealRunEffect(healAmount) }
                         : Array.Empty<IRunEffectRequest>()),
             });
+
+    // Leech: after any resolved fight, gain gold equal to the run HP the hero lost — authored as an
+    // expression over the combat event (RunExpr.EventValue), proving a relic can compute from event data
+    // with no bespoke class, just composable data.
+    public static RelicDefinition Leech() =>
+        new(
+            new RelicId("leech"),
+            "Leech",
+            runPrograms: new[]
+            {
+                RelicPrograms.GainResourceOn<CombatResolvedRunEvent>(
+                    StandardRunIds.Gold,
+                    RunExpr.EventValue<CombatResolvedRunEvent>(evt => evt.DamageTaken)),
+            });
 }
