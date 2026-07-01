@@ -153,6 +153,46 @@ public sealed class ClampExpression : IRunExpression<int>
     }
 }
 
+// ── Random / pool draws ───────────────────────────────────────────────────────────
+// These are the one impure corner of the vocabulary: evaluating them advances the run RNG (RunState.NextRandom),
+// so the result is not referentially transparent — evaluate each once per decision. The run seed still makes
+// the whole sequence reproducible. Everything else in this file is a pure read.
+
+// Uniform draw of an int in the inclusive range [min, max]. Bounds are themselves expressions so a roll can
+// scale with run state (e.g. a treasure roll that grows with depth). min must not exceed max.
+public sealed class RandomRangeExpression : IRunExpression<int>
+{
+    private readonly IRunExpression<int> _minInclusive;
+    private readonly IRunExpression<int> _maxInclusive;
+    public RandomRangeExpression(IRunExpression<int> minInclusive, IRunExpression<int> maxInclusive)
+    {
+        ArgumentNullException.ThrowIfNull(minInclusive);
+        ArgumentNullException.ThrowIfNull(maxInclusive);
+        _minInclusive = minInclusive;
+        _maxInclusive = maxInclusive;
+    }
+    public int Evaluate(RunState run)
+    {
+        var min = _minInclusive.Evaluate(run);
+        var max = _maxInclusive.Evaluate(run);
+        if (min > max)
+            throw new InvalidOperationException($"RandomRange min ({min}) exceeds max ({max}).");
+        return min + run.NextRandom(max - min + 1);
+    }
+}
+
+// Weighted draw of an int from a pool (e.g. loot values with different rarities).
+public sealed class PoolValueExpression : IRunExpression<int>
+{
+    private readonly RunPool<int> _pool;
+    public PoolValueExpression(RunPool<int> pool)
+    {
+        ArgumentNullException.ThrowIfNull(pool);
+        _pool = pool;
+    }
+    public int Evaluate(RunState run) => _pool.Draw(run);
+}
+
 // ── Conditions ──────────────────────────────────────────────────────────────────
 
 public enum RunComparisonOperator
@@ -264,6 +304,13 @@ public static class RunExpr
     public static IRunExpression<int> Max(IRunExpression<int> l, IRunExpression<int> r) => new MaxExpression(l, r);
     public static IRunExpression<int> Clamp(IRunExpression<int> value, IRunExpression<int> min, IRunExpression<int> max) =>
         new ClampExpression(value, min, max);
+
+    // Random values (impure: each evaluation advances the run RNG — see the note above RandomRangeExpression).
+    public static IRunExpression<int> RandomRange(IRunExpression<int> minInclusive, IRunExpression<int> maxInclusive) =>
+        new RandomRangeExpression(minInclusive, maxInclusive);
+    public static IRunExpression<int> RandomRange(int minInclusive, int maxInclusive) =>
+        RandomRange(Const(minInclusive), Const(maxInclusive));
+    public static IRunExpression<int> Pool(RunPool<int> pool) => new PoolValueExpression(pool);
 
     // Conditions
     public static IRunExpression<bool> True { get; } = new RunConstantBoolExpression(true);

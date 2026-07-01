@@ -43,3 +43,17 @@ public sealed class ConditionalRunEffectHandler : RunEffectHandler<ConditionalRu
             run.EnqueueEffect(effect);
     }
 }
+
+// Weighted-random branch: draw one bundle of effects from a pool and enqueue it. The random counterpart of
+// ConditionalRunEffect (deterministic branch) — a random reward, a random event outcome. The draw goes
+// through RunState.NextRandom, so the run seed reproduces which bundle fires.
+public sealed record DrawEffectsRunEffect(RunPool<IReadOnlyList<IRunEffectRequest>> Pool) : IRunEffectRequest;
+
+public sealed class DrawEffectsRunEffectHandler : RunEffectHandler<DrawEffectsRunEffect>
+{
+    protected override void Resolve(RunState run, RunDefinitionRegistry registry, DrawEffectsRunEffect request)
+    {
+        foreach (var effect in request.Pool.Draw(run))
+            run.EnqueueEffect(effect);
+    }
+}
