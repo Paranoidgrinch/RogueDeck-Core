@@ -30,6 +30,13 @@ public readonly record struct RewardId(string Value)
     public override string ToString() => Value;
 }
 
+// Identity of a triggered program installed on the run (a scheduled consequence, a rule modifier, a reward
+// modifier — the generalised form of what a relic's RunPrograms do). Lets a program be uninstalled by id.
+public readonly record struct RunProgramId(string Value)
+{
+    public override string ToString() => Value;
+}
+
 // The kind of a map node. A string-backed id (not an enum) so new node kinds can be added by any package
 // without touching the core — resolvers are registered against these values.
 public readonly record struct NodeType(string Value)
@@ -64,4 +71,6 @@ public static class StandardRunLogTypes
     public const string RewardGranted = "run.reward-granted";
     public const string RunEnded = "run.ended";
     public const string ResolveGuardTripped = "run.resolve-guard-tripped";
+    public const string ProgramInstalled = "run.program-installed";
+    public const string ProgramUninstalled = "run.program-uninstalled";
 }

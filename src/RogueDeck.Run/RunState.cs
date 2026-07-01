@@ -11,6 +11,7 @@ public sealed class RunState
     private readonly Dictionary<RunResourceId, int> _resources = new();
     private readonly List<CardDefinitionId> _deck = new();
     private readonly List<RelicInstance> _relics = new();
+    private readonly List<InstalledRunProgram> _installedPrograms = new();
     private readonly Queue<IRunEffectRequest> _effects = new();
     private readonly Queue<IRunEvent> _undispatched = new();
     private readonly List<IRunEvent> _history = new();
@@ -28,6 +29,7 @@ public sealed class RunState
     public IReadOnlyDictionary<RunResourceId, int> Resources => _resources;
     public IReadOnlyList<CardDefinitionId> Deck => _deck;
     public IReadOnlyList<RelicInstance> Relics => _relics;
+    public IReadOnlyList<InstalledRunProgram> InstalledPrograms => _installedPrograms;
     public IReadOnlyList<IRunEvent> EventHistory => _history;
     public IReadOnlyList<RunLogEntry> Log => _log;
 
@@ -56,6 +58,28 @@ public sealed class RunState
     {
         ArgumentNullException.ThrowIfNull(relic);
         _relics.Add(relic);
+    }
+
+    // Install a triggered program on the run. Ids are unique — installing a duplicate id is a programming
+    // error (a scheduled consequence should mint a fresh id each time). Usable at setup; the in-flow path is
+    // InstallRunProgramRunEffect.
+    public void InstallProgram(InstalledRunProgram program)
+    {
+        ArgumentNullException.ThrowIfNull(program);
+        if (_installedPrograms.Any(p => p.Id == program.Id))
+            throw new InvalidOperationException($"A run program with id '{program.Id}' is already installed.");
+        _installedPrograms.Add(program);
+    }
+
+    // Remove an installed program by id. Returns whether one was actually removed (uninstalling an absent
+    // program is a no-op, so a program that fires and self-uninstalls twice does not fault).
+    public bool UninstallProgram(RunProgramId id)
+    {
+        var index = _installedPrograms.FindIndex(p => p.Id == id);
+        if (index < 0)
+            return false;
+        _installedPrograms.RemoveAt(index);
+        return true;
     }
 
     public void SetResult(RunResult result) => Result = result;

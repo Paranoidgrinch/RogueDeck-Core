@@ -41,3 +41,7 @@ public sealed record RelicAcquiredRunEvent(RelicId RelicId) : IRunEvent;
 public sealed record RewardGrantedRunEvent(RewardId RewardId) : IRunEvent;
 
 public sealed record RunEndedRunEvent(RunResult Result) : IRunEvent;
+
+public sealed record RunProgramInstalledRunEvent(RunProgramId ProgramId) : IRunEvent;
+
+public sealed record RunProgramUninstalledRunEvent(RunProgramId ProgramId) : IRunEvent;

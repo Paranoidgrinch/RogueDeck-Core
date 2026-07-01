@@ -39,21 +39,34 @@ public sealed class RunEffectProcessor
             }
 
             if (run.TryDequeueEvent(out var runEvent))
-                DispatchToRelics(run, runEvent);
+                DispatchToSubscribers(run, runEvent);
         }
     }
 
-    private static void DispatchToRelics(RunState run, IRunEvent runEvent)
+    // Every raised event goes to two kinds of subscriber, in a deterministic order: relic programs first (in
+    // relic-acquisition order), then programs installed directly on the run (in install order). Both use the
+    // same reaction contract, so a relic and a scheduled consequence are handled identically. A snapshot of
+    // the installed programs is iterated because a reaction may enqueue an install/uninstall effect — that
+    // effect is drained later, so the set is never mutated mid-dispatch.
+    private static void DispatchToSubscribers(RunState run, IRunEvent runEvent)
     {
         var eventType = runEvent.GetType();
+
         foreach (var relic in run.Relics)
             foreach (var program in relic.Definition.RunPrograms)
-            {
-                if (program.EventType != eventType)
-                    continue;
+                Dispatch(run, runEvent, eventType, program);
 
-                foreach (var effect in program.Build(runEvent, run))
-                    run.EnqueueEffect(effect);
-            }
+        foreach (var installed in run.InstalledPrograms.ToArray())
+            Dispatch(run, runEvent, eventType, installed.Reaction);
+    }
+
+    private static void Dispatch(
+        RunState run, IRunEvent runEvent, Type eventType, ITriggeredRunEffectDefinition program)
+    {
+        if (program.EventType != eventType)
+            return;
+
+        foreach (var effect in program.Build(runEvent, run))
+            run.EnqueueEffect(effect);
     }
 }
