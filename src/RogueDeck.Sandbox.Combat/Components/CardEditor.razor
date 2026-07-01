@@ -1,0 +1,85 @@
+@rendermode InteractiveServer
+@using System.Text.Json
+
+<section style="padding:1rem; max-width:64rem">
+    <h1>Card authoring (data)</h1>
+    <p class="muted">Edit a card as JSON (<code>CardData</code>) and validate that it deserializes through
+        <code>CombatJson</code> and compiles to a runnable card definition.</p>
+
+    <textarea style="width:100%; height:24rem; font-family:monospace; font-size:0.85rem" @bind="_json" @bind:event="oninput"></textarea>
+
+    <div style="margin:0.6rem 0">
+        <button class="play" @onclick="Validate">Parse &amp; validate</button>
+        <button class="play" @onclick="LoadDemo">Reset demo</button>
+    </div>
+
+    @if (_error is not null)
+    {
+        <p class="error">@_error</p>
+    }
+    @if (_summary is not null)
+    {
+        <pre style="background:#1b1f27; color:#cbd5e1; padding:0.75rem; border-radius:6px">@_summary</pre>
+    }
+</section>
+
+@code {
+    private readonly JsonSerializerOptions _options = CombatJson.CreateOptions<CardPlayContext>();
+    private string _json = "";
+    private string? _error;
+    private string? _summary;
+
+    protected override void OnInitialized() => LoadDemo();
+
+    private void LoadDemo()
+    {
+        _error = null;
+        _summary = null;
+        _json = JsonSerializer.Serialize(DemoCard(), _options);
+    }
+
+    private void Validate()
+    {
+        _error = null;
+        _summary = null;
+        try
+        {
+            var data = JsonSerializer.Deserialize<CardData>(_json, _options)
+                ?? throw new InvalidOperationException("Deserialized to null.");
+            // Prove it maps to a runnable definition.
+            _ = data.ToBlueprint().Compile().Build();
+
+            var roundTrips = JsonSerializer.Serialize(data, _options)
+                == JsonSerializer.Serialize(JsonSerializer.Deserialize<CardData>(_json, _options), _options);
+            var root = data.Program?.Root;
+            _summary =
+                $"✔ Deserialized and compiled card '{data.Id}'.\n" +
+                $"  costs: {data.Costs.Count}   tags: {data.Tags.Count}\n" +
+                $"  program root: {root?.GetType().Name ?? "(none)"}" +
+                (root is null ? "" : $" ({root.Children.Count} children)") + "\n" +
+                $"  round-trips: {roundTrips}";
+        }
+        catch (Exception ex)
+        {
+            _error = $"{ex.GetType().Name}: {ex.Message}";
+        }
+    }
+
+    private static CardData DemoCard()
+    {
+        var card = new CardBlueprint("cleave")
+        {
+            Program = new EffectProgram<CardPlayContext>(
+                new SequenceEffectNode<CardPlayContext>(new IEffectNode<CardPlayContext>[]
+                {
+                    new DealDamageNode<CardPlayContext>(
+                        new EventTargetCombatantTargetSelector(), new ConstantExpression<CardPlayContext>(8)),
+                    new GainBlockNode<CardPlayContext>(
+                        new SourceCombatantTargetSelector(), new ConstantExpression<CardPlayContext>(5)),
+                })),
+        };
+        card.Cost(new ResourceId("energy"), 1);
+        card.Tags.Add(new TagId("attack"));
+        return CardData.From(card);
+    }
+}
