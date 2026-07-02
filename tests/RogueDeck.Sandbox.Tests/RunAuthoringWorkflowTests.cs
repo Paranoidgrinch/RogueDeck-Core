@@ -1,6 +1,7 @@
 using RogueDeck.Core.Combat;
 using RogueDeck.Run;
 using RogueDeck.Sandbox.Composition;
+using RogueDeck.Sandbox.Run;
 using RogueDeck.Scenario.Authoring;
 
 namespace RogueDeck.Sandbox.Tests;
@@ -180,8 +181,74 @@ public class RunAuthoringWorkflowTests
         Assert.Equal(2, run.Log.Count(e => e.Type == StandardRunLogTypes.CombatResolved));
     }
 
-    // Mirror of RunSandbox.BuildContent + Start: build the content registry from the blueprint and run it.
-    private static RunState Drive(RunBlueprint blueprint, int seed)
+    [Fact]
+    public async Task InteractiveCombatDriver_LetsThePlayerFinishTheFight_AndTheRunContinues()
+    {
+        var options = RunJson.CreateOptions();
+        var imported = CombatImport.Project(EmptyBlueprint(), CombatTabModel(), options).Blueprint;
+        var blueprint = imported with
+        {
+            Map = new RunMap(new Node[]
+            {
+                new(new NodeId("n1"), StandardRunIds.CombatNode, new EncounterRef(new EncounterId("combat-fight"))),
+            }),
+        };
+
+        var content = BuildContent(blueprint);
+        var driver = new InteractiveCombatDriver();
+        var defs = new RunDefinitionRegistryBuilder();
+        new StandardRunPackage(driver, content).RegisterDefinitions(defs);
+        var registry = defs.Build();
+
+        var run = new RunState(new RunId("test"), new HealthState(30, 40), blueprint.Map, randomSeed: 1);
+        foreach (var card in blueprint.Deck)
+            run.AddDeckCard(card);
+
+        // Drive the run on a background thread, exactly as InteractiveRunSession does; the driver parks it at the
+        // combat node until we (standing in for the UI) play the fight out.
+        var runTask = Task.Run(() => new RunRunner(registry, new ScriptedChoiceProvider(), content: content).Run(run));
+
+        var combat = WaitFor(() => driver.Current, TimeSpan.FromSeconds(5));
+        Assert.NotNull(combat);
+
+        var guard = 0;
+        while (driver.Current is { } fight && guard++ < 200)
+        {
+            if (!fight.IsHeroTurn)
+                continue;
+            foreach (var card in fight.Hand.ToArray())
+            {
+                var target = fight.State.Combatants.FirstOrDefault(x => x.Id != fight.HeroId && x.IsAlive)?.Id;
+                if (target is null)
+                    break;
+                driver.PlayCard(card.Id, target);
+                if (driver.Current is null)
+                    break;
+            }
+            if (driver.Current is not null)
+                driver.EndTurn();
+        }
+
+        await runTask.WaitAsync(TimeSpan.FromSeconds(5)); // throws if the fight never resumed the run
+        Assert.Null(driver.Current);
+        Assert.Equal(RunResult.Victory, run.Result);
+        Assert.Contains(run.Log, e => e.Type == StandardRunLogTypes.CombatResolved);
+    }
+
+    private static T? WaitFor<T>(Func<T?> read, TimeSpan timeout) where T : class
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (read() is { } value)
+                return value;
+            Thread.Sleep(10);
+        }
+        return null;
+    }
+
+    // Mirror of RunSandbox.BuildContent: assemble the content registry from the blueprint's cards/actions/events.
+    private static RunContentRegistry BuildContent(RunBlueprint blueprint)
     {
         var library = new CombatContentLibrary(
             cards: blueprint.Cards.Select(card => card.ToBlueprint()).ToArray(),
@@ -191,8 +258,13 @@ public class RunAuthoringWorkflowTests
             .SetEncounters(new EncounterCatalog(library, blueprint.Encounters));
         foreach (var (id, script) in blueprint.Events)
             contentBuilder.RegisterEvent(new EventId(id), script);
-        var content = contentBuilder.Build();
+        return contentBuilder.Build();
+    }
 
+    // Mirror of RunSandbox.Start (headless): build the registry from the blueprint and run it to completion.
+    private static RunState Drive(RunBlueprint blueprint, int seed)
+    {
+        var content = BuildContent(blueprint);
         var defs = new RunDefinitionRegistryBuilder();
         new StandardRunPackage(new AutoPlayCombatDriver(), content).RegisterDefinitions(defs);
         var registry = defs.Build();

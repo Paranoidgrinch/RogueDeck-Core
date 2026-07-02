@@ -23,6 +23,11 @@
             <label class="play">Upload<InputFile OnChange="Upload" style="display:none" /></label>
         </div>
         <div class="run-bar">
+            <label title="on: play each fight yourself (cards + end turn); off: fights auto-resolve headlessly">
+                <input type="checkbox" @bind="_interactiveCombat" /> play combats interactively
+            </label>
+        </div>
+        <div class="run-bar">
             <button class="play" @onclick="ImportFromCombat" title="Bring the hero, deck, cards and enemies authored in the Combat tab into this run">
                 ⇐ Import from Combat tab
             </button>
@@ -140,6 +145,55 @@
                     Confirm (@_selected.Count/@request.Count)
                 </button>
             }
+            else if (_combatDriver?.Current is { } combat)
+            {
+                <h2>Combat — round @combat.Round</h2>
+                <div class="row"><span class="muted">Energy</span> @combat.HeroEnergy/@combat.HeroEnergyMax</div>
+                @foreach (var c in combat.State.Combatants)
+                {
+                    <div class="row">
+                        <strong>@(c.Id == combat.HeroId ? "You" : c.Id.value)</strong>
+                        <span class="muted">
+                            @c.Health.Current/@c.Health.Max HP@(Block(c) > 0 ? $" · 🛡{Block(c)}" : "")@(c.IsAlive ? "" : " 💀")
+                        </span>
+                        @if (c.Statuses.Count > 0)
+                        {
+                            <span class="muted">· @CombatStatusLine(c)</span>
+                        }
+                    </div>
+                }
+                @if (combat.IsHeroTurn)
+                {
+                    <div class="row">
+                        <span class="muted">Target</span>
+                        <select @bind="_combatTarget">
+                            @foreach (var enemy in combat.State.Combatants.Where(x => x.Id != combat.HeroId && x.IsAlive))
+                            {
+                                <option value="@enemy.Id.value">@enemy.Id.value</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="choices">
+                        @foreach (var card in combat.Hand)
+                        {
+                            var cost = CardEnergyCost(card.DefinitionId.value);
+                            <button class="play" disabled="@(cost > combat.HeroEnergy)"
+                                    @onclick="() => PlayCombatCard(card.Id)">
+                                @card.DefinitionId.value ⚡@cost
+                            </button>
+                        }
+                        @if (combat.Hand.Count == 0)
+                        {
+                            <span class="muted">(empty hand)</span>
+                        }
+                    </div>
+                    <button class="play" @onclick="EndCombatTurn">End turn ▸</button>
+                }
+                else
+                {
+                    <p class="muted">Resolving enemy actions…</p>
+                }
+            }
             else if (session.IsComplete)
             {
                 <h2>Run complete</h2>
@@ -197,6 +251,10 @@
     private string _newNodeTarget = "";
     private int _nodeSeq = 100;
     private string _importEncounterId = "combat-fight";
+    private bool _interactiveCombat = true;
+    private InteractiveCombatDriver? _combatDriver;
+    private string _combatTarget = "";
+    private Dictionary<string, int> _cardCosts = new();
 
     // ── Visual map builder (edits the parsed blueprint, then writes it back to the JSON) ──
     private bool TryBlueprint(out RunBlueprint blueprint)
@@ -327,8 +385,26 @@
             var blueprint = RunJson.FromJson<RunBlueprint>(_json, _options);
             var content = BuildContent(blueprint);
 
+            // Energy cost per card id, so the interactive combat view can grey out unaffordable cards.
+            _cardCosts = blueprint.Cards.ToDictionary(
+                card => card.Id,
+                card => card.Costs.Where(rc => rc.ResourceId == StandardCombatIds.EnergyResource).Sum(rc => rc.Amount));
+
+            // Interactive: a driver that hands each fight to the player (Current/Changed); headless: auto-resolve.
+            ICombatDriver driver;
+            if (_interactiveCombat)
+            {
+                _combatDriver = new InteractiveCombatDriver();
+                _combatDriver.Changed += OnSessionChanged;
+                driver = _combatDriver;
+            }
+            else
+            {
+                driver = new AutoPlayCombatDriver();
+            }
+
             var defs = new RunDefinitionRegistryBuilder();
-            new StandardRunPackage(new AutoPlayCombatDriver(), content).RegisterDefinitions(defs);
+            new StandardRunPackage(driver, content).RegisterDefinitions(defs);
             var registry = defs.Build();
 
             var run = new RunState(new RunId("demo"), new HealthState(30, 40), blueprint.Map, randomSeed: _seed);
@@ -406,13 +482,50 @@
 
     private void OnSessionChanged() => InvokeAsync(StateHasChanged);
 
+    // ── Interactive combat (the InteractiveCombatDriver surfaces the live fight; these drive it from the UI) ──
+    private void PlayCombatCard(CardInstanceId cardId)
+    {
+        var combat = _combatDriver?.Current;
+        if (combat is null)
+            return;
+        var target = !string.IsNullOrEmpty(_combatTarget)
+            ? new CombatantId(_combatTarget)
+            : combat.State.Combatants.FirstOrDefault(c => c.Id != combat.HeroId && c.IsAlive)?.Id;
+        _combatDriver!.PlayCard(cardId, target);
+    }
+
+    private void EndCombatTurn() => _combatDriver?.EndTurn();
+
+    private int CardEnergyCost(string definitionId) =>
+        _cardCosts.TryGetValue(definitionId, out var cost) ? cost : 0;
+
+    private static int Block(CombatantState c) =>
+        c.DefensivePools.TryGetValue(StandardCombatIds.BlockDefensivePool, out var pool) ? pool.Current : 0;
+
+    private static string CombatStatusLine(CombatantState c) =>
+        string.Join(" ", c.Statuses.Select(s =>
+        {
+            var name = s.DefinitionId.value.Replace("standard.", "");
+            var magnitude = s.Stacks > 0 ? $"×{s.Stacks}"
+                : s.DurationTurns > 0 ? $" {s.DurationTurns}t"
+                : s.Charges > 0 ? $" {s.Charges}c" : "";
+            return $"{name}{magnitude}";
+        }));
+
     private void DisposeSession()
     {
-        if (_session is null)
-            return;
-        _session.Changed -= OnSessionChanged;
-        _session.Dispose();
-        _session = null;
+        if (_session is not null)
+        {
+            _session.Changed -= OnSessionChanged;
+            _session.Dispose();
+            _session = null;
+        }
+        if (_combatDriver is not null)
+        {
+            _combatDriver.Changed -= OnSessionChanged;
+            _combatDriver.Dispose();
+            _combatDriver = null;
+        }
     }
 
     public async ValueTask DisposeAsync()
