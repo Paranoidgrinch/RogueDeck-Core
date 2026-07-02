@@ -834,6 +834,25 @@ public sealed class ContextValueExpression<TContext>(Func<TContext, int> read)
         _read(context.SourceContext);
 }
 
+// The HP/amount carried by the event that fired the trigger — heal amount in a Healed trigger, HP damage in a
+// damage trigger, resource amount in a ResourceGained trigger. A data-only counterpart of ContextValueExpression
+// (no stored delegate): it reads the amount via a runtime type switch, so it serializes as a plain leaf and works
+// in any trigger context (0 where the context has no such amount). This is what makes reflect / halving triggers
+// authorable as data.
+public sealed class EventAmountExpression<TContext> : ICombatExpression<TContext, int>
+    where TContext : class
+{
+    public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat) =>
+        context.SourceContext switch
+        {
+            HealedTriggeredEffectContext healed => healed.CombatEvent.HealedAmount,
+            DamageReceivedTriggeredEffectContext received => received.CombatEvent.HealthDamage,
+            DamageDealtTriggeredEffectContext dealt => dealt.CombatEvent.HealthDamage,
+            ResourceGainedTriggeredEffectContext gained => gained.CombatEvent.GainedAmount,
+            _ => 0,
+        };
+}
+
 // ── Boolean combat-state expressions ─────────────────────────────────────────
 
 public sealed class TargetHasStatusExpression<TContext> : ICombatExpression<TContext, bool>

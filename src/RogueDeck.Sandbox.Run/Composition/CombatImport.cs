@@ -34,6 +34,18 @@ public static class CombatImport
             $"Add a combat node → '{EncounterId}' to the map to play it.";
     }
 
+    // Rebuilds every status' serialized triggers into live triggered-effect definitions, ready to register into
+    // a combat (via CombatContentLibrary.TriggeredPrograms). The per-status index keeps definition ids unique.
+    public static IReadOnlyList<ITriggeredEffectDefinition> RebuildStatusTriggers(IReadOnlyList<StatusData> statuses)
+    {
+        ArgumentNullException.ThrowIfNull(statuses);
+        var programs = new List<ITriggeredEffectDefinition>();
+        foreach (var status in statuses)
+            for (var i = 0; i < status.Triggers.Count; i++)
+                programs.Add(ScenarioComposer.RebuildTrigger(status.Id, i, status.Triggers[i]));
+        return programs;
+    }
+
     // slug → display name, matching how ScenarioComposer keys cards/enemies (first name wins on a slug clash).
     private static Dictionary<string, string> NameBySlug(IEnumerable<string> names)
     {
@@ -116,17 +128,13 @@ public static class CombatImport
         }
 
         // Custom status definitions the cards / actions apply must ride along, or the run can't resolve the status
-        // id and the card is unplayable. Their DATA face (flags + passive modifiers) carries; trigger programs and
-        // death/debuff interceptors are Func escapes with no data form, so those are dropped and reported.
+        // id and the card is unplayable. Their passive face + triggers carry as data (BuildStatusData serializes
+        // each trigger's program); only death/debuff interceptors and non-serializable trigger effects are dropped.
         var statuses = current.Statuses.ToDictionary(s => s.Id, s => s);
-        foreach (var status in composed.Statuses)
-            statuses[status.Id] = StatusData.From(status);
-        foreach (var custom in model.Statuses)
-        {
-            var hasTriggers = custom.Triggers.Any(t => t.Effects.Count > 0) || custom.PreventsDeath || custom.BlocksDebuffs;
-            if (hasTriggers)
-                skipped.Add($"status '{ScenarioComposer.Slug(custom.Name)}' triggers/interceptors (passive effects still apply)");
-        }
+        var statusLibrary = ScenarioComposer.BuildStatusData(model, out var droppedTriggers);
+        foreach (var status in statusLibrary)
+            statuses[status.Id] = status;
+        skipped.AddRange(droppedTriggers);
 
         // The whole fight becomes one encounter: the enemy roster + the hero's combat resources / statuses.
         // Enemies only keep the actions that survived (a dropped action would dangle).

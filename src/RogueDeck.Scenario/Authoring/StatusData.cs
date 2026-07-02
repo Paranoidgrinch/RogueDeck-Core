@@ -1,3 +1,4 @@
+using System.Text.Json;
 using RogueDeck.Core.Combat;
 
 namespace RogueDeck.Scenario.Authoring;
@@ -21,6 +22,12 @@ public sealed record StatusData
     public StatusStackingBehavior StackingBehavior { get; init; } = StatusStackingBehavior.CreateSeparateInstance;
     public IReadOnlyList<string> Tags { get; init; } = [];
     public IReadOnlyList<PassiveModifierData> PassiveModifiers { get; init; } = [];
+
+    // Triggered programs bound to this status (fire on an event while a combatant bears it). Each carries the
+    // trigger event and the effect program as context-free CombatJson (deserialized under the event's context
+    // when the status is registered into a combat). Reconstructed by the sandbox composer, not by ToBlueprint —
+    // a StatusBlueprint holds only the passive face; the triggers become separate triggered-effect definitions.
+    public IReadOnlyList<StatusTriggerData> Triggers { get; init; } = [];
 
     public static StatusData From(StatusBlueprint status)
     {
@@ -61,6 +68,12 @@ public sealed record StatusData
         return status;
     }
 }
+
+// One triggered program bound to a status: the trigger event (a TriggerEvent enum name) and the effect program
+// serialized as context-free CombatJson (a {kind,value} tree). The event names which trigger context the program
+// is deserialized under; the program itself is context-agnostic on the wire. Escapes (non-serializable effects)
+// are dropped upstream, so anything stored here round-trips.
+public sealed record StatusTriggerData(string Event, JsonElement Program);
 
 // The serializable face of a PassiveModifierSpec. Drops the MagnitudeExpression escape (a live-state lambda the
 // sandbox never authors) — everything else is plain data.

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using RogueDeck.Core.Combat;
 using RogueDeck.Scenario.Authoring;
 using RogueDeck.Scenario.Scripting;
@@ -83,15 +84,7 @@ public sealed class ScenarioComposer
         foreach (var status in model.Statuses)
         {
             var slug = Slug(status.Name);
-            var bp = new StatusBlueprint(slug)
-            {
-                Polarity = status.Polarity,
-                UsesStacks = true,
-                UsesDuration = status.UsesDuration,
-            };
-            if (status.HasPassiveModifier)
-                bp.PassiveModifiers.Add(new PassiveModifierSpec(status.Pipeline, status.Operation, status.Magnitude));
-            blueprint.Statuses.Add(bp);
+            blueprint.Statuses.Add(BuildStatusBlueprint(status));
 
             for (var i = 0; i < status.Triggers.Count; i++)
             {
@@ -110,6 +103,147 @@ public sealed class ScenarioComposer
                     statusId, StatusPolarity.Debuff, BuildRequestFactory(status.OnBlockEffects)));
         }
     }
+
+    // The passive (non-triggered) face of a custom status, shared by the live-combat path and the serializable
+    // status library (BuildStatusData).
+    private static StatusBlueprint BuildStatusBlueprint(CustomStatusModel status)
+    {
+        var bp = new StatusBlueprint(Slug(status.Name))
+        {
+            Polarity = status.Polarity,
+            UsesStacks = true,
+            UsesDuration = status.UsesDuration,
+        };
+        if (status.HasPassiveModifier)
+            bp.PassiveModifiers.Add(new PassiveModifierSpec(status.Pipeline, status.Operation, status.Magnitude));
+        return bp;
+    }
+
+    // ── Serializable status library (for a run) ─────────────────────────────────────────────────────────────
+    // Builds each custom status as StatusData (its passive face + flags) with its triggers serialized to
+    // context-free program JSON, so a run can carry — and fire — custom-status triggers. A trigger whose effects
+    // use a non-serializable escape (or a death/debuff interceptor, which has no data form) is dropped and named
+    // in `droppedTriggers` for the caller to report.
+    public static IReadOnlyList<StatusData> BuildStatusData(SandboxModel model, out IReadOnlyList<string> droppedTriggers)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        var dropped = new List<string>();
+        var result = new List<StatusData>();
+        foreach (var status in model.Statuses)
+        {
+            var slug = Slug(status.Name);
+            var data = StatusData.From(BuildStatusBlueprint(status));
+            var triggers = new List<StatusTriggerData>();
+            for (var i = 0; i < status.Triggers.Count; i++)
+            {
+                var trigger = status.Triggers[i];
+                if (trigger.Effects.Count == 0)
+                    continue;
+                if (BuildTriggerData(slug, trigger) is { } triggerData)
+                    triggers.Add(triggerData);
+                else
+                    dropped.Add($"status '{slug}' trigger {i} ({trigger.Event})");
+            }
+            if (status.PreventsDeath || status.BlocksDebuffs)
+                dropped.Add($"status '{slug}' death/debuff interceptor");
+            result.Add(data with { Triggers = triggers });
+        }
+        droppedTriggers = dropped;
+        return result;
+    }
+
+    // Serializes one trigger's program to data (event name + context-free CombatJson). Mirrors BuildTrigger's
+    // per-event context choice. Returns null if the program uses a non-serializable escape.
+    private static StatusTriggerData? BuildTriggerData(string statusSlug, StatusTriggerModel trigger)
+    {
+        var selector = TriggerSelector(trigger.Event);
+        var statusId = new StatusDefinitionId(statusSlug);
+        try
+        {
+            return trigger.Event switch
+            {
+                TriggerEvent.TurnStarted => Serialize(trigger.Event, BuildProgram<TurnStartedTriggeredEffectContext>(trigger.Effects, selector)!),
+                TriggerEvent.TurnEnded => Serialize(trigger.Event, BuildProgram<TurnEndedTriggeredEffectContext>(trigger.Effects, selector)!),
+                TriggerEvent.DamageTaken => Serialize(trigger.Event, BuildProgram<DamageReceivedTriggeredEffectContext>(trigger.Effects, selector)!),
+                TriggerEvent.DamageDealt => Serialize(trigger.Event, BuildProgram<DamageDealtTriggeredEffectContext>(trigger.Effects, selector)!),
+                TriggerEvent.Healed => Serialize(trigger.Event, BuildProgram<HealedTriggeredEffectContext>(trigger.Effects, selector)!),
+                TriggerEvent.CardPlayed => Serialize(trigger.Event, BuildProgram<CardPlayedTriggeredEffectContext>(trigger.Effects, selector)!),
+                TriggerEvent.Downed => Serialize(trigger.Event, BuildProgram<CombatantDownedTriggeredEffectContext>(trigger.Effects, selector)!),
+                TriggerEvent.StatusExpired => Serialize(trigger.Event, BuildProgram<StatusExpiredTriggeredEffectContext>(trigger.Effects, selector)!),
+                TriggerEvent.ResourceGained => Serialize(trigger.Event, BuildProgram<ResourceGainedTriggeredEffectContext>(trigger.Effects, selector)!),
+                TriggerEvent.CardCostPaid => Serialize(trigger.Event, BuildProgram<CardCostPaidTriggeredEffectContext>(trigger.Effects, selector)!),
+                TriggerEvent.StatusApplied => Serialize(trigger.Event, BuildProgram<StatusAppliedTriggeredEffectContext>(trigger.Effects, selector)!),
+                TriggerEvent.StatusRemoved => Serialize(trigger.Event, BuildProgram<StatusRemovedTriggeredEffectContext>(trigger.Effects, selector)!),
+                TriggerEvent.StatusMerged => Serialize(trigger.Event, BuildProgram<StatusMergedTriggeredEffectContext>(trigger.Effects, selector)!),
+                TriggerEvent.RoundStarted => Serialize(trigger.Event, BuildRoundProgram<RoundStartedTriggeredEffectContext>(trigger.Effects, statusId)),
+                TriggerEvent.RoundEnded => Serialize(trigger.Event, BuildRoundProgram<RoundEndedTriggeredEffectContext>(trigger.Effects, statusId)),
+                _ => null,
+            };
+        }
+        catch (NotSupportedException)
+        {
+            return null; // an effect in the trigger has no serializable data form
+        }
+    }
+
+    private static StatusTriggerData Serialize<TContext>(TriggerEvent ev, EffectProgram<TContext> program)
+        where TContext : class =>
+        new(ev.ToString(), JsonSerializer.SerializeToElement(program, CombatJson.CreateOptions<TContext>()));
+
+    // Rebuilds a serialized status trigger into a live triggered-effect definition — the reverse of
+    // BuildTriggerData. `index` makes the definition id unique within the status. Deserializes the program under
+    // the event's trigger context (the JSON is context-free) and binds the *HasStatus filter for the bearer.
+    public static ITriggeredEffectDefinition RebuildTrigger(string statusSlug, int index, StatusTriggerData data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        var ev = Enum.Parse<TriggerEvent>(data.Event);
+        var id = new TriggeredEffectDefinitionId($"{statusSlug}_trigger{index}");
+        var statusId = new StatusDefinitionId(statusSlug);
+        return ev switch
+        {
+            TriggerEvent.TurnStarted => TriggeredProgramContextAdapters.TurnStarted.Define(
+                id, Program<TurnStartedTriggeredEffectContext>(data), filters: [new TurnStartedCombatantHasStatusTriggerFilter(statusId)]),
+            TriggerEvent.TurnEnded => TriggeredProgramContextAdapters.TurnEnded.Define(
+                id, Program<TurnEndedTriggeredEffectContext>(data), filters: [new TurnEndedCombatantHasStatusTriggerFilter(statusId)]),
+            TriggerEvent.DamageTaken => TriggeredProgramContextAdapters.DamageReceived.Define(
+                id, Program<DamageReceivedTriggeredEffectContext>(data), filters: [new DamageReceivedReceiverHasStatusTriggerFilter(statusId)]),
+            TriggerEvent.DamageDealt => TriggeredProgramContextAdapters.DamageDealt.Define(
+                id, Program<DamageDealtTriggeredEffectContext>(data), filters: [new DamageDealtSourceHasStatusTriggerFilter(statusId)]),
+            TriggerEvent.Healed => TriggeredProgramContextAdapters.Healed.Define(
+                id, Program<HealedTriggeredEffectContext>(data), filters: [new HealedTargetHasStatusTriggerFilter(statusId)]),
+            TriggerEvent.CardPlayed => TriggeredProgramContextAdapters.CardPlayed.Define(
+                id, Program<CardPlayedTriggeredEffectContext>(data), filters: [new CardPlayedSourceHasStatusTriggerFilter(statusId)]),
+            TriggerEvent.Downed => TriggeredProgramContextAdapters.CombatantDowned.Define(
+                id, Program<CombatantDownedTriggeredEffectContext>(data), filters: [new CombatantDownedHasStatusTriggerFilter(statusId)]),
+            TriggerEvent.StatusExpired => TriggeredProgramContextAdapters.StatusExpired.Define(
+                id, Program<StatusExpiredTriggeredEffectContext>(data), filters: [new StatusExpiredStatusDefinitionTriggerFilter(statusId)]),
+            TriggerEvent.ResourceGained => TriggeredProgramContextAdapters.ResourceGained.Define(
+                id, Program<ResourceGainedTriggeredEffectContext>(data), filters: [new ResourceGainedSourceHasStatusTriggerFilter(statusId)]),
+            TriggerEvent.CardCostPaid => TriggeredProgramContextAdapters.CardCostPaid.Define(
+                id, Program<CardCostPaidTriggeredEffectContext>(data), filters: [new CardCostPaidSourceHasStatusTriggerFilter(statusId)]),
+            TriggerEvent.StatusApplied => TriggeredProgramContextAdapters.StatusApplied.Define(
+                id, Program<StatusAppliedTriggeredEffectContext>(data),
+                filters:
+                [
+                    new StatusAppliedTargetHasStatusTriggerFilter(statusId),
+                    new StatusAppliedExceptStatusDefinitionTriggerFilter(statusId),
+                ]),
+            TriggerEvent.StatusRemoved => TriggeredProgramContextAdapters.StatusRemoved.Define(
+                id, Program<StatusRemovedTriggeredEffectContext>(data), filters: [new StatusRemovedTargetHasStatusTriggerFilter(statusId)]),
+            TriggerEvent.StatusMerged => TriggeredProgramContextAdapters.StatusMerged.Define(
+                id, Program<StatusMergedTriggeredEffectContext>(data), filters: [new StatusMergedTargetHasStatusTriggerFilter(statusId)]),
+            TriggerEvent.RoundStarted => TriggeredProgramContextAdapters.RoundStarted.Define(
+                id, Program<RoundStartedTriggeredEffectContext>(data)),
+            TriggerEvent.RoundEnded => TriggeredProgramContextAdapters.RoundEnded.Define(
+                id, Program<RoundEndedTriggeredEffectContext>(data)),
+            _ => throw new InvalidOperationException($"Trigger event '{ev}' is not supported for a status trigger."),
+        };
+    }
+
+    private static EffectProgram<TContext> Program<TContext>(StatusTriggerData data)
+        where TContext : class =>
+        data.Program.Deserialize<EffectProgram<TContext>>(CombatJson.CreateOptions<TContext>())
+        ?? throw new InvalidOperationException($"Trigger program for '{data.Event}' deserialized to null.");
 
     // Translates a status' interceptor effects into a request factory. Interceptors run outside a program,
     // so only leaf effects with constant amounts are supported (targets resolved by team at fire time).
@@ -658,21 +792,10 @@ public sealed class ScenarioComposer
     }
 
     // The HP amount of the event that fired the trigger — heal amount in a Healed trigger, HP damage in a
-    // damage trigger. Resolved per trigger-context type; 0 in any context without such an amount.
+    // damage trigger. Now a data-only Core expression (serializable), so EventAmount triggers carry into a run.
     private static ICombatExpression<TContext, int> EventAmountExpression<TContext>()
-        where TContext : class
-    {
-        if (typeof(TContext) == typeof(HealedTriggeredEffectContext))
-            return (ICombatExpression<TContext, int>)(object)new ContextValueExpression<HealedTriggeredEffectContext>(c => c.CombatEvent.HealedAmount);
-        if (typeof(TContext) == typeof(DamageReceivedTriggeredEffectContext))
-            return (ICombatExpression<TContext, int>)(object)new ContextValueExpression<DamageReceivedTriggeredEffectContext>(c => c.CombatEvent.HealthDamage);
-        if (typeof(TContext) == typeof(DamageDealtTriggeredEffectContext))
-            return (ICombatExpression<TContext, int>)(object)new ContextValueExpression<DamageDealtTriggeredEffectContext>(c => c.CombatEvent.HealthDamage);
-        if (typeof(TContext) == typeof(ResourceGainedTriggeredEffectContext))
-            return (ICombatExpression<TContext, int>)(object)new ContextValueExpression<ResourceGainedTriggeredEffectContext>(c => c.CombatEvent.GainedAmount);
-
-        return new ConstantExpression<TContext>(0);
-    }
+        where TContext : class =>
+        new EventAmountExpression<TContext>();
 
     // A round trigger has no bearer in the event, so it runs its effects once per marker-bearer via a
     // ForEach. Inside, Self/Target = the current bearer (single → scalar reads work); AllCombatants = all.

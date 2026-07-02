@@ -21,14 +21,19 @@ public sealed class CombatContentLibrary
     public IReadOnlyList<EnemyActionBlueprint> EnemyActions { get; }
     public IReadOnlyList<StatusBlueprint> Statuses { get; }
 
+    // Triggered-effect programs (e.g. a custom status' triggers) to register into every fight so they fire.
+    public IReadOnlyList<ITriggeredEffectDefinition> TriggeredPrograms { get; }
+
     public CombatContentLibrary(
         IReadOnlyList<CardBlueprint>? cards = null,
         IReadOnlyList<EnemyActionBlueprint>? enemyActions = null,
-        IReadOnlyList<StatusBlueprint>? statuses = null)
+        IReadOnlyList<StatusBlueprint>? statuses = null,
+        IReadOnlyList<ITriggeredEffectDefinition>? triggeredPrograms = null)
     {
         Cards = cards ?? Array.Empty<CardBlueprint>();
         EnemyActions = enemyActions ?? Array.Empty<EnemyActionBlueprint>();
         Statuses = statuses ?? Array.Empty<StatusBlueprint>();
+        TriggeredPrograms = triggeredPrograms ?? Array.Empty<ITriggeredEffectDefinition>();
     }
 }
 
@@ -100,6 +105,7 @@ public sealed class EncounterCatalog
         foreach (var card in _library.Cards) blueprint.Cards.Add(card);
         foreach (var action in _library.EnemyActions) blueprint.EnemyActions.Add(action);
         foreach (var status in _library.Statuses) blueprint.Statuses.Add(status);
+        foreach (var trigger in _library.TriggeredPrograms) blueprint.TriggeredPrograms.Add(trigger);
 
         // Hero shell: HP from the run; resources / starting statuses from the encounter; deck projected later.
         blueprint.Hero = new HeroBlueprint("hero")

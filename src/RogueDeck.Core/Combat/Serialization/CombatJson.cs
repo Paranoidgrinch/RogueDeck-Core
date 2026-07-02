@@ -161,7 +161,8 @@ public static class CombatJson
          .Register("damageDealtThisTurn", typeof(DamageDealtThisTurnExpression<>))
          .Register("resourceGainedThisTurn", typeof(ResourceGainedThisTurnExpression<>))
          .Register("cardCost", typeof(CardCostExpression<>))
-         .Register("iterationTargetStatusStacks", typeof(IterationTargetStatusStacksExpression<>));
+         .Register("iterationTargetStatusStacks", typeof(IterationTargetStatusStacksExpression<>))
+         .Register("eventAmount", typeof(EventAmountExpression<>));
 
         // bool condition expressions.
         r.Register("compare", typeof(ComparisonExpression<>))
@@ -195,6 +196,10 @@ public static class CombatJson
          .Register("sel.highestHealthEnemy", typeof(HighestHealthEnemyOfSourceCombatantTargetSelector))
          .Register("sel.lowestHealthAlly", typeof(LowestHealthAllyOfSourceCombatantTargetSelector))
          .Register("sel.highestHealthAlly", typeof(HighestHealthAllyOfSourceCombatantTargetSelector))
+         .Register("sel.allCombatants", typeof(AllCombatantsTargetSelector))
+         .Register("sel.withStatus", typeof(CombatantsWithStatusTargetSelector))
+         .Register("sel.alliesWithStatus", typeof(AllAlliesOfSourceWithStatusCombatantTargetSelector))
+         .Register("sel.enemiesWithStatus", typeof(AllEnemiesOfSourceWithStatusCombatantTargetSelector))
          .Register("sel.union", typeof(UnionCombatantTargetSelector));
     }
 

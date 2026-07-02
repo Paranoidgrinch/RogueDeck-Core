@@ -246,6 +246,140 @@ public class RunAuthoringWorkflowTests
     }
 
     [Fact]
+    public async Task CustomStatusTrigger_FiresInsideARunCombat()
+    {
+        var options = RunJson.CreateOptions();
+
+        // Combat tab: a "Spikes" marker status whose turn-start trigger deals 5 to all enemies; the hero starts
+        // the fight bearing it, so the trigger fires the moment the first turn begins.
+        var model = new SandboxModel
+        {
+            Hero = new HeroModel
+            {
+                Name = "Warden",
+                Hp = 40,
+                Energy = 3,
+                UseRealDeck = true,
+                DrawPerTurn = 5,
+                StartingStatuses = { new StartingStatusModel { StatusId = "spikes", Amount = 1 } },
+            },
+            Statuses =
+            {
+                new CustomStatusModel
+                {
+                    Name = "Spikes", Polarity = StatusPolarity.Buff, HasPassiveModifier = false,
+                    Triggers =
+                    {
+                        new StatusTriggerModel
+                        {
+                            Event = TriggerEvent.TurnStarted,
+                            Effects =
+                            {
+                                new EffectLineModel { Kind = EffectKind.DealDamage, Target = EffectTarget.AllEnemies, Amount = 5 },
+                            },
+                        },
+                    },
+                },
+            },
+            Cards = { new CardModel { Name = "Wait", Cost = 0 } },
+        };
+        model.Hero.Deck.Add(new DeckCardModel { CardName = "Wait", Copies = 3 });
+        model.Enemies.Add(new EnemyModel { Name = "Dummy", Hp = 30 });
+
+        var imported = CombatImport.Project(EmptyBlueprint(), model, options).Blueprint;
+        var spikes = Assert.Single(imported.Statuses, s => s.Id == "spikes");
+        Assert.Single(spikes.Triggers); // the turn-start trigger carried as data
+
+        // Round-trip the whole blueprint (the trigger program travels as context-free JSON) and drive the run.
+        var reloaded = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(imported, options), options);
+        Assert.Single(Assert.Single(reloaded.Statuses, s => s.Id == "spikes").Triggers);
+
+        var blueprint = reloaded with
+        {
+            Map = new RunMap(new Node[]
+            {
+                new(new NodeId("n1"), StandardRunIds.CombatNode, new EncounterRef(new EncounterId("combat-fight"))),
+            }),
+        };
+        var content = BuildContent(blueprint);
+        var driver = new InteractiveCombatDriver();
+        var defs = new RunDefinitionRegistryBuilder();
+        new StandardRunPackage(driver, content).RegisterDefinitions(defs);
+        var registry = defs.Build();
+        var run = new RunState(new RunId("t"), new HealthState(40, 40), blueprint.Map, randomSeed: 1);
+        foreach (var card in blueprint.Deck)
+            run.AddDeckCard(card);
+        var runTask = Task.Run(() => new RunRunner(registry, new ScriptedChoiceProvider(), content: content).Run(run));
+        try
+        {
+            var combat = WaitFor(() => driver.Current, TimeSpan.FromSeconds(5));
+            Assert.NotNull(combat);
+
+            // The turn-start trigger fired as the fight opened: the dummy already took 5 damage. Retry briefly
+            // because the trigger resolves on the background run thread just after the combat becomes visible.
+            var dummy = WaitFor(
+                () => combat!.State.Combatants.FirstOrDefault(c => c.Id != combat.HeroId && c.Health.Current < 30),
+                TimeSpan.FromSeconds(5));
+            Assert.NotNull(dummy);
+            Assert.Equal(25, dummy!.Health.Current);
+            Assert.DoesNotContain(combat!.Steps, s => s.HasProblems);
+        }
+        finally
+        {
+            driver.Dispose();
+            try { await runTask.WaitAsync(TimeSpan.FromSeconds(5)); }
+            catch { /* canceled by disposing the driver mid-combat */ }
+        }
+    }
+
+    [Fact]
+    public void ReflectTrigger_UsingEventAmount_CarriesAsData()
+    {
+        var options = RunJson.CreateOptions();
+
+        // A "Thorns" status that, when its bearer takes damage, deals that same amount back to the attacker —
+        // the iconic EventAmount reaction. It must carry as data (not be dropped) now that EventAmount serializes.
+        var model = new SandboxModel
+        {
+            Hero = new HeroModel { Name = "Bramble", Hp = 40, Energy = 3 },
+            Statuses =
+            {
+                new CustomStatusModel
+                {
+                    Name = "Thorns", Polarity = StatusPolarity.Buff, HasPassiveModifier = false,
+                    Triggers =
+                    {
+                        new StatusTriggerModel
+                        {
+                            Event = TriggerEvent.DamageTaken,
+                            Effects =
+                            {
+                                new EffectLineModel
+                                {
+                                    Kind = EffectKind.DealDamage, Target = EffectTarget.Target,
+                                    AmountSource = AmountSource.EventAmount,
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            Cards = { new CardModel { Name = "Wait", Cost = 0 } },
+        };
+        model.Enemies.Add(new EnemyModel { Name = "Dummy", Hp = 30 });
+
+        var result = CombatImport.Project(EmptyBlueprint(), model, options);
+        Assert.DoesNotContain(result.Skipped, s => s.Contains("thorns")); // the reflect trigger was not dropped
+        var thorns = Assert.Single(result.Blueprint.Statuses, s => s.Id == "thorns");
+        Assert.Single(thorns.Triggers);
+
+        // And it survives the JSON round-trip and rebuilds into a live triggered-effect definition.
+        var reloaded = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(result.Blueprint, options), options);
+        var programs = CombatImport.RebuildStatusTriggers(reloaded.Statuses);
+        Assert.Single(programs);
+    }
+
+    [Fact]
     public void Import_CarriesCardAndEnemyDisplayNames()
     {
         var options = RunJson.CreateOptions();
@@ -399,7 +533,8 @@ public class RunAuthoringWorkflowTests
         var library = new CombatContentLibrary(
             cards: blueprint.Cards.Select(card => card.ToBlueprint()).ToArray(),
             enemyActions: blueprint.EnemyActions.Select(action => action.ToBlueprint()).ToArray(),
-            statuses: blueprint.Statuses.Select(status => status.ToBlueprint()).ToArray());
+            statuses: blueprint.Statuses.Select(status => status.ToBlueprint()).ToArray(),
+            triggeredPrograms: CombatImport.RebuildStatusTriggers(blueprint.Statuses));
         var contentBuilder = new RunContentRegistryBuilder()
             .RegisterRelic(StandardRelics.Bloodstone())
             .RegisterRelic(StandardRelics.Leech())
