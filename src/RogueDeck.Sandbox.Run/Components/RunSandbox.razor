@@ -117,6 +117,7 @@
         </section>
 
         <EncounterEditor Blueprint="editorBlueprint" BlueprintChanged="ApplyBlueprint" />
+        <RelicEditor Blueprint="editorBlueprint" BlueprintChanged="ApplyBlueprint" />
         <EventEditor Blueprint="editorBlueprint" BlueprintChanged="ApplyBlueprint" />
     }
 
@@ -667,12 +668,20 @@
                 CombatantTargetSelectors.EventTarget, new ConstantExpression<EnemyActionContext>(4))),
         };
 
+        var windfall = new RelicData
+        {
+            Id = "windfall",
+            DisplayName = "Windfall",
+            RunPrograms = new[] { RunPrograms.On<NodeEnteredRunEvent>(new ChangeResourceRunEffect(StandardRunIds.Gold, 5)) },
+        };
+
         return new RunBlueprint(
             Enumerable.Repeat(new CardDefinitionId("smite"), 5).ToList(),
             new Dictionary<string, EventScript> { ["shrine"] = shrine, ["purge"] = purge },
             new[] { encounter },
             new[] { CardData.From(smite) },
             new[] { EnemyActionData.From(slam) },
-            map);
+            map)
+        { Relics = new[] { windfall } };
     }
 }

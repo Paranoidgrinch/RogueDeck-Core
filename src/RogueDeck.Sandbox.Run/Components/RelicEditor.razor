@@ -1,0 +1,342 @@
+@using System.Reflection
+@using RogueDeck.Core.Combat
+
+@* Visual editor for the run's authored relics. A relic is id + display name + reactions; each reaction fires on
+   a run event while the relic is owned and enqueues effects. This editor handles the common case — reactions
+   built from constant-valued literal effects and no condition. Richer reactions (conditions, computed amounts,
+   card templates) authored in JSON are shown read-only so nothing is lost. Edits re-serialize the blueprint. *@
+
+<section class="panel">
+    <h2>Relics</h2>
+    <p class="muted">A relic reacts to run events while it is owned. Grant one from an event choice's
+        <strong>+ Relic</strong>.</p>
+
+    @if (Blueprint.Relics.Count == 0)
+    {
+        <p class="muted">No relics yet — add one below.</p>
+    }
+
+    @for (var ri = 0; ri < Blueprint.Relics.Count; ri++)
+    {
+        var relicIndex = ri;
+        var relic = Blueprint.Relics[ri];
+        <div class="editor-card">
+            <div class="run-bar">
+                <label>Relic id
+                    <input value="@relic.Id" @onchange="e => SetRelicId(relicIndex, AsString(e.Value))" style="width:9rem" />
+                </label>
+                <label>Name
+                    <input value="@relic.DisplayName" @onchange="e => SetRelicName(relicIndex, AsString(e.Value))" style="width:11rem" />
+                </label>
+                <button class="mini" @onclick="() => RemoveRelic(relicIndex)">✕ remove</button>
+            </div>
+
+            @for (var pi = 0; pi < relic.RunPrograms.Count; pi++)
+            {
+                var reactionIndex = pi;
+                var reaction = relic.RunPrograms[pi];
+                <div class="editor-choice">
+                    @if (IsEditable(reaction))
+                    {
+                        <div class="run-bar">
+                            <label>When
+                                <select value="@EventKey(reaction.EventType)"
+                                        @onchange="e => SetReactionEvent(relicIndex, reactionIndex, AsString(e.Value))">
+                                    @foreach (var (key, label) in ReactionEvents)
+                                    {
+                                        <option value="@key">@label</option>
+                                    }
+                                </select>
+                            </label>
+                            <button class="mini" @onclick="() => RemoveReaction(relicIndex, reactionIndex)">✕ reaction</button>
+                        </div>
+                        <div class="editor-effects">
+                            @{
+                                var effects = LiteralEffects(reaction);
+                            }
+                            @for (var fi = 0; fi < effects.Count; fi++)
+                            {
+                                var fx = fi;
+                                <span class="fx">
+                                    @EffectEditor(relicIndex, reactionIndex, fx, effects[fx])
+                                    <button class="mini" @onclick="() => RemoveEffect(relicIndex, reactionIndex, fx)">✕</button>
+                                </span>
+                            }
+                            <span class="add-effect">
+                                <span class="muted">add:</span>
+                                @foreach (var (kind, label) in EffectKinds)
+                                {
+                                    <button class="mini" title="@label"
+                                            @onclick="() => AddEffect(relicIndex, reactionIndex, kind)">+ @label</button>
+                                }
+                            </span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="run-bar">
+                            <span class="muted">When <strong>@EventLabel(reaction.EventType)</strong> —
+                                advanced reaction (edit in JSON)</span>
+                            <button class="mini" @onclick="() => RemoveReaction(relicIndex, reactionIndex)">✕ reaction</button>
+                        </div>
+                    }
+                </div>
+            }
+            <button class="mini" @onclick="() => AddReaction(relicIndex)">+ reaction</button>
+        </div>
+    }
+
+    <div class="run-bar">
+        <input placeholder="new relic id" @bind="_newRelicId" style="width:11rem" />
+        <button class="play" @onclick="AddRelic">Add relic</button>
+    </div>
+</section>
+
+@code {
+    [Parameter] public RunBlueprint Blueprint { get; set; } = default!;
+    [Parameter] public EventCallback<RunBlueprint> BlueprintChanged { get; set; }
+
+    private string _newRelicId = "";
+
+    private static string AsString(object? v) => v?.ToString() ?? "";
+    private static int AsInt(object? v, int fallback) => int.TryParse(v?.ToString(), out var n) ? n : fallback;
+
+    // The run events a relic reaction can fire on (key → friendly label), mapped to a run-event type by BuildProgram.
+    private static readonly (string Key, string Label)[] ReactionEvents =
+    {
+        ("nodeEntered", "a node is entered"),
+        ("combatResolved", "a combat resolves"),
+        ("runStarted", "the run starts"),
+        ("rewardGranted", "a reward is granted"),
+        ("eventChoiceMade", "an event choice is made"),
+    };
+
+    private static readonly (string Kind, string Label)[] EffectKinds =
+    {
+        ("gold", "Gold"),
+        ("resource", "Resource"),
+        ("heal", "Heal"),
+        ("damage", "Damage"),
+        ("maxhp", "Max HP"),
+        ("flag", "Flag"),
+        ("counter", "Counter"),
+    };
+
+    private Task Apply(IReadOnlyList<RelicData> relics) =>
+        BlueprintChanged.InvokeAsync(Blueprint with { Relics = relics });
+
+    private Task EditRelic(int relicIndex, Func<RelicData, RelicData> edit)
+    {
+        var relics = Blueprint.Relics.ToList();
+        if (relicIndex < 0 || relicIndex >= relics.Count)
+            return Task.CompletedTask;
+        relics[relicIndex] = edit(relics[relicIndex]);
+        return Apply(relics);
+    }
+
+    private Task EditReactions(int relicIndex, Func<List<ITriggeredRunEffectDefinition>, List<ITriggeredRunEffectDefinition>> edit) =>
+        EditRelic(relicIndex, relic => relic with { RunPrograms = edit(relic.RunPrograms.ToList()) });
+
+    // ── relic level ─────────────────────────────────────────────────────────────
+    private Task SetRelicId(int relicIndex, string id) =>
+        string.IsNullOrWhiteSpace(id) ? Task.CompletedTask : EditRelic(relicIndex, r => r with { Id = id.Trim() });
+
+    private Task SetRelicName(int relicIndex, string name) =>
+        EditRelic(relicIndex, r => r with { DisplayName = name });
+
+    private Task RemoveRelic(int relicIndex)
+    {
+        var relics = Blueprint.Relics.ToList();
+        if (relicIndex >= 0 && relicIndex < relics.Count)
+            relics.RemoveAt(relicIndex);
+        return Apply(relics);
+    }
+
+    private Task AddRelic()
+    {
+        var id = _newRelicId.Trim();
+        if (id.Length == 0 || Blueprint.Relics.Any(r => r.Id == id))
+            return Task.CompletedTask;
+        var relic = new RelicData
+        {
+            Id = id,
+            DisplayName = id,
+            RunPrograms = new[] { BuildProgram("nodeEntered", new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 5) }) },
+        };
+        _newRelicId = "";
+        return Apply(Blueprint.Relics.Append(relic).ToList());
+    }
+
+    // ── reaction level ────────────────────────────────────────────────────────────
+    private Task AddReaction(int relicIndex) =>
+        EditReactions(relicIndex, programs =>
+        {
+            programs.Add(BuildProgram("nodeEntered", new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 5) }));
+            return programs;
+        });
+
+    private Task RemoveReaction(int relicIndex, int reactionIndex) =>
+        EditReactions(relicIndex, programs =>
+        {
+            if (reactionIndex >= 0 && reactionIndex < programs.Count)
+                programs.RemoveAt(reactionIndex);
+            return programs;
+        });
+
+    private Task SetReactionEvent(int relicIndex, int reactionIndex, string eventKey) =>
+        EditReactions(relicIndex, programs =>
+        {
+            if (reactionIndex >= 0 && reactionIndex < programs.Count)
+                programs[reactionIndex] = BuildProgram(eventKey, LiteralEffects(programs[reactionIndex]));
+            return programs;
+        });
+
+    // ── effect level ──────────────────────────────────────────────────────────────
+    private Task SetReactionEffects(int relicIndex, int reactionIndex, IReadOnlyList<IRunEffectRequest> effects) =>
+        EditReactions(relicIndex, programs =>
+        {
+            if (reactionIndex >= 0 && reactionIndex < programs.Count)
+                programs[reactionIndex] = BuildProgram(EventKey(programs[reactionIndex].EventType), effects);
+            return programs;
+        });
+
+    private Task AddEffect(int relicIndex, int reactionIndex, string kind)
+    {
+        if (NewEffect(kind) is not { } effect)
+            return Task.CompletedTask;
+        var reaction = Blueprint.Relics[relicIndex].RunPrograms[reactionIndex];
+        return SetReactionEffects(relicIndex, reactionIndex, LiteralEffects(reaction).Append(effect).ToList());
+    }
+
+    private Task RemoveEffect(int relicIndex, int reactionIndex, int effectIndex)
+    {
+        var effects = LiteralEffects(Blueprint.Relics[relicIndex].RunPrograms[reactionIndex]).ToList();
+        if (effectIndex >= 0 && effectIndex < effects.Count)
+            effects.RemoveAt(effectIndex);
+        return SetReactionEffects(relicIndex, reactionIndex, effects);
+    }
+
+    private Task SetEffect(int relicIndex, int reactionIndex, int effectIndex, IRunEffectRequest effect)
+    {
+        var effects = LiteralEffects(Blueprint.Relics[relicIndex].RunPrograms[reactionIndex]).ToList();
+        if (effectIndex >= 0 && effectIndex < effects.Count)
+            effects[effectIndex] = effect;
+        return SetReactionEffects(relicIndex, reactionIndex, effects);
+    }
+
+    private static IRunEffectRequest? NewEffect(string kind) => kind switch
+    {
+        "gold" => new ChangeResourceRunEffect(StandardRunIds.Gold, 10),
+        "resource" => new ChangeResourceRunEffect(new RunResourceId("resource"), 5),
+        "heal" => new HealRunEffect(5),
+        "damage" => new ApplyRunDamageRunEffect(3),
+        "maxhp" => new ChangeMaxHealthRunEffect(5),
+        "flag" => new SetFlagRunEffect(new RunFlagId("flag")),
+        "counter" => new IncrementCounterRunEffect(new RunCounterId("counter"), 1),
+        _ => null,
+    };
+
+    // ── reaction (de)composition ────────────────────────────────────────────────────
+    // A reaction is editable here iff it is a DataTriggeredRunEffect with no condition whose templates are all
+    // literal effects — exactly what this editor produces. Anything richer is preserved and shown read-only.
+    private static bool IsEditable(ITriggeredRunEffectDefinition reaction)
+    {
+        var type = reaction.GetType();
+        if (!type.IsGenericType || type.GetGenericTypeDefinition() != typeof(DataTriggeredRunEffect<>))
+            return false;
+        if (type.GetProperty("Condition")?.GetValue(reaction) is not null)
+            return false;
+        return TemplatesOf(reaction).All(t => t is LiteralEffectTemplate);
+    }
+
+    private static IReadOnlyList<IRunEffectTemplate> TemplatesOf(ITriggeredRunEffectDefinition reaction) =>
+        reaction.GetType().GetProperty("Templates")?.GetValue(reaction) as IReadOnlyList<IRunEffectTemplate>
+        ?? Array.Empty<IRunEffectTemplate>();
+
+    private static IReadOnlyList<IRunEffectRequest> LiteralEffects(ITriggeredRunEffectDefinition reaction) =>
+        TemplatesOf(reaction).OfType<LiteralEffectTemplate>().Select(t => t.Effect).ToList();
+
+    private static ITriggeredRunEffectDefinition BuildProgram(string eventKey, IReadOnlyList<IRunEffectRequest> effects)
+    {
+        var array = effects.ToArray();
+        return eventKey switch
+        {
+            "combatResolved" => RunPrograms.On<CombatResolvedRunEvent>(array),
+            "runStarted" => RunPrograms.On<RunStartedRunEvent>(array),
+            "rewardGranted" => RunPrograms.On<RewardGrantedRunEvent>(array),
+            "eventChoiceMade" => RunPrograms.On<EventChoiceMadeRunEvent>(array),
+            _ => RunPrograms.On<NodeEnteredRunEvent>(array),
+        };
+    }
+
+    private static string EventKey(Type eventType) => eventType.Name switch
+    {
+        nameof(CombatResolvedRunEvent) => "combatResolved",
+        nameof(RunStartedRunEvent) => "runStarted",
+        nameof(RewardGrantedRunEvent) => "rewardGranted",
+        nameof(EventChoiceMadeRunEvent) => "eventChoiceMade",
+        _ => "nodeEntered",
+    };
+
+    private static string EventLabel(Type eventType)
+    {
+        var key = EventKey(eventType);
+        return ReactionEvents.FirstOrDefault(e => e.Key == key).Label ?? eventType.Name;
+    }
+
+    // Inline editor for one literal reaction effect (the same simple, serializable kinds the EventEditor offers).
+    private RenderFragment EffectEditor(int relicIndex, int reactionIndex, int fx, IRunEffectRequest effect) => builder =>
+    {
+        void Amount(string label, int value, Func<int, IRunEffectRequest> make)
+        {
+            var seq = 0;
+            builder.AddContent(seq++, label + " ");
+            builder.OpenElement(seq++, "input");
+            builder.AddAttribute(seq++, "type", "number");
+            builder.AddAttribute(seq++, "value", value);
+            builder.AddAttribute(seq++, "style", "width:4rem");
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this,
+                e => SetEffect(relicIndex, reactionIndex, fx, make(AsInt(e.Value, value)))));
+            builder.CloseElement();
+        }
+
+        void Text(string label, string value, Func<string, IRunEffectRequest> make)
+        {
+            var seq = 100;
+            builder.AddContent(seq++, label + " ");
+            builder.OpenElement(seq++, "input");
+            builder.AddAttribute(seq++, "value", value);
+            builder.AddAttribute(seq++, "style", "width:6rem");
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this,
+                e => SetEffect(relicIndex, reactionIndex, fx, make(AsString(e.Value)))));
+            builder.CloseElement();
+        }
+
+        switch (effect)
+        {
+            case ChangeResourceRunEffect r:
+                Text("Resource", r.Resource.Value, s => new ChangeResourceRunEffect(new RunResourceId(s), r.Delta));
+                Amount(" Δ", r.Delta, n => new ChangeResourceRunEffect(r.Resource, n));
+                break;
+            case HealRunEffect h:
+                Amount("Heal", h.Amount, n => new HealRunEffect(n));
+                break;
+            case ApplyRunDamageRunEffect d:
+                Amount("Lose HP", d.Amount, n => new ApplyRunDamageRunEffect(n));
+                break;
+            case ChangeMaxHealthRunEffect m:
+                Amount("Max HP Δ", m.Delta, n => new ChangeMaxHealthRunEffect(n));
+                break;
+            case SetFlagRunEffect f:
+                Text("Set flag", f.Flag.Value, s => new SetFlagRunEffect(new RunFlagId(s), f.Value));
+                break;
+            case IncrementCounterRunEffect c:
+                Text("Counter", c.Counter.Value, s => new IncrementCounterRunEffect(new RunCounterId(s), c.Delta));
+                Amount(" by", c.Delta, n => new IncrementCounterRunEffect(c.Counter, n));
+                break;
+            default:
+                builder.AddContent(900, effect.GetType().Name);
+                break;
+        }
+    };
+}
