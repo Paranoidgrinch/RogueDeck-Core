@@ -29,6 +29,13 @@ public sealed record StatusData
     // a StatusBlueprint holds only the passive face; the triggers become separate triggered-effect definitions.
     public IReadOnlyList<StatusTriggerData> Triggers { get; init; } = [];
 
+    // Death-prevention interceptor (Seelenanker: one-shot cancel-death, survive at N HP, run effects). Null =
+    // the status does not prevent death. Rebuilt by the sandbox composer into an engine IPreDownInterceptor.
+    public StatusDeathPreventionData? DeathPrevention { get; init; }
+
+    // Debuff-block interceptor (suppress the first debuff application, run effects). Null = no debuff block.
+    public StatusDebuffBlockData? DebuffBlock { get; init; }
+
     public static StatusData From(StatusBlueprint status)
     {
         ArgumentNullException.ThrowIfNull(status);
@@ -74,6 +81,18 @@ public sealed record StatusData
 // is deserialized under; the program itself is context-agnostic on the wire. Escapes (non-serializable effects)
 // are dropped upstream, so anything stored here round-trips.
 public sealed record StatusTriggerData(string Event, JsonElement Program);
+
+// A status' death-prevention interceptor as data: the HP to survive at, plus the effects to run when it fires.
+public sealed record StatusDeathPreventionData(int SurvivingHealth, IReadOnlyList<InterceptorEffectData> Effects);
+
+// A status' debuff-block interceptor as data: the effects to run when a blocked debuff is suppressed.
+public sealed record StatusDebuffBlockData(IReadOnlyList<InterceptorEffectData> Effects);
+
+// One leaf effect an interceptor enqueues when it fires. Interceptors run outside a program (targets resolve by
+// team at fire time), so the vocabulary is deliberately small and constant-valued. Kind/Target are the sandbox
+// enum names (parsed by the composer on rebuild); Polarity is the engine enum (used by the Cleanse kind).
+public sealed record InterceptorEffectData(
+    string Kind, string Target, int Amount, string StatusId, int DurationTurns, StatusPolarity Polarity);
 
 // The serializable face of a PassiveModifierSpec. Drops the MagnitudeExpression escape (a live-state lambda the
 // sandbox never authors) — everything else is plain data.

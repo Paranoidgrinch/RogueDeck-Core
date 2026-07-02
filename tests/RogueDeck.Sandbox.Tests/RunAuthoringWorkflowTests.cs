@@ -380,6 +380,96 @@ public class RunAuthoringWorkflowTests
     }
 
     [Fact]
+    public async Task DeathPreventionInterceptor_FiresInsideARunCombat()
+    {
+        var options = RunJson.CreateOptions();
+
+        // A "PhoenixShield" status that cancels a lethal hit once, leaving the bearer at 5 HP. The hero starts
+        // with it on 10 HP and faces an enemy that hits for 50 — the interceptor must save them in the run.
+        var model = new SandboxModel
+        {
+            Hero = new HeroModel
+            {
+                Name = "Martyr",
+                Hp = 10,
+                Energy = 3,
+                UseRealDeck = true,
+                DrawPerTurn = 5,
+                StartingStatuses = { new StartingStatusModel { StatusId = "phoenixshield", Amount = 1 } },
+            },
+            Statuses =
+            {
+                new CustomStatusModel
+                {
+                    Name = "PhoenixShield", Polarity = StatusPolarity.Buff, HasPassiveModifier = false,
+                    PreventsDeath = true, SurvivingHealth = 5,
+                },
+            },
+            Cards = { new CardModel { Name = "Wait", Cost = 0 } },
+        };
+        model.Hero.Deck.Add(new DeckCardModel { CardName = "Wait", Copies = 3 });
+        model.Enemies.Add(new EnemyModel
+        {
+            Name = "Smasher",
+            Hp = 30,
+            Intents =
+            {
+                new IntentModel
+                {
+                    Label = "Smash", Kind = IntentKind.Attack,
+                    Effects = { new EffectLineModel { Kind = EffectKind.DealDamage, Target = EffectTarget.Target, Amount = 50 } },
+                },
+            },
+        });
+
+        var imported = CombatImport.Project(EmptyBlueprint(), model, options).Blueprint;
+        var shield = Assert.Single(imported.Statuses, s => s.Id == "phoenixshield");
+        Assert.NotNull(shield.DeathPrevention);
+        Assert.Equal(5, shield.DeathPrevention!.SurvivingHealth);
+
+        var reloaded = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(imported, options), options);
+        Assert.NotNull(Assert.Single(reloaded.Statuses, s => s.Id == "phoenixshield").DeathPrevention);
+
+        var blueprint = reloaded with
+        {
+            Map = new RunMap(new Node[]
+            {
+                new(new NodeId("n1"), StandardRunIds.CombatNode, new EncounterRef(new EncounterId("combat-fight"))),
+            }),
+        };
+        var content = BuildContent(blueprint);
+        var driver = new InteractiveCombatDriver();
+        var defs = new RunDefinitionRegistryBuilder();
+        new StandardRunPackage(driver, content).RegisterDefinitions(defs);
+        var registry = defs.Build();
+        var run = new RunState(new RunId("t"), new HealthState(10, 10), blueprint.Map, randomSeed: 1);
+        foreach (var card in blueprint.Deck)
+            run.AddDeckCard(card);
+        var runTask = Task.Run(() => new RunRunner(registry, new ScriptedChoiceProvider(), content: content).Run(run));
+        try
+        {
+            var combat = WaitFor(() => driver.Current, TimeSpan.FromSeconds(5));
+            Assert.NotNull(combat);
+            if (combat!.IsHeroTurn)
+                driver.EndTurn(); // hand the turn to the enemy, which swings for lethal
+
+            // The death-prevention interceptor fired: the hero is alive at 5 HP (not downed) and the shield is spent.
+            var hero = WaitFor(
+                () => driver.Current?.State.Combatants.FirstOrDefault(c => c.Id == driver.Current!.HeroId && c.Health.Current == 5),
+                TimeSpan.FromSeconds(5));
+            Assert.NotNull(hero);
+            Assert.True(hero!.IsAlive);
+            Assert.DoesNotContain(hero.Statuses, s => s.DefinitionId.value == "phoenixshield");
+        }
+        finally
+        {
+            driver.Dispose();
+            try { await runTask.WaitAsync(TimeSpan.FromSeconds(5)); }
+            catch { /* canceled by disposing the driver mid-combat */ }
+        }
+    }
+
+    [Fact]
     public void Import_CarriesCardAndEnemyDisplayNames()
     {
         var options = RunJson.CreateOptions();
@@ -530,11 +620,14 @@ public class RunAuthoringWorkflowTests
     // Mirror of RunSandbox.BuildContent: assemble the content registry from the blueprint's cards/actions/events.
     private static RunContentRegistry BuildContent(RunBlueprint blueprint)
     {
+        var interceptors = CombatImport.RebuildStatusInterceptors(blueprint.Statuses);
         var library = new CombatContentLibrary(
             cards: blueprint.Cards.Select(card => card.ToBlueprint()).ToArray(),
             enemyActions: blueprint.EnemyActions.Select(action => action.ToBlueprint()).ToArray(),
             statuses: blueprint.Statuses.Select(status => status.ToBlueprint()).ToArray(),
-            triggeredPrograms: CombatImport.RebuildStatusTriggers(blueprint.Statuses));
+            triggeredPrograms: CombatImport.RebuildStatusTriggers(blueprint.Statuses),
+            preDownInterceptors: interceptors.PreDown,
+            statusApplicationInterceptors: interceptors.StatusApplication);
         var contentBuilder = new RunContentRegistryBuilder()
             .RegisterRelic(StandardRelics.Bloodstone())
             .RegisterRelic(StandardRelics.Leech())

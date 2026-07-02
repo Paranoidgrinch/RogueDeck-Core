@@ -94,13 +94,14 @@ public sealed class ScenarioComposer
                 blueprint.TriggeredPrograms.Add(BuildTrigger(slug, i, trigger));
             }
 
-            var statusId = new StatusDefinitionId(slug);
+            // Interceptors are built through the same data path as a run (BuildInterceptorEffects → Rebuild*), so
+            // the live combat and an imported run behave identically.
             if (status.PreventsDeath)
-                blueprint.PreDownInterceptors.Add(new StatusDeathPreventionInterceptor(
-                    statusId, status.SurvivingHealth, BuildRequestFactory(status.OnPreventEffects)));
+                blueprint.PreDownInterceptors.Add(RebuildDeathPrevention(slug,
+                    new StatusDeathPreventionData(status.SurvivingHealth, BuildInterceptorEffects(status.OnPreventEffects))));
             if (status.BlocksDebuffs)
-                blueprint.StatusApplicationInterceptors.Add(new StatusBlocksApplicationInterceptor(
-                    statusId, StatusPolarity.Debuff, BuildRequestFactory(status.OnBlockEffects)));
+                blueprint.StatusApplicationInterceptors.Add(RebuildDebuffBlock(slug,
+                    new StatusDebuffBlockData(BuildInterceptorEffects(status.OnBlockEffects))));
         }
     }
 
@@ -144,9 +145,13 @@ public sealed class ScenarioComposer
                 else
                     dropped.Add($"status '{slug}' trigger {i} ({trigger.Event})");
             }
-            if (status.PreventsDeath || status.BlocksDebuffs)
-                dropped.Add($"status '{slug}' death/debuff interceptor");
-            result.Add(data with { Triggers = triggers });
+            var deathPrevention = status.PreventsDeath
+                ? new StatusDeathPreventionData(status.SurvivingHealth, BuildInterceptorEffects(status.OnPreventEffects))
+                : null;
+            var debuffBlock = status.BlocksDebuffs
+                ? new StatusDebuffBlockData(BuildInterceptorEffects(status.OnBlockEffects))
+                : null;
+            result.Add(data with { Triggers = triggers, DeathPrevention = deathPrevention, DebuffBlock = debuffBlock });
         }
         droppedTriggers = dropped;
         return result;
@@ -245,20 +250,40 @@ public sealed class ScenarioComposer
         data.Program.Deserialize<EffectProgram<TContext>>(CombatJson.CreateOptions<TContext>())
         ?? throw new InvalidOperationException($"Trigger program for '{data.Event}' deserialized to null.");
 
-    // Translates a status' interceptor effects into a request factory. Interceptors run outside a program,
-    // so only leaf effects with constant amounts are supported (targets resolved by team at fire time).
-    private static InterceptorEffects BuildRequestFactory(IReadOnlyList<EffectLineModel> lines)
+    // The interceptor effect vocabulary: leaf effects with constant amounts (targets resolve by team at fire
+    // time). Only these kinds are representable as interceptor data; other lines are dropped.
+    private static readonly EffectKind[] InterceptorEffectKinds =
     {
-        var effects = lines.Where(l => l.Line == LineKind.Effect).ToList();
-        return (bearer, combat, registry) =>
+        EffectKind.DealDamage, EffectKind.GainBlock, EffectKind.Heal,
+        EffectKind.ApplyStatus, EffectKind.Cleanse, EffectKind.RemoveStatus,
+    };
+
+    // Projects a status' interceptor effect lines to serializable data (supported leaf kinds only), so death /
+    // debuff-block interceptors carry into a run.
+    private static IReadOnlyList<InterceptorEffectData> BuildInterceptorEffects(IReadOnlyList<EffectLineModel> lines)
+    {
+        var result = new List<InterceptorEffectData>();
+        foreach (var line in lines)
+            if (line.Line == LineKind.Effect && InterceptorEffectKinds.Contains(line.Kind))
+                result.Add(new InterceptorEffectData(
+                    line.Kind.ToString(), line.Target.ToString(), Math.Max(0, line.Amount),
+                    line.StatusId, line.DurationTurns, line.Polarity));
+        return result;
+    }
+
+    // Rebuilds interceptor effect data into the request factory the interceptor classes run when they fire.
+    private static InterceptorEffects BuildRequestFactory(IReadOnlyList<InterceptorEffectData> effects) =>
+        (bearer, combat, registry) =>
         {
             var requests = new List<IEffectRequest>();
             foreach (var line in effects)
             {
+                var kind = Enum.Parse<EffectKind>(line.Kind);
+                var target = Enum.Parse<EffectTarget>(line.Target);
                 var amount = Math.Max(0, line.Amount);
-                foreach (var targetId in ResolveInterceptorTargets(line.Target, bearer, combat))
+                foreach (var targetId in ResolveInterceptorTargets(target, bearer, combat))
                 {
-                    IEffectRequest? request = line.Kind switch
+                    IEffectRequest? request = kind switch
                     {
                         EffectKind.DealDamage => new DealDamageEffectRequest(targetId, amount, bearer.Id),
                         EffectKind.GainBlock => new GainBlockEffectRequest(targetId, amount, bearer.Id),
@@ -275,6 +300,21 @@ public sealed class ScenarioComposer
             }
             return requests;
         };
+
+    // Rebuild a status' interceptors from data into live engine interceptors (used by both the live-combat path
+    // and a run's BuildContent). The internal interceptor classes are constructed only here.
+    public static IPreDownInterceptor RebuildDeathPrevention(string statusSlug, StatusDeathPreventionData data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        return new StatusDeathPreventionInterceptor(
+            new StatusDefinitionId(statusSlug), data.SurvivingHealth, BuildRequestFactory(data.Effects));
+    }
+
+    public static IStatusApplicationInterceptor RebuildDebuffBlock(string statusSlug, StatusDebuffBlockData data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        return new StatusBlocksApplicationInterceptor(
+            new StatusDefinitionId(statusSlug), StatusPolarity.Debuff, BuildRequestFactory(data.Effects));
     }
 
     private static IEnumerable<CombatantId> ResolveInterceptorTargets(

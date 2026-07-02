@@ -24,16 +24,24 @@ public sealed class CombatContentLibrary
     // Triggered-effect programs (e.g. a custom status' triggers) to register into every fight so they fire.
     public IReadOnlyList<ITriggeredEffectDefinition> TriggeredPrograms { get; }
 
+    // Status interceptors (death-prevention, debuff-block) to register into every fight.
+    public IReadOnlyList<IPreDownInterceptor> PreDownInterceptors { get; }
+    public IReadOnlyList<IStatusApplicationInterceptor> StatusApplicationInterceptors { get; }
+
     public CombatContentLibrary(
         IReadOnlyList<CardBlueprint>? cards = null,
         IReadOnlyList<EnemyActionBlueprint>? enemyActions = null,
         IReadOnlyList<StatusBlueprint>? statuses = null,
-        IReadOnlyList<ITriggeredEffectDefinition>? triggeredPrograms = null)
+        IReadOnlyList<ITriggeredEffectDefinition>? triggeredPrograms = null,
+        IReadOnlyList<IPreDownInterceptor>? preDownInterceptors = null,
+        IReadOnlyList<IStatusApplicationInterceptor>? statusApplicationInterceptors = null)
     {
         Cards = cards ?? Array.Empty<CardBlueprint>();
         EnemyActions = enemyActions ?? Array.Empty<EnemyActionBlueprint>();
         Statuses = statuses ?? Array.Empty<StatusBlueprint>();
         TriggeredPrograms = triggeredPrograms ?? Array.Empty<ITriggeredEffectDefinition>();
+        PreDownInterceptors = preDownInterceptors ?? Array.Empty<IPreDownInterceptor>();
+        StatusApplicationInterceptors = statusApplicationInterceptors ?? Array.Empty<IStatusApplicationInterceptor>();
     }
 }
 
@@ -106,6 +114,8 @@ public sealed class EncounterCatalog
         foreach (var action in _library.EnemyActions) blueprint.EnemyActions.Add(action);
         foreach (var status in _library.Statuses) blueprint.Statuses.Add(status);
         foreach (var trigger in _library.TriggeredPrograms) blueprint.TriggeredPrograms.Add(trigger);
+        foreach (var interceptor in _library.PreDownInterceptors) blueprint.PreDownInterceptors.Add(interceptor);
+        foreach (var interceptor in _library.StatusApplicationInterceptors) blueprint.StatusApplicationInterceptors.Add(interceptor);
 
         // Hero shell: HP from the run; resources / starting statuses from the encounter; deck projected later.
         blueprint.Hero = new HeroBlueprint("hero")

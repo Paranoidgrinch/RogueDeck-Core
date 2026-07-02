@@ -46,6 +46,24 @@ public static class CombatImport
         return programs;
     }
 
+    // Rebuilds every status' death-prevention / debuff-block interceptors from data into live engine interceptors,
+    // ready to register into a combat (via CombatContentLibrary).
+    public static (IReadOnlyList<IPreDownInterceptor> PreDown, IReadOnlyList<IStatusApplicationInterceptor> StatusApplication)
+        RebuildStatusInterceptors(IReadOnlyList<StatusData> statuses)
+    {
+        ArgumentNullException.ThrowIfNull(statuses);
+        var preDown = new List<IPreDownInterceptor>();
+        var statusApplication = new List<IStatusApplicationInterceptor>();
+        foreach (var status in statuses)
+        {
+            if (status.DeathPrevention is { } deathPrevention)
+                preDown.Add(ScenarioComposer.RebuildDeathPrevention(status.Id, deathPrevention));
+            if (status.DebuffBlock is { } debuffBlock)
+                statusApplication.Add(ScenarioComposer.RebuildDebuffBlock(status.Id, debuffBlock));
+        }
+        return (preDown, statusApplication);
+    }
+
     // slug → display name, matching how ScenarioComposer keys cards/enemies (first name wins on a slug clash).
     private static Dictionary<string, string> NameBySlug(IEnumerable<string> names)
     {

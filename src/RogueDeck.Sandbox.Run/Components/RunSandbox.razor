@@ -597,11 +597,14 @@
     // as data in the blueprint; only the relic is still code-provided by id.
     private static RunContentRegistry BuildContent(RunBlueprint blueprint)
     {
+        var interceptors = CombatImport.RebuildStatusInterceptors(blueprint.Statuses);
         var library = new CombatContentLibrary(
             cards: blueprint.Cards.Select(card => card.ToBlueprint()).ToArray(),
             enemyActions: blueprint.EnemyActions.Select(action => action.ToBlueprint()).ToArray(),
             statuses: blueprint.Statuses.Select(status => status.ToBlueprint()).ToArray(),
-            triggeredPrograms: CombatImport.RebuildStatusTriggers(blueprint.Statuses));
+            triggeredPrograms: CombatImport.RebuildStatusTriggers(blueprint.Statuses),
+            preDownInterceptors: interceptors.PreDown,
+            statusApplicationInterceptors: interceptors.StatusApplication);
 
         var builder = new RunContentRegistryBuilder()
             .RegisterRelic(StandardRelics.Bloodstone())
