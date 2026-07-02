@@ -1,10 +1,9 @@
-@using System.Reflection
 @using RogueDeck.Core.Combat
 
 @* Visual editor for the run's authored relics. A relic is id + display name + reactions; each reaction fires on
-   a run event while the relic is owned and enqueues effects. This editor handles the common case — reactions
-   built from constant-valued literal effects and no condition. Richer reactions (conditions, computed amounts,
-   card templates) authored in JSON are shown read-only so nothing is lost. Edits re-serialize the blueprint. *@
+   a run event (optionally gated by a condition) while the relic is owned and enqueues effects. Effect amounts can
+   be a constant or a run/event value (computed at dispatch). Reactions the editor can't model (nested and/or
+   conditions, advanced amounts, card templates) are preserved and shown read-only so nothing is lost. *@
 
 <section class="panel">
     <h2>Relics</h2>
@@ -93,7 +92,7 @@
                         </div>
                         <div class="editor-effects">
                             @{
-                                var effects = LiteralEffects(reaction);
+                                var effects = Templates(reaction);
                             }
                             @for (var fi = 0; fi < effects.Count; fi++)
                             {
@@ -142,7 +141,6 @@
     private static string AsString(object? v) => v?.ToString() ?? "";
     private static int AsInt(object? v, int fallback) => int.TryParse(v?.ToString(), out var n) ? n : fallback;
 
-    // The run events a relic reaction can fire on (key → friendly label), mapped to a run-event type by BuildProgram.
     private static readonly (string Key, string Label)[] ReactionEvents =
     {
         ("nodeEntered", "a node is entered"),
@@ -163,7 +161,7 @@
         ("counter", "Counter"),
     };
 
-    // Condition authoring: the "if" kinds, the comparison left-values, and the six operators.
+    // Condition authoring.
     private static readonly (string Kind, string Label)[] ConditionKinds =
     {
         ("none", "always"),
@@ -241,7 +239,7 @@
         {
             Id = id,
             DisplayName = id,
-            RunPrograms = new[] { BuildProgram("nodeEntered", new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 5) }, null) },
+            RunPrograms = new[] { BuildProgram("nodeEntered", new[] { NewTemplate("gold") }, null) },
         };
         _newRelicId = "";
         return Apply(Blueprint.Relics.Append(relic).ToList());
@@ -251,7 +249,7 @@
     private Task AddReaction(int relicIndex) =>
         EditReactions(relicIndex, programs =>
         {
-            programs.Add(BuildProgram("nodeEntered", new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 5) }, null));
+            programs.Add(BuildProgram("nodeEntered", new[] { NewTemplate("gold") }, null));
             return programs;
         });
 
@@ -267,7 +265,7 @@
         EditReactions(relicIndex, programs =>
         {
             if (reactionIndex >= 0 && reactionIndex < programs.Count)
-                programs[reactionIndex] = BuildProgram(eventKey, LiteralEffects(programs[reactionIndex]), ConditionOf(programs[reactionIndex]));
+                programs[reactionIndex] = BuildProgram(eventKey, Templates(programs[reactionIndex]), ConditionOf(programs[reactionIndex]));
             return programs;
         });
 
@@ -277,13 +275,13 @@
             if (reactionIndex >= 0 && reactionIndex < programs.Count)
             {
                 var program = programs[reactionIndex];
-                programs[reactionIndex] = BuildProgram(EventKey(program.EventType), LiteralEffects(program), RelicConditions.Build(spec));
+                programs[reactionIndex] = BuildProgram(EventKey(program.EventType), Templates(program), RelicConditions.Build(spec));
             }
             return programs;
         });
 
     // ── effect level ──────────────────────────────────────────────────────────────
-    private Task SetReactionEffects(int relicIndex, int reactionIndex, IReadOnlyList<IRunEffectRequest> effects) =>
+    private Task SetReactionEffects(int relicIndex, int reactionIndex, IReadOnlyList<IRunEffectTemplate> effects) =>
         EditReactions(relicIndex, programs =>
         {
             if (reactionIndex >= 0 && reactionIndex < programs.Count)
@@ -293,43 +291,41 @@
 
     private Task AddEffect(int relicIndex, int reactionIndex, string kind)
     {
-        if (NewEffect(kind) is not { } effect)
-            return Task.CompletedTask;
         var reaction = Blueprint.Relics[relicIndex].RunPrograms[reactionIndex];
-        return SetReactionEffects(relicIndex, reactionIndex, LiteralEffects(reaction).Append(effect).ToList());
+        return SetReactionEffects(relicIndex, reactionIndex, Templates(reaction).Append(NewTemplate(kind)).ToList());
     }
 
     private Task RemoveEffect(int relicIndex, int reactionIndex, int effectIndex)
     {
-        var effects = LiteralEffects(Blueprint.Relics[relicIndex].RunPrograms[reactionIndex]).ToList();
+        var effects = Templates(Blueprint.Relics[relicIndex].RunPrograms[reactionIndex]).ToList();
         if (effectIndex >= 0 && effectIndex < effects.Count)
             effects.RemoveAt(effectIndex);
         return SetReactionEffects(relicIndex, reactionIndex, effects);
     }
 
-    private Task SetEffect(int relicIndex, int reactionIndex, int effectIndex, IRunEffectRequest effect)
+    private Task SetEffectTemplate(int relicIndex, int reactionIndex, int effectIndex, IRunEffectTemplate template)
     {
-        var effects = LiteralEffects(Blueprint.Relics[relicIndex].RunPrograms[reactionIndex]).ToList();
+        var effects = Templates(Blueprint.Relics[relicIndex].RunPrograms[reactionIndex]).ToList();
         if (effectIndex >= 0 && effectIndex < effects.Count)
-            effects[effectIndex] = effect;
+            effects[effectIndex] = template;
         return SetReactionEffects(relicIndex, reactionIndex, effects);
     }
 
-    private static IRunEffectRequest? NewEffect(string kind) => kind switch
+    private static IRunEffectTemplate NewTemplate(string kind) => kind switch
     {
-        "gold" => new ChangeResourceRunEffect(StandardRunIds.Gold, 10),
-        "resource" => new ChangeResourceRunEffect(new RunResourceId("resource"), 5),
-        "heal" => new HealRunEffect(5),
-        "damage" => new ApplyRunDamageRunEffect(3),
-        "maxhp" => new ChangeMaxHealthRunEffect(5),
-        "flag" => new SetFlagRunEffect(new RunFlagId("flag")),
-        "counter" => new IncrementCounterRunEffect(new RunCounterId("counter"), 1),
-        _ => null,
+        "gold" => new GainResourceTemplate(StandardRunIds.Gold, RunExpr.Const(10)),
+        "resource" => new GainResourceTemplate(new RunResourceId("resource"), RunExpr.Const(5)),
+        "heal" => new HealTemplate(RunExpr.Const(5)),
+        "damage" => new DamageTemplate(RunExpr.Const(3)),
+        "maxhp" => new LiteralEffectTemplate(new ChangeMaxHealthRunEffect(5)),
+        "flag" => new LiteralEffectTemplate(new SetFlagRunEffect(new RunFlagId("flag"))),
+        "counter" => new LiteralEffectTemplate(new IncrementCounterRunEffect(new RunCounterId("counter"), 1)),
+        _ => new LiteralEffectTemplate(new ChangeMaxHealthRunEffect(0)),
     };
 
     // ── reaction (de)composition ────────────────────────────────────────────────────
-    // A reaction is editable here iff it is a DataTriggeredRunEffect whose templates are all literal effects and
-    // whose condition (if any) is one this editor can round-trip. Anything richer is preserved and shown read-only.
+    // A reaction is editable iff it is a DataTriggeredRunEffect whose condition (if any) and every effect template
+    // are shapes the editor can round-trip. Anything richer is preserved and shown read-only.
     private static bool IsEditable(ITriggeredRunEffectDefinition reaction)
     {
         var type = reaction.GetType();
@@ -337,8 +333,30 @@
             return false;
         if (RelicConditions.IsAdvanced(ConditionOf(reaction)))
             return false;
-        return TemplatesOf(reaction).All(t => t is LiteralEffectTemplate);
+        return TemplatesOf(reaction).All(IsEditableTemplate);
     }
+
+    private static bool IsEditableTemplate(IRunEffectTemplate template) => Normalize(template) switch
+    {
+        GainResourceTemplate g => !RelicAmounts.IsAdvanced(g.Amount),
+        HealTemplate h => !RelicAmounts.IsAdvanced(h.Amount),
+        DamageTemplate d => !RelicAmounts.IsAdvanced(d.Amount),
+        LiteralEffectTemplate { Effect: ChangeMaxHealthRunEffect or SetFlagRunEffect or IncrementCounterRunEffect } => true,
+        _ => false,
+    };
+
+    // Normalize so gold/resource/heal/damage are always the computed template form (a constant literal becomes a
+    // Const expression) — the single shape the effect editor edits. Max-HP / flag / counter stay literal.
+    private static IRunEffectTemplate Normalize(IRunEffectTemplate template) => template switch
+    {
+        LiteralEffectTemplate { Effect: ChangeResourceRunEffect r } => new GainResourceTemplate(r.Resource, RunExpr.Const(r.Delta)),
+        LiteralEffectTemplate { Effect: HealRunEffect h } => new HealTemplate(RunExpr.Const(h.Amount)),
+        LiteralEffectTemplate { Effect: ApplyRunDamageRunEffect d } => new DamageTemplate(RunExpr.Const(d.Amount)),
+        _ => template,
+    };
+
+    private static IReadOnlyList<IRunEffectTemplate> Templates(ITriggeredRunEffectDefinition reaction) =>
+        TemplatesOf(reaction).Select(Normalize).ToList();
 
     private static IReadOnlyList<IRunEffectTemplate> TemplatesOf(ITriggeredRunEffectDefinition reaction) =>
         reaction.GetType().GetProperty("Templates")?.GetValue(reaction) as IReadOnlyList<IRunEffectTemplate>
@@ -347,13 +365,10 @@
     private static IRunExpression<bool>? ConditionOf(ITriggeredRunEffectDefinition reaction) =>
         reaction.GetType().GetProperty("Condition")?.GetValue(reaction) as IRunExpression<bool>;
 
-    private static IReadOnlyList<IRunEffectRequest> LiteralEffects(ITriggeredRunEffectDefinition reaction) =>
-        TemplatesOf(reaction).OfType<LiteralEffectTemplate>().Select(t => t.Effect).ToList();
-
     private static ITriggeredRunEffectDefinition BuildProgram(
-        string eventKey, IReadOnlyList<IRunEffectRequest> effects, IRunExpression<bool>? condition)
+        string eventKey, IReadOnlyList<IRunEffectTemplate> templates, IRunExpression<bool>? condition)
     {
-        var array = effects.ToArray();
+        var array = templates.ToArray();
         return eventKey switch
         {
             "combatResolved" => Make<CombatResolvedRunEvent>(condition, array),
@@ -364,9 +379,9 @@
         };
     }
 
-    private static ITriggeredRunEffectDefinition Make<TEvent>(IRunExpression<bool>? condition, IRunEffectRequest[] effects)
+    private static ITriggeredRunEffectDefinition Make<TEvent>(IRunExpression<bool>? condition, IRunEffectTemplate[] templates)
         where TEvent : IRunEvent =>
-        condition is null ? RunPrograms.On<TEvent>(effects) : RunPrograms.When<TEvent>(condition, effects);
+        condition is null ? RunPrograms.On<TEvent>(templates) : RunPrograms.When<TEvent>(condition, templates);
 
     private static string EventKey(Type eventType) => eventType.Name switch
     {
@@ -383,58 +398,107 @@
         return ReactionEvents.FirstOrDefault(e => e.Key == key).Label ?? eventType.Name;
     }
 
-    // Inline editor for one literal reaction effect (the same simple, serializable kinds the EventEditor offers).
-    private RenderFragment EffectEditor(int relicIndex, int reactionIndex, int fx, IRunEffectRequest effect) => builder =>
+    // Inline editor for one effect template: a constant/computed amount for gold/resource/heal/damage, or the
+    // literal control for max-HP / flag / counter.
+    private RenderFragment EffectEditor(int ri, int rx, int fx, IRunEffectTemplate template) => builder =>
     {
-        void Amount(string label, int value, Func<int, IRunEffectRequest> make)
+        var seq = 0;
+
+        void Set(IRunEffectTemplate next) =>
+            _ = SetEffectTemplate(ri, rx, fx, next);
+
+        void Label(string text) => builder.AddContent(seq++, text + " ");
+
+        void TextInput(string value, int width, Action<string> onChange)
         {
-            var seq = 0;
-            builder.AddContent(seq++, label + " ");
+            builder.OpenElement(seq++, "input");
+            builder.AddAttribute(seq++, "value", value);
+            builder.AddAttribute(seq++, "style", $"width:{width}rem");
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e => onChange(AsString(e.Value))));
+            builder.CloseElement();
+        }
+
+        void NumberInput(int value, Action<int> onChange)
+        {
             builder.OpenElement(seq++, "input");
             builder.AddAttribute(seq++, "type", "number");
             builder.AddAttribute(seq++, "value", value);
             builder.AddAttribute(seq++, "style", "width:4rem");
-            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this,
-                e => SetEffect(relicIndex, reactionIndex, fx, make(AsInt(e.Value, value)))));
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e => onChange(AsInt(e.Value, value))));
             builder.CloseElement();
         }
 
-        void Text(string label, string value, Func<string, IRunEffectRequest> make)
+        void Select(string current, IEnumerable<(string Key, string Label)> options, Action<string> onChange)
         {
-            var seq = 100;
-            builder.AddContent(seq++, label + " ");
-            builder.OpenElement(seq++, "input");
-            builder.AddAttribute(seq++, "value", value);
-            builder.AddAttribute(seq++, "style", "width:6rem");
-            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this,
-                e => SetEffect(relicIndex, reactionIndex, fx, make(AsString(e.Value)))));
+            builder.OpenElement(seq++, "select");
+            builder.AddAttribute(seq++, "value", current);
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e => onChange(AsString(e.Value))));
+            foreach (var (key, label) in options)
+            {
+                builder.OpenElement(seq++, "option");
+                builder.AddAttribute(seq++, "value", key);
+                builder.AddContent(seq++, label);
+                builder.CloseElement();
+            }
             builder.CloseElement();
         }
 
-        switch (effect)
+        // Amount editor: a source toggle (constant vs a run/event value), then the matching control(s). `make`
+        // wraps a rebuilt amount expression back into the effect template.
+        void AmountControls(IRunExpression<int> amount, Func<IRunExpression<int>, IRunEffectTemplate> make)
         {
-            case ChangeResourceRunEffect r:
-                Text("Resource", r.Resource.Value, s => new ChangeResourceRunEffect(new RunResourceId(s), r.Delta));
-                Amount(" Δ", r.Delta, n => new ChangeResourceRunEffect(r.Resource, n));
+            var spec = RelicAmounts.Classify(amount);
+            Select(spec.Kind == "value" ? "value" : "const",
+                new[] { ("const", "amount"), ("value", "value of…") },
+                kind => Set(make(RelicAmounts.Build(spec with { Kind = kind }))));
+            if (spec.Kind == "value")
+            {
+                Select(spec.ValueKind, RelicAmounts.Values,
+                    v => Set(make(RelicAmounts.Build(spec with { ValueKind = v }))));
+                if (spec.ValueKind is "resource" or "counter")
+                    TextInput(spec.Id, 6, id => Set(make(RelicAmounts.Build(spec with { Id = id }))));
+            }
+            else
+            {
+                NumberInput(spec.Const, n => Set(make(RelicAmounts.Build(spec with { Const = n }))));
+            }
+        }
+
+        switch (template)
+        {
+            case GainResourceTemplate g when g.Resource == StandardRunIds.Gold:
+                Label("Gold");
+                AmountControls(g.Amount, a => new GainResourceTemplate(StandardRunIds.Gold, a));
                 break;
-            case HealRunEffect h:
-                Amount("Heal", h.Amount, n => new HealRunEffect(n));
+            case GainResourceTemplate g:
+                Label("Resource");
+                TextInput(g.Resource.Value, 6, s => Set(new GainResourceTemplate(new RunResourceId(s), g.Amount)));
+                AmountControls(g.Amount, a => new GainResourceTemplate(g.Resource, a));
                 break;
-            case ApplyRunDamageRunEffect d:
-                Amount("Lose HP", d.Amount, n => new ApplyRunDamageRunEffect(n));
+            case HealTemplate h:
+                Label("Heal");
+                AmountControls(h.Amount, a => new HealTemplate(a));
                 break;
-            case ChangeMaxHealthRunEffect m:
-                Amount("Max HP Δ", m.Delta, n => new ChangeMaxHealthRunEffect(n));
+            case DamageTemplate d:
+                Label("Lose HP");
+                AmountControls(d.Amount, a => new DamageTemplate(a));
                 break;
-            case SetFlagRunEffect f:
-                Text("Set flag", f.Flag.Value, s => new SetFlagRunEffect(new RunFlagId(s), f.Value));
+            case LiteralEffectTemplate { Effect: ChangeMaxHealthRunEffect m }:
+                Label("Max HP Δ");
+                NumberInput(m.Delta, n => Set(new LiteralEffectTemplate(new ChangeMaxHealthRunEffect(n))));
                 break;
-            case IncrementCounterRunEffect c:
-                Text("Counter", c.Counter.Value, s => new IncrementCounterRunEffect(new RunCounterId(s), c.Delta));
-                Amount(" by", c.Delta, n => new IncrementCounterRunEffect(c.Counter, n));
+            case LiteralEffectTemplate { Effect: SetFlagRunEffect f }:
+                Label("Set flag");
+                TextInput(f.Flag.Value, 7, s => Set(new LiteralEffectTemplate(new SetFlagRunEffect(new RunFlagId(s), f.Value))));
+                break;
+            case LiteralEffectTemplate { Effect: IncrementCounterRunEffect c }:
+                Label("Counter");
+                TextInput(c.Counter.Value, 6, s => Set(new LiteralEffectTemplate(new IncrementCounterRunEffect(new RunCounterId(s), c.Delta))));
+                Label(" by");
+                NumberInput(c.Delta, n => Set(new LiteralEffectTemplate(new IncrementCounterRunEffect(c.Counter, n))));
                 break;
             default:
-                builder.AddContent(900, effect.GetType().Name);
+                builder.AddContent(seq++, template.GetType().Name);
                 break;
         }
     };
