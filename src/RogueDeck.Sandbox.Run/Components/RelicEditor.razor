@@ -35,6 +35,7 @@
             {
                 var reactionIndex = pi;
                 var reaction = relic.RunPrograms[pi];
+                var cond = RelicConditions.Classify(ConditionOf(reaction));
                 <div class="editor-choice">
                     @if (IsEditable(reaction))
                     {
@@ -49,6 +50,46 @@
                                 </select>
                             </label>
                             <button class="mini" @onclick="() => RemoveReaction(relicIndex, reactionIndex)">✕ reaction</button>
+                        </div>
+                        <div class="run-bar">
+                            <label>if
+                                <select value="@cond.Kind"
+                                        @onchange="e => SetCondition(relicIndex, reactionIndex, cond with { Kind = AsString(e.Value) })">
+                                    @foreach (var (key, label) in ConditionKinds)
+                                    {
+                                        <option value="@key">@label</option>
+                                    }
+                                </select>
+                            </label>
+                            @if (cond.Kind == "flag")
+                            {
+                                <input value="@cond.Id" placeholder="flag id" style="width:7rem"
+                                       @onchange="e => SetCondition(relicIndex, reactionIndex, cond with { Id = AsString(e.Value) })" />
+                            }
+                            else if (cond.Kind == "compare")
+                            {
+                                <select value="@cond.ValueKind"
+                                        @onchange="e => SetCondition(relicIndex, reactionIndex, cond with { ValueKind = AsString(e.Value) })">
+                                    @foreach (var (key, label) in CompareValues)
+                                    {
+                                        <option value="@key">@label</option>
+                                    }
+                                </select>
+                                <select value="@cond.Op"
+                                        @onchange="e => SetCondition(relicIndex, reactionIndex, cond with { Op = ParseOp(AsString(e.Value)) })">
+                                    @foreach (var op in Operators)
+                                    {
+                                        <option value="@op">@OpSymbol(op)</option>
+                                    }
+                                </select>
+                                <input type="number" value="@cond.Right" style="width:4rem"
+                                       @onchange="e => SetCondition(relicIndex, reactionIndex, cond with { Right = AsInt(e.Value, cond.Right) })" />
+                                @if (cond.ValueKind is "resource" or "counter")
+                                {
+                                    <input value="@cond.Id" placeholder="id" style="width:6rem"
+                                           @onchange="e => SetCondition(relicIndex, reactionIndex, cond with { Id = AsString(e.Value) })" />
+                                }
+                            }
                         </div>
                         <div class="editor-effects">
                             @{
@@ -122,6 +163,45 @@
         ("counter", "Counter"),
     };
 
+    // Condition authoring: the "if" kinds, the comparison left-values, and the six operators.
+    private static readonly (string Kind, string Label)[] ConditionKinds =
+    {
+        ("none", "always"),
+        ("compare", "a value compares…"),
+        ("victory", "combat was a victory"),
+        ("defeat", "combat was a defeat"),
+        ("flag", "a flag is set"),
+    };
+
+    private static readonly (string Kind, string Label)[] CompareValues =
+    {
+        ("gold", "gold"),
+        ("currentHp", "current HP"),
+        ("maxHp", "max HP"),
+        ("missingHp", "missing HP"),
+        ("deckSize", "deck size"),
+        ("relicCount", "relic count"),
+        ("consumableCount", "consumables"),
+        ("resource", "resource…"),
+        ("counter", "counter…"),
+    };
+
+    private static readonly RunComparisonOperator[] Operators = Enum.GetValues<RunComparisonOperator>();
+
+    private static string OpSymbol(RunComparisonOperator op) => op switch
+    {
+        RunComparisonOperator.Equal => "==",
+        RunComparisonOperator.NotEqual => "≠",
+        RunComparisonOperator.LessThan => "<",
+        RunComparisonOperator.LessOrEqual => "≤",
+        RunComparisonOperator.GreaterThan => ">",
+        RunComparisonOperator.GreaterOrEqual => "≥",
+        _ => op.ToString(),
+    };
+
+    private static RunComparisonOperator ParseOp(string s) =>
+        Enum.TryParse<RunComparisonOperator>(s, out var op) ? op : RunComparisonOperator.GreaterOrEqual;
+
     private Task Apply(IReadOnlyList<RelicData> relics) =>
         BlueprintChanged.InvokeAsync(Blueprint with { Relics = relics });
 
@@ -161,7 +241,7 @@
         {
             Id = id,
             DisplayName = id,
-            RunPrograms = new[] { BuildProgram("nodeEntered", new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 5) }) },
+            RunPrograms = new[] { BuildProgram("nodeEntered", new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 5) }, null) },
         };
         _newRelicId = "";
         return Apply(Blueprint.Relics.Append(relic).ToList());
@@ -171,7 +251,7 @@
     private Task AddReaction(int relicIndex) =>
         EditReactions(relicIndex, programs =>
         {
-            programs.Add(BuildProgram("nodeEntered", new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 5) }));
+            programs.Add(BuildProgram("nodeEntered", new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 5) }, null));
             return programs;
         });
 
@@ -187,7 +267,18 @@
         EditReactions(relicIndex, programs =>
         {
             if (reactionIndex >= 0 && reactionIndex < programs.Count)
-                programs[reactionIndex] = BuildProgram(eventKey, LiteralEffects(programs[reactionIndex]));
+                programs[reactionIndex] = BuildProgram(eventKey, LiteralEffects(programs[reactionIndex]), ConditionOf(programs[reactionIndex]));
+            return programs;
+        });
+
+    private Task SetCondition(int relicIndex, int reactionIndex, RelicConditionSpec spec) =>
+        EditReactions(relicIndex, programs =>
+        {
+            if (reactionIndex >= 0 && reactionIndex < programs.Count)
+            {
+                var program = programs[reactionIndex];
+                programs[reactionIndex] = BuildProgram(EventKey(program.EventType), LiteralEffects(program), RelicConditions.Build(spec));
+            }
             return programs;
         });
 
@@ -196,7 +287,7 @@
         EditReactions(relicIndex, programs =>
         {
             if (reactionIndex >= 0 && reactionIndex < programs.Count)
-                programs[reactionIndex] = BuildProgram(EventKey(programs[reactionIndex].EventType), effects);
+                programs[reactionIndex] = BuildProgram(EventKey(programs[reactionIndex].EventType), effects, ConditionOf(programs[reactionIndex]));
             return programs;
         });
 
@@ -237,14 +328,14 @@
     };
 
     // ── reaction (de)composition ────────────────────────────────────────────────────
-    // A reaction is editable here iff it is a DataTriggeredRunEffect with no condition whose templates are all
-    // literal effects — exactly what this editor produces. Anything richer is preserved and shown read-only.
+    // A reaction is editable here iff it is a DataTriggeredRunEffect whose templates are all literal effects and
+    // whose condition (if any) is one this editor can round-trip. Anything richer is preserved and shown read-only.
     private static bool IsEditable(ITriggeredRunEffectDefinition reaction)
     {
         var type = reaction.GetType();
         if (!type.IsGenericType || type.GetGenericTypeDefinition() != typeof(DataTriggeredRunEffect<>))
             return false;
-        if (type.GetProperty("Condition")?.GetValue(reaction) is not null)
+        if (RelicConditions.IsAdvanced(ConditionOf(reaction)))
             return false;
         return TemplatesOf(reaction).All(t => t is LiteralEffectTemplate);
     }
@@ -253,21 +344,29 @@
         reaction.GetType().GetProperty("Templates")?.GetValue(reaction) as IReadOnlyList<IRunEffectTemplate>
         ?? Array.Empty<IRunEffectTemplate>();
 
+    private static IRunExpression<bool>? ConditionOf(ITriggeredRunEffectDefinition reaction) =>
+        reaction.GetType().GetProperty("Condition")?.GetValue(reaction) as IRunExpression<bool>;
+
     private static IReadOnlyList<IRunEffectRequest> LiteralEffects(ITriggeredRunEffectDefinition reaction) =>
         TemplatesOf(reaction).OfType<LiteralEffectTemplate>().Select(t => t.Effect).ToList();
 
-    private static ITriggeredRunEffectDefinition BuildProgram(string eventKey, IReadOnlyList<IRunEffectRequest> effects)
+    private static ITriggeredRunEffectDefinition BuildProgram(
+        string eventKey, IReadOnlyList<IRunEffectRequest> effects, IRunExpression<bool>? condition)
     {
         var array = effects.ToArray();
         return eventKey switch
         {
-            "combatResolved" => RunPrograms.On<CombatResolvedRunEvent>(array),
-            "runStarted" => RunPrograms.On<RunStartedRunEvent>(array),
-            "rewardGranted" => RunPrograms.On<RewardGrantedRunEvent>(array),
-            "eventChoiceMade" => RunPrograms.On<EventChoiceMadeRunEvent>(array),
-            _ => RunPrograms.On<NodeEnteredRunEvent>(array),
+            "combatResolved" => Make<CombatResolvedRunEvent>(condition, array),
+            "runStarted" => Make<RunStartedRunEvent>(condition, array),
+            "rewardGranted" => Make<RewardGrantedRunEvent>(condition, array),
+            "eventChoiceMade" => Make<EventChoiceMadeRunEvent>(condition, array),
+            _ => Make<NodeEnteredRunEvent>(condition, array),
         };
     }
+
+    private static ITriggeredRunEffectDefinition Make<TEvent>(IRunExpression<bool>? condition, IRunEffectRequest[] effects)
+        where TEvent : IRunEvent =>
+        condition is null ? RunPrograms.On<TEvent>(effects) : RunPrograms.When<TEvent>(condition, effects);
 
     private static string EventKey(Type eventType) => eventType.Name switch
     {
