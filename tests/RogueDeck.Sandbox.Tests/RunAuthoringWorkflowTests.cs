@@ -162,6 +162,90 @@ public class RunAuthoringWorkflowTests
     }
 
     [Fact]
+    public async Task CardApplyingACustomStatus_CarriesTheStatus_AndTheCardIsPlayableInTheRun()
+    {
+        var options = RunJson.CreateOptions();
+
+        // Combat tab: a custom "Blessing" buff and a card that applies it to the hero.
+        var model = new SandboxModel
+        {
+            Hero = new HeroModel { Name = "Cleric", Hp = 40, Energy = 3, UseRealDeck = true, DrawPerTurn = 5 },
+            Statuses =
+            {
+                new CustomStatusModel
+                {
+                    Name = "Blessing", Polarity = StatusPolarity.Buff,
+                    Pipeline = PassiveModifierPipeline.DamageDealt,
+                    Operation = PassiveModifierOperation.AddPerStack, Magnitude = 2,
+                },
+            },
+            Cards =
+            {
+                new CardModel
+                {
+                    Name = "Bless", Cost = 1,
+                    Effects =
+                    {
+                        new EffectLineModel
+                        {
+                            Kind = EffectKind.ApplyStatus, Target = EffectTarget.Self,
+                            StatusId = "blessing", Amount = 2,
+                        },
+                    },
+                },
+            },
+        };
+        model.Hero.Deck.Add(new DeckCardModel { CardName = "Bless", Copies = 3 });
+        model.Enemies.Add(new EnemyModel { Name = "Dummy", Hp = 30 });
+
+        var imported = CombatImport.Project(EmptyBlueprint(), model, options).Blueprint;
+        Assert.Contains(imported.Statuses, s => s.Id == "blessing");
+
+        // The custom status — its flags + passive modifier — survives the JSON round-trip (Download/Upload).
+        var reloaded = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(imported, options), options);
+        var status = Assert.Single(reloaded.Statuses, s => s.Id == "blessing");
+        Assert.Single(status.PassiveModifiers);
+        Assert.Equal(StatusPolarity.Buff, status.Polarity);
+
+        // The card is actually PLAYABLE in a run combat. Drive the reloaded run through the real resolver (which
+        // projects the deck and registers the content), then play Bless. Before the fix the status id was
+        // unregistered, so applying it recorded a problem and the card was unusable.
+        var blueprint = reloaded with
+        {
+            Map = new RunMap(new Node[]
+            {
+                new(new NodeId("n1"), StandardRunIds.CombatNode, new EncounterRef(new EncounterId("combat-fight"))),
+            }),
+        };
+        var content = BuildContent(blueprint);
+        var driver = new InteractiveCombatDriver();
+        var defs = new RunDefinitionRegistryBuilder();
+        new StandardRunPackage(driver, content).RegisterDefinitions(defs);
+        var registry = defs.Build();
+        var run = new RunState(new RunId("t"), new HealthState(40, 40), blueprint.Map, randomSeed: 1);
+        foreach (var card in blueprint.Deck)
+            run.AddDeckCard(card);
+        var runTask = Task.Run(() => new RunRunner(registry, new ScriptedChoiceProvider(), content: content).Run(run));
+        try
+        {
+            var combat = WaitFor(() => driver.Current, TimeSpan.FromSeconds(5));
+            Assert.NotNull(combat);
+            var bless = combat!.Hand.First(c => c.DefinitionId.value == "bless");
+            driver.PlayCard(bless.Id, combat.HeroId);
+
+            Assert.DoesNotContain(combat.Steps, s => s.HasProblems);
+            var hero = combat.State.Combatants.First(c => c.Id == combat.HeroId);
+            Assert.Contains(hero.Statuses, s => s.DefinitionId.value == "blessing");
+        }
+        finally
+        {
+            driver.Dispose(); // unblock the parked run thread (the dummy never dies, so the fight won't end on its own)
+            try { await runTask.WaitAsync(TimeSpan.FromSeconds(5)); }
+            catch { /* the run was canceled by disposing the driver mid-combat */ }
+        }
+    }
+
+    [Fact]
     public void Import_CarriesCardAndEnemyDisplayNames()
     {
         var options = RunJson.CreateOptions();
@@ -314,7 +398,8 @@ public class RunAuthoringWorkflowTests
     {
         var library = new CombatContentLibrary(
             cards: blueprint.Cards.Select(card => card.ToBlueprint()).ToArray(),
-            enemyActions: blueprint.EnemyActions.Select(action => action.ToBlueprint()).ToArray());
+            enemyActions: blueprint.EnemyActions.Select(action => action.ToBlueprint()).ToArray(),
+            statuses: blueprint.Statuses.Select(status => status.ToBlueprint()).ToArray());
         var contentBuilder = new RunContentRegistryBuilder()
             .RegisterRelic(StandardRelics.Bloodstone())
             .RegisterRelic(StandardRelics.Leech())

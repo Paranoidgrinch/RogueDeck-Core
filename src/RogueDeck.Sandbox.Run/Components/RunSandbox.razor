@@ -599,7 +599,8 @@
     {
         var library = new CombatContentLibrary(
             cards: blueprint.Cards.Select(card => card.ToBlueprint()).ToArray(),
-            enemyActions: blueprint.EnemyActions.Select(action => action.ToBlueprint()).ToArray());
+            enemyActions: blueprint.EnemyActions.Select(action => action.ToBlueprint()).ToArray(),
+            statuses: blueprint.Statuses.Select(status => status.ToBlueprint()).ToArray());
 
         var builder = new RunContentRegistryBuilder()
             .RegisterRelic(StandardRelics.Bloodstone())

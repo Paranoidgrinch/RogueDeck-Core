@@ -115,6 +115,19 @@ public static class CombatImport
             else skipped.Add($"action '{data.Id}'");
         }
 
+        // Custom status definitions the cards / actions apply must ride along, or the run can't resolve the status
+        // id and the card is unplayable. Their DATA face (flags + passive modifiers) carries; trigger programs and
+        // death/debuff interceptors are Func escapes with no data form, so those are dropped and reported.
+        var statuses = current.Statuses.ToDictionary(s => s.Id, s => s);
+        foreach (var status in composed.Statuses)
+            statuses[status.Id] = StatusData.From(status);
+        foreach (var custom in model.Statuses)
+        {
+            var hasTriggers = custom.Triggers.Any(t => t.Effects.Count > 0) || custom.PreventsDeath || custom.BlocksDebuffs;
+            if (hasTriggers)
+                skipped.Add($"status '{ScenarioComposer.Slug(custom.Name)}' triggers/interceptors (passive effects still apply)");
+        }
+
         // The whole fight becomes one encounter: the enemy roster + the hero's combat resources / statuses.
         // Enemies only keep the actions that survived (a dropped action would dangle).
         var enemies = composed.Enemies.Select(e => new EncounterEnemy(
@@ -138,6 +151,7 @@ public static class CombatImport
         {
             Cards = cards.Values.ToList(),
             EnemyActions = actions.Values.ToList(),
+            Statuses = statuses.Values.ToList(),
             Encounters = encounters,
             Deck = deck.Count > 0 ? deck : current.Deck,
         };

@@ -14,4 +14,10 @@ public sealed record RunBlueprint(
     IReadOnlyList<EncounterDefinition> Encounters,
     IReadOnlyList<CardData> Cards,
     IReadOnlyList<EnemyActionData> EnemyActions,
-    RunMap Map);
+    RunMap Map)
+{
+    // Custom status definitions the run's cards / actions reference (e.g. a card that applies an authored status).
+    // Registered into every combat's content so the status resolves; without it the engine can't find the id and
+    // the card is unplayable. An init property (not a positional field) so existing constructions stay unchanged.
+    public IReadOnlyList<StatusData> Statuses { get; init; } = [];
+}
