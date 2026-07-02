@@ -104,6 +104,18 @@
 
     @if (TryBlueprint(out var editorBlueprint))
     {
+        @* The same inventory lens as run-play, but over the AUTHORED starting state: only the deck is carried in
+           from the start — relics/resources/consumables begin empty and are granted by events during the run. *@
+        <section class="panel">
+            <h2>Starting inventory</h2>
+            <div class="row"><span class="muted">Deck (@editorBlueprint.Deck.Count)</span>
+                @(editorBlueprint.Deck.Count == 0 ? "empty" : string.Join(", ",
+                    editorBlueprint.Deck.GroupBy(c => BlueprintCardName(editorBlueprint, c.value)).Select(Tally)))
+            </div>
+            <p class="muted">Relics, resources, and consumables start empty — the hero gains them from events
+                during the run.</p>
+        </section>
+
         <EncounterEditor Blueprint="editorBlueprint" BlueprintChanged="ApplyBlueprint" />
         <EventEditor Blueprint="editorBlueprint" BlueprintChanged="ApplyBlueprint" />
     }
@@ -526,6 +538,10 @@
 
     private string CardName(string definitionId) =>
         _cardNames.TryGetValue(definitionId, out var name) ? name : definitionId;
+
+    // Editor-side display name for a starting-deck card id, read from the authored card definitions.
+    private static string BlueprintCardName(RunBlueprint blueprint, string definitionId) =>
+        blueprint.Cards.FirstOrDefault(c => c.Id == definitionId)?.NameKey ?? definitionId;
 
     // A deck card's display name plus one "+" per upgrade level (matches the run's "+"-suffix upgrade convention).
     private string DeckCardLabel(RunCardInstance card) =>
