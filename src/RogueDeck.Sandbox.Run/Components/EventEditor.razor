@@ -280,8 +280,12 @@
         ("counter", "Counter"),
     };
 
-    // Relics are code-provided by id and registered in RunSandbox.BuildContent; keep this list in sync with it.
-    private static readonly string[] StandardRelicIds = { "bloodstone", "leech" };
+    // The relic ids a grant can pick: the run's authored relics plus the built-in samples (bloodstone/leech),
+    // matching what RunSandbox.BuildContent registers.
+    private static readonly string[] BuiltInRelicIds = { "bloodstone", "leech" };
+
+    private string[] RelicIds() =>
+        Blueprint.Relics.Select(r => r.Id).Concat(BuiltInRelicIds).Distinct(StringComparer.Ordinal).ToArray();
 
     private IRunEffectRequest? NewEffect(string kind) => kind switch
     {
@@ -291,7 +295,7 @@
         "maxhp" => new ChangeMaxHealthRunEffect(5),
         "addcard" => new AddCardToDeckRunEffect(new CardDefinitionId(Blueprint.Cards.Select(c => c.Id).FirstOrDefault() ?? "")),
         "removecard" => new RemoveCardsRunEffect(RunSelectors.DeckCards.ChooseByPlayer(1, "Choose a card to remove")),
-        "relic" => new AddRelicByIdRunEffect(new RelicId(StandardRelicIds[0])),
+        "relic" => new AddRelicByIdRunEffect(new RelicId(RelicIds().FirstOrDefault() ?? "bloodstone")),
         "resource" => new ChangeResourceRunEffect(new RunResourceId("resource"), 5),
         "consumable" => new AddConsumableRunEffect(new ConsumableId("potion"), new IRunEffectRequest[] { new HealRunEffect(8) }),
         "flag" => new SetFlagRunEffect(new RunFlagId("flag")),
@@ -395,7 +399,7 @@
                 builder.AddAttribute(502, "value", relic.Relic.Value);
                 builder.AddAttribute(503, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this,
                     e => SetEffect(key, script, sitId, ci, fx, new AddRelicByIdRunEffect(new RelicId(AsString(e.Value))))));
-                foreach (var relicId in StandardRelicIds)
+                foreach (var relicId in RelicIds())
                 {
                     builder.OpenElement(504, "option");
                     builder.AddAttribute(505, "value", relicId);

@@ -20,4 +20,8 @@ public sealed record RunBlueprint(
     // Registered into every combat's content so the status resolves; without it the engine can't find the id and
     // the card is unplayable. An init property (not a positional field) so existing constructions stay unchanged.
     public IReadOnlyList<StatusData> Statuses { get; init; } = [];
+
+    // Relics the run defines as data (a relic = run-level triggered programs). Registered into the content so an
+    // event that grants one by id resolves it. An init property, like Statuses, to keep constructions unchanged.
+    public IReadOnlyList<RelicData> Relics { get; init; } = [];
 }

@@ -607,12 +607,23 @@
             statusApplicationInterceptors: interceptors.StatusApplication);
 
         var builder = new RunContentRegistryBuilder()
-            .RegisterRelic(StandardRelics.Bloodstone())
-            .RegisterRelic(StandardRelics.Leech())
             .SetEncounters(new EncounterCatalog(library, blueprint.Encounters));
+        RegisterRelics(builder, blueprint.Relics);
         foreach (var (id, script) in blueprint.Events)
             builder.RegisterEvent(new EventId(id), script);
         return builder.Build();
+    }
+
+    // Registers the blueprint's authored relics, then the built-in sample relics (bloodstone/leech) unless an
+    // authored relic already claims that id. Keeps single-source data authoring while the samples stay available.
+    private static void RegisterRelics(RunContentRegistryBuilder builder, IReadOnlyList<RelicData> relics)
+    {
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var relic in relics)
+            if (ids.Add(relic.Id))
+                builder.RegisterRelic(relic.ToDefinition());
+        if (ids.Add("bloodstone")) builder.RegisterRelic(StandardRelics.Bloodstone());
+        if (ids.Add("leech")) builder.RegisterRelic(StandardRelics.Leech());
     }
 
     private static RunBlueprint DemoBlueprint()

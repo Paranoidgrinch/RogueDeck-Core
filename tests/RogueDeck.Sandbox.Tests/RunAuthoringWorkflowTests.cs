@@ -470,6 +470,54 @@ public class RunAuthoringWorkflowTests
     }
 
     [Fact]
+    public void AuthoredRelic_RoundTrips_IsGranted_AndReacts()
+    {
+        var options = RunJson.CreateOptions();
+
+        // A run-authored relic: whenever a map node is entered, gain 5 gold. It reacts only while owned.
+        var windfall = new RelicData
+        {
+            Id = "windfall",
+            DisplayName = "Windfall",
+            RunPrograms = new[]
+            {
+                RunPrograms.On<NodeEnteredRunEvent>(new ChangeResourceRunEffect(StandardRunIds.Gold, 5)),
+            },
+        };
+
+        var grant = new EventScriptBuilder("grant")
+            .Situation("grant", "A merchant offers a charm.", s => s
+                .Choice("take", c => c.TextKey("Take the Windfall").AddRelic(new RelicId("windfall"))))
+            .Build();
+        var after = new EventScriptBuilder("after")
+            .Situation("after", "The road continues.", s => s
+                .Choice("go", c => c.TextKey("Walk on")))
+            .Build();
+
+        var blueprint = EmptyBlueprint() with
+        {
+            Relics = new[] { windfall },
+            Events = new Dictionary<string, EventScript> { ["grant"] = grant, ["after"] = after },
+            Map = new RunMap(new Node[]
+            {
+                new(new NodeId("n1"), StandardRunIds.EventNode, new EventRef(new EventId("grant"))),
+                new(new NodeId("n2"), StandardRunIds.EventNode, new EventRef(new EventId("after"))),
+            }),
+        };
+
+        // The authored relic (its triggered program) survives the JSON round-trip.
+        var reloaded = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(blueprint, options), options);
+        var relic = Assert.Single(reloaded.Relics, r => r.Id == "windfall");
+        Assert.Single(relic.RunPrograms);
+
+        // Driving it: the grant event gives the relic (proving it is registered — an unknown id would fail), and
+        // entering the next node fires the relic's reaction for +5 gold.
+        var run = Drive(reloaded, seed: 1);
+        Assert.NotNull(run.FindRelic(new RelicId("windfall")));
+        Assert.True(run.GetResource(StandardRunIds.Gold) >= 5, $"expected relic to grant gold, got {run.GetResource(StandardRunIds.Gold)}");
+    }
+
+    [Fact]
     public void Import_CarriesCardAndEnemyDisplayNames()
     {
         var options = RunJson.CreateOptions();
@@ -629,9 +677,13 @@ public class RunAuthoringWorkflowTests
             preDownInterceptors: interceptors.PreDown,
             statusApplicationInterceptors: interceptors.StatusApplication);
         var contentBuilder = new RunContentRegistryBuilder()
-            .RegisterRelic(StandardRelics.Bloodstone())
-            .RegisterRelic(StandardRelics.Leech())
             .SetEncounters(new EncounterCatalog(library, blueprint.Encounters));
+        var relicIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var relic in blueprint.Relics)
+            if (relicIds.Add(relic.Id))
+                contentBuilder.RegisterRelic(relic.ToDefinition());
+        if (relicIds.Add("bloodstone")) contentBuilder.RegisterRelic(StandardRelics.Bloodstone());
+        if (relicIds.Add("leech")) contentBuilder.RegisterRelic(StandardRelics.Leech());
         foreach (var (id, script) in blueprint.Events)
             contentBuilder.RegisterEvent(new EventId(id), script);
         return contentBuilder.Build();
