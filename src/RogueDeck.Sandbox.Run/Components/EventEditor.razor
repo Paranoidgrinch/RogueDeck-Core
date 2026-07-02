@@ -1,0 +1,395 @@
+@* Visual editor for the run's authored events. An event is a tiny graph of situations; each situation offers
+   choices; a choice carries a text, optional effects, and an optional transition to another situation. It edits
+   the parsed RunBlueprint and hands the new one back; the parent re-serializes to JSON.
+
+   Only the serializable, parameter-simple effects are offered here (heal / damage / gold / max-hp / add-card /
+   remove-a-card / flag / counter). Richer effects (requirements, costs, rewards, computed amounts) remain
+   authorable in the JSON and are shown read-only if present. *@
+
+<section class="panel">
+    <h2>Events</h2>
+    <p class="muted">Each event is a graph of situations with choices; reference it from the map above with an
+        <strong>event</strong> node.</p>
+
+    @if (Blueprint.Events.Count == 0)
+    {
+        <p class="muted">No events yet — add one below.</p>
+    }
+
+    @foreach (var (key, script) in Blueprint.Events)
+    {
+        var eventKey = key;
+        var eventScript = script;
+        var situations = Situations(eventScript);
+        <div class="editor-card">
+            <div class="run-bar">
+                <label>Event id
+                    <input value="@eventKey" @onchange="e => RenameEvent(eventKey, AsString(e.Value))" style="width:9rem" />
+                </label>
+                <label>Start
+                    <select value="@eventScript.StartSituationId" @onchange="e => SetStart(eventKey, AsString(e.Value))">
+                        @foreach (var s in situations)
+                        {
+                            <option value="@s.Id">@s.Id</option>
+                        }
+                    </select>
+                </label>
+                <button class="mini" @onclick="() => RemoveEvent(eventKey)">✕ remove</button>
+            </div>
+
+            @foreach (var situation in situations)
+            {
+                var sitId = situation.Id;
+                <div class="editor-sit">
+                    <div class="run-bar">
+                        <label>Situation
+                            <input value="@sitId" @onchange="e => RenameSituation(eventKey, eventScript, sitId, AsString(e.Value))" style="width:8rem" />
+                        </label>
+                        <button class="mini" @onclick="() => RemoveSituation(eventKey, eventScript, sitId)">✕ situation</button>
+                    </div>
+                    <input class="sit-text" value="@situation.TextKey"
+                           @onchange="e => SetSituationText(eventKey, eventScript, sitId, AsString(e.Value))"
+                           placeholder="situation text" />
+
+                    @for (var ci = 0; ci < situation.Choices.Count; ci++)
+                    {
+                        var choiceIndex = ci;
+                        var choice = situation.Choices[ci];
+                        <div class="editor-choice">
+                            <div class="run-bar">
+                                <label>Choice
+                                    <input value="@choice.Id" @onchange="e => SetChoiceId(eventKey, eventScript, sitId, choiceIndex, AsString(e.Value))" style="width:7rem" />
+                                </label>
+                                <input value="@choice.TextKey" placeholder="button text"
+                                       @onchange="e => SetChoiceText(eventKey, eventScript, sitId, choiceIndex, AsString(e.Value))" style="width:14rem" />
+                                <label>then
+                                    <select value="@(choice.NextSituationId ?? "")" @onchange="e => SetChoiceNext(eventKey, eventScript, sitId, choiceIndex, AsString(e.Value))">
+                                        <option value="">(end)</option>
+                                        @foreach (var s in situations)
+                                        {
+                                            <option value="@s.Id">@s.Id</option>
+                                        }
+                                    </select>
+                                </label>
+                                <button class="mini" @onclick="() => RemoveChoice(eventKey, eventScript, sitId, choiceIndex)">✕</button>
+                            </div>
+
+                            <div class="editor-effects">
+                                @for (var fi = 0; fi < choice.Effects.Count; fi++)
+                                {
+                                    var fx = fi;
+                                    var effect = choice.Effects[fi];
+                                    <span class="fx">
+                                        @EffectEditor(eventKey, eventScript, sitId, choiceIndex, fx, effect)
+                                        <button class="mini" @onclick="() => RemoveEffect(eventKey, eventScript, sitId, choiceIndex, fx)">✕</button>
+                                    </span>
+                                }
+                                <span class="add-effect">
+                                    <span class="muted">add:</span>
+                                    @foreach (var (kind, label) in EffectKinds)
+                                    {
+                                        <button class="mini" title="@label"
+                                                @onclick="() => AddEffect(eventKey, eventScript, sitId, choiceIndex, kind)">
+                                            + @label
+                                        </button>
+                                    }
+                                </span>
+                            </div>
+                        </div>
+                    }
+                    <button class="mini" @onclick="() => AddChoice(eventKey, eventScript, sitId)">+ choice</button>
+                </div>
+            }
+            <button class="mini" @onclick="() => AddSituation(eventKey, eventScript)">+ situation</button>
+        </div>
+    }
+
+    <div class="run-bar">
+        <input placeholder="new event id" @bind="_newEventId" style="width:11rem" />
+        <button class="play" @onclick="AddEvent">Add event</button>
+    </div>
+</section>
+
+@code {
+    [Parameter] public RunBlueprint Blueprint { get; set; } = default!;
+    [Parameter] public EventCallback<RunBlueprint> BlueprintChanged { get; set; }
+
+    private string _newEventId = "";
+
+    private static string AsString(object? v) => v?.ToString() ?? "";
+    private static int AsInt(object? v, int fallback) => int.TryParse(v?.ToString(), out var n) ? n : fallback;
+
+    private static List<EventSituation> Situations(EventScript script) => script.Situations.Values.ToList();
+
+    // ── event level ─────────────────────────────────────────────────────────────────
+    private Task ReplaceEvents(Dictionary<string, EventScript> events) =>
+        BlueprintChanged.InvokeAsync(Blueprint with { Events = events });
+
+    private Dictionary<string, EventScript> EventsCopy() =>
+        Blueprint.Events.ToDictionary(kv => kv.Key, kv => kv.Value);
+
+    // Write a script back under `key`, guarding the "start must exist / at least one situation" invariants.
+    private Task SetScript(string key, string start, List<EventSituation> situations)
+    {
+        if (situations.Count == 0)
+            return Task.CompletedTask;
+        if (situations.All(s => s.Id != start))
+            start = situations[0].Id;
+        var events = EventsCopy();
+        events[key] = new EventScript(start, situations);
+        return ReplaceEvents(events);
+    }
+
+    private Task AddEvent()
+    {
+        var id = _newEventId.Trim();
+        if (id.Length == 0 || Blueprint.Events.ContainsKey(id))
+            return Task.CompletedTask;
+        var script = new EventScript("start", new[]
+        {
+            new EventSituation("start", "A new event.", new[]
+            {
+                new EventChoice("leave", Array.Empty<IRunEffectRequest>(), TextKey: "Leave"),
+            }),
+        });
+        var events = EventsCopy();
+        events[id] = script;
+        _newEventId = "";
+        return ReplaceEvents(events);
+    }
+
+    private Task RemoveEvent(string key)
+    {
+        var events = EventsCopy();
+        events.Remove(key);
+        return ReplaceEvents(events);
+    }
+
+    private Task RenameEvent(string key, string newKey)
+    {
+        newKey = newKey.Trim();
+        if (newKey.Length == 0 || (newKey != key && Blueprint.Events.ContainsKey(newKey)))
+            return Task.CompletedTask;
+        var events = new Dictionary<string, EventScript>();
+        foreach (var (k, v) in Blueprint.Events)
+            events[k == key ? newKey : k] = v;
+        return ReplaceEvents(events);
+    }
+
+    private Task SetStart(string key, string start) =>
+        Blueprint.Events.TryGetValue(key, out var script)
+            ? SetScript(key, start, Situations(script))
+            : Task.CompletedTask;
+
+    // ── situation level ───────────────────────────────────────────────────────────────
+    // Rebuild a script's situation list, replacing the one with `sitId` via `edit` (drop it if it returns null).
+    private Task EditSituation(string key, EventScript script, string sitId, Func<EventSituation, EventSituation?> edit)
+    {
+        var list = new List<EventSituation>();
+        foreach (var s in Situations(script))
+        {
+            if (s.Id != sitId) { list.Add(s); continue; }
+            if (edit(s) is { } replaced) list.Add(replaced);
+        }
+        // Keep the start pointing at a live situation (handles rename/remove of the start situation).
+        var start = list.Any(s => s.Id == script.StartSituationId) ? script.StartSituationId
+            : (list.Count > 0 ? list[0].Id : script.StartSituationId);
+        return SetScript(key, start, list);
+    }
+
+    private static EventSituation WithChoices(EventSituation s, IReadOnlyList<EventChoice> choices) =>
+        new(s.Id, s.TextKey, choices);
+
+    private Task AddSituation(string key, EventScript script)
+    {
+        var n = Situations(script).Count + 1;
+        var id = $"sit{n}";
+        while (Situations(script).Any(s => s.Id == id)) id = $"sit{++n}";
+        var sit = new EventSituation(id, "…", new[]
+        {
+            new EventChoice("leave", Array.Empty<IRunEffectRequest>(), TextKey: "Leave"),
+        });
+        return SetScript(key, script.StartSituationId, Situations(script).Append(sit).ToList());
+    }
+
+    private Task RemoveSituation(string key, EventScript script, string sitId) =>
+        Situations(script).Count <= 1
+            ? Task.CompletedTask // an event needs at least one situation
+            : EditSituation(key, script, sitId, _ => null);
+
+    private Task RenameSituation(string key, EventScript script, string sitId, string newId)
+    {
+        newId = newId.Trim();
+        if (newId.Length == 0 || (newId != sitId && Situations(script).Any(s => s.Id == newId)))
+            return Task.CompletedTask;
+        return EditSituation(key, script, sitId, s => new EventSituation(newId, s.TextKey, s.Choices));
+    }
+
+    private Task SetSituationText(string key, EventScript script, string sitId, string text) =>
+        EditSituation(key, script, sitId, s => new EventSituation(s.Id, text, s.Choices));
+
+    // ── choice level ──────────────────────────────────────────────────────────────────
+    private Task EditChoice(string key, EventScript script, string sitId, int choiceIndex, Func<EventChoice, EventChoice> edit) =>
+        EditSituation(key, script, sitId, s =>
+        {
+            var choices = s.Choices.ToList();
+            if (choiceIndex >= 0 && choiceIndex < choices.Count)
+                choices[choiceIndex] = edit(choices[choiceIndex]);
+            return WithChoices(s, choices);
+        });
+
+    private Task AddChoice(string key, EventScript script, string sitId) =>
+        EditSituation(key, script, sitId, s =>
+            WithChoices(s, s.Choices.Append(
+                new EventChoice($"choice{s.Choices.Count + 1}", Array.Empty<IRunEffectRequest>(), TextKey: "Choose")).ToList()));
+
+    private Task RemoveChoice(string key, EventScript script, string sitId, int choiceIndex) =>
+        EditSituation(key, script, sitId, s =>
+        {
+            if (s.Choices.Count <= 1)
+                return s; // a situation needs at least one choice to be resolvable
+            var choices = s.Choices.ToList();
+            choices.RemoveAt(choiceIndex);
+            return WithChoices(s, choices);
+        });
+
+    private Task SetChoiceId(string key, EventScript script, string sitId, int choiceIndex, string id) =>
+        string.IsNullOrWhiteSpace(id) ? Task.CompletedTask
+            : EditChoice(key, script, sitId, choiceIndex, c => c with { Id = id.Trim() });
+
+    private Task SetChoiceText(string key, EventScript script, string sitId, int choiceIndex, string text) =>
+        EditChoice(key, script, sitId, choiceIndex, c => c with { TextKey = text });
+
+    private Task SetChoiceNext(string key, EventScript script, string sitId, int choiceIndex, string next) =>
+        EditChoice(key, script, sitId, choiceIndex, c => c with { NextSituationId = string.IsNullOrEmpty(next) ? null : next });
+
+    // ── effect level ──────────────────────────────────────────────────────────────────
+    // The simple, serializable effect kinds offered as "+ …" buttons; each maps to a default in NewEffect.
+    private static readonly (string Kind, string Label)[] EffectKinds =
+    {
+        ("heal", "Heal"),
+        ("damage", "Damage"),
+        ("gold", "Gold"),
+        ("maxhp", "Max HP"),
+        ("addcard", "Add card"),
+        ("removecard", "Remove card"),
+        ("flag", "Flag"),
+        ("counter", "Counter"),
+    };
+
+    private IRunEffectRequest? NewEffect(string kind) => kind switch
+    {
+        "heal" => new HealRunEffect(5),
+        "damage" => new ApplyRunDamageRunEffect(3),
+        "gold" => new ChangeResourceRunEffect(StandardRunIds.Gold, 10),
+        "maxhp" => new ChangeMaxHealthRunEffect(5),
+        "addcard" => new AddCardToDeckRunEffect(new CardDefinitionId(Blueprint.Cards.Select(c => c.Id).FirstOrDefault() ?? "")),
+        "removecard" => new RemoveCardsRunEffect(RunSelectors.DeckCards.ChooseByPlayer(1, "Choose a card to remove")),
+        "flag" => new SetFlagRunEffect(new RunFlagId("flag")),
+        "counter" => new IncrementCounterRunEffect(new RunCounterId("counter"), 1),
+        _ => null,
+    };
+
+    private Task AddEffect(string key, EventScript script, string sitId, int choiceIndex, string kind)
+    {
+        if (NewEffect(kind) is not { } effect)
+            return Task.CompletedTask;
+        return EditChoice(key, script, sitId, choiceIndex, c => c with { Effects = c.Effects.Append(effect).ToList() });
+    }
+
+    private Task RemoveEffect(string key, EventScript script, string sitId, int choiceIndex, int effectIndex) =>
+        EditChoice(key, script, sitId, choiceIndex, c =>
+        {
+            var list = c.Effects.ToList();
+            if (effectIndex >= 0 && effectIndex < list.Count)
+                list.RemoveAt(effectIndex);
+            return c with { Effects = list };
+        });
+
+    private Task SetEffect(string key, EventScript script, string sitId, int choiceIndex, int effectIndex, IRunEffectRequest effect) =>
+        EditChoice(key, script, sitId, choiceIndex, c =>
+        {
+            var list = c.Effects.ToList();
+            if (effectIndex >= 0 && effectIndex < list.Count)
+                list[effectIndex] = effect;
+            return c with { Effects = list };
+        });
+
+    // Inline editor for one effect. Known simple effects get parameter inputs; anything else is shown read-only.
+    private RenderFragment EffectEditor(string key, EventScript script, string sitId, int ci, int fx, IRunEffectRequest effect) => builder =>
+    {
+        void Amount(string label, int value, Func<int, IRunEffectRequest> make)
+        {
+            var seq = 0;
+            builder.AddContent(seq++, label + " ");
+            builder.OpenElement(seq++, "input");
+            builder.AddAttribute(seq++, "type", "number");
+            builder.AddAttribute(seq++, "value", value);
+            builder.AddAttribute(seq++, "style", "width:4rem");
+            builder.AddAttribute(seq++, "onchange",
+                EventCallback.Factory.Create<ChangeEventArgs>(this, e => SetEffect(key, script, sitId, ci, fx, make(AsInt(e.Value, value)))));
+            builder.CloseElement();
+        }
+
+        void Text(string label, string value, Func<string, IRunEffectRequest> make)
+        {
+            var seq = 100;
+            builder.AddContent(seq++, label + " ");
+            builder.OpenElement(seq++, "input");
+            builder.AddAttribute(seq++, "value", value);
+            builder.AddAttribute(seq++, "style", "width:6rem");
+            builder.AddAttribute(seq++, "onchange",
+                EventCallback.Factory.Create<ChangeEventArgs>(this, e => SetEffect(key, script, sitId, ci, fx, make(AsString(e.Value)))));
+            builder.CloseElement();
+        }
+
+        switch (effect)
+        {
+            case HealRunEffect h:
+                Amount("Heal", h.Amount, n => new HealRunEffect(n));
+                break;
+            case ApplyRunDamageRunEffect d:
+                Amount("Lose HP", d.Amount, n => new ApplyRunDamageRunEffect(n));
+                break;
+            case ChangeMaxHealthRunEffect m:
+                Amount("Max HP Δ", m.Delta, n => new ChangeMaxHealthRunEffect(n));
+                break;
+            case ChangeResourceRunEffect r:
+                builder.AddContent(200, $"{r.Resource.Value} Δ ");
+                Amount("", r.Delta, n => new ChangeResourceRunEffect(r.Resource, n));
+                break;
+            case AddCardToDeckRunEffect a:
+                builder.AddContent(300, "Add card ");
+                builder.OpenElement(301, "select");
+                builder.AddAttribute(302, "value", a.Card.value);
+                builder.AddAttribute(303, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this,
+                    e => SetEffect(key, script, sitId, ci, fx, new AddCardToDeckRunEffect(new CardDefinitionId(AsString(e.Value))))));
+                builder.OpenElement(304, "option");
+                builder.AddAttribute(305, "value", "");
+                builder.AddContent(306, "— card —");
+                builder.CloseElement();
+                foreach (var card in Blueprint.Cards)
+                {
+                    builder.OpenElement(307, "option");
+                    builder.AddAttribute(308, "value", card.Id);
+                    builder.AddContent(309, card.Id);
+                    builder.CloseElement();
+                }
+                builder.CloseElement();
+                break;
+            case RemoveCardsRunEffect:
+                builder.AddContent(400, "Remove a card (player picks)");
+                break;
+            case SetFlagRunEffect f:
+                Text("Set flag", f.Flag.Value, s => new SetFlagRunEffect(new RunFlagId(s), f.Value));
+                break;
+            case IncrementCounterRunEffect c:
+                Text("Counter", c.Counter.Value, s => new IncrementCounterRunEffect(new RunCounterId(s), c.Delta));
+                Amount(" by", c.Delta, n => new IncrementCounterRunEffect(c.Counter, n));
+                break;
+            default:
+                builder.AddContent(900, effect.GetType().Name);
+                break;
+        }
+    };
+}

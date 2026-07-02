@@ -1,5 +1,6 @@
 @rendermode InteractiveServer
 @using System.Text.Json
+@inject CardDraft Draft
 
 <section style="padding:1rem; max-width:64rem">
     <h1>Card authoring (data)</h1>
@@ -25,11 +26,16 @@
 
 @code {
     private readonly JsonSerializerOptions _options = CombatJson.CreateOptions<CardPlayContext>();
-    private string _json = "";
+    // The card JSON lives in the circuit-scoped CardDraft so switching tabs keeps it (see CardDraft).
+    private string _json { get => Draft.Json ?? ""; set => Draft.Json = value; }
     private string? _error;
     private string? _summary;
 
-    protected override void OnInitialized() => LoadDemo();
+    protected override void OnInitialized()
+    {
+        if (Draft.Json is null)
+            LoadDemo();
+    }
 
     private void LoadDemo()
     {

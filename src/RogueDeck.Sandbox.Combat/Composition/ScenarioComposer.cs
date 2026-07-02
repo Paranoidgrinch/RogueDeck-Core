@@ -46,6 +46,11 @@ public sealed class ScenarioComposer
         return new InteractiveCombat(compiled, EnemyIntent);
     }
 
+    // Exposes the composed blueprint (hero + cards + enemies + their actions) so the Run tab can project the
+    // authored combat content into run data (CardData / EnemyActionData / an encounter roster) without running
+    // a fight. Reuses the exact same composition the sandbox plays, so imported content behaves identically.
+    public static ScenarioBlueprint ComposeBlueprint(SandboxModel model) => BuildBlueprint(model);
+
     private static ScenarioBlueprint BuildBlueprint(SandboxModel model)
     {
         ArgumentNullException.ThrowIfNull(model);

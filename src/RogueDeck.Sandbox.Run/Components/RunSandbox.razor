@@ -1,6 +1,8 @@
 @rendermode InteractiveServer
 @implements IAsyncDisposable
 @inject IJSRuntime JS
+@inject RunDraft Draft
+@inject CombatDraft CombatDraft
 
 <h1>RogueDeck Run Sandbox</h1>
 <p class="muted">
@@ -20,6 +22,15 @@
             <button class="play" @onclick="Download">Download</button>
             <label class="play">Upload<InputFile OnChange="Upload" style="display:none" /></label>
         </div>
+        <div class="run-bar">
+            <button class="play" @onclick="ImportFromCombat" title="Bring the hero, deck, cards and enemies authored in the Combat tab into this run">
+                ⇐ Import from Combat tab
+            </button>
+        </div>
+        @if (_importMsg is not null)
+        {
+            <p class="muted">@_importMsg</p>
+        }
         @if (_error is not null)
         {
             <p class="error">@_error</p>
@@ -82,6 +93,12 @@
             <p class="muted">@_simSummary</p>
         }
     </section>
+
+    @if (TryBlueprint(out var editorBlueprint))
+    {
+        <EncounterEditor Blueprint="editorBlueprint" BlueprintChanged="ApplyBlueprint" />
+        <EventEditor Blueprint="editorBlueprint" BlueprintChanged="ApplyBlueprint" />
+    }
 
     @if (_session is { } session)
     {
@@ -163,10 +180,12 @@
     private static readonly EncounterId GoblinFight = new("goblin-fight");
 
     private readonly JsonSerializerOptions _options = RunJson.CreateOptions();
-    private string _json = "";
+    // The run document lives in the circuit-scoped RunDraft so switching tabs keeps it (see RunDraft).
+    private string _json { get => Draft.Json ?? ""; set => Draft.Json = value; }
     private int _seed = 1;
     private InteractiveRunSession? _session;
     private string? _error;
+    private string? _importMsg;
     private readonly HashSet<int> _selected = new();
     private int _simRuns = 50;
     private string? _simSummary;
@@ -220,6 +239,99 @@
         RebuildMap(blueprint, nodes);
     }
 
+    // Applied by the encounter/event editors: they hand back a mutated blueprint; we write it to the JSON (the
+    // single source of truth), which re-renders every visual editor from the new parse.
+    private void ApplyBlueprint(RunBlueprint blueprint) => _json = RunJson.ToJson(blueprint, _options);
+
+    // Bring the hero, deck, cards and enemies authored in the Combat tab into this run. Reuses the sandbox's own
+    // ScenarioComposer so imported cards/actions behave identically to how they play in the Combat tab. The whole
+    // combat (its enemy roster + hero resources) lands as an encounter you can drop onto the map; its cards go
+    // into the run's card pool and starting deck. Custom status definitions do not carry over — the run blueprint
+    // has no status library — so encounters using them should stick to the built-in statuses.
+    private void ImportFromCombat()
+    {
+        _importMsg = null;
+        _error = null;
+        var model = CombatDraft.Model;
+        if (model is null || model.Hero is null || model.Enemies.Count == 0)
+        {
+            _importMsg = "Define a hero and at least one enemy in the Combat tab first.";
+            return;
+        }
+        if (!TryBlueprint(out var current))
+        {
+            _importMsg = "Fix the run JSON before importing.";
+            return;
+        }
+
+        try
+        {
+            var composed = ScenarioComposer.ComposeBlueprint(model);
+            var hero = composed.Hero!; // ComposeBlueprint always sets the hero (it throws otherwise).
+
+            // Some advanced combat effects are escape nodes with no serializable data form (e.g. temporary
+            // rules); such cards/actions can't live in a RunBlueprint. Keep only what the run JSON can round-trip
+            // and report the rest, so a valid document is always produced instead of the whole import failing.
+            bool CanSerialize<T>(T value)
+            {
+                try { RunJson.ToJson(value, _options); return true; }
+                catch (NotSupportedException) { return false; }
+            }
+
+            // Merge cards and enemy actions by id (imported definitions win over same-id existing ones).
+            var cards = current.Cards.ToDictionary(c => c.Id, c => c);
+            var skipped = new List<string>();
+            foreach (var card in composed.Cards)
+            {
+                var data = CardData.From(card);
+                if (CanSerialize(data)) cards[data.Id] = data;
+                else skipped.Add($"card '{data.Id}'");
+            }
+            var actions = current.EnemyActions.ToDictionary(a => a.Id, a => a);
+            foreach (var action in composed.EnemyActions)
+            {
+                var data = EnemyActionData.From(action);
+                if (CanSerialize(data)) actions[data.Id] = data;
+                else skipped.Add($"action '{data.Id}'");
+            }
+
+            // The whole fight becomes one encounter: the enemy roster + the hero's combat resources / statuses.
+            // Enemies only keep the actions that survived (a dropped action would dangle); deck likewise.
+            var enemies = composed.Enemies.Select(e => new EncounterEnemy(
+                e.Id, e.MaxHealth,
+                e.Actions.Where(a => actions.ContainsKey(a.value)).ToList(),
+                e.StartingStatuses.Count > 0 ? e.StartingStatuses.ToList() : null)).ToList();
+            var encounterId = new EncounterId("combat-fight");
+            var encounter = new EncounterDefinition(encounterId, enemies, hero.Resources.ToList(),
+                hero.StartingStatuses.Count > 0 ? hero.StartingStatuses.ToList() : null);
+            var encounters = current.Encounters.Where(e => e.Id != encounterId).Append(encounter).ToList();
+
+            // The hero's deck (expanded by copies, only cards that survived) becomes the run's starting deck.
+            var deck = hero.Deck
+                .SelectMany(entry => Enumerable.Repeat(entry.Card, Math.Max(1, entry.Count)))
+                .Where(c => cards.ContainsKey(c.value))
+                .ToList();
+
+            var merged = current with
+            {
+                Cards = cards.Values.ToList(),
+                EnemyActions = actions.Values.ToList(),
+                Encounters = encounters,
+                Deck = deck.Count > 0 ? deck : current.Deck,
+            };
+            _json = RunJson.ToJson(merged, _options);
+            _importMsg = $"Imported hero '{hero.Id}', {composed.Cards.Count - skipped.Count(s => s.StartsWith("card"))} card(s), " +
+                $"{composed.EnemyActions.Count - skipped.Count(s => s.StartsWith("action"))} action(s); " +
+                $"encounter 'combat-fight' ({enemies.Count} enemy/-ies), deck {deck.Count} card(s). " +
+                (skipped.Count > 0 ? $"Skipped (effects the run JSON can't represent): {string.Join(", ", skipped)}. " : "") +
+                "Add a combat node → 'combat-fight' to the map to play it.";
+        }
+        catch (Exception ex)
+        {
+            _importMsg = $"Import failed: {ex.GetType().Name}: {ex.Message}";
+        }
+    }
+
     private static string NodeKind(Node node) => node.Type == StandardRunIds.CombatNode ? "combat" : "event";
 
     private static string NodeTarget(Node node) => node.Payload switch
@@ -229,7 +341,7 @@
         _ => "?",
     };
 
-    protected override void OnInitialized() => _json = RunJson.ToJson(DemoBlueprint(), _options);
+    protected override void OnInitialized() => Draft.Json ??= RunJson.ToJson(DemoBlueprint(), _options);
 
     // Save the current blueprint JSON as a file (via a small JS download helper).
     private async Task Download()

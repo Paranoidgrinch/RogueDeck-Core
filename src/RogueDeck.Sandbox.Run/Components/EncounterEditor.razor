@@ -1,0 +1,151 @@
+@* Visual editor for the run's combat encounters. An encounter is a fight authored as data: a roster of enemies
+   (HP + which enemy actions they use, referenced from the blueprint's EnemyActions) plus the hero's starting
+   combat resources. It edits the parsed RunBlueprint and hands the new one back; the parent re-serializes to JSON. *@
+
+<section class="panel">
+    <h2>Encounters (combats)</h2>
+    <p class="muted">Each encounter is a combat you can drop onto the map above with a <strong>combat</strong> node.
+        Enemy actions are picked from the blueprint's authored actions.</p>
+
+    @if (Blueprint.Encounters.Count == 0)
+    {
+        <p class="muted">No encounters yet — add one below.</p>
+    }
+
+    @foreach (var encounter in Blueprint.Encounters)
+    {
+        var encId = encounter.Id.Value;
+        <div class="editor-card">
+            <div class="run-bar">
+                <label>Encounter id
+                    <input value="@encId" @onchange="e => RenameEncounter(encId, AsString(e.Value))" style="width:9rem" />
+                </label>
+                <button class="mini" @onclick="() => RemoveEncounter(encId)">✕ remove</button>
+            </div>
+
+            @foreach (var enemy in encounter.Enemies)
+            {
+                var enemyId = enemy.Id;
+                <div class="editor-row">
+                    <label>Enemy
+                        <input value="@enemyId" @onchange="e => SetEnemyId(encId, enemyId, AsString(e.Value))" style="width:8rem" />
+                    </label>
+                    <label>HP
+                        <input type="number" value="@enemy.MaxHealth"
+                               @onchange="e => SetEnemyHealth(encId, enemyId, AsInt(e.Value, enemy.MaxHealth))" style="width:5rem" />
+                    </label>
+                    <span class="muted">actions:</span>
+                    @if (Blueprint.EnemyActions.Count == 0)
+                    {
+                        <span class="muted">(define enemy actions in the JSON first)</span>
+                    }
+                    @foreach (var action in Blueprint.EnemyActions)
+                    {
+                        var actId = action.Id;
+                        var has = enemy.Actions.Any(a => a.value == actId);
+                        <label class="chk">
+                            <input type="checkbox" checked="@has"
+                                   @onchange="e => ToggleEnemyAction(encId, enemyId, actId, (bool)(e.Value ?? false))" />
+                            @actId
+                        </label>
+                    }
+                    <button class="mini" @onclick="() => RemoveEnemy(encId, enemyId)">✕</button>
+                </div>
+            }
+            <button class="mini" @onclick="() => AddEnemy(encId)">+ enemy</button>
+        </div>
+    }
+
+    <div class="run-bar">
+        <input placeholder="new encounter id" @bind="_newEncounterId" style="width:11rem" />
+        <button class="play" @onclick="AddEncounter">Add encounter</button>
+    </div>
+</section>
+
+@code {
+    [Parameter] public RunBlueprint Blueprint { get; set; } = default!;
+    [Parameter] public EventCallback<RunBlueprint> BlueprintChanged { get; set; }
+
+    private string _newEncounterId = "";
+
+    private static string AsString(object? v) => v?.ToString() ?? "";
+    private static int AsInt(object? v, int fallback) => int.TryParse(v?.ToString(), out var n) ? n : fallback;
+
+    private Task Replace(IReadOnlyList<EncounterDefinition> encounters) =>
+        BlueprintChanged.InvokeAsync(Blueprint with { Encounters = encounters });
+
+    // EncounterDefinition is a class (no `with`) — reconstruct it, carrying over anything not being changed.
+    private static EncounterDefinition Rebuild(
+        EncounterDefinition enc, EncounterId? id = null, IReadOnlyList<EncounterEnemy>? enemies = null) =>
+        new(id ?? enc.Id, enemies ?? enc.Enemies, enc.HeroResources, enc.HeroStartingStatuses);
+
+    // Rebuild the encounter list, replacing the one with `id` via `edit` (drop it if edit returns null).
+    private Task Edit(string id, Func<EncounterDefinition, EncounterDefinition?> edit)
+    {
+        var list = new List<EncounterDefinition>();
+        foreach (var enc in Blueprint.Encounters)
+        {
+            if (enc.Id.Value != id) { list.Add(enc); continue; }
+            if (edit(enc) is { } replaced) list.Add(replaced);
+        }
+        return Replace(list);
+    }
+
+    private Task EditEnemy(string encId, string enemyId, Func<EncounterEnemy, EncounterEnemy> edit) =>
+        Edit(encId, enc => Rebuild(enc,
+            enemies: enc.Enemies.Select(en => en.Id == enemyId ? edit(en) : en).ToList()));
+
+    private EncounterEnemy NewEnemy(int ordinal)
+    {
+        var firstAction = Blueprint.EnemyActions.Select(a => a.Id).FirstOrDefault();
+        var actions = firstAction is null
+            ? Array.Empty<EnemyActionDefinitionId>()
+            : new[] { new EnemyActionDefinitionId(firstAction) };
+        return new EncounterEnemy($"enemy{ordinal}", 20, actions);
+    }
+
+    private Task AddEncounter()
+    {
+        var id = _newEncounterId.Trim();
+        if (id.Length == 0 || Blueprint.Encounters.Any(e => e.Id.Value == id))
+            return Task.CompletedTask;
+        var enc = new EncounterDefinition(new EncounterId(id), new[] { NewEnemy(1) },
+            new[] { new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3) });
+        _newEncounterId = "";
+        return Replace(Blueprint.Encounters.Append(enc).ToList());
+    }
+
+    private Task RemoveEncounter(string id) =>
+        Replace(Blueprint.Encounters.Where(e => e.Id.Value != id).ToList());
+
+    private Task RenameEncounter(string id, string newId)
+    {
+        newId = newId.Trim();
+        if (newId.Length == 0 || (newId != id && Blueprint.Encounters.Any(e => e.Id.Value == newId)))
+            return Task.CompletedTask;
+        return Edit(id, enc => Rebuild(enc, id: new EncounterId(newId)));
+    }
+
+    private Task AddEnemy(string encId) =>
+        Edit(encId, enc => Rebuild(enc, enemies: enc.Enemies.Append(NewEnemy(enc.Enemies.Count + 1)).ToList()));
+
+    private Task RemoveEnemy(string encId, string enemyId) =>
+        Edit(encId, enc => enc.Enemies.Count <= 1
+            ? enc // an encounter needs at least one enemy
+            : Rebuild(enc, enemies: enc.Enemies.Where(en => en.Id != enemyId).ToList()));
+
+    private Task SetEnemyId(string encId, string enemyId, string newId) =>
+        string.IsNullOrWhiteSpace(newId) ? Task.CompletedTask
+            : EditEnemy(encId, enemyId, en => en with { Id = newId.Trim() });
+
+    private Task SetEnemyHealth(string encId, string enemyId, int hp) =>
+        EditEnemy(encId, enemyId, en => en with { MaxHealth = Math.Max(1, hp) });
+
+    private Task ToggleEnemyAction(string encId, string enemyId, string actionId, bool on) =>
+        EditEnemy(encId, enemyId, en =>
+        {
+            var actions = en.Actions.Where(a => a.value != actionId).ToList();
+            if (on) actions.Add(new EnemyActionDefinitionId(actionId));
+            return en with { Actions = actions };
+        });
+}

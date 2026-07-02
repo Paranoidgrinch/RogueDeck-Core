@@ -71,3 +71,73 @@ body {
     background: #37506b;
     color: #fff;
 }
+
+/* Encounter / event visual editors (RunSandbox) */
+.editor-card {
+    border: 1px solid #3a3f4b;
+    border-radius: 6px;
+    padding: 0.6rem;
+    margin: 0.5rem 0;
+    background: #1a1d24;
+}
+
+.editor-row,
+.editor-sit,
+.editor-choice {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0.3rem 0;
+}
+
+.editor-sit {
+    display: block;
+    border-left: 2px solid #37506b;
+    padding-left: 0.6rem;
+    margin: 0.4rem 0;
+}
+
+.editor-choice {
+    border-left: 2px solid #2b2f3a;
+    padding-left: 0.6rem;
+    margin: 0.25rem 0;
+}
+
+.editor-effects {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0.2rem 0 0.4rem;
+}
+
+.editor-effects .fx {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    background: #23262e;
+    border: 1px solid #3a3f4b;
+    border-radius: 4px;
+    padding: 0.1rem 0.35rem;
+    font-size: 0.85em;
+}
+
+.chk {
+    font-size: 0.85em;
+    white-space: nowrap;
+}
+
+.sit-text {
+    width: 100%;
+    margin: 0.2rem 0;
+    font-size: 0.9em;
+}
+
+.add-effect {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+    margin-left: 0.25rem;
+}

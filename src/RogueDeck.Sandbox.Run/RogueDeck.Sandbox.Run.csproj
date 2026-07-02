@@ -13,6 +13,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\RogueDeck.Run\RogueDeck.Run.csproj" />
+    <!-- The Run tab projects content authored in the Combat tab (a run contains combats), so it depends on the
+         combat sandbox — the dependency points Run → Combat, never the other way round. -->
+    <ProjectReference Include="..\RogueDeck.Sandbox.Combat\RogueDeck.Sandbox.Combat.csproj" />
   </ItemGroup>
 
 </Project>
