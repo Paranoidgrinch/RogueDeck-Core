@@ -152,7 +152,7 @@
                 @foreach (var c in combat.State.Combatants)
                 {
                     <div class="row">
-                        <strong>@(c.Id == combat.HeroId ? "You" : c.Id.value)</strong>
+                        <strong>@(c.Id == combat.HeroId ? "You" : EnemyName(c.Id))</strong>
                         <span class="muted">
                             @c.Health.Current/@c.Health.Max HP@(Block(c) > 0 ? $" · 🛡{Block(c)}" : "")@(c.IsAlive ? "" : " 💀")
                         </span>
@@ -169,7 +169,7 @@
                         <select @bind="_combatTarget">
                             @foreach (var enemy in combat.State.Combatants.Where(x => x.Id != combat.HeroId && x.IsAlive))
                             {
-                                <option value="@enemy.Id.value">@enemy.Id.value</option>
+                                <option value="@enemy.Id.value">@EnemyName(enemy.Id)</option>
                             }
                         </select>
                     </div>
@@ -179,7 +179,7 @@
                             var cost = CardEnergyCost(card.DefinitionId.value);
                             <button class="play" disabled="@(cost > combat.HeroEnergy)"
                                     @onclick="() => PlayCombatCard(card.Id)">
-                                @card.DefinitionId.value ⚡@cost
+                                @CardName(card.DefinitionId.value) ⚡@cost
                             </button>
                         }
                         @if (combat.Hand.Count == 0)
@@ -255,6 +255,8 @@
     private InteractiveCombatDriver? _combatDriver;
     private string _combatTarget = "";
     private Dictionary<string, int> _cardCosts = new();
+    private Dictionary<string, string> _cardNames = new();
+    private Dictionary<string, string> _enemyNames = new();
 
     // ── Visual map builder (edits the parsed blueprint, then writes it back to the JSON) ──
     private bool TryBlueprint(out RunBlueprint blueprint)
@@ -385,10 +387,16 @@
             var blueprint = RunJson.FromJson<RunBlueprint>(_json, _options);
             var content = BuildContent(blueprint);
 
-            // Energy cost per card id, so the interactive combat view can grey out unaffordable cards.
+            // Energy cost + display name per card id, and enemy display names per enemy id, so the interactive
+            // combat view can grey out unaffordable cards and show human-readable names instead of raw slugs.
             _cardCosts = blueprint.Cards.ToDictionary(
                 card => card.Id,
                 card => card.Costs.Where(rc => rc.ResourceId == StandardCombatIds.EnergyResource).Sum(rc => rc.Amount));
+            _cardNames = blueprint.Cards.ToDictionary(card => card.Id, card => card.NameKey ?? card.Id);
+            _enemyNames = blueprint.Encounters
+                .SelectMany(encounter => encounter.Enemies)
+                .GroupBy(enemy => enemy.Id)
+                .ToDictionary(g => g.Key, g => g.First().DisplayName ?? g.Key);
 
             // Interactive: a driver that hands each fight to the player (Current/Changed); headless: auto-resolve.
             ICombatDriver driver;
@@ -499,6 +507,12 @@
     private int CardEnergyCost(string definitionId) =>
         _cardCosts.TryGetValue(definitionId, out var cost) ? cost : 0;
 
+    private string CardName(string definitionId) =>
+        _cardNames.TryGetValue(definitionId, out var name) ? name : definitionId;
+
+    private string EnemyName(CombatantId id) =>
+        _enemyNames.TryGetValue(id.value, out var name) ? name : id.value;
+
     private static int Block(CombatantState c) =>
         c.DefensivePools.TryGetValue(StandardCombatIds.BlockDefensivePool, out var pool) ? pool.Current : 0;
 
@@ -573,7 +587,7 @@
 
         var encounter = new EncounterDefinition(
             GoblinFight,
-            enemies: new[] { new EncounterEnemy("goblin", 12, new[] { new EnemyActionDefinitionId("slam") }) },
+            enemies: new[] { new EncounterEnemy("goblin", 12, new[] { new EnemyActionDefinitionId("slam") }, null, "Goblin") },
             heroResources: new[] { new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3) });
 
         var map = new RunMap(new Node[]
@@ -585,6 +599,7 @@
 
         var smite = new CardBlueprint("smite")
         {
+            NameKey = "Smite",
             Program = Effects.Program(Effects.DealDamage(Targets.EventTarget, 6)),
         };
         var slam = new EnemyActionBlueprint("slam", new ActionIntent("Slam", IntentKind.Attack))

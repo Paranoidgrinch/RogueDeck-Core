@@ -710,8 +710,9 @@ public sealed class ScenarioComposer
         _ => CombatantTargetSelectors.EventTarget,
     };
 
-    // Turns a display name into a registry-safe id (lowercase, non-alphanumerics → '_').
-    internal static string Slug(string? name)
+    // Turns a display name into a registry-safe id (lowercase, non-alphanumerics → '_'). Public so the Run sandbox
+    // can match imported combat content (keyed by slug) back to the model's display names.
+    public static string Slug(string? name)
     {
         if (string.IsNullOrWhiteSpace(name))
             return "x";

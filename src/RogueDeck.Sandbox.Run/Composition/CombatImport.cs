@@ -34,6 +34,20 @@ public static class CombatImport
             $"Add a combat node → '{EncounterId}' to the map to play it.";
     }
 
+    // slug → display name, matching how ScenarioComposer keys cards/enemies (first name wins on a slug clash).
+    private static Dictionary<string, string> NameBySlug(IEnumerable<string> names)
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var name in names)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                continue;
+            var slug = ScenarioComposer.Slug(name);
+            map.TryAdd(slug, name);
+        }
+        return map;
+    }
+
     // Suggests an encounter id that doesn't collide with any already in the blueprint, so repeated imports create
     // distinct fights instead of overwriting one. If `desired` is free it's returned as-is; otherwise a trailing
     // "-<number>" is dropped to find the stem (so combat-fight-2 → combat-fight) and the next free "-N" is used.
@@ -69,6 +83,11 @@ public static class CombatImport
         var composed = ScenarioComposer.ComposeBlueprint(model);
         var hero = composed.Hero!; // ComposeBlueprint always sets the hero (it throws otherwise).
 
+        // The composer keys cards/enemies by Slug(Name); the human-readable Name only lives on the model. Map slug
+        // → Name so the imported run data carries display names (card NameKey / enemy DisplayName) for UIs and logs.
+        var cardNames = NameBySlug(model.Cards.Select(c => c.Name));
+        var enemyNames = NameBySlug(model.Enemies.Select(e => e.Name));
+
         bool CanSerialize<T>(T value)
         {
             try { RunJson.ToJson(value, options); return true; }
@@ -82,6 +101,8 @@ public static class CombatImport
         foreach (var card in composed.Cards)
         {
             var data = CardData.From(card);
+            if (cardNames.TryGetValue(data.Id, out var cardName))
+                data = data with { NameKey = cardName };
             if (CanSerialize(data)) { cards[data.Id] = data; importedCards++; }
             else skipped.Add($"card '{data.Id}'");
         }
@@ -99,7 +120,8 @@ public static class CombatImport
         var enemies = composed.Enemies.Select(e => new EncounterEnemy(
             e.Id, e.MaxHealth,
             e.Actions.Where(a => actions.ContainsKey(a.value)).ToList(),
-            e.StartingStatuses.Count > 0 ? e.StartingStatuses.ToList() : null)).ToList();
+            e.StartingStatuses.Count > 0 ? e.StartingStatuses.ToList() : null,
+            enemyNames.TryGetValue(e.Id, out var enemyName) ? enemyName : null)).ToList();
         var id = new EncounterId(encounterId);
         var encounter = new EncounterDefinition(id, enemies, hero.Resources.ToList(),
             hero.StartingStatuses.Count > 0 ? hero.StartingStatuses.ToList() : null);

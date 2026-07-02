@@ -32,12 +32,14 @@ public sealed class CombatContentLibrary
     }
 }
 
-// One enemy in an encounter — data referencing action definitions from the library.
+// One enemy in an encounter — data referencing action definitions from the library. DisplayName is an optional
+// human-readable label for UIs/logs; Id remains the stable slug the fight is keyed on.
 public sealed record EncounterEnemy(
     string Id,
     int MaxHealth,
     IReadOnlyList<EnemyActionDefinitionId> Actions,
-    IReadOnlyList<StartingStatusSpec>? StartingStatuses = null);
+    IReadOnlyList<StartingStatusSpec>? StartingStatuses = null,
+    string? DisplayName = null);
 
 // A combat as data: the enemy roster plus the hero's combat resources / starting statuses. The hero's HP and
 // deck come from the run (projected by the bridge), so an encounter is reusable across runs.

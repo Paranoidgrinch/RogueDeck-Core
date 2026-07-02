@@ -129,6 +129,25 @@ public class RunAuthoringWorkflowTests
     }
 
     [Fact]
+    public void Import_CarriesCardAndEnemyDisplayNames()
+    {
+        var options = RunJson.CreateOptions();
+        var blueprint = CombatImport.Project(EmptyBlueprint(), CombatTabModel(), options).Blueprint;
+
+        // The card's human-readable name rides along on NameKey (slug id stays "strike").
+        var strike = Assert.Single(blueprint.Cards, c => c.Id == "strike");
+        Assert.Equal("Strike", strike.NameKey);
+
+        // Each enemy keeps its slug Id but gains the display name from the Combat tab.
+        var encounter = Assert.Single(blueprint.Encounters);
+        for (var i = 1; i <= 5; i++)
+        {
+            var enemy = Assert.Single(encounter.Enemies, e => e.Id == $"goblin{i}");
+            Assert.Equal($"Goblin{i}", enemy.DisplayName);
+        }
+    }
+
+    [Fact]
     public void SuggestEncounterId_AvoidsCollisions()
     {
         var options = RunJson.CreateOptions();
