@@ -124,7 +124,8 @@ public static class CombatImport
             enemyNames.TryGetValue(e.Id, out var enemyName) ? enemyName : null)).ToList();
         var id = new EncounterId(encounterId);
         var encounter = new EncounterDefinition(id, enemies, hero.Resources.ToList(),
-            hero.StartingStatuses.Count > 0 ? hero.StartingStatuses.ToList() : null);
+            hero.StartingStatuses.Count > 0 ? hero.StartingStatuses.ToList() : null,
+            string.IsNullOrWhiteSpace(model.Hero?.Name) ? null : model.Hero.Name);
         var encounters = current.Encounters.Where(e => e.Id != id).Append(encounter).ToList();
 
         // The hero's deck (expanded by copies, only cards that survived) becomes the run's starting deck.

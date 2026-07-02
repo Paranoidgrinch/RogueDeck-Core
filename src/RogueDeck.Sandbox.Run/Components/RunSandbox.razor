@@ -152,7 +152,7 @@
                 @foreach (var c in combat.State.Combatants)
                 {
                     <div class="row">
-                        <strong>@(c.Id == combat.HeroId ? "You" : EnemyName(c.Id))</strong>
+                        <strong>@(c.Id == combat.HeroId ? (_heroName ?? "You") : EnemyName(c.Id))</strong>
                         <span class="muted">
                             @c.Health.Current/@c.Health.Max HP@(Block(c) > 0 ? $" · 🛡{Block(c)}" : "")@(c.IsAlive ? "" : " 💀")
                         </span>
@@ -257,6 +257,7 @@
     private Dictionary<string, int> _cardCosts = new();
     private Dictionary<string, string> _cardNames = new();
     private Dictionary<string, string> _enemyNames = new();
+    private string? _heroName;
 
     // ── Visual map builder (edits the parsed blueprint, then writes it back to the JSON) ──
     private bool TryBlueprint(out RunBlueprint blueprint)
@@ -397,6 +398,10 @@
                 .SelectMany(encounter => encounter.Enemies)
                 .GroupBy(enemy => enemy.Id)
                 .ToDictionary(g => g.Key, g => g.First().DisplayName ?? g.Key);
+            // The run has a single hero across encounters; take the first authored hero name (else fall back to "You").
+            _heroName = blueprint.Encounters
+                .Select(encounter => encounter.HeroDisplayName)
+                .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name));
 
             // Interactive: a driver that hands each fight to the player (Current/Changed); headless: auto-resolve.
             ICombatDriver driver;
@@ -588,7 +593,8 @@
         var encounter = new EncounterDefinition(
             GoblinFight,
             enemies: new[] { new EncounterEnemy("goblin", 12, new[] { new EnemyActionDefinitionId("slam") }, null, "Goblin") },
-            heroResources: new[] { new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3) });
+            heroResources: new[] { new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3) },
+            heroDisplayName: "Hero");
 
         var map = new RunMap(new Node[]
         {

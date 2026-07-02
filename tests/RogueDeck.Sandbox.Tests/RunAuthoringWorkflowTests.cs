@@ -145,6 +145,16 @@ public class RunAuthoringWorkflowTests
             var enemy = Assert.Single(encounter.Enemies, e => e.Id == $"goblin{i}");
             Assert.Equal($"Goblin{i}", enemy.DisplayName);
         }
+
+        // The hero name rides along on the encounter (the combat identity stays "hero").
+        Assert.Equal("Knight", encounter.HeroDisplayName);
+
+        // All three survive a JSON round-trip.
+        var reloaded = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(blueprint, options), options);
+        Assert.Equal("Strike", Assert.Single(reloaded.Cards, c => c.Id == "strike").NameKey);
+        var reEncounter = Assert.Single(reloaded.Encounters);
+        Assert.Equal("Knight", reEncounter.HeroDisplayName);
+        Assert.Equal("Goblin1", Assert.Single(reEncounter.Enemies, e => e.Id == "goblin1").DisplayName);
     }
 
     [Fact]

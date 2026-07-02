@@ -50,11 +50,15 @@ public sealed class EncounterDefinition
     public IReadOnlyList<ResourceSpec> HeroResources { get; }
     public IReadOnlyList<StartingStatusSpec> HeroStartingStatuses { get; }
 
+    // Optional human-readable name for the hero in this fight (UIs/logs); the combat identity stays "hero".
+    public string? HeroDisplayName { get; }
+
     public EncounterDefinition(
         EncounterId id,
         IReadOnlyList<EncounterEnemy> enemies,
         IReadOnlyList<ResourceSpec>? heroResources = null,
-        IReadOnlyList<StartingStatusSpec>? heroStartingStatuses = null)
+        IReadOnlyList<StartingStatusSpec>? heroStartingStatuses = null,
+        string? heroDisplayName = null)
     {
         if (enemies is null || enemies.Count == 0)
             throw new ArgumentException("An encounter needs at least one enemy.", nameof(enemies));
@@ -62,6 +66,7 @@ public sealed class EncounterDefinition
         Enemies = enemies;
         HeroResources = heroResources ?? Array.Empty<ResourceSpec>();
         HeroStartingStatuses = heroStartingStatuses ?? Array.Empty<StartingStatusSpec>();
+        HeroDisplayName = heroDisplayName;
     }
 }
 
