@@ -567,6 +567,7 @@
 
         var builder = new RunContentRegistryBuilder()
             .RegisterRelic(StandardRelics.Bloodstone())
+            .RegisterRelic(StandardRelics.Leech())
             .SetEncounters(new EncounterCatalog(library, blueprint.Encounters));
         foreach (var (id, script) in blueprint.Events)
             builder.RegisterEvent(new EventId(id), script);

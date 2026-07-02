@@ -129,6 +129,39 @@ public class RunAuthoringWorkflowTests
     }
 
     [Fact]
+    public void EventGrantingRelicResourceAndConsumable_RoundTrips_AndLandsOnTheRun()
+    {
+        var options = RunJson.CreateOptions();
+
+        // An event whose single choice grants a relic, a resource, and a consumable — the three kinds the
+        // EventEditor now exposes as "+ Relic / + Resource / + Consumable" buttons.
+        var loot = new EventScriptBuilder("loot")
+            .Situation("loot", "A dead adventurer's pack.", s => s
+                .Choice("take", c => c.TextKey("Take everything")
+                    .AddRelic(new RelicId("leech"))
+                    .GainResource(new RunResourceId("gold"), 7)
+                    .AddConsumable(new ConsumableId("potion"), new HealRunEffect(8))))
+            .Build();
+
+        var blueprint = EmptyBlueprint() with
+        {
+            Events = new Dictionary<string, EventScript> { ["loot"] = loot },
+            Map = new RunMap(new Node[]
+            {
+                new(new NodeId("n1"), StandardRunIds.EventNode, new EventRef(new EventId("loot"))),
+            }),
+        };
+
+        // The whole authored event survives the JSON round-trip Download/Upload does.
+        var reloaded = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(blueprint, options), options);
+        var run = Drive(reloaded, seed: 1);
+
+        Assert.NotNull(run.FindRelic(new RelicId("leech")));
+        Assert.Equal(7, run.GetResource(new RunResourceId("gold")));
+        Assert.Contains(run.Consumables, cn => cn.DefinitionId == new ConsumableId("potion"));
+    }
+
+    [Fact]
     public void Import_CarriesCardAndEnemyDisplayNames()
     {
         var options = RunJson.CreateOptions();
@@ -284,6 +317,7 @@ public class RunAuthoringWorkflowTests
             enemyActions: blueprint.EnemyActions.Select(action => action.ToBlueprint()).ToArray());
         var contentBuilder = new RunContentRegistryBuilder()
             .RegisterRelic(StandardRelics.Bloodstone())
+            .RegisterRelic(StandardRelics.Leech())
             .SetEncounters(new EncounterCatalog(library, blueprint.Encounters));
         foreach (var (id, script) in blueprint.Events)
             contentBuilder.RegisterEvent(new EventId(id), script);

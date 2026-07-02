@@ -273,9 +273,15 @@
         ("maxhp", "Max HP"),
         ("addcard", "Add card"),
         ("removecard", "Remove card"),
+        ("relic", "Relic"),
+        ("resource", "Resource"),
+        ("consumable", "Consumable"),
         ("flag", "Flag"),
         ("counter", "Counter"),
     };
+
+    // Relics are code-provided by id and registered in RunSandbox.BuildContent; keep this list in sync with it.
+    private static readonly string[] StandardRelicIds = { "bloodstone", "leech" };
 
     private IRunEffectRequest? NewEffect(string kind) => kind switch
     {
@@ -285,6 +291,9 @@
         "maxhp" => new ChangeMaxHealthRunEffect(5),
         "addcard" => new AddCardToDeckRunEffect(new CardDefinitionId(Blueprint.Cards.Select(c => c.Id).FirstOrDefault() ?? "")),
         "removecard" => new RemoveCardsRunEffect(RunSelectors.DeckCards.ChooseByPlayer(1, "Choose a card to remove")),
+        "relic" => new AddRelicByIdRunEffect(new RelicId(StandardRelicIds[0])),
+        "resource" => new ChangeResourceRunEffect(new RunResourceId("resource"), 5),
+        "consumable" => new AddConsumableRunEffect(new ConsumableId("potion"), new IRunEffectRequest[] { new HealRunEffect(8) }),
         "flag" => new SetFlagRunEffect(new RunFlagId("flag")),
         "counter" => new IncrementCounterRunEffect(new RunCounterId("counter"), 1),
         _ => null,
@@ -355,8 +364,8 @@
                 Amount("Max HP Δ", m.Delta, n => new ChangeMaxHealthRunEffect(n));
                 break;
             case ChangeResourceRunEffect r:
-                builder.AddContent(200, $"{r.Resource.Value} Δ ");
-                Amount("", r.Delta, n => new ChangeResourceRunEffect(r.Resource, n));
+                Text("Resource", r.Resource.Value, s => new ChangeResourceRunEffect(new RunResourceId(s), r.Delta));
+                Amount(" Δ", r.Delta, n => new ChangeResourceRunEffect(r.Resource, n));
                 break;
             case AddCardToDeckRunEffect a:
                 builder.AddContent(300, "Add card ");
@@ -379,6 +388,30 @@
                 break;
             case RemoveCardsRunEffect:
                 builder.AddContent(400, "Remove a card (player picks)");
+                break;
+            case AddRelicByIdRunEffect relic:
+                builder.AddContent(500, "Relic ");
+                builder.OpenElement(501, "select");
+                builder.AddAttribute(502, "value", relic.Relic.Value);
+                builder.AddAttribute(503, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this,
+                    e => SetEffect(key, script, sitId, ci, fx, new AddRelicByIdRunEffect(new RelicId(AsString(e.Value))))));
+                foreach (var relicId in StandardRelicIds)
+                {
+                    builder.OpenElement(504, "option");
+                    builder.AddAttribute(505, "value", relicId);
+                    builder.AddContent(506, relicId);
+                    builder.CloseElement();
+                }
+                builder.CloseElement();
+                break;
+            case AddConsumableRunEffect consumable:
+                Text("Consumable", consumable.Definition.Value,
+                    s => new AddConsumableRunEffect(new ConsumableId(s), consumable.UseEffects));
+                if (consumable.UseEffects.Count == 1 && consumable.UseEffects[0] is HealRunEffect consumableHeal)
+                    Amount(" heals", consumableHeal.Amount,
+                        n => new AddConsumableRunEffect(consumable.Definition, new IRunEffectRequest[] { new HealRunEffect(n) }));
+                else
+                    builder.AddContent(600, $" ({consumable.UseEffects.Count} use effects)");
                 break;
             case SetFlagRunEffect f:
                 Text("Set flag", f.Flag.Value, s => new SetFlagRunEffect(new RunFlagId(s), f.Value));
