@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using RogueDeck.Core.Combat;
 using RogueDeck.Run;
 using RogueDeck.Scenario.Authoring;
@@ -31,6 +32,24 @@ public static class CombatImport
             $"encounter '{EncounterId}' ({EnemyCount} enemy/-ies), deck {DeckCount} card(s). " +
             (Skipped.Count > 0 ? $"Skipped (effects the run JSON can't represent): {string.Join(", ", Skipped)}. " : "") +
             $"Add a combat node → '{EncounterId}' to the map to play it.";
+    }
+
+    // Suggests an encounter id that doesn't collide with any already in the blueprint, so repeated imports create
+    // distinct fights instead of overwriting one. If `desired` is free it's returned as-is; otherwise a trailing
+    // "-<number>" is dropped to find the stem (so combat-fight-2 → combat-fight) and the next free "-N" is used.
+    public static string SuggestEncounterId(RunBlueprint blueprint, string desired = "combat-fight")
+    {
+        ArgumentNullException.ThrowIfNull(blueprint);
+        var existing = blueprint.Encounters.Select(e => e.Id.Value).ToHashSet(StringComparer.Ordinal);
+        if (!existing.Contains(desired))
+            return desired;
+        var stem = Regex.Replace(desired, "-\\d+$", "");
+        for (var n = 2; ; n++)
+        {
+            var candidate = $"{stem}-{n}";
+            if (!existing.Contains(candidate))
+                return candidate;
+        }
     }
 
     // Merges the composed combat into `current`. The whole fight (its enemy roster + hero combat resources /

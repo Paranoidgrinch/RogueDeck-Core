@@ -26,6 +26,9 @@
             <button class="play" @onclick="ImportFromCombat" title="Bring the hero, deck, cards and enemies authored in the Combat tab into this run">
                 ⇐ Import from Combat tab
             </button>
+            <label title="each import becomes a distinct encounter under this id; the next free id is suggested after each import so several different fights can live in one run">
+                as encounter <input @bind="_importEncounterId" style="width:10rem" />
+            </label>
         </div>
         @if (_importMsg is not null)
         {
@@ -193,6 +196,7 @@
     private string _newNodeType = "event";
     private string _newNodeTarget = "";
     private int _nodeSeq = 100;
+    private string _importEncounterId = "combat-fight";
 
     // ── Visual map builder (edits the parsed blueprint, then writes it back to the JSON) ──
     private bool TryBlueprint(out RunBlueprint blueprint)
@@ -264,11 +268,16 @@
             return;
         }
 
+        var encounterId = string.IsNullOrWhiteSpace(_importEncounterId) ? "combat-fight" : _importEncounterId.Trim();
         try
         {
-            var result = CombatImport.Project(current, model, _options);
+            var result = CombatImport.Project(current, model, _options, encounterId);
             _json = RunJson.ToJson(result.Blueprint, _options);
             _importMsg = result.Summary;
+            // Suggest the next free id so a follow-up import (after editing the Combat tab) adds a distinct fight
+            // instead of overwriting the one just created.
+            if (TryBlueprint(out var updated))
+                _importEncounterId = CombatImport.SuggestEncounterId(updated, encounterId);
         }
         catch (Exception ex)
         {
@@ -285,7 +294,12 @@
         _ => "?",
     };
 
-    protected override void OnInitialized() => Draft.Json ??= RunJson.ToJson(DemoBlueprint(), _options);
+    protected override void OnInitialized()
+    {
+        Draft.Json ??= RunJson.ToJson(DemoBlueprint(), _options);
+        if (TryBlueprint(out var bp))
+            _importEncounterId = CombatImport.SuggestEncounterId(bp);
+    }
 
     // Save the current blueprint JSON as a file (via a small JS download helper).
     private async Task Download()

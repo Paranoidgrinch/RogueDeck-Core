@@ -127,6 +127,59 @@ public class RunAuthoringWorkflowTests
         Assert.Contains(run.Log, e => e.Type == StandardRunLogTypes.CombatResolved);
     }
 
+    [Fact]
+    public void SuggestEncounterId_AvoidsCollisions()
+    {
+        var options = RunJson.CreateOptions();
+        var empty = EmptyBlueprint();
+        Assert.Equal("combat-fight", CombatImport.SuggestEncounterId(empty));
+
+        var one = CombatImport.Project(empty, CombatTabModel(), options).Blueprint; // has "combat-fight"
+        Assert.Equal("combat-fight-2", CombatImport.SuggestEncounterId(one));
+        // A numeric suffix on the desired id derives the stem, not "combat-fight-2-2".
+        Assert.Equal("combat-fight-2", CombatImport.SuggestEncounterId(one, "combat-fight-2"));
+        // A free custom name is returned unchanged.
+        Assert.Equal("elite-orc", CombatImport.SuggestEncounterId(one, "elite-orc"));
+    }
+
+    [Fact]
+    public void MultipleImports_ProduceDistinctEncounters_BothPlayable()
+    {
+        var options = RunJson.CreateOptions();
+
+        // Import the same Combat tab twice under successive suggested ids (what the UI does after each import).
+        var afterFirst = CombatImport.Project(EmptyBlueprint(), CombatTabModel(), options).Blueprint;
+        var nextId = CombatImport.SuggestEncounterId(afterFirst); // "combat-fight-2"
+        var afterSecond = CombatImport.Project(afterFirst, CombatTabModel(), options, nextId).Blueprint;
+
+        Assert.Equal(2, afterSecond.Encounters.Count);
+        Assert.Contains(afterSecond.Encounters, e => e.Id.Value == "combat-fight");
+        Assert.Contains(afterSecond.Encounters, e => e.Id.Value == "combat-fight-2");
+
+        // Arrange both fights (with an event between) and drive the whole run to Victory.
+        var map = new RunMap(new Node[]
+        {
+            new(new NodeId("n1"), StandardRunIds.CombatNode, new EncounterRef(new EncounterId("combat-fight"))),
+            new(new NodeId("n2"), StandardRunIds.EventNode, new EventRef(new EventId("shrine"))),
+            new(new NodeId("n3"), StandardRunIds.CombatNode, new EncounterRef(new EncounterId("combat-fight-2"))),
+        });
+        var events = new Dictionary<string, EventScript>
+        {
+            ["shrine"] = new EventScriptBuilder("shrine")
+                .Situation("shrine", "A shrine hums.", s => s
+                    .Choice("heal", c => c.TextKey("Pray (+8 HP)").Heal(8))
+                    .Choice("leave", c => c.TextKey("Leave")))
+                .Build(),
+        };
+        var blueprint = afterSecond with { Events = events, Map = map };
+
+        var reloaded = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(blueprint, options), options);
+        var run = Drive(reloaded, seed: 1);
+
+        Assert.Equal(RunResult.Victory, run.Result);
+        Assert.Equal(2, run.Log.Count(e => e.Type == StandardRunLogTypes.CombatResolved));
+    }
+
     // Mirror of RunSandbox.BuildContent + Start: build the content registry from the blueprint and run it.
     private static RunState Drive(RunBlueprint blueprint, int seed)
     {
