@@ -204,12 +204,24 @@
                 <p class="muted">Resolving…</p>
             }
 
-            <h2>State</h2>
+            @* Inventory — a read-only lens over everything the hero carries between combats in this run. *@
+            <h2>Inventory</h2>
             <div class="row"><span class="muted">HP</span> @session.Run.Health.Current / @session.Run.Health.Max</div>
-            <div class="row"><span class="muted">Gold</span> @session.Run.GetResource(StandardRunIds.Gold)</div>
-            <div class="row"><span class="muted">Deck</span> @session.Run.Deck.Count</div>
+            <div class="row"><span class="muted">Resources</span>
+                @(session.Run.Resources.Count == 0 ? "none"
+                    : string.Join(", ", session.Run.Resources.OrderBy(r => r.Key.Value).Select(r => $"{r.Key.Value} {r.Value}")))
+            </div>
             <div class="row"><span class="muted">Relics</span>
-                @(session.Run.Relics.Count == 0 ? "none" : string.Join(", ", session.Run.Relics.Select(r => r.Id)))
+                @(session.Run.Relics.Count == 0 ? "none" : string.Join(", ",
+                    session.Run.Relics.Select(r => r.Definition.DisplayName + (r.Enabled ? "" : " (disabled)"))))
+            </div>
+            <div class="row"><span class="muted">Consumables</span>
+                @(session.Run.Consumables.Count == 0 ? "none" : string.Join(", ",
+                    session.Run.Consumables.GroupBy(c => c.DefinitionId.Value).Select(Tally)))
+            </div>
+            <div class="row"><span class="muted">Deck (@session.Run.Deck.Count)</span>
+                @(session.Run.Deck.Count == 0 ? "empty" : string.Join(", ",
+                    session.Run.Deck.GroupBy(DeckCardLabel).Select(Tally)))
             </div>
             @if (session.Run.Flags.Count > 0)
             {
@@ -514,6 +526,14 @@
 
     private string CardName(string definitionId) =>
         _cardNames.TryGetValue(definitionId, out var name) ? name : definitionId;
+
+    // A deck card's display name plus one "+" per upgrade level (matches the run's "+"-suffix upgrade convention).
+    private string DeckCardLabel(RunCardInstance card) =>
+        CardName(card.DefinitionId.value) + new string('+', card.UpgradeLevel);
+
+    // "Strike ×3" for a group of copies, or just "Strike" for a single one.
+    private static string Tally<T>(IGrouping<string, T> group) =>
+        group.Count() > 1 ? $"{group.Key} ×{group.Count()}" : group.Key;
 
     private string EnemyName(CombatantId id) =>
         _enemyNames.TryGetValue(id.value, out var name) ? name : id.value;
