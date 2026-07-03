@@ -99,10 +99,44 @@
                             @for (var fi = 0; fi < effects.Count; fi++)
                             {
                                 var fx = fi;
-                                <span class="fx">
-                                    @EffectEditor(relicIndex, reactionIndex, fx, effects[fx])
-                                    <button class="mini" @onclick="() => RemoveEffect(relicIndex, reactionIndex, fx)">✕</button>
-                                </span>
+                                var tpl = effects[fx];
+                                @if (tpl is LiteralEffectTemplate { Effect: RepeatRunEffect rp })
+                                {
+                                    <div class="fx-block">
+                                        <div class="run-bar">
+                                            <span class="muted">Repeat</span>
+                                            @AmountEditor(RelicAmounts.Classify(rp.Count),
+                                                spec => RepeatSetCount(relicIndex, reactionIndex, fx, rp, spec))
+                                            <span class="muted">×</span>
+                                            <button class="mini" @onclick="() => RemoveEffect(relicIndex, reactionIndex, fx)">✕ repeat</button>
+                                        </div>
+                                        <div class="fx-body">
+                                            @for (var bi = 0; bi < rp.Effects.Count; bi++)
+                                            {
+                                                var bx = bi;
+                                                <span class="fx">
+                                                    @RequestEditor(rp.Effects[bx], req => BodySet(relicIndex, reactionIndex, fx, rp, bx, req))
+                                                    <button class="mini" @onclick="() => BodyRemove(relicIndex, reactionIndex, fx, rp, bx)">✕</button>
+                                                </span>
+                                            }
+                                            <span class="add-effect">
+                                                <span class="muted">add:</span>
+                                                @foreach (var (kind, label) in RelicRequests.Kinds)
+                                                {
+                                                    <button class="mini" title="@label"
+                                                            @onclick="() => BodyAdd(relicIndex, reactionIndex, fx, rp, kind)">+ @label</button>
+                                                }
+                                            </span>
+                                        </div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span class="fx">
+                                        @EffectEditor(relicIndex, reactionIndex, fx, tpl)
+                                        <button class="mini" @onclick="() => RemoveEffect(relicIndex, reactionIndex, fx)">✕</button>
+                                    </span>
+                                }
                             }
                             <span class="add-effect">
                                 <span class="muted">add:</span>
@@ -169,6 +203,7 @@
         ("disablerelic", "Disable relic"),
         ("enablerelic", "Enable relic"),
         ("consumable", "Consumable"),
+        ("repeat", "Repeat…"),
     };
 
     // The relic ids a grant/removal can pick: the run's authored relics plus the built-in samples
@@ -357,6 +392,8 @@
         "enablerelic" => new LiteralEffectTemplate(new EnableRelicRunEffect(new RelicId(FirstRelicId()))),
         "consumable" => new LiteralEffectTemplate(
             new AddConsumableRunEffect(new ConsumableId("potion"), new IRunEffectRequest[] { new HealRunEffect(8) })),
+        "repeat" => new LiteralEffectTemplate(new RepeatRunEffect(
+            RunExpr.Const(2), new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 5) })),
         _ => new LiteralEffectTemplate(new ChangeMaxHealthRunEffect(0)),
     };
 
@@ -385,6 +422,10 @@
         // are preserved read-only.
         LiteralEffectTemplate { Effect: AddConsumableRunEffect c } =>
             c.UseEffects.Count == 1 && c.UseEffects[0] is HealRunEffect,
+        // A repeat is editable iff its count is a modellable amount and every body effect is a body leaf the
+        // nested editor can round-trip; otherwise it is preserved read-only.
+        LiteralEffectTemplate { Effect: RepeatRunEffect rp } =>
+            !RelicAmounts.IsAdvanced(rp.Count) && rp.Effects.All(RelicRequests.IsEditable),
         _ => false,
     };
 
@@ -486,26 +527,11 @@
             builder.CloseElement();
         }
 
-        // Amount editor: a source toggle (constant vs a run/event value), then the matching control(s). `make`
-        // wraps a rebuilt amount expression back into the effect template.
-        void AmountControls(IRunExpression<int> amount, Func<IRunExpression<int>, IRunEffectTemplate> make)
-        {
-            var spec = RelicAmounts.Classify(amount);
-            Select(spec.Kind == "value" ? "value" : "const",
-                new[] { ("const", "amount"), ("value", "value of…") },
-                kind => Set(make(RelicAmounts.Build(spec with { Kind = kind }))));
-            if (spec.Kind == "value")
-            {
-                Select(spec.ValueKind, RelicAmounts.Values,
-                    v => Set(make(RelicAmounts.Build(spec with { ValueKind = v }))));
-                if (spec.ValueKind is "resource" or "counter")
-                    TextInput(spec.Id, 6, id => Set(make(RelicAmounts.Build(spec with { Id = id }))));
-            }
-            else
-            {
-                NumberInput(spec.Const, n => Set(make(RelicAmounts.Build(spec with { Const = n }))));
-            }
-        }
+        // Amount editor: reuse the shared AmountEditor (source toggle + matching control). `make` wraps the
+        // rebuilt amount expression back into the effect template.
+        void AmountControls(IRunExpression<int> amount, Func<IRunExpression<int>, IRunEffectTemplate> make) =>
+            builder.AddContent(seq++, AmountEditor(RelicAmounts.Classify(amount),
+                spec => Set(make(RelicAmounts.Build(spec)))));
 
         switch (template)
         {
@@ -591,4 +617,159 @@
                 break;
         }
     };
+
+    // Shared amount control: a source toggle (constant vs a run/event value) plus the matching input(s). Emits
+    // the edited spec through `onChange`; the caller decides how to fold it back (a template amount, a Repeat
+    // count, a Computed* body effect). Used by both EffectEditor and RequestEditor so amounts author identically.
+    private RenderFragment AmountEditor(RelicAmountSpec spec, Action<RelicAmountSpec> onChange) => builder =>
+    {
+        var seq = 0;
+
+        void Select(string current, IEnumerable<(string Key, string Label)> options, Action<string> change)
+        {
+            builder.OpenElement(seq++, "select");
+            builder.AddAttribute(seq++, "value", current);
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e => change(AsString(e.Value))));
+            foreach (var (key, label) in options)
+            {
+                builder.OpenElement(seq++, "option");
+                builder.AddAttribute(seq++, "value", key);
+                builder.AddContent(seq++, label);
+                builder.CloseElement();
+            }
+            builder.CloseElement();
+        }
+
+        Select(spec.Kind == "value" ? "value" : "const",
+            new[] { ("const", "amount"), ("value", "value of…") },
+            kind => onChange(spec with { Kind = kind }));
+        if (spec.Kind == "value")
+        {
+            Select(spec.ValueKind, RelicAmounts.Values, v => onChange(spec with { ValueKind = v }));
+            if (spec.ValueKind is "resource" or "counter")
+            {
+                builder.OpenElement(seq++, "input");
+                builder.AddAttribute(seq++, "value", spec.Id);
+                builder.AddAttribute(seq++, "style", "width:6rem");
+                builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e => onChange(spec with { Id = AsString(e.Value) })));
+                builder.CloseElement();
+            }
+        }
+        else
+        {
+            builder.OpenElement(seq++, "input");
+            builder.AddAttribute(seq++, "type", "number");
+            builder.AddAttribute(seq++, "value", spec.Const);
+            builder.AddAttribute(seq++, "style", "width:4rem");
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e => onChange(spec with { Const = AsInt(e.Value, spec.Const) })));
+            builder.CloseElement();
+        }
+    };
+
+    // Inline editor for one control-flow BODY effect (an IRunEffectRequest, resolved later): the amount/state
+    // leaf palette. Computed amounts fold into the Computed* effects via RelicRequests. `set` replaces this body
+    // effect and rebuilds the enclosing Repeat/Conditional.
+    private RenderFragment RequestEditor(IRunEffectRequest request, Action<IRunEffectRequest> set) => builder =>
+    {
+        var seq = 0;
+
+        void Label(string text) => builder.AddContent(seq++, text + " ");
+
+        void TextInput(string value, int width, Action<string> onChange)
+        {
+            builder.OpenElement(seq++, "input");
+            builder.AddAttribute(seq++, "value", value);
+            builder.AddAttribute(seq++, "style", $"width:{width}rem");
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e => onChange(AsString(e.Value))));
+            builder.CloseElement();
+        }
+
+        void NumberInput(int value, Action<int> onChange)
+        {
+            builder.OpenElement(seq++, "input");
+            builder.AddAttribute(seq++, "type", "number");
+            builder.AddAttribute(seq++, "value", value);
+            builder.AddAttribute(seq++, "style", "width:4rem");
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e => onChange(AsInt(e.Value, value))));
+            builder.CloseElement();
+        }
+
+        void Amount() => builder.AddContent(seq++, AmountEditor(RelicRequests.AmountOf(request),
+            spec => set(RelicRequests.WithAmount(request, spec))));
+
+        if (RelicRequests.ResourceOf(request) is { } resource)
+        {
+            if (resource == StandardRunIds.Gold)
+            {
+                Label("Gold");
+            }
+            else
+            {
+                Label("Resource");
+                TextInput(resource.Value, 6, s => set(RelicRequests.WithResource(request, new RunResourceId(s))));
+            }
+            Amount();
+            return;
+        }
+
+        switch (request)
+        {
+            case HealRunEffect or ComputedHealRunEffect:
+                Label("Heal");
+                Amount();
+                break;
+            case ApplyRunDamageRunEffect or ComputedDamageRunEffect:
+                Label("Lose HP");
+                Amount();
+                break;
+            case ChangeMaxHealthRunEffect m:
+                Label("Max HP Δ");
+                NumberInput(m.Delta, n => set(new ChangeMaxHealthRunEffect(n)));
+                break;
+            case SetFlagRunEffect f:
+                Label("Set flag");
+                TextInput(f.Flag.Value, 7, s => set(new SetFlagRunEffect(new RunFlagId(s), f.Value)));
+                break;
+            case IncrementCounterRunEffect c:
+                Label("Counter");
+                TextInput(c.Counter.Value, 6, s => set(new IncrementCounterRunEffect(new RunCounterId(s), c.Delta)));
+                Label(" by");
+                NumberInput(c.Delta, n => set(new IncrementCounterRunEffect(c.Counter, n)));
+                break;
+            case SetCounterRunEffect sc:
+                Label("Set counter");
+                TextInput(sc.Counter.Value, 6, s => set(new SetCounterRunEffect(new RunCounterId(s), sc.Value)));
+                Label(" =");
+                NumberInput(sc.Value, n => set(new SetCounterRunEffect(sc.Counter, n)));
+                break;
+            default:
+                builder.AddContent(seq++, request.GetType().Name);
+                break;
+        }
+    };
+
+    // ── control-flow (Repeat) body editing ──────────────────────────────────────────
+    // Each op rebuilds the whole Repeat template from the captured `rp` and hands it to SetEffectTemplate.
+    private Task RepeatSetCount(int ri, int rx, int fx, RepeatRunEffect rp, RelicAmountSpec spec) =>
+        SetEffectTemplate(ri, rx, fx, new LiteralEffectTemplate(rp with { Count = RelicAmounts.Build(spec) }));
+
+    private Task BodySet(int ri, int rx, int fx, RepeatRunEffect rp, int bx, IRunEffectRequest request)
+    {
+        var body = rp.Effects.ToList();
+        if (bx >= 0 && bx < body.Count)
+            body[bx] = request;
+        return SetEffectTemplate(ri, rx, fx, new LiteralEffectTemplate(rp with { Effects = body }));
+    }
+
+    private Task BodyRemove(int ri, int rx, int fx, RepeatRunEffect rp, int bx)
+    {
+        var body = rp.Effects.ToList();
+        if (bx >= 0 && bx < body.Count)
+            body.RemoveAt(bx);
+        return SetEffectTemplate(ri, rx, fx, new LiteralEffectTemplate(rp with { Effects = body }));
+    }
+
+    private Task BodyAdd(int ri, int rx, int fx, RepeatRunEffect rp, string kind) =>
+        SetEffectTemplate(ri, rx, fx, new LiteralEffectTemplate(
+            rp with { Effects = rp.Effects.Append(RelicRequests.New(kind)).ToList() }));
 }

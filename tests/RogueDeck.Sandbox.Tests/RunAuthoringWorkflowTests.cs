@@ -571,6 +571,59 @@ public class RunAuthoringWorkflowTests
     }
 
     [Fact]
+    public void AuthoredRelic_WithRepeatControlFlow_RoundTrips_AndReacts()
+    {
+        var options = RunJson.CreateOptions();
+
+        // A relic whose reaction repeats a body of effects a computed number of times: on entering a node it
+        // repeats "+5 gold" three times. This is a LiteralEffectTemplate wrapping a RepeatRunEffect whose body is
+        // a plain run-effect request — the exact shape the RelicEditor's "+ Repeat…" block produces.
+        var interest = new RelicData
+        {
+            Id = "interest",
+            DisplayName = "Compound Interest",
+            RunPrograms = new[]
+            {
+                RunPrograms.On<NodeEnteredRunEvent>(new LiteralEffectTemplate(new RepeatRunEffect(
+                    RunExpr.Const(3),
+                    new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 5) }))),
+            },
+        };
+
+        var grant = new EventScriptBuilder("grant")
+            .Situation("grant", "A banker offers a charm.", s => s
+                .Choice("take", c => c.TextKey("Take it").AddRelic(new RelicId("interest"))))
+            .Build();
+        var after = new EventScriptBuilder("after")
+            .Situation("after", "The road continues.", s => s
+                .Choice("go", c => c.TextKey("Walk on")))
+            .Build();
+
+        var blueprint = EmptyBlueprint() with
+        {
+            Relics = new[] { interest },
+            Events = new Dictionary<string, EventScript> { ["grant"] = grant, ["after"] = after },
+            Map = new RunMap(new Node[]
+            {
+                new(new NodeId("n1"), StandardRunIds.EventNode, new EventRef(new EventId("grant"))),
+                new(new NodeId("n2"), StandardRunIds.EventNode, new EventRef(new EventId("after"))),
+            }),
+        };
+
+        // The Repeat (count + body) survives the JSON round-trip — it serializes as tpl.literal over fx.repeat,
+        // whose nested body recurses through the same effect converter.
+        var reloaded = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(blueprint, options), options);
+        Assert.Single(Assert.Single(reloaded.Relics, r => r.Id == "interest").RunPrograms);
+
+        // Driving it: taking the charm grants the relic, and entering the next node fires the reaction — the body
+        // repeats three times for +15 gold.
+        var run = Drive(reloaded, seed: 1);
+        Assert.NotNull(run.FindRelic(new RelicId("interest")));
+        Assert.True(run.GetResource(StandardRunIds.Gold) >= 15,
+            $"expected the repeat to grant 3×5 gold, got {run.GetResource(StandardRunIds.Gold)}");
+    }
+
+    [Fact]
     public void Import_CarriesCardAndEnemyDisplayNames()
     {
         var options = RunJson.CreateOptions();
