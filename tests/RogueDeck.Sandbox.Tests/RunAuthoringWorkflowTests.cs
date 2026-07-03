@@ -624,6 +624,60 @@ public class RunAuthoringWorkflowTests
     }
 
     [Fact]
+    public void AuthoredRelic_WithConditionalControlFlow_TakesTheElseBranch_AfterRoundTrip()
+    {
+        var options = RunJson.CreateOptions();
+
+        // A relic whose reaction branches on run state: on entering a node, IF gold >= 1000 gain 20 gold, ELSE
+        // gain 7. The run starts with no gold, so the else branch fires. This is a LiteralEffectTemplate wrapping a
+        // ConditionalRunEffect (condition + two branches of run-effect requests) — the "+ If…" block's shape. The
+        // branch amounts (20 / 7) are coprime so the total proves which branch ran regardless of how many nodes
+        // fire the reaction: an else-only total is a multiple of 7, and any then contribution would break that.
+        var thrifty = new RelicData
+        {
+            Id = "thrifty",
+            DisplayName = "Thrifty Charm",
+            RunPrograms = new[]
+            {
+                RunPrograms.On<NodeEnteredRunEvent>(new LiteralEffectTemplate(new ConditionalRunEffect(
+                    new RunComparisonExpression(RunExpr.Resource(StandardRunIds.Gold), RunComparisonOperator.GreaterOrEqual, RunExpr.Const(1000)),
+                    new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 20) },
+                    new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 7) }))),
+            },
+        };
+
+        var grant = new EventScriptBuilder("grant")
+            .Situation("grant", "A charm on a string.", s => s
+                .Choice("take", c => c.TextKey("Take it").AddRelic(new RelicId("thrifty"))))
+            .Build();
+        var after = new EventScriptBuilder("after")
+            .Situation("after", "The road continues.", s => s
+                .Choice("go", c => c.TextKey("Walk on")))
+            .Build();
+
+        var blueprint = EmptyBlueprint() with
+        {
+            Relics = new[] { thrifty },
+            Events = new Dictionary<string, EventScript> { ["grant"] = grant, ["after"] = after },
+            Map = new RunMap(new Node[]
+            {
+                new(new NodeId("n1"), StandardRunIds.EventNode, new EventRef(new EventId("grant"))),
+                new(new NodeId("n2"), StandardRunIds.EventNode, new EventRef(new EventId("after"))),
+            }),
+        };
+
+        // The Conditional (condition + both branches) survives the JSON round-trip (tpl.literal over fx.conditional).
+        var reloaded = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(blueprint, options), options);
+        Assert.Single(Assert.Single(reloaded.Relics, r => r.Id == "thrifty").RunPrograms);
+
+        // Driving it: gold is 0 (< 1000), so entering nodes runs the ELSE branch (+7) — never the then branch (+20).
+        var run = Drive(reloaded, seed: 1);
+        Assert.NotNull(run.FindRelic(new RelicId("thrifty")));
+        var gold = run.GetResource(StandardRunIds.Gold);
+        Assert.True(gold > 0 && gold % 7 == 0, $"expected else-branch (+7) totals only, got {gold}");
+    }
+
+    [Fact]
     public void Import_CarriesCardAndEnemyDisplayNames()
     {
         var options = RunJson.CreateOptions();

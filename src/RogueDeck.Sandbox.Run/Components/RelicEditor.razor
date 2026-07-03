@@ -53,44 +53,8 @@
                             <button class="mini" @onclick="() => RemoveReaction(relicIndex, reactionIndex)">✕ reaction</button>
                         </div>
                         <div class="run-bar">
-                            <label>if
-                                <select value="@cond.Kind"
-                                        @onchange="e => SetCondition(relicIndex, reactionIndex, cond with { Kind = AsString(e.Value) })">
-                                    @foreach (var (key, label) in ConditionKinds)
-                                    {
-                                        <option value="@key">@label</option>
-                                    }
-                                </select>
-                            </label>
-                            @if (cond.Kind == "flag")
-                            {
-                                <input value="@cond.Id" placeholder="flag id" style="width:7rem"
-                                       @onchange="e => SetCondition(relicIndex, reactionIndex, cond with { Id = AsString(e.Value) })" />
-                            }
-                            else if (cond.Kind == "compare")
-                            {
-                                <select value="@cond.ValueKind"
-                                        @onchange="e => SetCondition(relicIndex, reactionIndex, cond with { ValueKind = AsString(e.Value) })">
-                                    @foreach (var (key, label) in CompareValues)
-                                    {
-                                        <option value="@key">@label</option>
-                                    }
-                                </select>
-                                <select value="@cond.Op"
-                                        @onchange="e => SetCondition(relicIndex, reactionIndex, cond with { Op = ParseOp(AsString(e.Value)) })">
-                                    @foreach (var op in Operators)
-                                    {
-                                        <option value="@op">@OpSymbol(op)</option>
-                                    }
-                                </select>
-                                <input type="number" value="@cond.Right" style="width:4rem"
-                                       @onchange="e => SetCondition(relicIndex, reactionIndex, cond with { Right = AsInt(e.Value, cond.Right) })" />
-                                @if (cond.ValueKind is "resource" or "counter")
-                                {
-                                    <input value="@cond.Id" placeholder="id" style="width:6rem"
-                                           @onchange="e => SetCondition(relicIndex, reactionIndex, cond with { Id = AsString(e.Value) })" />
-                                }
-                            }
+                            <span class="muted">if</span>
+                            @ConditionEditor(cond, spec => SetCondition(relicIndex, reactionIndex, spec), allowNone: true)
                         </div>
                         <div class="editor-effects">
                             @{
@@ -125,6 +89,55 @@
                                                 {
                                                     <button class="mini" title="@label"
                                                             @onclick="() => BodyAdd(relicIndex, reactionIndex, fx, rp, kind)">+ @label</button>
+                                                }
+                                            </span>
+                                        </div>
+                                    </div>
+                                }
+                                else if (tpl is LiteralEffectTemplate { Effect: ConditionalRunEffect cnd })
+                                {
+                                    <div class="fx-block">
+                                        <div class="run-bar">
+                                            <span class="muted">If</span>
+                                            @ConditionEditor(RelicConditions.Classify(cnd.Condition),
+                                                spec => CondSetCondition(relicIndex, reactionIndex, fx, cnd, spec), allowNone: false)
+                                            <button class="mini" @onclick="() => RemoveEffect(relicIndex, reactionIndex, fx)">✕ if</button>
+                                        </div>
+                                        <div class="fx-body">
+                                            <span class="muted">then:</span>
+                                            @for (var bi = 0; bi < cnd.WhenTrue.Count; bi++)
+                                            {
+                                                var bx = bi;
+                                                <span class="fx">
+                                                    @RequestEditor(cnd.WhenTrue[bx], req => CondBodySet(relicIndex, reactionIndex, fx, cnd, true, bx, req))
+                                                    <button class="mini" @onclick="() => CondBodyRemove(relicIndex, reactionIndex, fx, cnd, true, bx)">✕</button>
+                                                </span>
+                                            }
+                                            <span class="add-effect">
+                                                <span class="muted">add:</span>
+                                                @foreach (var (kind, label) in RelicRequests.Kinds)
+                                                {
+                                                    <button class="mini" title="@label"
+                                                            @onclick="() => CondBodyAdd(relicIndex, reactionIndex, fx, cnd, true, kind)">+ @label</button>
+                                                }
+                                            </span>
+                                        </div>
+                                        <div class="fx-body">
+                                            <span class="muted">else:</span>
+                                            @for (var bi = 0; bi < cnd.WhenFalse.Count; bi++)
+                                            {
+                                                var bx = bi;
+                                                <span class="fx">
+                                                    @RequestEditor(cnd.WhenFalse[bx], req => CondBodySet(relicIndex, reactionIndex, fx, cnd, false, bx, req))
+                                                    <button class="mini" @onclick="() => CondBodyRemove(relicIndex, reactionIndex, fx, cnd, false, bx)">✕</button>
+                                                </span>
+                                            }
+                                            <span class="add-effect">
+                                                <span class="muted">add:</span>
+                                                @foreach (var (kind, label) in RelicRequests.Kinds)
+                                                {
+                                                    <button class="mini" title="@label"
+                                                            @onclick="() => CondBodyAdd(relicIndex, reactionIndex, fx, cnd, false, kind)">+ @label</button>
                                                 }
                                             </span>
                                         </div>
@@ -204,6 +217,7 @@
         ("enablerelic", "Enable relic"),
         ("consumable", "Consumable"),
         ("repeat", "Repeat…"),
+        ("conditional", "If…"),
     };
 
     // The relic ids a grant/removal can pick: the run's authored relics plus the built-in samples
@@ -394,6 +408,10 @@
             new AddConsumableRunEffect(new ConsumableId("potion"), new IRunEffectRequest[] { new HealRunEffect(8) })),
         "repeat" => new LiteralEffectTemplate(new RepeatRunEffect(
             RunExpr.Const(2), new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 5) })),
+        "conditional" => new LiteralEffectTemplate(new ConditionalRunEffect(
+            RelicConditions.Build(new RelicConditionSpec("compare"))!,
+            new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 5) },
+            Array.Empty<IRunEffectRequest>())),
         _ => new LiteralEffectTemplate(new ChangeMaxHealthRunEffect(0)),
     };
 
@@ -426,6 +444,11 @@
         // nested editor can round-trip; otherwise it is preserved read-only.
         LiteralEffectTemplate { Effect: RepeatRunEffect rp } =>
             !RelicAmounts.IsAdvanced(rp.Count) && rp.Effects.All(RelicRequests.IsEditable),
+        // A conditional is editable iff its condition is a modellable one and both branches are body leaves the
+        // nested editor can round-trip.
+        LiteralEffectTemplate { Effect: ConditionalRunEffect cnd } =>
+            !RelicConditions.IsAdvanced(cnd.Condition)
+            && cnd.WhenTrue.All(RelicRequests.IsEditable) && cnd.WhenFalse.All(RelicRequests.IsEditable),
         _ => false,
     };
 
@@ -666,6 +689,62 @@
         }
     };
 
+    // Shared condition control: a kind select (value-compare / victory / defeat / flag, plus "always" when
+    // allowNone) and the operands for the chosen kind. Emits the edited spec through `onChange`. Used by both the
+    // reaction-level "if" and the Conditional effect so conditions author identically. A Conditional passes
+    // allowNone:false because it needs a real branch (an always-true guard would defeat the point).
+    private RenderFragment ConditionEditor(RelicConditionSpec spec, Action<RelicConditionSpec> onChange, bool allowNone) => builder =>
+    {
+        var seq = 0;
+
+        void Select(string current, IEnumerable<(string Key, string Label)> options, Action<string> change)
+        {
+            builder.OpenElement(seq++, "select");
+            builder.AddAttribute(seq++, "value", current);
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e => change(AsString(e.Value))));
+            foreach (var (key, label) in options)
+            {
+                builder.OpenElement(seq++, "option");
+                builder.AddAttribute(seq++, "value", key);
+                builder.AddContent(seq++, label);
+                builder.CloseElement();
+            }
+            builder.CloseElement();
+        }
+
+        void TextInput(string value, int width, string placeholder, Action<string> onInput)
+        {
+            builder.OpenElement(seq++, "input");
+            builder.AddAttribute(seq++, "value", value);
+            builder.AddAttribute(seq++, "placeholder", placeholder);
+            builder.AddAttribute(seq++, "style", $"width:{width}rem");
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e => onInput(AsString(e.Value))));
+            builder.CloseElement();
+        }
+
+        var kinds = allowNone ? ConditionKinds : ConditionKinds.Where(k => k.Kind != "none");
+        Select(spec.Kind, kinds, kind => onChange(spec with { Kind = kind }));
+
+        if (spec.Kind == "flag")
+        {
+            TextInput(spec.Id, 7, "flag id", id => onChange(spec with { Id = id }));
+        }
+        else if (spec.Kind == "compare")
+        {
+            Select(spec.ValueKind, CompareValues, v => onChange(spec with { ValueKind = v }));
+            Select(spec.Op.ToString(), Operators.Select(op => (op.ToString(), OpSymbol(op))),
+                op => onChange(spec with { Op = ParseOp(op) }));
+            builder.OpenElement(seq++, "input");
+            builder.AddAttribute(seq++, "type", "number");
+            builder.AddAttribute(seq++, "value", spec.Right);
+            builder.AddAttribute(seq++, "style", "width:4rem");
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e => onChange(spec with { Right = AsInt(e.Value, spec.Right) })));
+            builder.CloseElement();
+            if (spec.ValueKind is "resource" or "counter")
+                TextInput(spec.Id, 6, "id", id => onChange(spec with { Id = id }));
+        }
+    };
+
     // Inline editor for one control-flow BODY effect (an IRunEffectRequest, resolved later): the amount/state
     // leaf palette. Computed amounts fold into the Computed* effects via RelicRequests. `set` replaces this body
     // effect and rebuilds the enclosing Repeat/Conditional.
@@ -772,4 +851,37 @@
     private Task BodyAdd(int ri, int rx, int fx, RepeatRunEffect rp, string kind) =>
         SetEffectTemplate(ri, rx, fx, new LiteralEffectTemplate(
             rp with { Effects = rp.Effects.Append(RelicRequests.New(kind)).ToList() }));
+
+    // ── control-flow (Conditional) body editing ─────────────────────────────────────
+    // ConditionalRunEffect has get-only properties (no `with`), so each op rebuilds it via its constructor,
+    // replacing only the changed part. `whenTrue` selects which branch a body op targets.
+    private Task CondSet(int ri, int rx, int fx, ConditionalRunEffect cnd,
+        IRunExpression<bool>? condition, IReadOnlyList<IRunEffectRequest>? whenTrue, IReadOnlyList<IRunEffectRequest>? whenFalse) =>
+        SetEffectTemplate(ri, rx, fx, new LiteralEffectTemplate(new ConditionalRunEffect(
+            condition ?? cnd.Condition, whenTrue ?? cnd.WhenTrue, whenFalse ?? cnd.WhenFalse)));
+
+    private Task CondSetCondition(int ri, int rx, int fx, ConditionalRunEffect cnd, RelicConditionSpec spec) =>
+        CondSet(ri, rx, fx, cnd, RelicConditions.Build(spec) ?? cnd.Condition, null, null);
+
+    private Task CondBodySet(int ri, int rx, int fx, ConditionalRunEffect cnd, bool whenTrue, int bx, IRunEffectRequest request)
+    {
+        var body = (whenTrue ? cnd.WhenTrue : cnd.WhenFalse).ToList();
+        if (bx >= 0 && bx < body.Count)
+            body[bx] = request;
+        return CondSet(ri, rx, fx, cnd, null, whenTrue ? body : null, whenTrue ? null : body);
+    }
+
+    private Task CondBodyRemove(int ri, int rx, int fx, ConditionalRunEffect cnd, bool whenTrue, int bx)
+    {
+        var body = (whenTrue ? cnd.WhenTrue : cnd.WhenFalse).ToList();
+        if (bx >= 0 && bx < body.Count)
+            body.RemoveAt(bx);
+        return CondSet(ri, rx, fx, cnd, null, whenTrue ? body : null, whenTrue ? null : body);
+    }
+
+    private Task CondBodyAdd(int ri, int rx, int fx, ConditionalRunEffect cnd, bool whenTrue, string kind)
+    {
+        var body = (whenTrue ? cnd.WhenTrue : cnd.WhenFalse).Append(RelicRequests.New(kind)).ToList();
+        return CondSet(ri, rx, fx, cnd, null, whenTrue ? body : null, whenTrue ? null : body);
+    }
 }
