@@ -145,6 +145,36 @@
                                         </div>
                                     </div>
                                 }
+                                else if (tpl is LiteralEffectTemplate { Effect: GrantRewardRunEffect gr })
+                                {
+                                    <div class="fx-block">
+                                        <div class="run-bar">
+                                            <span class="muted">Grant reward</span>
+                                            <input value="@gr.Reward.Value" style="width:8rem"
+                                                   @onchange="e => GrantSetReward(relicIndex, reactionIndex, fx, gr, AsString(e.Value))" />
+                                            <button class="mini" @onclick="() => RemoveEffect(relicIndex, reactionIndex, fx)">✕ reward</button>
+                                        </div>
+                                        <div class="fx-body">
+                                            <span class="muted">contains:</span>
+                                            @for (var bi = 0; bi < gr.Effects.Count; bi++)
+                                            {
+                                                var bx = bi;
+                                                <span class="fx">
+                                                    @RequestEditor(gr.Effects[bx], req => GrantBodySet(relicIndex, reactionIndex, fx, gr, bx, req))
+                                                    <button class="mini" @onclick="() => GrantBodyRemove(relicIndex, reactionIndex, fx, gr, bx)">✕</button>
+                                                </span>
+                                            }
+                                            <span class="add-effect">
+                                                <span class="muted">add:</span>
+                                                @foreach (var (kind, label) in RelicRequests.Kinds)
+                                                {
+                                                    <button class="mini" title="@label"
+                                                            @onclick="() => GrantBodyAdd(relicIndex, reactionIndex, fx, gr, kind)">+ @label</button>
+                                                }
+                                            </span>
+                                        </div>
+                                    </div>
+                                }
                                 else
                                 {
                                     <span class="fx">
@@ -220,6 +250,7 @@
         ("consumable", "Consumable"),
         ("repeat", "Repeat…"),
         ("conditional", "If…"),
+        ("grantreward", "Grant reward…"),
     };
 
     // The relic ids a grant/removal can pick: the run's authored relics plus the built-in samples
@@ -414,6 +445,8 @@
             RelicConditions.Build(new RelicConditionSpec("compare"))!,
             new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 5) },
             Array.Empty<IRunEffectRequest>())),
+        "grantreward" => new LiteralEffectTemplate(new GrantRewardRunEffect(
+            new RewardId("reward"), new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 10) })),
         _ => new LiteralEffectTemplate(new ChangeMaxHealthRunEffect(0)),
     };
 
@@ -451,6 +484,8 @@
         LiteralEffectTemplate { Effect: ConditionalRunEffect cnd } =>
             !RelicConditions.IsAdvanced(cnd.Condition)
             && cnd.WhenTrue.All(RelicRequests.IsEditable) && cnd.WhenFalse.All(RelicRequests.IsEditable),
+        // A grant-reward is editable iff every effect it bundles is a body leaf the nested editor can round-trip.
+        LiteralEffectTemplate { Effect: GrantRewardRunEffect gr } => gr.Effects.All(RelicRequests.IsEditable),
         _ => false,
     };
 
@@ -775,6 +810,21 @@
             builder.CloseElement();
         }
 
+        void Select(string current, IEnumerable<(string Key, string Label)> options, Action<string> onChange)
+        {
+            builder.OpenElement(seq++, "select");
+            builder.AddAttribute(seq++, "value", current);
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e => onChange(AsString(e.Value))));
+            foreach (var (key, label) in options)
+            {
+                builder.OpenElement(seq++, "option");
+                builder.AddAttribute(seq++, "value", key);
+                builder.AddContent(seq++, label);
+                builder.CloseElement();
+            }
+            builder.CloseElement();
+        }
+
         void Amount() => builder.AddContent(seq++, AmountEditor(RelicRequests.AmountOf(request),
             spec => set(RelicRequests.WithAmount(request, spec))));
 
@@ -822,6 +872,20 @@
                 TextInput(sc.Counter.Value, 6, s => set(new SetCounterRunEffect(new RunCounterId(s), sc.Value)));
                 Label(" =");
                 NumberInput(sc.Value, n => set(new SetCounterRunEffect(sc.Counter, n)));
+                break;
+            case AddCardToDeckRunEffect ac:
+                Label("Add card");
+                Select(ac.Card.value, CardOptions(), s => set(new AddCardToDeckRunEffect(new CardDefinitionId(s))));
+                break;
+            case AddRelicByIdRunEffect ar:
+                Label("Add relic");
+                Select(ar.Relic.Value, RelicOptions(), s => set(new AddRelicByIdRunEffect(new RelicId(s))));
+                break;
+            case AddConsumableRunEffect cn when cn.UseEffects.Count == 1 && cn.UseEffects[0] is HealRunEffect cnHeal:
+                Label("Consumable");
+                TextInput(cn.Definition.Value, 6, s => set(new AddConsumableRunEffect(new ConsumableId(s), cn.UseEffects)));
+                Label(" heals");
+                NumberInput(cnHeal.Amount, n => set(new AddConsumableRunEffect(cn.Definition, new IRunEffectRequest[] { new HealRunEffect(n) })));
                 break;
             default:
                 builder.AddContent(seq++, request.GetType().Name);
@@ -886,4 +950,32 @@
         var body = (whenTrue ? cnd.WhenTrue : cnd.WhenFalse).Append(RelicRequests.New(kind)).ToList();
         return CondSet(ri, rx, fx, cnd, null, whenTrue ? body : null, whenTrue ? null : body);
     }
+
+    // ── reward (GrantReward) contents editing ───────────────────────────────────────
+    // GrantRewardRunEffect is a positional record → rebuilt with `with`. Each op rebuilds it from the captured
+    // `gr` and hands it to SetEffectTemplate. Granting a reward raises RewardGrantedRunEvent, so other relics'
+    // "a reward is granted" reactions can chain off it.
+    private Task GrantSetReward(int ri, int rx, int fx, GrantRewardRunEffect gr, string reward) =>
+        SetEffectTemplate(ri, rx, fx, new LiteralEffectTemplate(
+            gr with { Reward = new RewardId(string.IsNullOrWhiteSpace(reward) ? "reward" : reward.Trim()) }));
+
+    private Task GrantBodySet(int ri, int rx, int fx, GrantRewardRunEffect gr, int bx, IRunEffectRequest request)
+    {
+        var body = gr.Effects.ToList();
+        if (bx >= 0 && bx < body.Count)
+            body[bx] = request;
+        return SetEffectTemplate(ri, rx, fx, new LiteralEffectTemplate(gr with { Effects = body }));
+    }
+
+    private Task GrantBodyRemove(int ri, int rx, int fx, GrantRewardRunEffect gr, int bx)
+    {
+        var body = gr.Effects.ToList();
+        if (bx >= 0 && bx < body.Count)
+            body.RemoveAt(bx);
+        return SetEffectTemplate(ri, rx, fx, new LiteralEffectTemplate(gr with { Effects = body }));
+    }
+
+    private Task GrantBodyAdd(int ri, int rx, int fx, GrantRewardRunEffect gr, string kind) =>
+        SetEffectTemplate(ri, rx, fx, new LiteralEffectTemplate(
+            gr with { Effects = gr.Effects.Append(RelicRequests.New(kind)).ToList() }));
 }

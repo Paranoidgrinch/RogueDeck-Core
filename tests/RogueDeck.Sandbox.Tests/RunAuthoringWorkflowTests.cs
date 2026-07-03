@@ -678,6 +678,66 @@ public class RunAuthoringWorkflowTests
     }
 
     [Fact]
+    public void AuthoredRelic_GrantingAReward_RoundTrips_RaisesRewardGranted_AndDeliversContents()
+    {
+        var options = RunJson.CreateOptions();
+
+        // A relic whose reaction grants a named reward — a bundle of contents (gold + the built-in bloodstone
+        // relic). This is a LiteralEffectTemplate wrapping a GrantRewardRunEffect whose Effects are body-leaf
+        // run-effect requests — the "+ Grant reward…" block's shape. Granting raises RewardGrantedRunEvent, so it
+        // travels the reward path (not a plain effect list).
+        var patron = new RelicData
+        {
+            Id = "patron",
+            DisplayName = "Generous Patron",
+            RunPrograms = new[]
+            {
+                RunPrograms.On<NodeEnteredRunEvent>(new LiteralEffectTemplate(new GrantRewardRunEffect(
+                    new RewardId("boon"),
+                    new IRunEffectRequest[]
+                    {
+                        new ChangeResourceRunEffect(StandardRunIds.Gold, 9),
+                        new AddRelicByIdRunEffect(new RelicId("bloodstone")),
+                    }))),
+            },
+        };
+
+        var grant = new EventScriptBuilder("grant")
+            .Situation("grant", "A patron pledges support.", s => s
+                .Choice("take", c => c.TextKey("Accept").AddRelic(new RelicId("patron"))))
+            .Build();
+        var after = new EventScriptBuilder("after")
+            .Situation("after", "The road continues.", s => s
+                .Choice("go", c => c.TextKey("Walk on")))
+            .Build();
+
+        var blueprint = EmptyBlueprint() with
+        {
+            Relics = new[] { patron },
+            Events = new Dictionary<string, EventScript> { ["grant"] = grant, ["after"] = after },
+            Map = new RunMap(new Node[]
+            {
+                new(new NodeId("n1"), StandardRunIds.EventNode, new EventRef(new EventId("grant"))),
+                new(new NodeId("n2"), StandardRunIds.EventNode, new EventRef(new EventId("after"))),
+            }),
+        };
+
+        // The reward (id + contents) survives the JSON round-trip — tpl.literal over fx.grantReward, whose nested
+        // contents recurse through the same effect converter.
+        var reloaded = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(blueprint, options), options);
+        Assert.Single(Assert.Single(reloaded.Relics, r => r.Id == "patron").RunPrograms);
+
+        // Driving it: the reaction grants the reward — a RewardGranted log entry is recorded and both contents land
+        // (gold in multiples of 9, the bloodstone relic acquired).
+        var run = Drive(reloaded, seed: 1);
+        Assert.NotNull(run.FindRelic(new RelicId("patron")));
+        Assert.NotNull(run.FindRelic(new RelicId("bloodstone")));
+        Assert.Contains(run.Log, e => e.Type == StandardRunLogTypes.RewardGranted);
+        var gold = run.GetResource(StandardRunIds.Gold);
+        Assert.True(gold > 0 && gold % 9 == 0, $"expected the reward's +9 gold contents, got {gold}");
+    }
+
+    [Fact]
     public void Import_CarriesCardAndEnemyDisplayNames()
     {
         var options = RunJson.CreateOptions();

@@ -1,4 +1,3 @@
-using RogueDeck.Core.Combat;
 using RogueDeck.Run;
 using RogueDeck.Sandbox.Composition;
 
@@ -19,6 +18,9 @@ public class RelicRequestsTests
     [InlineData("flag")]
     [InlineData("counter")]
     [InlineData("setcounter")]
+    [InlineData("addcard")]
+    [InlineData("addrelic")]
+    [InlineData("consumable")]
     public void NewDefaults_AreAllEditable(string kind)
     {
         Assert.True(RelicRequests.IsEditable(RelicRequests.New(kind)));
@@ -62,7 +64,8 @@ public class RelicRequestsTests
         var arithmetic = new ComputedHealRunEffect(RunExpr.Add(RunExpr.CurrentHealth, RunExpr.Const(1)));
         Assert.False(RelicRequests.IsEditable(arithmetic));
 
-        // An effect the body editor does not model (card grant) is not a body leaf.
-        Assert.False(RelicRequests.IsEditable(new AddCardToDeckRunEffect(new CardDefinitionId("strike"))));
+        // An effect the body editor does not model (a player-choice card removal) is not a body leaf.
+        Assert.False(RelicRequests.IsEditable(
+            new RemoveCardsRunEffect(RunSelectors.DeckCards.ChooseByPlayer(1, "Choose"))));
     }
 }

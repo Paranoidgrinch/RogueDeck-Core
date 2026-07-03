@@ -1,3 +1,4 @@
+using RogueDeck.Core.Combat;
 using RogueDeck.Run;
 
 namespace RogueDeck.Sandbox.Composition;
@@ -12,7 +13,9 @@ namespace RogueDeck.Sandbox.Composition;
 // read-only. Lives outside the .razor so it can be unit-tested.
 public static class RelicRequests
 {
-    // The body-effect kinds offered as "+ …" buttons inside a Repeat/Conditional (key → label).
+    // The body-effect kinds offered as "+ …" buttons inside a Repeat/Conditional branch or a reward's contents
+    // (key → label). Covers the amount/state leaves plus the grant leaves a reward typically is (a card, a relic,
+    // a consumable). Removals/disable/enable and nested control-flow stay out (a body is one level deep).
     public static readonly (string Kind, string Label)[] Kinds =
     {
         ("gold", "Gold"),
@@ -23,6 +26,9 @@ public static class RelicRequests
         ("flag", "Flag"),
         ("counter", "Counter"),
         ("setcounter", "Set counter"),
+        ("addcard", "Add card"),
+        ("addrelic", "Add relic"),
+        ("consumable", "Consumable"),
     };
 
     public static IRunEffectRequest New(string kind) => kind switch
@@ -35,18 +41,24 @@ public static class RelicRequests
         "flag" => new SetFlagRunEffect(new RunFlagId("flag")),
         "counter" => new IncrementCounterRunEffect(new RunCounterId("counter"), 1),
         "setcounter" => new SetCounterRunEffect(new RunCounterId("counter"), 0),
+        // The card id defaults empty (author picks from the deck dropdown); the relic id to a built-in sample.
+        "addcard" => new AddCardToDeckRunEffect(new CardDefinitionId("")),
+        "addrelic" => new AddRelicByIdRunEffect(new RelicId("bloodstone")),
+        "consumable" => new AddConsumableRunEffect(new ConsumableId("potion"), new IRunEffectRequest[] { new HealRunEffect(8) }),
         _ => new ChangeMaxHealthRunEffect(0),
     };
 
     // A body effect round-trips through the editor iff it is one of the modelled leaves and (for the computed
-    // amount variants) its amount is itself editable.
+    // amount / single-heal-consumable variants) its shape is itself editable.
     public static bool IsEditable(IRunEffectRequest request) => request switch
     {
         HealRunEffect or ApplyRunDamageRunEffect or ChangeResourceRunEffect => true,
         ChangeMaxHealthRunEffect or SetFlagRunEffect or IncrementCounterRunEffect or SetCounterRunEffect => true,
+        AddCardToDeckRunEffect or AddRelicByIdRunEffect => true,
         ComputedHealRunEffect h => !RelicAmounts.IsAdvanced(h.Amount),
         ComputedDamageRunEffect d => !RelicAmounts.IsAdvanced(d.Amount),
         ComputedResourceRunEffect r => !RelicAmounts.IsAdvanced(r.Amount),
+        AddConsumableRunEffect c => c.UseEffects.Count == 1 && c.UseEffects[0] is HealRunEffect,
         _ => false,
     };
 
