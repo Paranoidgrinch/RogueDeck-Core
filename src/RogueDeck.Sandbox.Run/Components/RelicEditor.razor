@@ -1,9 +1,11 @@
 @using RogueDeck.Core.Combat
 
 @* Visual editor for the run's authored relics. A relic is id + display name + reactions; each reaction fires on
-   a run event (optionally gated by a condition) while the relic is owned and enqueues effects. Effect amounts can
-   be a constant or a run/event value (computed at dispatch). Reactions the editor can't model (nested and/or
-   conditions, advanced amounts, card templates) are preserved and shown read-only so nothing is lost. *@
+   a run event (optionally gated by a condition) while the relic is owned and enqueues effects. The effect palette
+   spans the run-effect leaf surface: resources/HP/heal/damage (with constant or computed amounts), flags/counters,
+   card grants/removal, relic add/remove/disable/enable, and consumable grants. Reactions the editor can't model
+   (nested and/or conditions, advanced amounts, control-flow effects) are preserved and shown read-only so nothing
+   is lost. *@
 
 <section class="panel">
     <h2>Relics</h2>
@@ -159,7 +161,31 @@
         ("maxhp", "Max HP"),
         ("flag", "Flag"),
         ("counter", "Counter"),
+        ("setcounter", "Set counter"),
+        ("addcard", "Add card"),
+        ("removecard", "Remove card"),
+        ("addrelic", "Add relic"),
+        ("removerelic", "Remove relic"),
+        ("disablerelic", "Disable relic"),
+        ("enablerelic", "Enable relic"),
+        ("consumable", "Consumable"),
     };
+
+    // The relic ids a grant/removal can pick: the run's authored relics plus the built-in samples
+    // (bloodstone/leech), matching what RunSandbox.BuildContent registers — same set the EventEditor offers.
+    private static readonly string[] BuiltInRelicIds = { "bloodstone", "leech" };
+
+    private string[] RelicIds() =>
+        Blueprint.Relics.Select(r => r.Id).Concat(BuiltInRelicIds).Distinct(StringComparer.Ordinal).ToArray();
+
+    private string FirstRelicId() => RelicIds().FirstOrDefault() ?? "bloodstone";
+
+    private IEnumerable<(string Key, string Label)> RelicOptions() =>
+        RelicIds().Select(id => (id, id));
+
+    // The deck cards an "add card" can pick (blank sentinel first, like the EventEditor).
+    private IEnumerable<(string Key, string Label)> CardOptions() =>
+        new[] { ("", "— card —") }.Concat(Blueprint.Cards.Select(c => (c.Id, c.Id)));
 
     // Condition authoring.
     private static readonly (string Kind, string Label)[] ConditionKinds =
@@ -311,7 +337,7 @@
         return SetReactionEffects(relicIndex, reactionIndex, effects);
     }
 
-    private static IRunEffectTemplate NewTemplate(string kind) => kind switch
+    private IRunEffectTemplate NewTemplate(string kind) => kind switch
     {
         "gold" => new GainResourceTemplate(StandardRunIds.Gold, RunExpr.Const(10)),
         "resource" => new GainResourceTemplate(new RunResourceId("resource"), RunExpr.Const(5)),
@@ -320,6 +346,17 @@
         "maxhp" => new LiteralEffectTemplate(new ChangeMaxHealthRunEffect(5)),
         "flag" => new LiteralEffectTemplate(new SetFlagRunEffect(new RunFlagId("flag"))),
         "counter" => new LiteralEffectTemplate(new IncrementCounterRunEffect(new RunCounterId("counter"), 1)),
+        "setcounter" => new LiteralEffectTemplate(new SetCounterRunEffect(new RunCounterId("counter"), 0)),
+        "addcard" => new LiteralEffectTemplate(
+            new AddCardToDeckRunEffect(new CardDefinitionId(Blueprint.Cards.Select(c => c.Id).FirstOrDefault() ?? ""))),
+        "removecard" => new LiteralEffectTemplate(
+            new RemoveCardsRunEffect(RunSelectors.DeckCards.ChooseByPlayer(1, "Choose a card to remove"))),
+        "addrelic" => new LiteralEffectTemplate(new AddRelicByIdRunEffect(new RelicId(FirstRelicId()))),
+        "removerelic" => new LiteralEffectTemplate(new RemoveRelicRunEffect(new RelicId(FirstRelicId()))),
+        "disablerelic" => new LiteralEffectTemplate(new DisableRelicRunEffect(new RelicId(FirstRelicId()), 1)),
+        "enablerelic" => new LiteralEffectTemplate(new EnableRelicRunEffect(new RelicId(FirstRelicId()))),
+        "consumable" => new LiteralEffectTemplate(
+            new AddConsumableRunEffect(new ConsumableId("potion"), new IRunEffectRequest[] { new HealRunEffect(8) })),
         _ => new LiteralEffectTemplate(new ChangeMaxHealthRunEffect(0)),
     };
 
@@ -342,6 +379,12 @@
         HealTemplate h => !RelicAmounts.IsAdvanced(h.Amount),
         DamageTemplate d => !RelicAmounts.IsAdvanced(d.Amount),
         LiteralEffectTemplate { Effect: ChangeMaxHealthRunEffect or SetFlagRunEffect or IncrementCounterRunEffect } => true,
+        LiteralEffectTemplate { Effect: SetCounterRunEffect or AddCardToDeckRunEffect or RemoveCardsRunEffect } => true,
+        LiteralEffectTemplate { Effect: AddRelicByIdRunEffect or RemoveRelicRunEffect or DisableRelicRunEffect or EnableRelicRunEffect } => true,
+        // A consumable grant is editable only in the single-heal shape the editor renders; richer use-effect lists
+        // are preserved read-only.
+        LiteralEffectTemplate { Effect: AddConsumableRunEffect c } =>
+            c.UseEffects.Count == 1 && c.UseEffects[0] is HealRunEffect,
         _ => false,
     };
 
@@ -496,6 +539,52 @@
                 TextInput(c.Counter.Value, 6, s => Set(new LiteralEffectTemplate(new IncrementCounterRunEffect(new RunCounterId(s), c.Delta))));
                 Label(" by");
                 NumberInput(c.Delta, n => Set(new LiteralEffectTemplate(new IncrementCounterRunEffect(c.Counter, n))));
+                break;
+            case LiteralEffectTemplate { Effect: SetCounterRunEffect sc }:
+                Label("Set counter");
+                TextInput(sc.Counter.Value, 6, s => Set(new LiteralEffectTemplate(new SetCounterRunEffect(new RunCounterId(s), sc.Value))));
+                Label(" =");
+                NumberInput(sc.Value, n => Set(new LiteralEffectTemplate(new SetCounterRunEffect(sc.Counter, n))));
+                break;
+            case LiteralEffectTemplate { Effect: AddCardToDeckRunEffect ac }:
+                Label("Add card");
+                Select(ac.Card.value, CardOptions(),
+                    s => Set(new LiteralEffectTemplate(new AddCardToDeckRunEffect(new CardDefinitionId(s)))));
+                break;
+            case LiteralEffectTemplate { Effect: RemoveCardsRunEffect }:
+                Label("Remove a card (player picks)");
+                break;
+            case LiteralEffectTemplate { Effect: AddRelicByIdRunEffect ar }:
+                Label("Add relic");
+                Select(ar.Relic.Value, RelicOptions(),
+                    s => Set(new LiteralEffectTemplate(new AddRelicByIdRunEffect(new RelicId(s)))));
+                break;
+            case LiteralEffectTemplate { Effect: RemoveRelicRunEffect rr }:
+                Label("Remove relic");
+                Select(rr.Relic.Value, RelicOptions(),
+                    s => Set(new LiteralEffectTemplate(new RemoveRelicRunEffect(new RelicId(s)))));
+                break;
+            case LiteralEffectTemplate { Effect: DisableRelicRunEffect dr }:
+                Label("Disable relic");
+                Select(dr.Relic.Value, RelicOptions(),
+                    s => Set(new LiteralEffectTemplate(new DisableRelicRunEffect(new RelicId(s), dr.Combats))));
+                Label(" for");
+                NumberInput(dr.Combats, n => Set(new LiteralEffectTemplate(new DisableRelicRunEffect(dr.Relic, n))));
+                Label("combats");
+                break;
+            case LiteralEffectTemplate { Effect: EnableRelicRunEffect er }:
+                Label("Enable relic");
+                Select(er.Relic.Value, RelicOptions(),
+                    s => Set(new LiteralEffectTemplate(new EnableRelicRunEffect(new RelicId(s)))));
+                break;
+            case LiteralEffectTemplate { Effect: AddConsumableRunEffect cn }
+                when cn.UseEffects.Count == 1 && cn.UseEffects[0] is HealRunEffect cnHeal:
+                Label("Consumable");
+                TextInput(cn.Definition.Value, 6,
+                    s => Set(new LiteralEffectTemplate(new AddConsumableRunEffect(new ConsumableId(s), cn.UseEffects))));
+                Label(" heals");
+                NumberInput(cnHeal.Amount, n => Set(new LiteralEffectTemplate(
+                    new AddConsumableRunEffect(cn.Definition, new IRunEffectRequest[] { new HealRunEffect(n) }))));
                 break;
             default:
                 builder.AddContent(seq++, template.GetType().Name);

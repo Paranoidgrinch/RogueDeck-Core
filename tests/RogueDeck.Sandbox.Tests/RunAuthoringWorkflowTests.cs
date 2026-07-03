@@ -518,6 +518,59 @@ public class RunAuthoringWorkflowTests
     }
 
     [Fact]
+    public void AuthoredRelic_WithLeafEffects_RoundTrips_AndReacts()
+    {
+        var options = RunJson.CreateOptions();
+
+        // A run-authored relic whose reaction uses the broader leaf-effect palette the RelicEditor now exposes:
+        // on entering a node it grants a consumable and adds the built-in bloodstone relic. Both effects are
+        // LiteralEffectTemplate-wrapped run effects — the exact shapes the editor's "+ Consumable / + Add relic"
+        // buttons produce.
+        var quartermaster = new RelicData
+        {
+            Id = "quartermaster",
+            DisplayName = "Quartermaster",
+            RunPrograms = new[]
+            {
+                RunPrograms.On<NodeEnteredRunEvent>(
+                    new AddConsumableRunEffect(new ConsumableId("potion"), new IRunEffectRequest[] { new HealRunEffect(8) }),
+                    new AddRelicByIdRunEffect(new RelicId("bloodstone"))),
+            },
+        };
+
+        var grant = new EventScriptBuilder("grant")
+            .Situation("grant", "A quartermaster hands you a charm.", s => s
+                .Choice("take", c => c.TextKey("Take it").AddRelic(new RelicId("quartermaster"))))
+            .Build();
+        var after = new EventScriptBuilder("after")
+            .Situation("after", "The road continues.", s => s
+                .Choice("go", c => c.TextKey("Walk on")))
+            .Build();
+
+        var blueprint = EmptyBlueprint() with
+        {
+            Relics = new[] { quartermaster },
+            Events = new Dictionary<string, EventScript> { ["grant"] = grant, ["after"] = after },
+            Map = new RunMap(new Node[]
+            {
+                new(new NodeId("n1"), StandardRunIds.EventNode, new EventRef(new EventId("grant"))),
+                new(new NodeId("n2"), StandardRunIds.EventNode, new EventRef(new EventId("after"))),
+            }),
+        };
+
+        // The leaf effects survive the JSON round-trip (they serialize as tpl.literal over fx.addConsumable /
+        // fx.addRelicById — already-registered effect kinds).
+        var reloaded = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(blueprint, options), options);
+        Assert.Single(Assert.Single(reloaded.Relics, r => r.Id == "quartermaster").RunPrograms);
+
+        // Driving it: taking the charm grants the relic, and entering the next node fires both leaf effects.
+        var run = Drive(reloaded, seed: 1);
+        Assert.NotNull(run.FindRelic(new RelicId("quartermaster")));
+        Assert.NotNull(run.FindRelic(new RelicId("bloodstone")));
+        Assert.Contains(run.Consumables, cn => cn.DefinitionId == new ConsumableId("potion"));
+    }
+
+    [Fact]
     public void Import_CarriesCardAndEnemyDisplayNames()
     {
         var options = RunJson.CreateOptions();
