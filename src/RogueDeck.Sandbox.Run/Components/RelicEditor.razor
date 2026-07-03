@@ -3,9 +3,11 @@
 @* Visual editor for the run's authored relics. A relic is id + display name + reactions; each reaction fires on
    a run event (optionally gated by a condition) while the relic is owned and enqueues effects. The effect palette
    spans the run-effect leaf surface: resources/HP/heal/damage (with constant or computed amounts), flags/counters,
-   card grants/removal, relic add/remove/disable/enable, and consumable grants. Reactions the editor can't model
-   (nested and/or conditions, advanced amounts, control-flow effects) are preserved and shown read-only so nothing
-   is lost. *@
+   card grants/removal, relic add/remove/disable/enable, and consumable grants — plus control flow: Repeat (a body
+   run a constant/computed number of times) and Conditional (If/then/else on run state). Control-flow bodies hold
+   the amount/state leaf set, one level deep. Reactions the editor can't model (nested and/or conditions, advanced
+   amounts, deeper nesting, card/relic/consumable inside a body) are preserved and shown read-only so nothing is
+   lost. *@
 
 <section class="panel">
     <h2>Relics</h2>
