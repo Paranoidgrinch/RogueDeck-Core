@@ -154,4 +154,32 @@ public static class RelicRequests
 
     public static bool BundlePoolEditable(RunPool<IReadOnlyList<IRunEffectRequest>> pool) =>
         pool.Entries.All(e => e.Value.All(IsEditable));
+
+    // ── weighted reward-offer pools (OfferReward with a PoolRewardSource) ────────────
+    // One weighted entry of an offer pool: a named RewardOffer (id + grant body) and its weight (>= 1). The editor
+    // authors a RunPool<RewardOffer> — "draw N distinct offers from this weighted pool, then let the player pick".
+    public readonly record struct OfferEntry(RewardOffer Offer, int Weight);
+
+    public static IReadOnlyList<OfferEntry> OfferEntriesOf(RunPool<RewardOffer> pool) =>
+        pool.Entries.Select(e => new OfferEntry(e.Value, e.Weight)).ToList();
+
+    public static RunPool<RewardOffer> OfferPool(IEnumerable<OfferEntry> entries)
+    {
+        var list = entries
+            .Select(e => new RunPool<RewardOffer>.Entry(e.Offer, Math.Max(1, e.Weight)))
+            .ToList();
+        if (list.Count == 0)
+            list.Add(new RunPool<RewardOffer>.Entry(
+                new RewardOffer("offer-1", new IRunEffectRequest[] { new AddCardToDeckRunEffect(new CardDefinitionId("")) }), 1));
+        return new RunPool<RewardOffer>(list);
+    }
+
+    public static RunPool<RewardOffer> DefaultOfferPool() => OfferPool(new[]
+    {
+        new OfferEntry(new RewardOffer("offer-1", new IRunEffectRequest[] { new AddCardToDeckRunEffect(new CardDefinitionId("")) }), 1),
+        new OfferEntry(new RewardOffer("offer-2", new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 20) }), 1),
+    });
+
+    public static bool OfferPoolEditable(RunPool<RewardOffer> pool) =>
+        pool.Entries.All(e => e.Value.Grant.All(IsEditable));
 }

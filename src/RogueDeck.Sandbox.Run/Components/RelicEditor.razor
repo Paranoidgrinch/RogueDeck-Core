@@ -5,10 +5,11 @@
    spans the run-effect leaf surface: resources/HP/heal/damage (with constant or computed amounts), flags/counters,
    card grants/removal, relic add/remove/disable/enable, and consumable grants — plus control flow: Repeat (a body
    run a constant/computed number of times) and Conditional (If/then/else on run state) — plus rewards: Grant
-   reward (a named bundle) and Offer reward (player picks among fixed offers). Nested bodies (control-flow branches,
-   reward contents/offers) hold the amount/state/grant leaf set, one level deep. Reactions the editor can't model
-   (nested and/or conditions, advanced amounts, deeper nesting, pool/delegate reward sources) are preserved and
-   shown read-only so nothing is lost. *@
+   reward (a named bundle), Offer reward (player picks among fixed offers), and Offer reward (random) (draw N from a
+   weighted pool, then pick) — plus random draws: Random draw / Random draw N distinct (weighted outcome pool).
+   Nested bodies (control-flow branches, reward contents/offers, draw outcomes) hold the full amount/state/grant
+   leaf set, one level deep. Reactions the editor can't model (nested and/or conditions, advanced amounts, deeper
+   nesting, delegate/Func reward sources) are preserved and shown read-only so nothing is lost. *@
 
 <section class="panel">
     <h2>Relics</h2>
@@ -221,6 +222,57 @@
                                         <button class="mini" @onclick="() => OfferAddOffer(relicIndex, reactionIndex, fx, off)">+ offer</button>
                                     </div>
                                 }
+                                else if (tpl is LiteralEffectTemplate { Effect: OfferRewardRunEffect { Source: PoolRewardSource prs } offp })
+                                {
+                                    var entries = RelicRequests.OfferEntriesOf(prs.Pool);
+                                    <div class="fx-block">
+                                        <div class="run-bar">
+                                            <span class="muted">Offer reward (random) — draw</span>
+                                            <input type="number" value="@prs.Count" style="width:4rem"
+                                                   @onchange="e => OfferPoolSetDraw(relicIndex, reactionIndex, fx, offp, AsInt(e.Value, prs.Count))" />
+                                            <span class="muted">then pick</span>
+                                            <input type="number" value="@offp.PickCount" style="width:4rem"
+                                                   @onchange="e => OfferPoolSetPick(relicIndex, reactionIndex, fx, offp, AsInt(e.Value, offp.PickCount))" />
+                                            <input value="@offp.Reward.Value" style="width:8rem"
+                                                   @onchange="e => OfferPoolSetReward(relicIndex, reactionIndex, fx, offp, AsString(e.Value))" />
+                                            <button class="mini" @onclick="() => RemoveEffect(relicIndex, reactionIndex, fx)">✕ reward</button>
+                                        </div>
+                                        @for (var oi = 0; oi < entries.Count; oi++)
+                                        {
+                                            var ox = oi;
+                                            var entry = entries[ox];
+                                            <div class="fx-body">
+                                                <span class="muted">weight</span>
+                                                <input type="number" value="@entry.Weight" style="width:4rem"
+                                                       @onchange="e => OfferPoolSetWeight(relicIndex, reactionIndex, fx, offp, ox, AsInt(e.Value, entry.Weight))" />
+                                                <span class="muted">offer</span>
+                                                <input value="@entry.Offer.Id" style="width:8rem"
+                                                       @onchange="e => OfferPoolSetId(relicIndex, reactionIndex, fx, offp, ox, AsString(e.Value))" />
+                                                <button class="mini" @onclick="() => OfferPoolRemoveOffer(relicIndex, reactionIndex, fx, offp, ox)">✕ offer</button>
+                                                <div class="fx-body">
+                                                    <span class="muted">grants:</span>
+                                                    @for (var bi = 0; bi < entry.Offer.Grant.Count; bi++)
+                                                    {
+                                                        var bx = bi;
+                                                        <span class="fx">
+                                                            @RequestEditor(entry.Offer.Grant[bx], req => OfferPoolBodySet(relicIndex, reactionIndex, fx, offp, ox, bx, req))
+                                                            <button class="mini" @onclick="() => OfferPoolBodyRemove(relicIndex, reactionIndex, fx, offp, ox, bx)">✕</button>
+                                                        </span>
+                                                    }
+                                                    <span class="add-effect">
+                                                        <span class="muted">add:</span>
+                                                        @foreach (var (kind, label) in RelicRequests.Kinds)
+                                                        {
+                                                            <button class="mini" title="@label"
+                                                                    @onclick="() => OfferPoolBodyAdd(relicIndex, reactionIndex, fx, offp, ox, kind)">+ @label</button>
+                                                        }
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        }
+                                        <button class="mini" @onclick="() => OfferPoolAddOffer(relicIndex, reactionIndex, fx, offp)">+ offer</button>
+                                    </div>
+                                }
                                 else if (tpl is LiteralEffectTemplate { Effect: DrawEffectsRunEffect or DrawManyEffectsRunEffect } dtpl)
                                 {
                                     var draw = dtpl.Effect;
@@ -351,6 +403,7 @@
         ("conditional", "If…"),
         ("grantreward", "Grant reward…"),
         ("offerreward", "Offer reward…"),
+        ("offerpool", "Offer reward (random)…"),
         ("draw", "Random draw…"),
         ("drawmany", "Random draw N…"),
     };
@@ -557,6 +610,8 @@
                 new("offer-2", new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 20) }),
             },
             pickCount: 1)),
+        "offerpool" => new LiteralEffectTemplate(new OfferRewardRunEffect(
+            new RewardId("reward"), new PoolRewardSource(RelicRequests.DefaultOfferPool(), 2), pickCount: 1)),
         "draw" => new LiteralEffectTemplate(new DrawEffectsRunEffect(RelicRequests.DefaultBundlePool())),
         "drawmany" => new LiteralEffectTemplate(new DrawManyEffectsRunEffect(RelicRequests.DefaultBundlePool(), 1)),
         _ => new LiteralEffectTemplate(new ChangeMaxHealthRunEffect(0)),
@@ -602,6 +657,9 @@
         // offer's grant must be body leaves. Pool/delegate sources are preserved read-only.
         LiteralEffectTemplate { Effect: OfferRewardRunEffect { Source: FixedRewardSource ofr } } =>
             ofr.Offers.All(o => o.Grant.All(RelicRequests.IsEditable)),
+        // A random (pool-source) offer is editable iff every offer in the weighted pool holds body-leaf grants.
+        LiteralEffectTemplate { Effect: OfferRewardRunEffect { Source: PoolRewardSource opr } } =>
+            RelicRequests.OfferPoolEditable(opr.Pool),
         // A random draw is editable iff every outcome bundle in its pool holds body leaves we can round-trip.
         LiteralEffectTemplate { Effect: DrawEffectsRunEffect de } => RelicRequests.BundlePoolEditable(de.Pool),
         LiteralEffectTemplate { Effect: DrawManyEffectsRunEffect dm } => RelicRequests.BundlePoolEditable(dm.Pool),
@@ -1270,5 +1328,98 @@
         if (ex >= 0 && ex < bundles.Count)
             bundles[ex] = bundles[ex] with { Body = bundles[ex].Body.Append(RelicRequests.New(kind)).ToList() };
         return DrawApply(ri, rx, fx, draw, bundles, null);
+    }
+
+    // ── random reward (OfferReward over a PoolRewardSource) editing ──────────────────
+    // A weighted pool of named offers with a draw count (generate N distinct offers) and a pick count (player
+    // then picks). Every op rebuilds the pool/counts and re-wraps into an OfferRewardRunEffect(PoolRewardSource).
+    private static IReadOnlyList<RelicRequests.OfferEntry> PoolEntriesOf(OfferRewardRunEffect off) =>
+        off.Source is PoolRewardSource p ? RelicRequests.OfferEntriesOf(p.Pool) : Array.Empty<RelicRequests.OfferEntry>();
+
+    private static int DrawCountOf(OfferRewardRunEffect off) => off.Source is PoolRewardSource p ? p.Count : 1;
+
+    private Task OfferPoolApply(int ri, int rx, int fx, RewardId reward,
+        IReadOnlyList<RelicRequests.OfferEntry> entries, int drawCount, int pick)
+    {
+        var pool = RelicRequests.OfferPool(entries);
+        var source = new PoolRewardSource(pool, Math.Clamp(drawCount, 0, pool.Entries.Count));
+        return SetEffectTemplate(ri, rx, fx, new LiteralEffectTemplate(
+            new OfferRewardRunEffect(reward, source, Math.Max(0, pick))));
+    }
+
+    private Task OfferPoolSetReward(int ri, int rx, int fx, OfferRewardRunEffect off, string reward) =>
+        OfferPoolApply(ri, rx, fx, new RewardId(string.IsNullOrWhiteSpace(reward) ? "reward" : reward.Trim()),
+            PoolEntriesOf(off), DrawCountOf(off), off.PickCount);
+
+    private Task OfferPoolSetDraw(int ri, int rx, int fx, OfferRewardRunEffect off, int draw) =>
+        OfferPoolApply(ri, rx, fx, off.Reward, PoolEntriesOf(off), draw, off.PickCount);
+
+    private Task OfferPoolSetPick(int ri, int rx, int fx, OfferRewardRunEffect off, int pick) =>
+        OfferPoolApply(ri, rx, fx, off.Reward, PoolEntriesOf(off), DrawCountOf(off), pick);
+
+    private Task OfferPoolSetWeight(int ri, int rx, int fx, OfferRewardRunEffect off, int ox, int weight)
+    {
+        var entries = PoolEntriesOf(off).ToList();
+        if (ox >= 0 && ox < entries.Count)
+            entries[ox] = entries[ox] with { Weight = Math.Max(1, weight) };
+        return OfferPoolApply(ri, rx, fx, off.Reward, entries, DrawCountOf(off), off.PickCount);
+    }
+
+    private Task OfferPoolSetId(int ri, int rx, int fx, OfferRewardRunEffect off, int ox, string id)
+    {
+        var entries = PoolEntriesOf(off).ToList();
+        if (ox >= 0 && ox < entries.Count)
+            entries[ox] = entries[ox] with { Offer = entries[ox].Offer with { Id = string.IsNullOrWhiteSpace(id) ? entries[ox].Offer.Id : id.Trim() } };
+        return OfferPoolApply(ri, rx, fx, off.Reward, entries, DrawCountOf(off), off.PickCount);
+    }
+
+    private Task OfferPoolAddOffer(int ri, int rx, int fx, OfferRewardRunEffect off)
+    {
+        var entries = PoolEntriesOf(off).ToList();
+        entries.Add(new RelicRequests.OfferEntry(
+            new RewardOffer($"offer-{entries.Count + 1}", new IRunEffectRequest[] { new AddCardToDeckRunEffect(new CardDefinitionId("")) }), 1));
+        return OfferPoolApply(ri, rx, fx, off.Reward, entries, DrawCountOf(off), off.PickCount);
+    }
+
+    private Task OfferPoolRemoveOffer(int ri, int rx, int fx, OfferRewardRunEffect off, int ox)
+    {
+        var entries = PoolEntriesOf(off).ToList();
+        if (entries.Count > 1 && ox >= 0 && ox < entries.Count) // a pool needs at least one offer
+            entries.RemoveAt(ox);
+        return OfferPoolApply(ri, rx, fx, off.Reward, entries, DrawCountOf(off), off.PickCount);
+    }
+
+    private Task OfferPoolBodySet(int ri, int rx, int fx, OfferRewardRunEffect off, int ox, int bx, IRunEffectRequest request)
+    {
+        var entries = PoolEntriesOf(off).ToList();
+        if (ox >= 0 && ox < entries.Count)
+        {
+            var grant = entries[ox].Offer.Grant.ToList();
+            if (bx >= 0 && bx < grant.Count)
+                grant[bx] = request;
+            entries[ox] = entries[ox] with { Offer = entries[ox].Offer with { Grant = grant } };
+        }
+        return OfferPoolApply(ri, rx, fx, off.Reward, entries, DrawCountOf(off), off.PickCount);
+    }
+
+    private Task OfferPoolBodyRemove(int ri, int rx, int fx, OfferRewardRunEffect off, int ox, int bx)
+    {
+        var entries = PoolEntriesOf(off).ToList();
+        if (ox >= 0 && ox < entries.Count)
+        {
+            var grant = entries[ox].Offer.Grant.ToList();
+            if (bx >= 0 && bx < grant.Count)
+                grant.RemoveAt(bx);
+            entries[ox] = entries[ox] with { Offer = entries[ox].Offer with { Grant = grant } };
+        }
+        return OfferPoolApply(ri, rx, fx, off.Reward, entries, DrawCountOf(off), off.PickCount);
+    }
+
+    private Task OfferPoolBodyAdd(int ri, int rx, int fx, OfferRewardRunEffect off, int ox, string kind)
+    {
+        var entries = PoolEntriesOf(off).ToList();
+        if (ox >= 0 && ox < entries.Count)
+            entries[ox] = entries[ox] with { Offer = entries[ox].Offer with { Grant = entries[ox].Offer.Grant.Append(RelicRequests.New(kind)).ToList() } };
+        return OfferPoolApply(ri, rx, fx, off.Reward, entries, DrawCountOf(off), off.PickCount);
     }
 }

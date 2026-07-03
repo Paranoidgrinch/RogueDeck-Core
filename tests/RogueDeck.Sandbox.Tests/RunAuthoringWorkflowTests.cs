@@ -852,6 +852,62 @@ public class RunAuthoringWorkflowTests
     }
 
     [Fact]
+    public void AuthoredRelic_OfferingARandomPoolReward_RoundTrips_AndGrantsAPickedOffer()
+    {
+        var options = RunJson.CreateOptions();
+
+        // A relic whose reaction offers a reward drawn from a WEIGHTED POOL: draw 2 distinct offers, player picks 1.
+        // Both offers grant +12 gold, so whichever are drawn/picked the result is deterministic — proving the
+        // PoolRewardSource generated + the chosen offer was granted, while the RunPool<RewardOffer> survived the
+        // round-trip. This is the "+ Offer reward (random)…" block's shape.
+        var pool = RunPool.Weighted<RewardOffer>(
+            (new RewardOffer("a", new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 12) }), 1),
+            (new RewardOffer("b", new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 12) }), 1));
+        var bazaar = new RelicData
+        {
+            Id = "bazaar",
+            DisplayName = "Bazaar Token",
+            RunPrograms = new[]
+            {
+                RunPrograms.On<NodeEnteredRunEvent>(new LiteralEffectTemplate(
+                    new OfferRewardRunEffect(new RewardId("wares"), new PoolRewardSource(pool, 2), pickCount: 1))),
+            },
+        };
+
+        var grant = new EventScriptBuilder("grant")
+            .Situation("grant", "A token opens the bazaar.", s => s
+                .Choice("take", c => c.TextKey("Accept").AddRelic(new RelicId("bazaar"))))
+            .Build();
+        var after = new EventScriptBuilder("after")
+            .Situation("after", "The road continues.", s => s
+                .Choice("go", c => c.TextKey("Walk on")))
+            .Build();
+
+        var blueprint = EmptyBlueprint() with
+        {
+            Relics = new[] { bazaar },
+            Events = new Dictionary<string, EventScript> { ["grant"] = grant, ["after"] = after },
+            Map = new RunMap(new Node[]
+            {
+                new(new NodeId("n1"), StandardRunIds.EventNode, new EventRef(new EventId("grant"))),
+                new(new NodeId("n2"), StandardRunIds.EventNode, new EventRef(new EventId("after"))),
+            }),
+        };
+
+        // The weighted offer pool + draw/pick counts survive the JSON round-trip (fx.offerReward / reward.pool).
+        var reloaded = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(blueprint, options), options);
+        Assert.Single(Assert.Single(reloaded.Relics, r => r.Id == "bazaar").RunPrograms);
+
+        // Driving it: the reaction offers pooled rewards and the chooser picks one (+12); the reward path logs.
+        var run = Drive(reloaded, seed: 1);
+        Assert.NotNull(run.FindRelic(new RelicId("bazaar")));
+        Assert.Contains(run.Log, e => e.Type == StandardRunLogTypes.RewardOffered);
+        Assert.Contains(run.Log, e => e.Type == StandardRunLogTypes.RewardChosen);
+        var gold = run.GetResource(StandardRunIds.Gold);
+        Assert.True(gold > 0 && gold % 12 == 0, $"expected a picked pool offer to grant +12 gold, got {gold}");
+    }
+
+    [Fact]
     public void Import_CarriesCardAndEnemyDisplayNames()
     {
         var options = RunJson.CreateOptions();
