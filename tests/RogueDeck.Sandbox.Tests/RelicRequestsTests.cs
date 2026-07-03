@@ -19,7 +19,11 @@ public class RelicRequestsTests
     [InlineData("counter")]
     [InlineData("setcounter")]
     [InlineData("addcard")]
+    [InlineData("removecard")]
     [InlineData("addrelic")]
+    [InlineData("removerelic")]
+    [InlineData("disablerelic")]
+    [InlineData("enablerelic")]
     [InlineData("consumable")]
     public void NewDefaults_AreAllEditable(string kind)
     {
@@ -64,8 +68,8 @@ public class RelicRequestsTests
         var arithmetic = new ComputedHealRunEffect(RunExpr.Add(RunExpr.CurrentHealth, RunExpr.Const(1)));
         Assert.False(RelicRequests.IsEditable(arithmetic));
 
-        // An effect the body editor does not model (a player-choice card removal) is not a body leaf.
+        // Control flow does not nest inside a body (one level deep) → a Repeat is not itself a body leaf.
         Assert.False(RelicRequests.IsEditable(
-            new RemoveCardsRunEffect(RunSelectors.DeckCards.ChooseByPlayer(1, "Choose"))));
+            new RepeatRunEffect(RunExpr.Const(2), Array.Empty<IRunEffectRequest>())));
     }
 }

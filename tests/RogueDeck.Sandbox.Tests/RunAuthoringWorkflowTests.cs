@@ -799,6 +799,59 @@ public class RunAuthoringWorkflowTests
     }
 
     [Fact]
+    public void AuthoredRelic_WithRandomDraw_RoundTrips_AndAnOutcomeIsGranted()
+    {
+        var options = RunJson.CreateOptions();
+
+        // A relic whose reaction is a RANDOM draw: on entering a node, draw one weighted outcome from a pool. Both
+        // outcomes grant +14 gold (different weights) so whichever is drawn, the result is deterministic — proving
+        // the DrawEffectsRunEffect executed while its weighted pool survived the JSON round-trip. This is the
+        // "+ Random draw…" block's shape (LiteralEffectTemplate over fx.drawEffects with a RunPool of bundles).
+        var pool = RunPool.Weighted<IReadOnlyList<IRunEffectRequest>>(
+            (new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 14) }, 3),
+            (new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 14) }, 1));
+        var gambler = new RelicData
+        {
+            Id = "gambler",
+            DisplayName = "Gambler's Charm",
+            RunPrograms = new[]
+            {
+                RunPrograms.On<NodeEnteredRunEvent>(new LiteralEffectTemplate(new DrawEffectsRunEffect(pool))),
+            },
+        };
+
+        var grant = new EventScriptBuilder("grant")
+            .Situation("grant", "A gambler offers a charm.", s => s
+                .Choice("take", c => c.TextKey("Accept").AddRelic(new RelicId("gambler"))))
+            .Build();
+        var after = new EventScriptBuilder("after")
+            .Situation("after", "The road continues.", s => s
+                .Choice("go", c => c.TextKey("Walk on")))
+            .Build();
+
+        var blueprint = EmptyBlueprint() with
+        {
+            Relics = new[] { gambler },
+            Events = new Dictionary<string, EventScript> { ["grant"] = grant, ["after"] = after },
+            Map = new RunMap(new Node[]
+            {
+                new(new NodeId("n1"), StandardRunIds.EventNode, new EventRef(new EventId("grant"))),
+                new(new NodeId("n2"), StandardRunIds.EventNode, new EventRef(new EventId("after"))),
+            }),
+        };
+
+        // The weighted pool (bundles + weights) survives the JSON round-trip — RunPool serializes structurally.
+        var reloaded = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(blueprint, options), options);
+        Assert.Single(Assert.Single(reloaded.Relics, r => r.Id == "gambler").RunPrograms);
+
+        // Driving it: each node entry draws one outcome; both grant +14, so gold is a positive multiple of 14.
+        var run = Drive(reloaded, seed: 1);
+        Assert.NotNull(run.FindRelic(new RelicId("gambler")));
+        var gold = run.GetResource(StandardRunIds.Gold);
+        Assert.True(gold > 0 && gold % 14 == 0, $"expected a drawn outcome to grant +14 gold, got {gold}");
+    }
+
+    [Fact]
     public void Import_CarriesCardAndEnemyDisplayNames()
     {
         var options = RunJson.CreateOptions();

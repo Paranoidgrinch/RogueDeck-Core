@@ -27,7 +27,11 @@ public static class RelicRequests
         ("counter", "Counter"),
         ("setcounter", "Set counter"),
         ("addcard", "Add card"),
+        ("removecard", "Remove card"),
         ("addrelic", "Add relic"),
+        ("removerelic", "Remove relic"),
+        ("disablerelic", "Disable relic"),
+        ("enablerelic", "Enable relic"),
         ("consumable", "Consumable"),
     };
 
@@ -43,7 +47,11 @@ public static class RelicRequests
         "setcounter" => new SetCounterRunEffect(new RunCounterId("counter"), 0),
         // The card id defaults empty (author picks from the deck dropdown); the relic id to a built-in sample.
         "addcard" => new AddCardToDeckRunEffect(new CardDefinitionId("")),
+        "removecard" => new RemoveCardsRunEffect(RunSelectors.DeckCards.ChooseByPlayer(1, "Choose a card to remove")),
         "addrelic" => new AddRelicByIdRunEffect(new RelicId("bloodstone")),
+        "removerelic" => new RemoveRelicRunEffect(new RelicId("bloodstone")),
+        "disablerelic" => new DisableRelicRunEffect(new RelicId("bloodstone"), 1),
+        "enablerelic" => new EnableRelicRunEffect(new RelicId("bloodstone")),
         "consumable" => new AddConsumableRunEffect(new ConsumableId("potion"), new IRunEffectRequest[] { new HealRunEffect(8) }),
         _ => new ChangeMaxHealthRunEffect(0),
     };
@@ -54,7 +62,8 @@ public static class RelicRequests
     {
         HealRunEffect or ApplyRunDamageRunEffect or ChangeResourceRunEffect => true,
         ChangeMaxHealthRunEffect or SetFlagRunEffect or IncrementCounterRunEffect or SetCounterRunEffect => true,
-        AddCardToDeckRunEffect or AddRelicByIdRunEffect => true,
+        AddCardToDeckRunEffect or RemoveCardsRunEffect => true,
+        AddRelicByIdRunEffect or RemoveRelicRunEffect or DisableRelicRunEffect or EnableRelicRunEffect => true,
         ComputedHealRunEffect h => !RelicAmounts.IsAdvanced(h.Amount),
         ComputedDamageRunEffect d => !RelicAmounts.IsAdvanced(d.Amount),
         ComputedResourceRunEffect r => !RelicAmounts.IsAdvanced(r.Amount),
@@ -115,4 +124,34 @@ public static class RelicRequests
         ComputedResourceRunEffect g => g with { Resource = resource },
         _ => request,
     };
+
+    // ── weighted effect-bundle pools (Draw / DrawMany random outcomes) ───────────────
+    // One weighted outcome of a random draw: a body of effects and its weight (>= 1). The editor authors a
+    // RunPool<IReadOnlyList<IRunEffectRequest>> as a list of these.
+    public readonly record struct PoolBundle(IReadOnlyList<IRunEffectRequest> Body, int Weight);
+
+    public static IReadOnlyList<PoolBundle> BundlesOf(RunPool<IReadOnlyList<IRunEffectRequest>> pool) =>
+        pool.Entries.Select(e => new PoolBundle(e.Value, e.Weight)).ToList();
+
+    // Rebuild a bundle pool from an edited list, enforcing RunPool's invariants (>= 1 entry; each weight >= 1) so
+    // the editor can never construct an invalid pool.
+    public static RunPool<IReadOnlyList<IRunEffectRequest>> BundlePool(IEnumerable<PoolBundle> bundles)
+    {
+        var list = bundles
+            .Select(b => new RunPool<IReadOnlyList<IRunEffectRequest>>.Entry(b.Body, Math.Max(1, b.Weight)))
+            .ToList();
+        if (list.Count == 0)
+            list.Add(new RunPool<IReadOnlyList<IRunEffectRequest>>.Entry(
+                new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 5) }, 1));
+        return new RunPool<IReadOnlyList<IRunEffectRequest>>(list);
+    }
+
+    public static RunPool<IReadOnlyList<IRunEffectRequest>> DefaultBundlePool() => BundlePool(new[]
+    {
+        new PoolBundle(new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 10) }, 1),
+        new PoolBundle(new IRunEffectRequest[] { new HealRunEffect(5) }, 1),
+    });
+
+    public static bool BundlePoolEditable(RunPool<IReadOnlyList<IRunEffectRequest>> pool) =>
+        pool.Entries.All(e => e.Value.All(IsEditable));
 }

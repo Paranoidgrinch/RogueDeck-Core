@@ -221,6 +221,59 @@
                                         <button class="mini" @onclick="() => OfferAddOffer(relicIndex, reactionIndex, fx, off)">+ offer</button>
                                     </div>
                                 }
+                                else if (tpl is LiteralEffectTemplate { Effect: DrawEffectsRunEffect or DrawManyEffectsRunEffect } dtpl)
+                                {
+                                    var draw = dtpl.Effect;
+                                    var many = draw as DrawManyEffectsRunEffect;
+                                    var bundles = RelicRequests.BundlesOf(PoolOf(draw));
+                                    <div class="fx-block">
+                                        <div class="run-bar">
+                                            <span class="muted">Random — draw</span>
+                                            @if (many is not null)
+                                            {
+                                                <input type="number" value="@many.Count" style="width:4rem"
+                                                       @onchange="e => DrawSetCount(relicIndex, reactionIndex, fx, draw, AsInt(e.Value, many.Count))" />
+                                            }
+                                            else
+                                            {
+                                                <span class="muted">1</span>
+                                            }
+                                            <span class="muted">of</span>
+                                            <button class="mini" @onclick="() => RemoveEffect(relicIndex, reactionIndex, fx)">✕ random</button>
+                                        </div>
+                                        @for (var ei = 0; ei < bundles.Count; ei++)
+                                        {
+                                            var ex = ei;
+                                            var bundle = bundles[ex];
+                                            <div class="fx-body">
+                                                <span class="muted">weight</span>
+                                                <input type="number" value="@bundle.Weight" style="width:4rem"
+                                                       @onchange="e => DrawSetWeight(relicIndex, reactionIndex, fx, draw, ex, AsInt(e.Value, bundle.Weight))" />
+                                                <button class="mini" @onclick="() => DrawRemoveEntry(relicIndex, reactionIndex, fx, draw, ex)">✕ outcome</button>
+                                                <div class="fx-body">
+                                                    <span class="muted">grants:</span>
+                                                    @for (var bi = 0; bi < bundle.Body.Count; bi++)
+                                                    {
+                                                        var bx = bi;
+                                                        <span class="fx">
+                                                            @RequestEditor(bundle.Body[bx], req => DrawBodySet(relicIndex, reactionIndex, fx, draw, ex, bx, req))
+                                                            <button class="mini" @onclick="() => DrawBodyRemove(relicIndex, reactionIndex, fx, draw, ex, bx)">✕</button>
+                                                        </span>
+                                                    }
+                                                    <span class="add-effect">
+                                                        <span class="muted">add:</span>
+                                                        @foreach (var (kind, label) in RelicRequests.Kinds)
+                                                        {
+                                                            <button class="mini" title="@label"
+                                                                    @onclick="() => DrawBodyAdd(relicIndex, reactionIndex, fx, draw, ex, kind)">+ @label</button>
+                                                        }
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        }
+                                        <button class="mini" @onclick="() => DrawAddEntry(relicIndex, reactionIndex, fx, draw)">+ outcome</button>
+                                    </div>
+                                }
                                 else
                                 {
                                     <span class="fx">
@@ -298,6 +351,8 @@
         ("conditional", "If…"),
         ("grantreward", "Grant reward…"),
         ("offerreward", "Offer reward…"),
+        ("draw", "Random draw…"),
+        ("drawmany", "Random draw N…"),
     };
 
     // The relic ids a grant/removal can pick: the run's authored relics plus the built-in samples
@@ -502,6 +557,8 @@
                 new("offer-2", new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 20) }),
             },
             pickCount: 1)),
+        "draw" => new LiteralEffectTemplate(new DrawEffectsRunEffect(RelicRequests.DefaultBundlePool())),
+        "drawmany" => new LiteralEffectTemplate(new DrawManyEffectsRunEffect(RelicRequests.DefaultBundlePool(), 1)),
         _ => new LiteralEffectTemplate(new ChangeMaxHealthRunEffect(0)),
     };
 
@@ -545,6 +602,9 @@
         // offer's grant must be body leaves. Pool/delegate sources are preserved read-only.
         LiteralEffectTemplate { Effect: OfferRewardRunEffect { Source: FixedRewardSource ofr } } =>
             ofr.Offers.All(o => o.Grant.All(RelicRequests.IsEditable)),
+        // A random draw is editable iff every outcome bundle in its pool holds body leaves we can round-trip.
+        LiteralEffectTemplate { Effect: DrawEffectsRunEffect de } => RelicRequests.BundlePoolEditable(de.Pool),
+        LiteralEffectTemplate { Effect: DrawManyEffectsRunEffect dm } => RelicRequests.BundlePoolEditable(dm.Pool),
         _ => false,
     };
 
@@ -936,9 +996,27 @@
                 Label("Add card");
                 Select(ac.Card.value, CardOptions(), s => set(new AddCardToDeckRunEffect(new CardDefinitionId(s))));
                 break;
+            case RemoveCardsRunEffect:
+                Label("Remove a card (player picks)");
+                break;
             case AddRelicByIdRunEffect ar:
                 Label("Add relic");
                 Select(ar.Relic.Value, RelicOptions(), s => set(new AddRelicByIdRunEffect(new RelicId(s))));
+                break;
+            case RemoveRelicRunEffect rr:
+                Label("Remove relic");
+                Select(rr.Relic.Value, RelicOptions(), s => set(new RemoveRelicRunEffect(new RelicId(s))));
+                break;
+            case DisableRelicRunEffect dr:
+                Label("Disable relic");
+                Select(dr.Relic.Value, RelicOptions(), s => set(new DisableRelicRunEffect(new RelicId(s), dr.Combats)));
+                Label(" for");
+                NumberInput(dr.Combats, n => set(new DisableRelicRunEffect(dr.Relic, n)));
+                Label("combats");
+                break;
+            case EnableRelicRunEffect er:
+                Label("Enable relic");
+                Select(er.Relic.Value, RelicOptions(), s => set(new EnableRelicRunEffect(new RelicId(s))));
                 break;
             case AddConsumableRunEffect cn when cn.UseEffects.Count == 1 && cn.UseEffects[0] is HealRunEffect cnHeal:
                 Label("Consumable");
@@ -1112,5 +1190,85 @@
         if (ox >= 0 && ox < offers.Count)
             offers[ox] = offers[ox] with { Grant = offers[ox].Grant.Append(RelicRequests.New(kind)).ToList() };
         return OfferRebuild(ri, rx, fx, off.Reward, offers, off.PickCount);
+    }
+
+    // ── random draw (DrawEffects / DrawManyEffects) editing ──────────────────────────
+    // Both wrap a weighted bundle pool; DrawMany also carries a distinct-pick count. `draw` is either effect
+    // (guarded by the markup branch). Every op rebuilds the pool (or count) and re-wraps into the same effect kind.
+    private static RunPool<IReadOnlyList<IRunEffectRequest>> PoolOf(IRunEffectRequest draw) => draw switch
+    {
+        DrawEffectsRunEffect de => de.Pool,
+        DrawManyEffectsRunEffect dm => dm.Pool,
+        _ => RelicRequests.DefaultBundlePool(),
+    };
+
+    private Task DrawApply(int ri, int rx, int fx, IRunEffectRequest draw,
+        List<RelicRequests.PoolBundle>? bundles, int? count)
+    {
+        var pool = bundles is null ? PoolOf(draw) : RelicRequests.BundlePool(bundles);
+        IRunEffectRequest effect = draw is DrawManyEffectsRunEffect dm
+            ? new DrawManyEffectsRunEffect(pool, Math.Clamp(count ?? dm.Count, 0, pool.Entries.Count))
+            : new DrawEffectsRunEffect(pool);
+        return SetEffectTemplate(ri, rx, fx, new LiteralEffectTemplate(effect));
+    }
+
+    private Task DrawSetCount(int ri, int rx, int fx, IRunEffectRequest draw, int count) =>
+        DrawApply(ri, rx, fx, draw, null, count);
+
+    private Task DrawSetWeight(int ri, int rx, int fx, IRunEffectRequest draw, int ex, int weight)
+    {
+        var bundles = RelicRequests.BundlesOf(PoolOf(draw)).ToList();
+        if (ex >= 0 && ex < bundles.Count)
+            bundles[ex] = bundles[ex] with { Weight = Math.Max(1, weight) };
+        return DrawApply(ri, rx, fx, draw, bundles, null);
+    }
+
+    private Task DrawAddEntry(int ri, int rx, int fx, IRunEffectRequest draw)
+    {
+        var bundles = RelicRequests.BundlesOf(PoolOf(draw)).ToList();
+        bundles.Add(new RelicRequests.PoolBundle(new IRunEffectRequest[] { RelicRequests.New("gold") }, 1));
+        return DrawApply(ri, rx, fx, draw, bundles, null);
+    }
+
+    private Task DrawRemoveEntry(int ri, int rx, int fx, IRunEffectRequest draw, int ex)
+    {
+        var bundles = RelicRequests.BundlesOf(PoolOf(draw)).ToList();
+        if (bundles.Count > 1 && ex >= 0 && ex < bundles.Count) // a pool needs at least one outcome
+            bundles.RemoveAt(ex);
+        return DrawApply(ri, rx, fx, draw, bundles, null);
+    }
+
+    private Task DrawBodySet(int ri, int rx, int fx, IRunEffectRequest draw, int ex, int bx, IRunEffectRequest request)
+    {
+        var bundles = RelicRequests.BundlesOf(PoolOf(draw)).ToList();
+        if (ex >= 0 && ex < bundles.Count)
+        {
+            var body = bundles[ex].Body.ToList();
+            if (bx >= 0 && bx < body.Count)
+                body[bx] = request;
+            bundles[ex] = bundles[ex] with { Body = body };
+        }
+        return DrawApply(ri, rx, fx, draw, bundles, null);
+    }
+
+    private Task DrawBodyRemove(int ri, int rx, int fx, IRunEffectRequest draw, int ex, int bx)
+    {
+        var bundles = RelicRequests.BundlesOf(PoolOf(draw)).ToList();
+        if (ex >= 0 && ex < bundles.Count)
+        {
+            var body = bundles[ex].Body.ToList();
+            if (bx >= 0 && bx < body.Count)
+                body.RemoveAt(bx);
+            bundles[ex] = bundles[ex] with { Body = body };
+        }
+        return DrawApply(ri, rx, fx, draw, bundles, null);
+    }
+
+    private Task DrawBodyAdd(int ri, int rx, int fx, IRunEffectRequest draw, int ex, string kind)
+    {
+        var bundles = RelicRequests.BundlesOf(PoolOf(draw)).ToList();
+        if (ex >= 0 && ex < bundles.Count)
+            bundles[ex] = bundles[ex] with { Body = bundles[ex].Body.Append(RelicRequests.New(kind)).ToList() };
+        return DrawApply(ri, rx, fx, draw, bundles, null);
     }
 }
