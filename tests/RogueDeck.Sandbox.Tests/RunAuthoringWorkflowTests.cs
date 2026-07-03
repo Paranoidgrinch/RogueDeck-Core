@@ -738,6 +738,67 @@ public class RunAuthoringWorkflowTests
     }
 
     [Fact]
+    public void AuthoredRelic_OfferingAReward_RoundTrips_AndTheChosenOfferIsGranted()
+    {
+        var options = RunJson.CreateOptions();
+
+        // A relic whose reaction OFFERS a reward: two offers, pick one. Contents use coprime gold amounts (offer-1
+        // +11, offer-2 +20) so the total proves which offer was chosen. Headless, the run's chooser (the scripted
+        // provider) picks the first `pickCount` offers → offer-1. This is a LiteralEffectTemplate wrapping an
+        // OfferRewardRunEffect over a fixed-offer source — the "+ Offer reward…" block's shape.
+        var merchant = new RelicData
+        {
+            Id = "merchant",
+            DisplayName = "Wandering Merchant",
+            RunPrograms = new[]
+            {
+                RunPrograms.On<NodeEnteredRunEvent>(new LiteralEffectTemplate(new OfferRewardRunEffect(
+                    new RewardId("wares"),
+                    new RewardOffer[]
+                    {
+                        new("offer-1", new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 11) }),
+                        new("offer-2", new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 20) }),
+                    },
+                    pickCount: 1))),
+            },
+        };
+
+        var grant = new EventScriptBuilder("grant")
+            .Situation("grant", "A merchant beckons.", s => s
+                .Choice("take", c => c.TextKey("Accept").AddRelic(new RelicId("merchant"))))
+            .Build();
+        var after = new EventScriptBuilder("after")
+            .Situation("after", "The road continues.", s => s
+                .Choice("go", c => c.TextKey("Walk on")))
+            .Build();
+
+        var blueprint = EmptyBlueprint() with
+        {
+            Relics = new[] { merchant },
+            Events = new Dictionary<string, EventScript> { ["grant"] = grant, ["after"] = after },
+            Map = new RunMap(new Node[]
+            {
+                new(new NodeId("n1"), StandardRunIds.EventNode, new EventRef(new EventId("grant"))),
+                new(new NodeId("n2"), StandardRunIds.EventNode, new EventRef(new EventId("after"))),
+            }),
+        };
+
+        // The offer set (fixed source: two offers, pick count) survives the JSON round-trip — tpl.literal over
+        // fx.offerReward / reward.fixed, whose offer grants recurse through the same effect converter.
+        var reloaded = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(blueprint, options), options);
+        Assert.Single(Assert.Single(reloaded.Relics, r => r.Id == "merchant").RunPrograms);
+
+        // Driving it: the reaction offers the reward and the chooser takes offer-1 (+11) — never offer-2 (+20). The
+        // reward path logs both RewardOffered and RewardChosen.
+        var run = Drive(reloaded, seed: 1);
+        Assert.NotNull(run.FindRelic(new RelicId("merchant")));
+        Assert.Contains(run.Log, e => e.Type == StandardRunLogTypes.RewardOffered);
+        Assert.Contains(run.Log, e => e.Type == StandardRunLogTypes.RewardChosen);
+        var gold = run.GetResource(StandardRunIds.Gold);
+        Assert.True(gold > 0 && gold % 11 == 0, $"expected only offer-1 (+11) to be granted, got {gold}");
+    }
+
+    [Fact]
     public void Import_CarriesCardAndEnemyDisplayNames()
     {
         var options = RunJson.CreateOptions();
