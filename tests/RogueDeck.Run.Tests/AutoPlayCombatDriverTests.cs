@@ -140,4 +140,52 @@ public class AutoPlayCombatDriverTests
         Assert.Equal(RunResult.Victory, run.Result);
         Assert.Equal(28, run.Health.Current); // 30 - 2 from the single turn-start firing
     }
+
+    // A wounded hero with one smite that exactly kills the goblin (6 dmg vs 6 HP), so exactly one DamageDealt fires.
+    private static Playthrough OneHitKill(int heroCurrent, int heroMax)
+    {
+        var blueprint = new ScenarioBlueprint();
+        blueprint.Cards.Add(new CardBlueprint("smite")
+        {
+            Program = Effects.Program(Effects.DealDamage(Targets.EventTarget, 6)),
+        });
+        blueprint.Hero = new HeroBlueprint("knight") { MaxHealth = heroMax, CurrentHealth = heroCurrent };
+        blueprint.Hero.Resources.Add(new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3));
+        blueprint.Hero.Deck.Add(new DeckEntry(new CardDefinitionId("smite"), 1));
+        var goblin = new EnemyBlueprint("goblin") { MaxHealth = 6 }; // dies to one 6-damage smite; no actions
+        blueprint.Enemies.Add(goblin);
+        return new Playthrough(blueprint, new ScenarioScript().Build(), combatId: "fight");
+    }
+
+    [Fact]
+    public void A_relic_rule_that_reads_the_triggering_event_fires_with_the_event_value()
+    {
+        // R3 end to end: a data-authored "lifesteal" relic — on DamageDealt, heal the source by EventAmount (the
+        // damage just dealt). Injected into the fight exactly as the combat bridge does, then driven headless: a
+        // wounded hero (10/30) plays one 6-damage smite that kills the 6-HP goblin, so exactly one DamageDealt fires
+        // and heals 6 → 16. Proves a rule reads the triggering EVENT's value (not just combat state) and runs.
+        var relic = new RelicData
+        {
+            Id = "vampiric",
+            DisplayName = "Vampiric Fang",
+            CombatRules = new[]
+            {
+                new RelicCombatRule
+                {
+                    Trigger = "damageDealt",
+                    Program = RelicCombatTriggers.Get("damageDealt").NewProgram(), // heal Source by EventAmount
+                    Priority = 0,
+                },
+            },
+        }.ToDefinition();
+
+        var playthrough = OneHitKill(heroCurrent: 10, heroMax: 30);
+        foreach (var contribution in relic.CombatContributions) // what CombatNodeResolver does at spawn time
+            playthrough.Blueprint.TriggeredPrograms.Add(contribution);
+
+        var result = new AutoPlayCombatDriver().Drive(playthrough);
+
+        Assert.Equal(CombatResult.Victory, result.Result);
+        Assert.Equal(16, result.HeroHpRemaining); // 10 + 6 lifesteal from the single 6-damage hit
+    }
 }

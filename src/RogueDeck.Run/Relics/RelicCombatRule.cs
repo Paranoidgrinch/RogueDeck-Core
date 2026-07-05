@@ -78,6 +78,36 @@ public static class RelicCombatTriggers
                     new GainBlockNode<CardPlayedTriggeredEffectContext>(
                         CombatantTargetSelectors.Source,
                         new ConstantExpression<CardPlayedTriggeredEffectContext>(1)))),
+
+            // Event-READING triggers: the default programs use EventAmountExpression, which reads the triggering
+            // event's amount (damage taken / dealt, heal, resource gained) — proof a rule can react to the event,
+            // not just to combat state. "Thorns": take damage → gain that much block.
+            For("damageReceived", TriggeredProgramContextAdapters.DamageReceived,
+                () => new EffectProgram<DamageReceivedTriggeredEffectContext>(
+                    new GainBlockNode<DamageReceivedTriggeredEffectContext>(
+                        CombatantTargetSelectors.Source,
+                        new EventAmountExpression<DamageReceivedTriggeredEffectContext>()))),
+
+            // "Lifesteal": deal damage → heal by that much.
+            For("damageDealt", TriggeredProgramContextAdapters.DamageDealt,
+                () => new EffectProgram<DamageDealtTriggeredEffectContext>(
+                    new HealNode<DamageDealtTriggeredEffectContext>(
+                        CombatantTargetSelectors.Source,
+                        new EventAmountExpression<DamageDealtTriggeredEffectContext>()))),
+
+            // "When healed, gain that much block."
+            For("healed", TriggeredProgramContextAdapters.Healed,
+                () => new EffectProgram<HealedTriggeredEffectContext>(
+                    new GainBlockNode<HealedTriggeredEffectContext>(
+                        CombatantTargetSelectors.Source,
+                        new EventAmountExpression<HealedTriggeredEffectContext>()))),
+
+            // "When you gain a resource, gain that much block."
+            For("resourceGained", TriggeredProgramContextAdapters.ResourceGained,
+                () => new EffectProgram<ResourceGainedTriggeredEffectContext>(
+                    new GainBlockNode<ResourceGainedTriggeredEffectContext>(
+                        CombatantTargetSelectors.Source,
+                        new EventAmountExpression<ResourceGainedTriggeredEffectContext>()))),
         }.ToDictionary(t => t.Key, StringComparer.Ordinal);
 
     public static IEnumerable<string> Keys => ByKey.Keys;

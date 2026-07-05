@@ -93,8 +93,17 @@ There is **no visual `EffectProgram` builder**. The Cards tab edits programs as 
   RegisterRelics` already calls `ToDefinition`, so authored rules fire in sandbox play. Render test
   added. Reverting-on-parse-error is the one rough edge (no per-rule draft state) — acceptable for a
   JSON authoring UI; a structured/visual editor is R4.
-- **R3 — event-value exprs per event.** As events are exposed, S0 + register their context-specific
-  amount/value types so rules can read the triggering event ("= damage taken", "= card cost").
+- **R3 — read the triggering event. DONE (for EventAmount events).** The engine already had a
+  serializable, registered `EventAmountExpression<TContext>` (`eventAmount`) that reads the event's
+  amount for Healed / DamageReceived / DamageDealt / ResourceGained. R3 exposed those four triggers in
+  `RelicCombatTriggers` with default programs that USE it — thorns (`damageReceived` → block =
+  damage taken), lifesteal (`damageDealt` → heal = damage dealt), etc. They auto-appear in the R2
+  dropdown. Tests: round-trip of an `eventAmount` program inside a relic + a headless-drive proving
+  lifesteal fires reading the event value (hero 10→16) — also the first coverage of
+  `EventAmountExpression`. REMAINING for other event fields (card cost, blocked/requested damage,
+  status-specific amounts): those are `ICombatValueProvider` (the older per-event abstraction), NOT
+  `ICombatExpression`, so exposing them in a program needs new expression types + registration — a
+  further slice, per field.
 - **R4 (optional, large) — visual program editor** shared by Cards + Relics combat rules.
 
 R1 is the honest first bounded step; R2 makes it usable; R3/R4 deepen coverage.

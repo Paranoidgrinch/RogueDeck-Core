@@ -100,4 +100,24 @@ public class RelicDataJsonTests
         var ex = Assert.Throws<KeyNotFoundException>(() => RelicCombatTriggers.Get("noSuchEvent"));
         Assert.Contains("noSuchEvent", ex.Message);
     }
+
+    [Fact]
+    public void Event_reading_triggers_are_available_and_round_trip()
+    {
+        // R3: triggers whose default program reads the triggering event (via EventAmountExpression) — thorns,
+        // lifesteal, etc. The program (with an event-value expression) round-trips inside the relic.
+        foreach (var key in new[] { "damageReceived", "damageDealt", "healed", "resourceGained" })
+            Assert.True(RelicCombatTriggers.Has(key), key);
+
+        var data = new RelicData
+        {
+            Id = "thorns",
+            DisplayName = "Thorns",
+            CombatRules = new[] { Rule("damageReceived") }, // gain block = damage taken
+        };
+        var json1 = RunJson.ToJson(data, Options);
+        var back = RunJson.FromJson<RelicData>(json1, Options);
+        Assert.Equal(json1, RunJson.ToJson(back, Options));
+        Assert.Equal(typeof(DamageReceivedCombatEvent), back.ToDefinition().CombatContributions[0].EventType);
+    }
 }
