@@ -119,4 +119,36 @@ public class CombatBridgeProjectionTests
 
         Assert.Contains(marker, driver.Captured!.TriggeredPrograms);
     }
+
+    [Fact]
+    public void Relic_combat_rules_authored_as_data_reach_the_fight()
+    {
+        // End-to-end wiring of face (b) as data: a RelicData combat rule → ToDefinition → the relic's combat
+        // contribution → injected into the spawned fight as a TriggeredProgramDefinition for the trigger's event.
+        var run = NewRun("strike");
+        var relic = new RelicData
+        {
+            Id = "aegis",
+            DisplayName = "Aegis",
+            CombatRules = new[]
+            {
+                new RelicCombatRule
+                {
+                    Trigger = "turnStarted",
+                    Program = RelicCombatTriggers.Get("turnStarted").NewProgram(),
+                    Priority = 0,
+                },
+            },
+        }.ToDefinition();
+        run.AddRelic(new RelicInstance(relic));
+
+        var driver = new CapturingDriver();
+        var resolver = new CombatNodeResolver(driver);
+        var node = new Node(new NodeId("fight"), StandardRunIds.CombatNode, new CombatNodePayload(BuildEncounter));
+
+        resolver.Resolve(Context(run, Registry()), node);
+
+        var contribution = Assert.Single(driver.Captured!.TriggeredPrograms);
+        Assert.Equal(typeof(TurnStartedCombatEvent), contribution.EventType);
+    }
 }

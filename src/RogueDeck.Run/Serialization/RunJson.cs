@@ -98,6 +98,7 @@ public static class RunJson
         options.Converters.Add(new NodeJsonConverter());
         options.Converters.Add(new EventScriptJsonConverter());
         options.Converters.Add(new TriggeredRunEffectJsonConverter());
+        options.Converters.Add(new RelicCombatRuleJsonConverter());
 
         // Combat effect programs carried by the blueprint's cards / enemy actions (both contexts).
         var combatRegistry = CombatJson.DefaultRegistry();

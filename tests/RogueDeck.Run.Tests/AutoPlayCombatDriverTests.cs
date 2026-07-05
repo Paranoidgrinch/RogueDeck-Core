@@ -85,4 +85,59 @@ public class AutoPlayCombatDriverTests
         Assert.Contains(run.EventHistory.OfType<CombatResolvedRunEvent>(),
             e => e.Result == CombatResult.Victory);
     }
+
+    // A fight the hero wins on turn 1 (a fragile actionless goblin) — so the hero takes NO combat damage and any HP
+    // loss is attributable to a relic's combat rule firing.
+    private static Playthrough OneTurnWin(RunState run)
+    {
+        var blueprint = new ScenarioBlueprint();
+        blueprint.Cards.Add(new CardBlueprint("smite")
+        {
+            Program = Effects.Program(Effects.DealDamage(Targets.EventTarget, 6)),
+        });
+        blueprint.Hero = new HeroBlueprint("knight") { MaxHealth = run.Health.Max, CurrentHealth = run.Health.Current };
+        blueprint.Hero.Resources.Add(new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3));
+        // Deck is projected by the bridge; the encounter itself carries none.
+        var goblin = new EnemyBlueprint("goblin") { MaxHealth = 5 }; // dies to one smite, and has no actions to hit back
+        blueprint.Enemies.Add(goblin);
+        return new Playthrough(blueprint, new ScenarioScript().Build(), combatId: "fight");
+    }
+
+    [Fact]
+    public void A_data_authored_relic_combat_rule_fires_during_a_real_fight()
+    {
+        // Face (b) end to end: a relic authored as data with a turn-start rule that deals 2 to the hero. The hero
+        // wins on turn 1 taking no enemy damage, so the run's reconciled HP (30 → 28) is exactly the one turn-start
+        // firing — proof the data-defined program is injected AND actually runs in combat.
+        var relic = new RelicData
+        {
+            Id = "cursed",
+            DisplayName = "Cursed Idol",
+            CombatRules = new[]
+            {
+                new RelicCombatRule
+                {
+                    Trigger = "turnStarted",
+                    Program = new EffectProgram<TurnStartedTriggeredEffectContext>(
+                        new DealDamageNode<TurnStartedTriggeredEffectContext>(
+                            CombatantTargetSelectors.Source,
+                            new ConstantExpression<TurnStartedTriggeredEffectContext>(2))),
+                    Priority = 0,
+                },
+            },
+        }.ToDefinition();
+
+        var registry = new RunDefinitionRegistryBuilder();
+        new StandardRunPackage(new AutoPlayCombatDriver()).RegisterDefinitions(registry);
+
+        var run = new RunState(new RunId("run"), new HealthState(30, 30),
+            new RunMap(new[] { new Node(new NodeId("fight"), StandardRunIds.CombatNode, new CombatNodePayload(OneTurnWin)) }));
+        run.AddRelic(new RelicInstance(relic));
+        run.AddDeckCard(new CardDefinitionId("smite"));
+
+        new RunRunner(registry.Build(), new ScriptedChoiceProvider()).Run(run);
+
+        Assert.Equal(RunResult.Victory, run.Result);
+        Assert.Equal(28, run.Health.Current); // 30 - 2 from the single turn-start firing
+    }
 }
