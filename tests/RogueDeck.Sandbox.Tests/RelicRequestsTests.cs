@@ -25,6 +25,8 @@ public class RelicRequestsTests
     [InlineData("disablerelic")]
     [InlineData("enablerelic")]
     [InlineData("consumable")]
+    [InlineData("repeat")]
+    [InlineData("conditional")]
     public void NewDefaults_AreAllEditable(string kind)
     {
         Assert.True(RelicRequests.IsEditable(RelicRequests.New(kind)));
@@ -67,9 +69,36 @@ public class RelicRequestsTests
         // A computed amount with arithmetic is beyond the single-value model → the body leaf is not editable.
         var arithmetic = new ComputedHealRunEffect(RunExpr.Add(RunExpr.CurrentHealth, RunExpr.Const(1)));
         Assert.False(RelicRequests.IsEditable(arithmetic));
+    }
 
-        // Control flow does not nest inside a body (one level deep) → a Repeat is not itself a body leaf.
-        Assert.False(RelicRequests.IsEditable(
-            new RepeatRunEffect(RunExpr.Const(2), Array.Empty<IRunEffectRequest>())));
+    [Fact]
+    public void IsEditable_RecursesIntoNestedControlFlow()
+    {
+        // A body may now hold nested control flow: a Repeat/Conditional is editable iff its own body is. A Repeat
+        // whose body is all leaves round-trips; nesting a Conditional inside it still round-trips (arbitrary depth).
+        var nested = new RepeatRunEffect(RunExpr.Const(2), new IRunEffectRequest[]
+        {
+            new ConditionalRunEffect(
+                RelicConditions.Build(new RelicConditionSpec("victory"))!,
+                new IRunEffectRequest[] { RelicRequests.New("gold") },
+                new IRunEffectRequest[] { RelicRequests.New("heal") }),
+        });
+        Assert.True(RelicRequests.IsEditable(nested));
+    }
+
+    [Fact]
+    public void IsEditable_NestedControlFlowIsNotEditableWhenItsBodyIsnt()
+    {
+        // A nested Repeat carrying an un-modellable leaf (arithmetic computed amount) pins itself — and any body
+        // that contains it — read-only, so the reaction is preserved rather than clobbered.
+        var arithmetic = new ComputedHealRunEffect(RunExpr.Add(RunExpr.CurrentHealth, RunExpr.Const(1)));
+        var repeat = new RepeatRunEffect(RunExpr.Const(2), new IRunEffectRequest[] { arithmetic });
+        Assert.False(RelicRequests.IsEditable(repeat));
+
+        // An advanced count also pins it read-only, independent of the body.
+        var advancedCount = new RepeatRunEffect(
+            RunExpr.Add(RunExpr.CurrentHealth, RunExpr.Const(1)),
+            new IRunEffectRequest[] { RelicRequests.New("gold") });
+        Assert.False(RelicRequests.IsEditable(advancedCount));
     }
 }

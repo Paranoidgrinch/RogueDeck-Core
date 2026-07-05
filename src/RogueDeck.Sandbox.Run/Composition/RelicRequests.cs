@@ -3,19 +3,21 @@ using RogueDeck.Run;
 
 namespace RogueDeck.Sandbox.Composition;
 
-// The leaf effects a control-flow body (Repeat / Conditional branch) can hold, in the shape the Run-tab
-// RelicEditor authors. Unlike a reaction's top-level effects — which are IRunEffectTemplate and are Built once,
-// with the firing event in context — a control-flow body is a list of IRunEffectRequest resolved LATER, so a
-// computed amount here uses the Computed* run effects (evaluated against run state at resolve time). The palette
-// is the amount/state leaf set (resources/HP/heal/damage with constant or computed amounts, flags, counters);
-// nested control-flow and card/relic/consumable grants are intentionally out of scope so a body stays one level
-// deep and small. Anything else in a body classifies as non-editable and pins the whole control-flow effect
-// read-only. Lives outside the .razor so it can be unit-tested.
+// The effects a control-flow body (Repeat / Conditional branch, reward contents, draw outcome, offer grant) can
+// hold, in the shape the Run-tab RelicEditor authors. Unlike a reaction's top-level effects — which are
+// IRunEffectTemplate and are Built once, with the firing event in context — a control-flow body is a list of
+// IRunEffectRequest resolved LATER, so a computed amount here uses the Computed* run effects (evaluated against run
+// state at resolve time). The palette is the amount/state/grant leaf set (resources/HP/heal/damage with constant or
+// computed amounts, flags, counters, card/relic/consumable grants) PLUS nested control flow (Repeat / Conditional):
+// a body item may itself be a Repeat or Conditional whose body is another IRunEffectRequest list, so bodies nest to
+// arbitrary depth (the RelicEditor's BodyEditor recurses over this same shape). IsEditable therefore recurses too —
+// a nested control-flow item is editable iff its own body is. Anything outside this set classifies as non-editable
+// and pins the whole control-flow effect read-only. Lives outside the .razor so it can be unit-tested.
 public static class RelicRequests
 {
-    // The body-effect kinds offered as "+ …" buttons inside a Repeat/Conditional branch or a reward's contents
-    // (key → label). Covers the amount/state leaves plus the grant leaves a reward typically is (a card, a relic,
-    // a consumable). Removals/disable/enable and nested control-flow stay out (a body is one level deep).
+    // The body-effect kinds offered as "+ …" buttons inside a Repeat/Conditional branch, a reward's contents, a
+    // draw outcome or an offer grant (key → label). Covers the amount/state leaves, the grant leaves (a card, a
+    // relic, a consumable) plus nested control flow (Repeat / Conditional) so a body can itself branch or loop.
     public static readonly (string Kind, string Label)[] Kinds =
     {
         ("gold", "Gold"),
@@ -33,6 +35,8 @@ public static class RelicRequests
         ("disablerelic", "Disable relic"),
         ("enablerelic", "Enable relic"),
         ("consumable", "Consumable"),
+        ("repeat", "Repeat…"),
+        ("conditional", "If…"),
     };
 
     public static IRunEffectRequest New(string kind) => kind switch
@@ -53,11 +57,20 @@ public static class RelicRequests
         "disablerelic" => new DisableRelicRunEffect(new RelicId("bloodstone"), 1),
         "enablerelic" => new EnableRelicRunEffect(new RelicId("bloodstone")),
         "consumable" => new AddConsumableRunEffect(new ConsumableId("potion"), new IRunEffectRequest[] { new HealRunEffect(8) }),
+        // Nested control flow: a Repeat/Conditional whose body is itself a (leaf) IRunEffectRequest list the editor
+        // can grow further. Defaults mirror the top-level "repeat"/"conditional" templates.
+        "repeat" => new RepeatRunEffect(RunExpr.Const(2),
+            new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 5) }),
+        "conditional" => new ConditionalRunEffect(
+            RelicConditions.Build(new RelicConditionSpec("compare"))!,
+            new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 5) },
+            Array.Empty<IRunEffectRequest>()),
         _ => new ChangeMaxHealthRunEffect(0),
     };
 
     // A body effect round-trips through the editor iff it is one of the modelled leaves and (for the computed
-    // amount / single-heal-consumable variants) its shape is itself editable.
+    // amount / single-heal-consumable variants) its shape is itself editable — or a nested control-flow effect
+    // (Repeat / Conditional) whose count/condition is modellable and whose own body is recursively editable.
     public static bool IsEditable(IRunEffectRequest request) => request switch
     {
         HealRunEffect or ApplyRunDamageRunEffect or ChangeResourceRunEffect => true,
@@ -68,6 +81,9 @@ public static class RelicRequests
         ComputedDamageRunEffect d => !RelicAmounts.IsAdvanced(d.Amount),
         ComputedResourceRunEffect r => !RelicAmounts.IsAdvanced(r.Amount),
         AddConsumableRunEffect c => c.UseEffects.Count == 1 && c.UseEffects[0] is HealRunEffect,
+        RepeatRunEffect rp => !RelicAmounts.IsAdvanced(rp.Count) && rp.Effects.All(IsEditable),
+        ConditionalRunEffect cnd => !RelicConditions.IsAdvanced(cnd.Condition)
+            && cnd.WhenTrue.All(IsEditable) && cnd.WhenFalse.All(IsEditable),
         _ => false,
     };
 

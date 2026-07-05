@@ -8,8 +8,9 @@
    reward (a named bundle), Offer reward (player picks among fixed offers), and Offer reward (random) (draw N from a
    weighted pool, then pick) — plus random draws: Random draw / Random draw N distinct (weighted outcome pool).
    Nested bodies (control-flow branches, reward contents/offers, draw outcomes) hold the full amount/state/grant
-   leaf set, one level deep. Reactions the editor can't model (nested and/or conditions, advanced amounts, deeper
-   nesting, delegate/Func reward sources) are preserved and shown read-only so nothing is lost. *@
+   leaf set AND nested control flow (Repeat / Conditional), so a body can itself branch or loop to arbitrary depth
+   (BodyEditor recurses over the same IRunEffectRequest shape). Reactions the editor can't model (nested and/or
+   conditions, advanced amounts, delegate/Func reward sources) are preserved and shown read-only so nothing is lost. *@
 
 <section class="panel">
     <h2>Relics</h2>
@@ -79,22 +80,8 @@
                                             <button class="mini" @onclick="() => RemoveEffect(relicIndex, reactionIndex, fx)">✕ repeat</button>
                                         </div>
                                         <div class="fx-body">
-                                            @for (var bi = 0; bi < rp.Effects.Count; bi++)
-                                            {
-                                                var bx = bi;
-                                                <span class="fx">
-                                                    @RequestEditor(rp.Effects[bx], req => BodySet(relicIndex, reactionIndex, fx, rp, bx, req))
-                                                    <button class="mini" @onclick="() => BodyRemove(relicIndex, reactionIndex, fx, rp, bx)">✕</button>
-                                                </span>
-                                            }
-                                            <span class="add-effect">
-                                                <span class="muted">add:</span>
-                                                @foreach (var (kind, label) in RelicRequests.Kinds)
-                                                {
-                                                    <button class="mini" title="@label"
-                                                            @onclick="() => BodyAdd(relicIndex, reactionIndex, fx, rp, kind)">+ @label</button>
-                                                }
-                                            </span>
+                                            @BodyEditor(rp.Effects, nb => _ = SetEffectTemplate(relicIndex, reactionIndex, fx,
+                                                new LiteralEffectTemplate(rp with { Effects = nb })))
                                         </div>
                                     </div>
                                 }
@@ -109,41 +96,13 @@
                                         </div>
                                         <div class="fx-body">
                                             <span class="muted">then:</span>
-                                            @for (var bi = 0; bi < cnd.WhenTrue.Count; bi++)
-                                            {
-                                                var bx = bi;
-                                                <span class="fx">
-                                                    @RequestEditor(cnd.WhenTrue[bx], req => CondBodySet(relicIndex, reactionIndex, fx, cnd, true, bx, req))
-                                                    <button class="mini" @onclick="() => CondBodyRemove(relicIndex, reactionIndex, fx, cnd, true, bx)">✕</button>
-                                                </span>
-                                            }
-                                            <span class="add-effect">
-                                                <span class="muted">add:</span>
-                                                @foreach (var (kind, label) in RelicRequests.Kinds)
-                                                {
-                                                    <button class="mini" title="@label"
-                                                            @onclick="() => CondBodyAdd(relicIndex, reactionIndex, fx, cnd, true, kind)">+ @label</button>
-                                                }
-                                            </span>
+                                            @BodyEditor(cnd.WhenTrue, nb => _ = SetEffectTemplate(relicIndex, reactionIndex, fx,
+                                                new LiteralEffectTemplate(new ConditionalRunEffect(cnd.Condition, nb, cnd.WhenFalse))))
                                         </div>
                                         <div class="fx-body">
                                             <span class="muted">else:</span>
-                                            @for (var bi = 0; bi < cnd.WhenFalse.Count; bi++)
-                                            {
-                                                var bx = bi;
-                                                <span class="fx">
-                                                    @RequestEditor(cnd.WhenFalse[bx], req => CondBodySet(relicIndex, reactionIndex, fx, cnd, false, bx, req))
-                                                    <button class="mini" @onclick="() => CondBodyRemove(relicIndex, reactionIndex, fx, cnd, false, bx)">✕</button>
-                                                </span>
-                                            }
-                                            <span class="add-effect">
-                                                <span class="muted">add:</span>
-                                                @foreach (var (kind, label) in RelicRequests.Kinds)
-                                                {
-                                                    <button class="mini" title="@label"
-                                                            @onclick="() => CondBodyAdd(relicIndex, reactionIndex, fx, cnd, false, kind)">+ @label</button>
-                                                }
-                                            </span>
+                                            @BodyEditor(cnd.WhenFalse, nb => _ = SetEffectTemplate(relicIndex, reactionIndex, fx,
+                                                new LiteralEffectTemplate(new ConditionalRunEffect(cnd.Condition, cnd.WhenTrue, nb))))
                                         </div>
                                     </div>
                                 }
@@ -158,22 +117,8 @@
                                         </div>
                                         <div class="fx-body">
                                             <span class="muted">contains:</span>
-                                            @for (var bi = 0; bi < gr.Effects.Count; bi++)
-                                            {
-                                                var bx = bi;
-                                                <span class="fx">
-                                                    @RequestEditor(gr.Effects[bx], req => GrantBodySet(relicIndex, reactionIndex, fx, gr, bx, req))
-                                                    <button class="mini" @onclick="() => GrantBodyRemove(relicIndex, reactionIndex, fx, gr, bx)">✕</button>
-                                                </span>
-                                            }
-                                            <span class="add-effect">
-                                                <span class="muted">add:</span>
-                                                @foreach (var (kind, label) in RelicRequests.Kinds)
-                                                {
-                                                    <button class="mini" title="@label"
-                                                            @onclick="() => GrantBodyAdd(relicIndex, reactionIndex, fx, gr, kind)">+ @label</button>
-                                                }
-                                            </span>
+                                            @BodyEditor(gr.Effects, nb => _ = SetEffectTemplate(relicIndex, reactionIndex, fx,
+                                                new LiteralEffectTemplate(gr with { Effects = nb })))
                                         </div>
                                     </div>
                                 }
@@ -200,22 +145,7 @@
                                                 <button class="mini" @onclick="() => OfferRemoveOffer(relicIndex, reactionIndex, fx, off, ox)">✕ offer</button>
                                                 <div class="fx-body">
                                                     <span class="muted">grants:</span>
-                                                    @for (var bi = 0; bi < offer.Grant.Count; bi++)
-                                                    {
-                                                        var bx = bi;
-                                                        <span class="fx">
-                                                            @RequestEditor(offer.Grant[bx], req => OfferBodySet(relicIndex, reactionIndex, fx, off, ox, bx, req))
-                                                            <button class="mini" @onclick="() => OfferBodyRemove(relicIndex, reactionIndex, fx, off, ox, bx)">✕</button>
-                                                        </span>
-                                                    }
-                                                    <span class="add-effect">
-                                                        <span class="muted">add:</span>
-                                                        @foreach (var (kind, label) in RelicRequests.Kinds)
-                                                        {
-                                                            <button class="mini" title="@label"
-                                                                    @onclick="() => OfferBodyAdd(relicIndex, reactionIndex, fx, off, ox, kind)">+ @label</button>
-                                                        }
-                                                    </span>
+                                                    @BodyEditor(offer.Grant, nb => _ = OfferSetGrant(relicIndex, reactionIndex, fx, off, ox, nb))
                                                 </div>
                                             </div>
                                         }
@@ -251,22 +181,7 @@
                                                 <button class="mini" @onclick="() => OfferPoolRemoveOffer(relicIndex, reactionIndex, fx, offp, ox)">✕ offer</button>
                                                 <div class="fx-body">
                                                     <span class="muted">grants:</span>
-                                                    @for (var bi = 0; bi < entry.Offer.Grant.Count; bi++)
-                                                    {
-                                                        var bx = bi;
-                                                        <span class="fx">
-                                                            @RequestEditor(entry.Offer.Grant[bx], req => OfferPoolBodySet(relicIndex, reactionIndex, fx, offp, ox, bx, req))
-                                                            <button class="mini" @onclick="() => OfferPoolBodyRemove(relicIndex, reactionIndex, fx, offp, ox, bx)">✕</button>
-                                                        </span>
-                                                    }
-                                                    <span class="add-effect">
-                                                        <span class="muted">add:</span>
-                                                        @foreach (var (kind, label) in RelicRequests.Kinds)
-                                                        {
-                                                            <button class="mini" title="@label"
-                                                                    @onclick="() => OfferPoolBodyAdd(relicIndex, reactionIndex, fx, offp, ox, kind)">+ @label</button>
-                                                        }
-                                                    </span>
+                                                    @BodyEditor(entry.Offer.Grant, nb => _ = OfferPoolSetGrant(relicIndex, reactionIndex, fx, offp, ox, nb))
                                                 </div>
                                             </div>
                                         }
@@ -304,22 +219,7 @@
                                                 <button class="mini" @onclick="() => DrawRemoveEntry(relicIndex, reactionIndex, fx, draw, ex)">✕ outcome</button>
                                                 <div class="fx-body">
                                                     <span class="muted">grants:</span>
-                                                    @for (var bi = 0; bi < bundle.Body.Count; bi++)
-                                                    {
-                                                        var bx = bi;
-                                                        <span class="fx">
-                                                            @RequestEditor(bundle.Body[bx], req => DrawBodySet(relicIndex, reactionIndex, fx, draw, ex, bx, req))
-                                                            <button class="mini" @onclick="() => DrawBodyRemove(relicIndex, reactionIndex, fx, draw, ex, bx)">✕</button>
-                                                        </span>
-                                                    }
-                                                    <span class="add-effect">
-                                                        <span class="muted">add:</span>
-                                                        @foreach (var (kind, label) in RelicRequests.Kinds)
-                                                        {
-                                                            <button class="mini" title="@label"
-                                                                    @onclick="() => DrawBodyAdd(relicIndex, reactionIndex, fx, draw, ex, kind)">+ @label</button>
-                                                        }
-                                                    </span>
+                                                    @BodyEditor(bundle.Body, nb => _ = DrawSetBody(relicIndex, reactionIndex, fx, draw, ex, nb))
                                                 </div>
                                             </div>
                                         }
@@ -1088,91 +988,137 @@
         }
     };
 
+    // Recursive editor for a control-flow BODY — a list of IRunEffectRequest resolved later. Each item renders as a
+    // leaf (RequestEditor) or, for a nested Repeat/Conditional, as a control-flow block whose sub-bodies recurse
+    // back into BodyEditor, so bodies nest to arbitrary depth. `setBody` replaces this whole list; callers compose
+    // it (a nested edit rebuilds every enclosing effect up to the reaction). `SetKey(ix)` keeps list diffing correct
+    // across edits despite the running sequence numbers. Used by every body holder (Repeat/Conditional/reward/draw).
+    private RenderFragment BodyEditor(IReadOnlyList<IRunEffectRequest> body, Action<IReadOnlyList<IRunEffectRequest>> setBody) => builder =>
+    {
+        var seq = 0;
+
+        IReadOnlyList<IRunEffectRequest> With(int i, IRunEffectRequest req)
+        {
+            var list = body.ToList();
+            if (i >= 0 && i < list.Count)
+                list[i] = req;
+            return list;
+        }
+
+        IReadOnlyList<IRunEffectRequest> Without(int i)
+        {
+            var list = body.ToList();
+            if (i >= 0 && i < list.Count)
+                list.RemoveAt(i);
+            return list;
+        }
+
+        void Open(string element, string cssClass, object? key = null)
+        {
+            builder.OpenElement(seq++, element);
+            if (key is not null)
+                builder.SetKey(key);
+            builder.AddAttribute(seq++, "class", cssClass);
+        }
+
+        void Muted(string text)
+        {
+            builder.OpenElement(seq++, "span");
+            builder.AddAttribute(seq++, "class", "muted");
+            builder.AddContent(seq++, text);
+            builder.CloseElement();
+        }
+
+        void MiniButton(string label, string title, Action onClick)
+        {
+            builder.OpenElement(seq++, "button");
+            builder.AddAttribute(seq++, "class", "mini");
+            builder.AddAttribute(seq++, "title", title);
+            builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create(this, onClick));
+            builder.AddContent(seq++, label);
+            builder.CloseElement();
+        }
+
+        for (var i = 0; i < body.Count; i++)
+        {
+            var ix = i;
+            switch (body[ix])
+            {
+                case RepeatRunEffect rp:
+                    Open("div", "fx-block", ix);
+                    Open("div", "run-bar");
+                    Muted("Repeat");
+                    builder.AddContent(seq++, AmountEditor(RelicAmounts.Classify(rp.Count),
+                        spec => setBody(With(ix, rp with { Count = RelicAmounts.Build(spec) }))));
+                    Muted("×");
+                    MiniButton("✕ repeat", "remove", () => setBody(Without(ix)));
+                    builder.CloseElement();
+                    Open("div", "fx-body");
+                    builder.AddContent(seq++, BodyEditor(rp.Effects, nb => setBody(With(ix, rp with { Effects = nb }))));
+                    builder.CloseElement();
+                    builder.CloseElement();
+                    break;
+
+                case ConditionalRunEffect cnd:
+                    Open("div", "fx-block", ix);
+                    Open("div", "run-bar");
+                    Muted("If");
+                    builder.AddContent(seq++, ConditionEditor(RelicConditions.Classify(cnd.Condition),
+                        spec => setBody(With(ix, new ConditionalRunEffect(
+                            RelicConditions.Build(spec) ?? cnd.Condition, cnd.WhenTrue, cnd.WhenFalse))), allowNone: false));
+                    MiniButton("✕ if", "remove", () => setBody(Without(ix)));
+                    builder.CloseElement();
+                    Open("div", "fx-body");
+                    Muted("then:");
+                    builder.AddContent(seq++, BodyEditor(cnd.WhenTrue,
+                        nb => setBody(With(ix, new ConditionalRunEffect(cnd.Condition, nb, cnd.WhenFalse)))));
+                    builder.CloseElement();
+                    Open("div", "fx-body");
+                    Muted("else:");
+                    builder.AddContent(seq++, BodyEditor(cnd.WhenFalse,
+                        nb => setBody(With(ix, new ConditionalRunEffect(cnd.Condition, cnd.WhenTrue, nb)))));
+                    builder.CloseElement();
+                    builder.CloseElement();
+                    break;
+
+                default:
+                    Open("span", "fx", ix);
+                    builder.AddContent(seq++, RequestEditor(body[ix], req => setBody(With(ix, req))));
+                    MiniButton("✕", "remove", () => setBody(Without(ix)));
+                    builder.CloseElement();
+                    break;
+            }
+        }
+
+        Open("span", "add-effect", "add");
+        Muted("add:");
+        foreach (var (kind, label) in RelicRequests.Kinds)
+        {
+            var k = kind;
+            MiniButton("+ " + label, label, () => setBody(body.Append(RelicRequests.New(k)).ToList()));
+        }
+        builder.CloseElement();
+    };
+
     // ── control-flow (Repeat) body editing ──────────────────────────────────────────
-    // Each op rebuilds the whole Repeat template from the captured `rp` and hands it to SetEffectTemplate.
+    // The Repeat count is a top-level template op; the body contents are edited through BodyEditor's `setBody` lens.
     private Task RepeatSetCount(int ri, int rx, int fx, RepeatRunEffect rp, RelicAmountSpec spec) =>
         SetEffectTemplate(ri, rx, fx, new LiteralEffectTemplate(rp with { Count = RelicAmounts.Build(spec) }));
 
-    private Task BodySet(int ri, int rx, int fx, RepeatRunEffect rp, int bx, IRunEffectRequest request)
-    {
-        var body = rp.Effects.ToList();
-        if (bx >= 0 && bx < body.Count)
-            body[bx] = request;
-        return SetEffectTemplate(ri, rx, fx, new LiteralEffectTemplate(rp with { Effects = body }));
-    }
-
-    private Task BodyRemove(int ri, int rx, int fx, RepeatRunEffect rp, int bx)
-    {
-        var body = rp.Effects.ToList();
-        if (bx >= 0 && bx < body.Count)
-            body.RemoveAt(bx);
-        return SetEffectTemplate(ri, rx, fx, new LiteralEffectTemplate(rp with { Effects = body }));
-    }
-
-    private Task BodyAdd(int ri, int rx, int fx, RepeatRunEffect rp, string kind) =>
-        SetEffectTemplate(ri, rx, fx, new LiteralEffectTemplate(
-            rp with { Effects = rp.Effects.Append(RelicRequests.New(kind)).ToList() }));
-
-    // ── control-flow (Conditional) body editing ─────────────────────────────────────
-    // ConditionalRunEffect has get-only properties (no `with`), so each op rebuilds it via its constructor,
-    // replacing only the changed part. `whenTrue` selects which branch a body op targets.
-    private Task CondSet(int ri, int rx, int fx, ConditionalRunEffect cnd,
-        IRunExpression<bool>? condition, IReadOnlyList<IRunEffectRequest>? whenTrue, IReadOnlyList<IRunEffectRequest>? whenFalse) =>
-        SetEffectTemplate(ri, rx, fx, new LiteralEffectTemplate(new ConditionalRunEffect(
-            condition ?? cnd.Condition, whenTrue ?? cnd.WhenTrue, whenFalse ?? cnd.WhenFalse)));
-
+    // ── control-flow (Conditional) condition editing ────────────────────────────────
+    // ConditionalRunEffect has get-only properties (no `with`), so the condition op rebuilds it via its constructor,
+    // preserving both branches; branch contents are edited through BodyEditor's `setBody` lens.
     private Task CondSetCondition(int ri, int rx, int fx, ConditionalRunEffect cnd, RelicConditionSpec spec) =>
-        CondSet(ri, rx, fx, cnd, RelicConditions.Build(spec) ?? cnd.Condition, null, null);
+        SetEffectTemplate(ri, rx, fx, new LiteralEffectTemplate(new ConditionalRunEffect(
+            RelicConditions.Build(spec) ?? cnd.Condition, cnd.WhenTrue, cnd.WhenFalse)));
 
-    private Task CondBodySet(int ri, int rx, int fx, ConditionalRunEffect cnd, bool whenTrue, int bx, IRunEffectRequest request)
-    {
-        var body = (whenTrue ? cnd.WhenTrue : cnd.WhenFalse).ToList();
-        if (bx >= 0 && bx < body.Count)
-            body[bx] = request;
-        return CondSet(ri, rx, fx, cnd, null, whenTrue ? body : null, whenTrue ? null : body);
-    }
-
-    private Task CondBodyRemove(int ri, int rx, int fx, ConditionalRunEffect cnd, bool whenTrue, int bx)
-    {
-        var body = (whenTrue ? cnd.WhenTrue : cnd.WhenFalse).ToList();
-        if (bx >= 0 && bx < body.Count)
-            body.RemoveAt(bx);
-        return CondSet(ri, rx, fx, cnd, null, whenTrue ? body : null, whenTrue ? null : body);
-    }
-
-    private Task CondBodyAdd(int ri, int rx, int fx, ConditionalRunEffect cnd, bool whenTrue, string kind)
-    {
-        var body = (whenTrue ? cnd.WhenTrue : cnd.WhenFalse).Append(RelicRequests.New(kind)).ToList();
-        return CondSet(ri, rx, fx, cnd, null, whenTrue ? body : null, whenTrue ? null : body);
-    }
-
-    // ── reward (GrantReward) contents editing ───────────────────────────────────────
-    // GrantRewardRunEffect is a positional record → rebuilt with `with`. Each op rebuilds it from the captured
-    // `gr` and hands it to SetEffectTemplate. Granting a reward raises RewardGrantedRunEvent, so other relics'
-    // "a reward is granted" reactions can chain off it.
+    // ── reward (GrantReward) reward-id editing ──────────────────────────────────────
+    // GrantRewardRunEffect is a positional record → rebuilt with `with`. Granting a reward raises
+    // RewardGrantedRunEvent, so other relics' "a reward is granted" reactions can chain off it. The bundled effects
+    // are edited through BodyEditor's `setBody` lens.
     private Task GrantSetReward(int ri, int rx, int fx, GrantRewardRunEffect gr, string reward) =>
         SetEffectTemplate(ri, rx, fx, new LiteralEffectTemplate(
             gr with { Reward = new RewardId(string.IsNullOrWhiteSpace(reward) ? "reward" : reward.Trim()) }));
-
-    private Task GrantBodySet(int ri, int rx, int fx, GrantRewardRunEffect gr, int bx, IRunEffectRequest request)
-    {
-        var body = gr.Effects.ToList();
-        if (bx >= 0 && bx < body.Count)
-            body[bx] = request;
-        return SetEffectTemplate(ri, rx, fx, new LiteralEffectTemplate(gr with { Effects = body }));
-    }
-
-    private Task GrantBodyRemove(int ri, int rx, int fx, GrantRewardRunEffect gr, int bx)
-    {
-        var body = gr.Effects.ToList();
-        if (bx >= 0 && bx < body.Count)
-            body.RemoveAt(bx);
-        return SetEffectTemplate(ri, rx, fx, new LiteralEffectTemplate(gr with { Effects = body }));
-    }
-
-    private Task GrantBodyAdd(int ri, int rx, int fx, GrantRewardRunEffect gr, string kind) =>
-        SetEffectTemplate(ri, rx, fx, new LiteralEffectTemplate(
-            gr with { Effects = gr.Effects.Append(RelicRequests.New(kind)).ToList() }));
 
     // ── reward (OfferReward) offers editing ─────────────────────────────────────────
     // The editor models the FIXED-offer source only (a static list of named offers, each a grant body). Every op
@@ -1216,37 +1162,12 @@
         return OfferRebuild(ri, rx, fx, off.Reward, offers, off.PickCount);
     }
 
-    private Task OfferBodySet(int ri, int rx, int fx, OfferRewardRunEffect off, int ox, int bx, IRunEffectRequest request)
+    // Replace offer `ox`'s grant body wholesale (BodyEditor's `setBody` lens) and rebuild the offer.
+    private Task OfferSetGrant(int ri, int rx, int fx, OfferRewardRunEffect off, int ox, IReadOnlyList<IRunEffectRequest> grant)
     {
         var offers = OffersOf(off).ToList();
         if (ox >= 0 && ox < offers.Count)
-        {
-            var grant = offers[ox].Grant.ToList();
-            if (bx >= 0 && bx < grant.Count)
-                grant[bx] = request;
             offers[ox] = offers[ox] with { Grant = grant };
-        }
-        return OfferRebuild(ri, rx, fx, off.Reward, offers, off.PickCount);
-    }
-
-    private Task OfferBodyRemove(int ri, int rx, int fx, OfferRewardRunEffect off, int ox, int bx)
-    {
-        var offers = OffersOf(off).ToList();
-        if (ox >= 0 && ox < offers.Count)
-        {
-            var grant = offers[ox].Grant.ToList();
-            if (bx >= 0 && bx < grant.Count)
-                grant.RemoveAt(bx);
-            offers[ox] = offers[ox] with { Grant = grant };
-        }
-        return OfferRebuild(ri, rx, fx, off.Reward, offers, off.PickCount);
-    }
-
-    private Task OfferBodyAdd(int ri, int rx, int fx, OfferRewardRunEffect off, int ox, string kind)
-    {
-        var offers = OffersOf(off).ToList();
-        if (ox >= 0 && ox < offers.Count)
-            offers[ox] = offers[ox] with { Grant = offers[ox].Grant.Append(RelicRequests.New(kind)).ToList() };
         return OfferRebuild(ri, rx, fx, off.Reward, offers, off.PickCount);
     }
 
@@ -1296,37 +1217,12 @@
         return DrawApply(ri, rx, fx, draw, bundles, null);
     }
 
-    private Task DrawBodySet(int ri, int rx, int fx, IRunEffectRequest draw, int ex, int bx, IRunEffectRequest request)
+    // Replace outcome `ex`'s effect body wholesale (BodyEditor's `setBody` lens) and rebuild the pool.
+    private Task DrawSetBody(int ri, int rx, int fx, IRunEffectRequest draw, int ex, IReadOnlyList<IRunEffectRequest> body)
     {
         var bundles = RelicRequests.BundlesOf(PoolOf(draw)).ToList();
         if (ex >= 0 && ex < bundles.Count)
-        {
-            var body = bundles[ex].Body.ToList();
-            if (bx >= 0 && bx < body.Count)
-                body[bx] = request;
             bundles[ex] = bundles[ex] with { Body = body };
-        }
-        return DrawApply(ri, rx, fx, draw, bundles, null);
-    }
-
-    private Task DrawBodyRemove(int ri, int rx, int fx, IRunEffectRequest draw, int ex, int bx)
-    {
-        var bundles = RelicRequests.BundlesOf(PoolOf(draw)).ToList();
-        if (ex >= 0 && ex < bundles.Count)
-        {
-            var body = bundles[ex].Body.ToList();
-            if (bx >= 0 && bx < body.Count)
-                body.RemoveAt(bx);
-            bundles[ex] = bundles[ex] with { Body = body };
-        }
-        return DrawApply(ri, rx, fx, draw, bundles, null);
-    }
-
-    private Task DrawBodyAdd(int ri, int rx, int fx, IRunEffectRequest draw, int ex, string kind)
-    {
-        var bundles = RelicRequests.BundlesOf(PoolOf(draw)).ToList();
-        if (ex >= 0 && ex < bundles.Count)
-            bundles[ex] = bundles[ex] with { Body = bundles[ex].Body.Append(RelicRequests.New(kind)).ToList() };
         return DrawApply(ri, rx, fx, draw, bundles, null);
     }
 
@@ -1389,37 +1285,12 @@
         return OfferPoolApply(ri, rx, fx, off.Reward, entries, DrawCountOf(off), off.PickCount);
     }
 
-    private Task OfferPoolBodySet(int ri, int rx, int fx, OfferRewardRunEffect off, int ox, int bx, IRunEffectRequest request)
+    // Replace pool offer `ox`'s grant body wholesale (BodyEditor's `setBody` lens) and rebuild the pool.
+    private Task OfferPoolSetGrant(int ri, int rx, int fx, OfferRewardRunEffect off, int ox, IReadOnlyList<IRunEffectRequest> grant)
     {
         var entries = PoolEntriesOf(off).ToList();
         if (ox >= 0 && ox < entries.Count)
-        {
-            var grant = entries[ox].Offer.Grant.ToList();
-            if (bx >= 0 && bx < grant.Count)
-                grant[bx] = request;
             entries[ox] = entries[ox] with { Offer = entries[ox].Offer with { Grant = grant } };
-        }
-        return OfferPoolApply(ri, rx, fx, off.Reward, entries, DrawCountOf(off), off.PickCount);
-    }
-
-    private Task OfferPoolBodyRemove(int ri, int rx, int fx, OfferRewardRunEffect off, int ox, int bx)
-    {
-        var entries = PoolEntriesOf(off).ToList();
-        if (ox >= 0 && ox < entries.Count)
-        {
-            var grant = entries[ox].Offer.Grant.ToList();
-            if (bx >= 0 && bx < grant.Count)
-                grant.RemoveAt(bx);
-            entries[ox] = entries[ox] with { Offer = entries[ox].Offer with { Grant = grant } };
-        }
-        return OfferPoolApply(ri, rx, fx, off.Reward, entries, DrawCountOf(off), off.PickCount);
-    }
-
-    private Task OfferPoolBodyAdd(int ri, int rx, int fx, OfferRewardRunEffect off, int ox, string kind)
-    {
-        var entries = PoolEntriesOf(off).ToList();
-        if (ox >= 0 && ox < entries.Count)
-            entries[ox] = entries[ox] with { Offer = entries[ox].Offer with { Grant = entries[ox].Offer.Grant.Append(RelicRequests.New(kind)).ToList() } };
         return OfferPoolApply(ri, rx, fx, off.Reward, entries, DrawCountOf(off), off.PickCount);
     }
 }
