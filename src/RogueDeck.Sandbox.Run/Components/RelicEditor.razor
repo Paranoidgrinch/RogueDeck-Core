@@ -110,6 +110,51 @@
                 </div>
             }
             <button class="mini" @onclick="() => AddReaction(relicIndex)">+ reaction</button>
+
+            <div class="editor-choice">
+                <div class="run-bar">
+                    <span class="muted">Combat rules</span>
+                    <span class="muted" style="font-size:.85em">— programs this relic injects into every fight it is owned in</span>
+                </div>
+                @for (var ci = 0; ci < relic.CombatRules.Count; ci++)
+                {
+                    var ruleIndex = ci;
+                    var rule = relic.CombatRules[ci];
+                    <div class="fx-block">
+                        <div class="run-bar">
+                            <span class="muted">on</span>
+                            <select value="@rule.Trigger" @onchange="e => SetRuleTrigger(relicIndex, ruleIndex, AsString(e.Value))">
+                                @foreach (var key in RelicCombatTriggers.Keys)
+                                {
+                                    <option value="@key">@key</option>
+                                }
+                            </select>
+                            <span class="muted">priority</span>
+                            <input type="number" value="@rule.Priority" style="width:4rem"
+                                   @onchange="e => SetRulePriority(relicIndex, ruleIndex, AsInt(e.Value, rule.Priority))" />
+                            <button class="mini" @onclick="() => RemoveCombatRule(relicIndex, ruleIndex)">✕ rule</button>
+                        </div>
+                        <div class="fx-body">
+                            <span class="muted">program (JSON — edit &amp; blur to apply):</span>
+                            <textarea rows="6" style="width:100%;font-family:monospace"
+                                      @onchange="e => SetRuleProgram(relicIndex, ruleIndex, AsString(e.Value))">@ProgramJson(rule)</textarea>
+                        </div>
+                    </div>
+                }
+                @if (_combatRuleError is { } err)
+                {
+                    <div class="run-bar"><span style="color:#c33">@err</span></div>
+                }
+                <div class="run-bar">
+                    <select @bind="_newRuleTrigger">
+                        @foreach (var key in RelicCombatTriggers.Keys)
+                        {
+                            <option value="@key">@key</option>
+                        }
+                    </select>
+                    <button class="mini" @onclick="() => AddCombatRule(relicIndex)">+ combat rule</button>
+                </div>
+            </div>
         </div>
     }
 
@@ -232,6 +277,96 @@
 
     private Task EditReactions(int relicIndex, Func<List<ITriggeredRunEffectDefinition>, List<ITriggeredRunEffectDefinition>> edit) =>
         EditRelic(relicIndex, relic => relic with { RunPrograms = edit(relic.RunPrograms.ToList()) });
+
+    // ── combat rules (face (b): programs the relic injects into fights) ──────────────
+    // Each rule = a combat trigger (from the RelicCombatTriggers catalog) + an EffectProgram authored as JSON +
+    // a firing priority. The program's context is fixed by the trigger, so changing the trigger resets the program
+    // to that context's default, and the JSON is (de)serialized through the trigger (context-specific CombatJson).
+    private string _newRuleTrigger = RelicCombatTriggers.Keys.First();
+    private string? _combatRuleError;
+    private static readonly System.Text.Json.JsonSerializerOptions PrettyProgramJson = new() { WriteIndented = true };
+
+    private static string ProgramJson(RelicCombatRule rule) =>
+        System.Text.Json.JsonSerializer.Serialize(RelicCombatTriggers.Get(rule.Trigger).Serialize(rule.Program), PrettyProgramJson);
+
+    private Task EditCombatRules(int relicIndex, Func<List<RelicCombatRule>, List<RelicCombatRule>> edit) =>
+        EditRelic(relicIndex, relic => relic with { CombatRules = edit(relic.CombatRules.ToList()) });
+
+    private Task AddCombatRule(int relicIndex)
+    {
+        _combatRuleError = null;
+        if (!RelicCombatTriggers.TryGet(_newRuleTrigger, out var trigger))
+            return Task.CompletedTask;
+        return EditCombatRules(relicIndex, rules =>
+        {
+            rules.Add(new RelicCombatRule { Trigger = _newRuleTrigger, Program = trigger.NewProgram(), Priority = 0 });
+            return rules;
+        });
+    }
+
+    private Task RemoveCombatRule(int relicIndex, int ruleIndex)
+    {
+        _combatRuleError = null;
+        return EditCombatRules(relicIndex, rules =>
+        {
+            if (ruleIndex >= 0 && ruleIndex < rules.Count)
+                rules.RemoveAt(ruleIndex);
+            return rules;
+        });
+    }
+
+    private Task SetRulePriority(int relicIndex, int ruleIndex, int priority) =>
+        EditCombatRules(relicIndex, rules =>
+        {
+            if (ruleIndex >= 0 && ruleIndex < rules.Count)
+                rules[ruleIndex] = rules[ruleIndex] with { Priority = priority };
+            return rules;
+        });
+
+    // Changing the trigger changes the program's context, so the old program no longer type-checks — reset it to
+    // the new trigger's default so the rule stays valid and authorable.
+    private Task SetRuleTrigger(int relicIndex, int ruleIndex, string triggerKey)
+    {
+        _combatRuleError = null;
+        if (!RelicCombatTriggers.TryGet(triggerKey, out var trigger))
+            return Task.CompletedTask;
+        return EditCombatRules(relicIndex, rules =>
+        {
+            if (ruleIndex >= 0 && ruleIndex < rules.Count)
+                rules[ruleIndex] = rules[ruleIndex] with { Trigger = triggerKey, Program = trigger.NewProgram() };
+            return rules;
+        });
+    }
+
+    // Parse the edited JSON in the rule's trigger context; on success replace the program, on failure surface the
+    // error and leave the model unchanged (the textarea reverts to the last valid program on re-render).
+    private Task SetRuleProgram(int relicIndex, int ruleIndex, string json)
+    {
+        if (relicIndex < 0 || relicIndex >= Blueprint.Relics.Count)
+            return Task.CompletedTask;
+        var rules = Blueprint.Relics[relicIndex].CombatRules;
+        if (ruleIndex < 0 || ruleIndex >= rules.Count)
+            return Task.CompletedTask;
+        var trigger = RelicCombatTriggers.Get(rules[ruleIndex].Trigger);
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var program = trigger.Deserialize(doc.RootElement);
+            _combatRuleError = null;
+            return EditCombatRules(relicIndex, list =>
+            {
+                if (ruleIndex >= 0 && ruleIndex < list.Count)
+                    list[ruleIndex] = list[ruleIndex] with { Program = program };
+                return list;
+            });
+        }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or NotSupportedException
+            or KeyNotFoundException or InvalidOperationException or ArgumentException)
+        {
+            _combatRuleError = $"Program JSON invalid: {ex.Message}";
+            return Task.CompletedTask;
+        }
+    }
 
     // ── relic level ─────────────────────────────────────────────────────────────
     private Task SetRelicId(int relicIndex, string id) =>

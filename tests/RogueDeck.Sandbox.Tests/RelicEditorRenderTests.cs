@@ -110,4 +110,33 @@ public class RelicEditorRenderTests
         Assert.Contains("weight", html);
         Assert.DoesNotContain("advanced reaction", html);
     }
+
+    [Fact]
+    public async Task RendersCombatRulesSectionForARelic()
+    {
+        // Face (b) UI (R2): a relic with a combat rule renders the Combat-rules section — trigger select, priority,
+        // and the effect program serialized into a JSON textarea (the default turn-start rule gains block).
+        var relic = new RelicData
+        {
+            Id = "aegis",
+            DisplayName = "Aegis",
+            CombatRules = new[]
+            {
+                new RelicCombatRule
+                {
+                    Trigger = "turnStarted",
+                    Program = RelicCombatTriggers.Get("turnStarted").NewProgram(),
+                    Priority = 1,
+                },
+            },
+        };
+
+        var html = await RenderAsync(BlueprintWith(relic));
+
+        Assert.Contains("Combat rules", html);
+        Assert.Contains("turnStarted", html);
+        Assert.Contains("program (JSON", html);
+        Assert.Contains("combat rule", html); // the add button ("+" HTML-encodes)
+        Assert.Contains("node.gainBlock", html); // the default program, serialized into the textarea
+    }
 }

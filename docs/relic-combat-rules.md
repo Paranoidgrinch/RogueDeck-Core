@@ -85,9 +85,14 @@ There is **no visual `EffectProgram` builder**. The Cards tab edits programs as 
   rule fires (hero 30→28). `RelicData.From` still rejects code-built contributions (reverse map is a
   later slice). Run suite 193 green. *(Files: `Relics/RelicCombatRule.cs`,
   `Serialization/RelicCombatRuleJsonConverter.cs`, `Relics/RelicData.cs`, `Serialization/RunJson.cs`.)*
-- **R2 — Relics-tab UI (JSON program).** `RelicEditor` gains a "combat rules" section per relic:
-  trigger dropdown (catalog) + priority + a JSON program textarea with parse/validate (reuse
-  `CardEditor`). Usable end-to-end for basic programs.
+- **R2 — Relics-tab UI (JSON program). DONE.** `RelicEditor` gained a "Combat rules" section per
+  relic: trigger `<select>` (catalog) + priority + a JSON `<textarea>` for the effect program. Edit &
+  blur parses the JSON in the rule's trigger context (via `RelicCombatTriggers.Deserialize`); on
+  failure it surfaces an inline error and reverts (model unchanged). Changing the trigger resets the
+  program to that context's default (the program's context is fixed by the trigger). `RunSandbox.
+  RegisterRelics` already calls `ToDefinition`, so authored rules fire in sandbox play. Render test
+  added. Reverting-on-parse-error is the one rough edge (no per-rule draft state) — acceptable for a
+  JSON authoring UI; a structured/visual editor is R4.
 - **R3 — event-value exprs per event.** As events are exposed, S0 + register their context-specific
   amount/value types so rules can read the triggering event ("= damage taken", "= card cost").
 - **R4 (optional, large) — visual program editor** shared by Cards + Relics combat rules.
