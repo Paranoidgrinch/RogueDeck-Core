@@ -77,6 +77,17 @@ public class RelicRequestsTests
     }
 
     [Fact]
+    public void IsBlock_MarksControlFlowRewardsAndDrawsAsBlocksAndLeavesAsNot()
+    {
+        // Blocks (rendered as titled boxes with sub-bodies) vs leaves (one-line editors) — the split the editor uses
+        // to route to RelicCompositeEditor vs the leaf editor.
+        foreach (var kind in new[] { "repeat", "conditional", "grantreward", "offerreward", "offerpool", "draw", "drawmany" })
+            Assert.True(RelicRequests.IsBlock(RelicRequests.New(kind)), kind);
+        foreach (var kind in new[] { "gold", "heal", "damage", "flag", "counter", "addcard", "addrelic", "consumable" })
+            Assert.False(RelicRequests.IsBlock(RelicRequests.New(kind)), kind);
+    }
+
+    [Fact]
     public void IsEditable_RecursesIntoNestedControlFlow()
     {
         // A body may now hold nested control flow: a Repeat/Conditional is editable iff its own body is. A Repeat

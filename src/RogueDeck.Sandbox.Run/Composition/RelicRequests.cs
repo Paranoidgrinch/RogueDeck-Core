@@ -115,6 +115,13 @@ public static class RelicRequests
         _ => false,
     };
 
+    // Whether this request is a "block" — a nested control-flow / reward / draw effect the editor renders as its own
+    // titled box (with sub-bodies), rather than a one-line leaf. The RelicEditor renders blocks via RelicComposite
+    // Editor and leaves via the amount/state leaf editor; this is the split point.
+    public static bool IsBlock(IRunEffectRequest request) => request is
+        RepeatRunEffect or ConditionalRunEffect or GrantRewardRunEffect or
+        OfferRewardRunEffect or DrawEffectsRunEffect or DrawManyEffectsRunEffect;
+
     // Whether this leaf carries an authorable amount (constant or computed) the editor should show a control for.
     public static bool HasAmount(IRunEffectRequest request) => request is
         HealRunEffect or ApplyRunDamageRunEffect or ChangeResourceRunEffect or

@@ -1,0 +1,65 @@
+@* Recursive editor for a control-flow BODY — a list of IRunEffectRequest resolved later. Each item renders as a
+   leaf (via the injected LeafEditor) or, for a nested block (control flow / reward / draw), as a RelicCompositeEditor
+   whose sub-bodies recurse back here. BodyChanged replaces the whole list; callers compose it so a deep edit rebuilds
+   every enclosing effect up to the reaction. Shared by the top-level reaction editor (one body per composite) and by
+   RelicCompositeEditor (every nested body), so composite markup lives in ONE place. The leaf / amount / condition
+   widgets are INJECTED — they depend on RelicEditor's blueprint-scoped option lists (deck cards, relic ids) and its
+   component identity for event callbacks — which keeps this component blueprint-agnostic and purely structural. *@
+
+@for (var i = 0; i < Body.Count; i++)
+{
+    var ix = i;
+    var item = Body[ix];
+    @if (RelicRequests.IsBlock(item))
+    {
+        <RelicCompositeEditor Request="item"
+                              RequestChanged="req => Replace(ix, req)"
+                              Removed="() => Remove(ix)"
+                              LeafEditor="LeafEditor"
+                              AmountEditor="AmountEditor"
+                              ConditionEditor="ConditionEditor" />
+    }
+    else
+    {
+        <span class="fx">
+            @LeafEditor(item, req => Replace(ix, req))
+            <button class="mini" @onclick="() => Remove(ix)">✕</button>
+        </span>
+    }
+}
+<span class="add-effect">
+    <span class="muted">add:</span>
+    @foreach (var (kind, label) in RelicRequests.Kinds)
+    {
+        var k = kind;
+        <button class="mini" title="@label" @onclick="() => Add(k)">+ @label</button>
+    }
+</span>
+
+@code {
+    [Parameter] public IReadOnlyList<IRunEffectRequest> Body { get; set; } = Array.Empty<IRunEffectRequest>();
+    [Parameter] public EventCallback<IReadOnlyList<IRunEffectRequest>> BodyChanged { get; set; }
+
+    // Widgets supplied by RelicEditor: render one leaf request, one amount control, one condition control.
+    [Parameter] public Func<IRunEffectRequest, Action<IRunEffectRequest>, RenderFragment> LeafEditor { get; set; } = default!;
+    [Parameter] public Func<RelicAmountSpec, Action<RelicAmountSpec>, RenderFragment> AmountEditor { get; set; } = default!;
+    [Parameter] public Func<RelicConditionSpec, Action<RelicConditionSpec>, bool, RenderFragment> ConditionEditor { get; set; } = default!;
+
+    private void Replace(int i, IRunEffectRequest req)
+    {
+        var list = Body.ToList();
+        if (i >= 0 && i < list.Count)
+            list[i] = req;
+        _ = BodyChanged.InvokeAsync(list);
+    }
+
+    private void Remove(int i)
+    {
+        var list = Body.ToList();
+        if (i >= 0 && i < list.Count)
+            list.RemoveAt(i);
+        _ = BodyChanged.InvokeAsync(list);
+    }
+
+    private void Add(string kind) => _ = BodyChanged.InvokeAsync(Body.Append(RelicRequests.New(kind)).ToList());
+}

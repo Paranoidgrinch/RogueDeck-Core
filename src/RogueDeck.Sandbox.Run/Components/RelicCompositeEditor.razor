@@ -1,0 +1,316 @@
+@* The single home for a "block" effect's editor — control flow (Repeat / Conditional), rewards (Grant / Offer fixed /
+   Offer random) and random draws (Draw / DrawMany). Renders ONE IRunEffectRequest and emits the edited request through
+   RequestChanged; the ✕ removes it through Removed. Callers decide what a request means: the top-level reaction editor
+   wraps it back into a LiteralEffectTemplate; a RelicBodyEditor replaces it in its list. Sub-bodies (Repeat body,
+   Conditional branches, reward contents/offers, draw outcomes) recurse through RelicBodyEditor, which routes nested
+   blocks back here — so this markup is written ONCE and serves every depth and both the top level and bodies. The
+   leaf / amount / condition widgets are injected and passed straight through to nested bodies. *@
+
+@if (Request is RepeatRunEffect rp)
+{
+    <div class="fx-block">
+        <div class="run-bar">
+            <span class="muted">Repeat</span>
+            @AmountEditor(RelicAmounts.Classify(rp.Count), spec => Set(rp with { Count = RelicAmounts.Build(spec) }))
+            <span class="muted">×</span>
+            <button class="mini" @onclick="Remove">✕ repeat</button>
+        </div>
+        <div class="fx-body">
+            @Body(rp.Effects, nb => Set(rp with { Effects = nb }))
+        </div>
+    </div>
+}
+else if (Request is ConditionalRunEffect cnd)
+{
+    <div class="fx-block">
+        <div class="run-bar">
+            <span class="muted">If</span>
+            @ConditionEditor(RelicConditions.Classify(cnd.Condition),
+                spec => Set(new ConditionalRunEffect(RelicConditions.Build(spec) ?? cnd.Condition, cnd.WhenTrue, cnd.WhenFalse)), false)
+            <button class="mini" @onclick="Remove">✕ if</button>
+        </div>
+        <div class="fx-body">
+            <span class="muted">then:</span>
+            @Body(cnd.WhenTrue, nb => Set(new ConditionalRunEffect(cnd.Condition, nb, cnd.WhenFalse)))
+        </div>
+        <div class="fx-body">
+            <span class="muted">else:</span>
+            @Body(cnd.WhenFalse, nb => Set(new ConditionalRunEffect(cnd.Condition, cnd.WhenTrue, nb)))
+        </div>
+    </div>
+}
+else if (Request is GrantRewardRunEffect gr)
+{
+    <div class="fx-block">
+        <div class="run-bar">
+            <span class="muted">Grant reward</span>
+            <input value="@gr.Reward.Value" style="width:8rem"
+                   @onchange="e => Set(gr with { Reward = new RewardId(Reward(AsString(e.Value))) })" />
+            <button class="mini" @onclick="Remove">✕ reward</button>
+        </div>
+        <div class="fx-body">
+            <span class="muted">contains:</span>
+            @Body(gr.Effects, nb => Set(gr with { Effects = nb }))
+        </div>
+    </div>
+}
+else if (Request is OfferRewardRunEffect { Source: FixedRewardSource fs } off)
+{
+    var offers = fs.Offers;
+    <div class="fx-block">
+        <div class="run-bar">
+            <span class="muted">Offer reward</span>
+            <input value="@off.Reward.Value" style="width:8rem"
+                   @onchange="e => Set(FixedOffer(new RewardId(Reward(AsString(e.Value))), offers, off.PickCount))" />
+            <span class="muted">pick</span>
+            <input type="number" value="@off.PickCount" style="width:4rem"
+                   @onchange="e => Set(FixedOffer(off.Reward, offers, AsInt(e.Value, off.PickCount)))" />
+            <button class="mini" @onclick="Remove">✕ reward</button>
+        </div>
+        @for (var oi = 0; oi < offers.Count; oi++)
+        {
+            var ox = oi;
+            var offer = offers[ox];
+            <div class="fx-body">
+                <span class="muted">offer</span>
+                <input value="@offer.Id" style="width:8rem"
+                       @onchange="e => Set(FixedOffer(off.Reward, WithOfferId(offers, ox, AsString(e.Value)), off.PickCount))" />
+                <button class="mini" @onclick="() => Set(FixedOffer(off.Reward, WithoutOffer(offers, ox), off.PickCount))">✕ offer</button>
+                <div class="fx-body">
+                    <span class="muted">grants:</span>
+                    @Body(offer.Grant, nb => Set(FixedOffer(off.Reward, WithOfferGrant(offers, ox, nb), off.PickCount)))
+                </div>
+            </div>
+        }
+        <button class="mini" @onclick="() => Set(FixedOffer(off.Reward, AppendOffer(offers), off.PickCount))">+ offer</button>
+    </div>
+}
+else if (Request is OfferRewardRunEffect { Source: PoolRewardSource ps } offp)
+{
+    var entries = RelicRequests.OfferEntriesOf(ps.Pool);
+    <div class="fx-block">
+        <div class="run-bar">
+            <span class="muted">Offer reward (random) — draw</span>
+            <input type="number" value="@ps.Count" style="width:4rem"
+                   @onchange="e => Set(PoolOffer(offp.Reward, entries, AsInt(e.Value, ps.Count), offp.PickCount))" />
+            <span class="muted">then pick</span>
+            <input type="number" value="@offp.PickCount" style="width:4rem"
+                   @onchange="e => Set(PoolOffer(offp.Reward, entries, ps.Count, AsInt(e.Value, offp.PickCount)))" />
+            <input value="@offp.Reward.Value" style="width:8rem"
+                   @onchange="e => Set(PoolOffer(new RewardId(Reward(AsString(e.Value))), entries, ps.Count, offp.PickCount))" />
+            <button class="mini" @onclick="Remove">✕ reward</button>
+        </div>
+        @for (var oi = 0; oi < entries.Count; oi++)
+        {
+            var ox = oi;
+            var entry = entries[ox];
+            <div class="fx-body">
+                <span class="muted">weight</span>
+                <input type="number" value="@entry.Weight" style="width:4rem"
+                       @onchange="e => Set(PoolOffer(offp.Reward, WithEntryWeight(entries, ox, AsInt(e.Value, entry.Weight)), ps.Count, offp.PickCount))" />
+                <span class="muted">offer</span>
+                <input value="@entry.Offer.Id" style="width:8rem"
+                       @onchange="e => Set(PoolOffer(offp.Reward, WithEntryId(entries, ox, AsString(e.Value)), ps.Count, offp.PickCount))" />
+                <button class="mini" @onclick="() => Set(PoolOffer(offp.Reward, RemovedEntry(entries, ox), ps.Count, offp.PickCount))">✕ offer</button>
+                <div class="fx-body">
+                    <span class="muted">grants:</span>
+                    @Body(entry.Offer.Grant, nb => Set(PoolOffer(offp.Reward, WithEntryGrant(entries, ox, nb), ps.Count, offp.PickCount)))
+                </div>
+            </div>
+        }
+        <button class="mini" @onclick="() => Set(PoolOffer(offp.Reward, AppendEntry(entries), ps.Count, offp.PickCount))">+ offer</button>
+    </div>
+}
+else if (Request is DrawEffectsRunEffect or DrawManyEffectsRunEffect)
+{
+    var many = Request as DrawManyEffectsRunEffect;
+    var bundles = RelicRequests.BundlesOf(PoolOf(Request));
+    <div class="fx-block">
+        <div class="run-bar">
+            <span class="muted">Random — draw</span>
+            @if (many is not null)
+            {
+                <input type="number" value="@many.Count" style="width:4rem"
+                       @onchange="e => Set(Draw(bundles, AsInt(e.Value, many.Count)))" />
+            }
+            else
+            {
+                <span class="muted">1</span>
+            }
+            <span class="muted">of</span>
+            <button class="mini" @onclick="Remove">✕ random</button>
+        </div>
+        @for (var ei = 0; ei < bundles.Count; ei++)
+        {
+            var ex = ei;
+            var bundle = bundles[ex];
+            <div class="fx-body">
+                <span class="muted">weight</span>
+                <input type="number" value="@bundle.Weight" style="width:4rem"
+                       @onchange="e => Set(Draw(WithBundleWeight(bundles, ex, AsInt(e.Value, bundle.Weight)), null))" />
+                <button class="mini" @onclick="() => Set(Draw(RemovedBundle(bundles, ex), null))">✕ outcome</button>
+                <div class="fx-body">
+                    <span class="muted">grants:</span>
+                    @Body(bundle.Body, nb => Set(Draw(WithBundleBody(bundles, ex, nb), null)))
+                </div>
+            </div>
+        }
+        <button class="mini" @onclick="() => Set(Draw(AppendBundle(bundles), null))">+ outcome</button>
+    </div>
+}
+
+@code {
+    [Parameter] public IRunEffectRequest Request { get; set; } = default!;
+    [Parameter] public EventCallback<IRunEffectRequest> RequestChanged { get; set; }
+    [Parameter] public EventCallback Removed { get; set; }
+
+    // Passed straight through to every nested body (see RelicBodyEditor).
+    [Parameter] public Func<IRunEffectRequest, Action<IRunEffectRequest>, RenderFragment> LeafEditor { get; set; } = default!;
+    [Parameter] public Func<RelicAmountSpec, Action<RelicAmountSpec>, RenderFragment> AmountEditor { get; set; } = default!;
+    [Parameter] public Func<RelicConditionSpec, Action<RelicConditionSpec>, bool, RenderFragment> ConditionEditor { get; set; } = default!;
+
+    private static string AsString(object? v) => v?.ToString() ?? "";
+    private static int AsInt(object? v, int fallback) => int.TryParse(v?.ToString(), out var n) ? n : fallback;
+    private static string Reward(string s) => string.IsNullOrWhiteSpace(s) ? "reward" : s.Trim();
+
+    private void Set(IRunEffectRequest req) => _ = RequestChanged.InvokeAsync(req);
+    private void Remove() => _ = Removed.InvokeAsync();
+
+    // A nested body: renders through RelicBodyEditor with the injected widgets, folding its edits back into the
+    // enclosing request via `rebuild`.
+    private RenderFragment Body(IReadOnlyList<IRunEffectRequest> body, Action<IReadOnlyList<IRunEffectRequest>> rebuild) => builder =>
+    {
+        builder.OpenComponent<RelicBodyEditor>(0);
+        builder.AddComponentParameter(1, nameof(RelicBodyEditor.Body), body);
+        builder.AddComponentParameter(2, nameof(RelicBodyEditor.BodyChanged),
+            EventCallback.Factory.Create<IReadOnlyList<IRunEffectRequest>>(this, rebuild));
+        builder.AddComponentParameter(3, nameof(RelicBodyEditor.LeafEditor), LeafEditor);
+        builder.AddComponentParameter(4, nameof(RelicBodyEditor.AmountEditor), AmountEditor);
+        builder.AddComponentParameter(5, nameof(RelicBodyEditor.ConditionEditor), ConditionEditor);
+        builder.CloseComponent();
+    };
+
+    // ── fixed-offer rebuilds ────────────────────────────────────────────────────────
+    private static IRunEffectRequest FixedOffer(RewardId reward, IReadOnlyList<RewardOffer> offers, int pick) =>
+        new OfferRewardRunEffect(reward, offers, Math.Max(0, pick));
+
+    private static IReadOnlyList<RewardOffer> WithOfferId(IReadOnlyList<RewardOffer> offers, int ox, string id)
+    {
+        var list = offers.ToList();
+        list[ox] = list[ox] with { Id = string.IsNullOrWhiteSpace(id) ? list[ox].Id : id.Trim() };
+        return list;
+    }
+
+    private static IReadOnlyList<RewardOffer> WithOfferGrant(IReadOnlyList<RewardOffer> offers, int ox, IReadOnlyList<IRunEffectRequest> grant)
+    {
+        var list = offers.ToList();
+        list[ox] = list[ox] with { Grant = grant };
+        return list;
+    }
+
+    private static IReadOnlyList<RewardOffer> WithoutOffer(IReadOnlyList<RewardOffer> offers, int ox)
+    {
+        var list = offers.ToList();
+        list.RemoveAt(ox);
+        return list;
+    }
+
+    private static IReadOnlyList<RewardOffer> AppendOffer(IReadOnlyList<RewardOffer> offers)
+    {
+        var list = offers.ToList();
+        list.Add(new RewardOffer($"offer-{list.Count + 1}",
+            new IRunEffectRequest[] { new AddCardToDeckRunEffect(new CardDefinitionId("")) }));
+        return list;
+    }
+
+    // ── pool-offer rebuilds ─────────────────────────────────────────────────────────
+    private static IRunEffectRequest PoolOffer(RewardId reward, IReadOnlyList<RelicRequests.OfferEntry> entries, int drawCount, int pick)
+    {
+        var pool = RelicRequests.OfferPool(entries);
+        return new OfferRewardRunEffect(reward, new PoolRewardSource(pool, Math.Clamp(drawCount, 0, pool.Entries.Count)), Math.Max(0, pick));
+    }
+
+    private static IReadOnlyList<RelicRequests.OfferEntry> WithEntryWeight(IReadOnlyList<RelicRequests.OfferEntry> entries, int ox, int weight)
+    {
+        var list = entries.ToList();
+        list[ox] = list[ox] with { Weight = Math.Max(1, weight) };
+        return list;
+    }
+
+    private static IReadOnlyList<RelicRequests.OfferEntry> WithEntryId(IReadOnlyList<RelicRequests.OfferEntry> entries, int ox, string id)
+    {
+        var list = entries.ToList();
+        list[ox] = list[ox] with { Offer = list[ox].Offer with { Id = string.IsNullOrWhiteSpace(id) ? list[ox].Offer.Id : id.Trim() } };
+        return list;
+    }
+
+    private static IReadOnlyList<RelicRequests.OfferEntry> WithEntryGrant(IReadOnlyList<RelicRequests.OfferEntry> entries, int ox, IReadOnlyList<IRunEffectRequest> grant)
+    {
+        var list = entries.ToList();
+        list[ox] = list[ox] with { Offer = list[ox].Offer with { Grant = grant } };
+        return list;
+    }
+
+    private static IReadOnlyList<RelicRequests.OfferEntry> RemovedEntry(IReadOnlyList<RelicRequests.OfferEntry> entries, int ox)
+    {
+        if (entries.Count <= 1)
+            return entries; // a pool needs at least one offer
+        var list = entries.ToList();
+        list.RemoveAt(ox);
+        return list;
+    }
+
+    private static IReadOnlyList<RelicRequests.OfferEntry> AppendEntry(IReadOnlyList<RelicRequests.OfferEntry> entries)
+    {
+        var list = entries.ToList();
+        list.Add(new RelicRequests.OfferEntry(
+            new RewardOffer($"offer-{list.Count + 1}", new IRunEffectRequest[] { new AddCardToDeckRunEffect(new CardDefinitionId("")) }), 1));
+        return list;
+    }
+
+    // ── draw rebuilds ───────────────────────────────────────────────────────────────
+    private static RunPool<IReadOnlyList<IRunEffectRequest>> PoolOf(IRunEffectRequest draw) => draw switch
+    {
+        DrawEffectsRunEffect de => de.Pool,
+        DrawManyEffectsRunEffect dm => dm.Pool,
+        _ => RelicRequests.DefaultBundlePool(),
+    };
+
+    private IRunEffectRequest Draw(IReadOnlyList<RelicRequests.PoolBundle> bundles, int? count)
+    {
+        var pool = RelicRequests.BundlePool(bundles);
+        return Request is DrawManyEffectsRunEffect dm
+            ? new DrawManyEffectsRunEffect(pool, Math.Clamp(count ?? dm.Count, 0, pool.Entries.Count))
+            : new DrawEffectsRunEffect(pool);
+    }
+
+    private static IReadOnlyList<RelicRequests.PoolBundle> WithBundleWeight(IReadOnlyList<RelicRequests.PoolBundle> bundles, int ex, int weight)
+    {
+        var list = bundles.ToList();
+        list[ex] = list[ex] with { Weight = Math.Max(1, weight) };
+        return list;
+    }
+
+    private static IReadOnlyList<RelicRequests.PoolBundle> WithBundleBody(IReadOnlyList<RelicRequests.PoolBundle> bundles, int ex, IReadOnlyList<IRunEffectRequest> body)
+    {
+        var list = bundles.ToList();
+        list[ex] = list[ex] with { Body = body };
+        return list;
+    }
+
+    private static IReadOnlyList<RelicRequests.PoolBundle> RemovedBundle(IReadOnlyList<RelicRequests.PoolBundle> bundles, int ex)
+    {
+        if (bundles.Count <= 1)
+            return bundles; // a pool needs at least one outcome
+        var list = bundles.ToList();
+        list.RemoveAt(ex);
+        return list;
+    }
+
+    private static IReadOnlyList<RelicRequests.PoolBundle> AppendBundle(IReadOnlyList<RelicRequests.PoolBundle> bundles)
+    {
+        var list = bundles.ToList();
+        list.Add(new RelicRequests.PoolBundle(new IRunEffectRequest[] { RelicRequests.New("gold") }, 1));
+        return list;
+    }
+}
