@@ -8,7 +8,8 @@
    reward (a named bundle), Offer reward (player picks among fixed offers), and Offer reward (random) (draw N from a
    weighted pool, then pick) — plus random draws: Random draw / Random draw N distinct (weighted outcome pool).
    Nested bodies (control-flow branches, reward contents/offers, draw outcomes) hold the full amount/state/grant
-   leaf set AND nested control flow (Repeat / Conditional), so a body can itself branch or loop to arbitrary depth
+   leaf set AND nested blocks — control flow (Repeat / Conditional), rewards (Grant / Offer / Offer-random) and
+   random draws — so a body can itself branch, loop, grant/offer rewards and draw outcomes to arbitrary depth
    (BodyEditor recurses over the same IRunEffectRequest shape). Reactions the editor can't model (nested and/or
    conditions, advanced amounts, delegate/Func reward sources) are preserved and shown read-only so nothing is lost. *@
 
@@ -989,10 +990,11 @@
     };
 
     // Recursive editor for a control-flow BODY — a list of IRunEffectRequest resolved later. Each item renders as a
-    // leaf (RequestEditor) or, for a nested Repeat/Conditional, as a control-flow block whose sub-bodies recurse
-    // back into BodyEditor, so bodies nest to arbitrary depth. `setBody` replaces this whole list; callers compose
-    // it (a nested edit rebuilds every enclosing effect up to the reaction). `SetKey(ix)` keeps list diffing correct
-    // across edits despite the running sequence numbers. Used by every body holder (Repeat/Conditional/reward/draw).
+    // leaf (RequestEditor) or, for a nested block (Repeat/Conditional, GrantReward, OfferReward fixed/random, random
+    // draw), as a control-flow/reward/draw block whose sub-bodies recurse back into BodyEditor — so bodies nest to
+    // arbitrary depth AND may branch, loop, grant or offer rewards, and draw random outcomes. `setBody` replaces this
+    // whole list; callers compose it (a nested edit rebuilds every enclosing effect up to the reaction). `SetKey`
+    // keeps list diffing correct across edits despite the running sequence numbers. Used by every body holder.
     private RenderFragment BodyEditor(IReadOnlyList<IRunEffectRequest> body, Action<IReadOnlyList<IRunEffectRequest>> setBody) => builder =>
     {
         var seq = 0;
@@ -1039,9 +1041,30 @@
             builder.CloseElement();
         }
 
+        void TextInput(string value, int width, Action<string> onChange)
+        {
+            builder.OpenElement(seq++, "input");
+            builder.AddAttribute(seq++, "value", value);
+            builder.AddAttribute(seq++, "style", $"width:{width}rem");
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e => onChange(AsString(e.Value))));
+            builder.CloseElement();
+        }
+
+        void NumberInput(int value, Action<int> onChange)
+        {
+            builder.OpenElement(seq++, "input");
+            builder.AddAttribute(seq++, "type", "number");
+            builder.AddAttribute(seq++, "value", value);
+            builder.AddAttribute(seq++, "style", "width:4rem");
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e => onChange(AsInt(e.Value, value))));
+            builder.CloseElement();
+        }
+
         for (var i = 0; i < body.Count; i++)
         {
             var ix = i;
+            void SetItem(IRunEffectRequest req) => setBody(With(ix, req));
+
             switch (body[ix])
             {
                 case RepeatRunEffect rp:
@@ -1049,12 +1072,12 @@
                     Open("div", "run-bar");
                     Muted("Repeat");
                     builder.AddContent(seq++, AmountEditor(RelicAmounts.Classify(rp.Count),
-                        spec => setBody(With(ix, rp with { Count = RelicAmounts.Build(spec) }))));
+                        spec => SetItem(rp with { Count = RelicAmounts.Build(spec) })));
                     Muted("×");
                     MiniButton("✕ repeat", "remove", () => setBody(Without(ix)));
                     builder.CloseElement();
                     Open("div", "fx-body");
-                    builder.AddContent(seq++, BodyEditor(rp.Effects, nb => setBody(With(ix, rp with { Effects = nb }))));
+                    builder.AddContent(seq++, BodyEditor(rp.Effects, nb => SetItem(rp with { Effects = nb })));
                     builder.CloseElement();
                     builder.CloseElement();
                     break;
@@ -1064,26 +1087,231 @@
                     Open("div", "run-bar");
                     Muted("If");
                     builder.AddContent(seq++, ConditionEditor(RelicConditions.Classify(cnd.Condition),
-                        spec => setBody(With(ix, new ConditionalRunEffect(
-                            RelicConditions.Build(spec) ?? cnd.Condition, cnd.WhenTrue, cnd.WhenFalse))), allowNone: false));
+                        spec => SetItem(new ConditionalRunEffect(
+                            RelicConditions.Build(spec) ?? cnd.Condition, cnd.WhenTrue, cnd.WhenFalse)), allowNone: false));
                     MiniButton("✕ if", "remove", () => setBody(Without(ix)));
                     builder.CloseElement();
                     Open("div", "fx-body");
                     Muted("then:");
                     builder.AddContent(seq++, BodyEditor(cnd.WhenTrue,
-                        nb => setBody(With(ix, new ConditionalRunEffect(cnd.Condition, nb, cnd.WhenFalse)))));
+                        nb => SetItem(new ConditionalRunEffect(cnd.Condition, nb, cnd.WhenFalse))));
                     builder.CloseElement();
                     Open("div", "fx-body");
                     Muted("else:");
                     builder.AddContent(seq++, BodyEditor(cnd.WhenFalse,
-                        nb => setBody(With(ix, new ConditionalRunEffect(cnd.Condition, cnd.WhenTrue, nb)))));
+                        nb => SetItem(new ConditionalRunEffect(cnd.Condition, cnd.WhenTrue, nb))));
                     builder.CloseElement();
                     builder.CloseElement();
                     break;
 
+                case GrantRewardRunEffect gr:
+                    Open("div", "fx-block", ix);
+                    Open("div", "run-bar");
+                    Muted("Grant reward");
+                    TextInput(gr.Reward.Value, 8, s => SetItem(
+                        gr with { Reward = new RewardId(string.IsNullOrWhiteSpace(s) ? "reward" : s.Trim()) }));
+                    MiniButton("✕ reward", "remove", () => setBody(Without(ix)));
+                    builder.CloseElement();
+                    Open("div", "fx-body");
+                    Muted("contains:");
+                    builder.AddContent(seq++, BodyEditor(gr.Effects, nb => SetItem(gr with { Effects = nb })));
+                    builder.CloseElement();
+                    builder.CloseElement();
+                    break;
+
+                case OfferRewardRunEffect { Source: FixedRewardSource fs } off:
+                {
+                    var offers = fs.Offers;
+                    IRunEffectRequest Rebuild(RewardId reward, IReadOnlyList<RewardOffer> os, int pick) =>
+                        new OfferRewardRunEffect(reward, os, Math.Max(0, pick));
+
+                    Open("div", "fx-block", ix);
+                    Open("div", "run-bar");
+                    Muted("Offer reward");
+                    TextInput(off.Reward.Value, 8, s => SetItem(Rebuild(
+                        new RewardId(string.IsNullOrWhiteSpace(s) ? "reward" : s.Trim()), offers, off.PickCount)));
+                    Muted("pick");
+                    NumberInput(off.PickCount, n => SetItem(Rebuild(off.Reward, offers, n)));
+                    MiniButton("✕ reward", "remove", () => setBody(Without(ix)));
+                    builder.CloseElement();
+                    for (var o = 0; o < offers.Count; o++)
+                    {
+                        var ox = o;
+                        var offer = offers[ox];
+                        Open("div", "fx-body", $"offer-{ox}");
+                        Muted("offer");
+                        TextInput(offer.Id, 8, s =>
+                        {
+                            var list = offers.ToList();
+                            list[ox] = list[ox] with { Id = string.IsNullOrWhiteSpace(s) ? list[ox].Id : s.Trim() };
+                            SetItem(Rebuild(off.Reward, list, off.PickCount));
+                        });
+                        MiniButton("✕ offer", "remove offer", () =>
+                        {
+                            var list = offers.ToList();
+                            list.RemoveAt(ox);
+                            SetItem(Rebuild(off.Reward, list, off.PickCount));
+                        });
+                        Open("div", "fx-body");
+                        Muted("grants:");
+                        builder.AddContent(seq++, BodyEditor(offer.Grant, nb =>
+                        {
+                            var list = offers.ToList();
+                            list[ox] = list[ox] with { Grant = nb };
+                            SetItem(Rebuild(off.Reward, list, off.PickCount));
+                        }));
+                        builder.CloseElement();
+                        builder.CloseElement();
+                    }
+                    MiniButton("+ offer", "add offer", () =>
+                    {
+                        var list = offers.ToList();
+                        list.Add(new RewardOffer($"offer-{list.Count + 1}",
+                            new IRunEffectRequest[] { new AddCardToDeckRunEffect(new CardDefinitionId("")) }));
+                        SetItem(Rebuild(off.Reward, list, off.PickCount));
+                    });
+                    builder.CloseElement();
+                    break;
+                }
+
+                case OfferRewardRunEffect { Source: PoolRewardSource ps } off:
+                {
+                    var entries = RelicRequests.OfferEntriesOf(ps.Pool);
+                    IRunEffectRequest Rebuild(RewardId reward, IReadOnlyList<RelicRequests.OfferEntry> es, int drawCount, int pick)
+                    {
+                        var pool = RelicRequests.OfferPool(es);
+                        return new OfferRewardRunEffect(reward,
+                            new PoolRewardSource(pool, Math.Clamp(drawCount, 0, pool.Entries.Count)), Math.Max(0, pick));
+                    }
+
+                    Open("div", "fx-block", ix);
+                    Open("div", "run-bar");
+                    Muted("Offer reward (random) — draw");
+                    NumberInput(ps.Count, n => SetItem(Rebuild(off.Reward, entries, n, off.PickCount)));
+                    Muted("then pick");
+                    NumberInput(off.PickCount, n => SetItem(Rebuild(off.Reward, entries, ps.Count, n)));
+                    TextInput(off.Reward.Value, 8, s => SetItem(Rebuild(
+                        new RewardId(string.IsNullOrWhiteSpace(s) ? "reward" : s.Trim()), entries, ps.Count, off.PickCount)));
+                    MiniButton("✕ reward", "remove", () => setBody(Without(ix)));
+                    builder.CloseElement();
+                    for (var o = 0; o < entries.Count; o++)
+                    {
+                        var ox = o;
+                        var entry = entries[ox];
+                        Open("div", "fx-body", $"offer-{ox}");
+                        Muted("weight");
+                        NumberInput(entry.Weight, n =>
+                        {
+                            var list = entries.ToList();
+                            list[ox] = list[ox] with { Weight = Math.Max(1, n) };
+                            SetItem(Rebuild(off.Reward, list, ps.Count, off.PickCount));
+                        });
+                        Muted("offer");
+                        TextInput(entry.Offer.Id, 8, s =>
+                        {
+                            var list = entries.ToList();
+                            list[ox] = list[ox] with { Offer = list[ox].Offer with { Id = string.IsNullOrWhiteSpace(s) ? list[ox].Offer.Id : s.Trim() } };
+                            SetItem(Rebuild(off.Reward, list, ps.Count, off.PickCount));
+                        });
+                        MiniButton("✕ offer", "remove offer", () =>
+                        {
+                            if (entries.Count <= 1)
+                                return; // a pool needs at least one offer
+                            var list = entries.ToList();
+                            list.RemoveAt(ox);
+                            SetItem(Rebuild(off.Reward, list, ps.Count, off.PickCount));
+                        });
+                        Open("div", "fx-body");
+                        Muted("grants:");
+                        builder.AddContent(seq++, BodyEditor(entry.Offer.Grant, nb =>
+                        {
+                            var list = entries.ToList();
+                            list[ox] = list[ox] with { Offer = list[ox].Offer with { Grant = nb } };
+                            SetItem(Rebuild(off.Reward, list, ps.Count, off.PickCount));
+                        }));
+                        builder.CloseElement();
+                        builder.CloseElement();
+                    }
+                    MiniButton("+ offer", "add offer", () =>
+                    {
+                        var list = entries.ToList();
+                        list.Add(new RelicRequests.OfferEntry(
+                            new RewardOffer($"offer-{list.Count + 1}",
+                                new IRunEffectRequest[] { new AddCardToDeckRunEffect(new CardDefinitionId("")) }), 1));
+                        SetItem(Rebuild(off.Reward, list, ps.Count, off.PickCount));
+                    });
+                    builder.CloseElement();
+                    break;
+                }
+
+                case DrawEffectsRunEffect or DrawManyEffectsRunEffect:
+                {
+                    var draw = body[ix];
+                    var many = draw as DrawManyEffectsRunEffect;
+                    var pool = many is not null ? many.Pool : ((DrawEffectsRunEffect)draw).Pool;
+                    var bundles = RelicRequests.BundlesOf(pool);
+                    IRunEffectRequest Rebuild(IReadOnlyList<RelicRequests.PoolBundle> bs, int? count)
+                    {
+                        var p = RelicRequests.BundlePool(bs);
+                        return many is not null
+                            ? new DrawManyEffectsRunEffect(p, Math.Clamp(count ?? many.Count, 0, p.Entries.Count))
+                            : new DrawEffectsRunEffect(p);
+                    }
+
+                    Open("div", "fx-block", ix);
+                    Open("div", "run-bar");
+                    Muted("Random — draw");
+                    if (many is not null)
+                        NumberInput(many.Count, n => SetItem(Rebuild(bundles, n)));
+                    else
+                        Muted("1");
+                    Muted("of");
+                    MiniButton("✕ random", "remove", () => setBody(Without(ix)));
+                    builder.CloseElement();
+                    for (var e = 0; e < bundles.Count; e++)
+                    {
+                        var ex = e;
+                        var bundle = bundles[ex];
+                        Open("div", "fx-body", $"outcome-{ex}");
+                        Muted("weight");
+                        NumberInput(bundle.Weight, n =>
+                        {
+                            var list = bundles.ToList();
+                            list[ex] = list[ex] with { Weight = Math.Max(1, n) };
+                            SetItem(Rebuild(list, null));
+                        });
+                        MiniButton("✕ outcome", "remove outcome", () =>
+                        {
+                            if (bundles.Count <= 1)
+                                return; // a pool needs at least one outcome
+                            var list = bundles.ToList();
+                            list.RemoveAt(ex);
+                            SetItem(Rebuild(list, null));
+                        });
+                        Open("div", "fx-body");
+                        Muted("grants:");
+                        builder.AddContent(seq++, BodyEditor(bundle.Body, nb =>
+                        {
+                            var list = bundles.ToList();
+                            list[ex] = list[ex] with { Body = nb };
+                            SetItem(Rebuild(list, null));
+                        }));
+                        builder.CloseElement();
+                        builder.CloseElement();
+                    }
+                    MiniButton("+ outcome", "add outcome", () =>
+                    {
+                        var list = bundles.ToList();
+                        list.Add(new RelicRequests.PoolBundle(new IRunEffectRequest[] { RelicRequests.New("gold") }, 1));
+                        SetItem(Rebuild(list, null));
+                    });
+                    builder.CloseElement();
+                    break;
+                }
+
                 default:
                     Open("span", "fx", ix);
-                    builder.AddContent(seq++, RequestEditor(body[ix], req => setBody(With(ix, req))));
+                    builder.AddContent(seq++, RequestEditor(body[ix], req => SetItem(req)));
                     MiniButton("✕", "remove", () => setBody(Without(ix)));
                     builder.CloseElement();
                     break;

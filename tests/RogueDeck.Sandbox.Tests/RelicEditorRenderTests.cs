@@ -74,4 +74,40 @@ public class RelicEditorRenderTests
         Assert.Contains("else:", html);
         Assert.DoesNotContain("advanced reaction", html);
     }
+
+    [Fact]
+    public async Task RendersNestedRewardsAndDrawsInABodyWithoutError()
+    {
+        // Repeat 2× { Grant reward{ +gold }, Offer reward(fixed), Offer reward(random/pool), Random draw N } — every
+        // reward/draw kind nested inside a control-flow body, the recursion this change adds. Each must render its
+        // header + contents (BodyEditor's new manual-builder cases), not fall to the read-only fallback. Guards the
+        // hand-written render tree (open/close balance, SetKey) for the reward/draw blocks specifically.
+        var body = new[]
+        {
+            RelicRequests.New("grantreward"),
+            RelicRequests.New("offerreward"),
+            RelicRequests.New("offerpool"),
+            RelicRequests.New("drawmany"),
+        };
+        var repeat = new LiteralEffectTemplate(new RepeatRunEffect(RunExpr.Const(2), body));
+        var relic = new RelicData
+        {
+            Id = "rewards",
+            DisplayName = "Rewards",
+            RunPrograms = new[] { RunPrograms.On<NodeEnteredRunEvent>(new IRunEffectTemplate[] { repeat }) },
+        };
+
+        var html = await RenderAsync(BlueprintWith(relic));
+
+        // Each block's headers/contents render (the em-dash in "Random — draw" HTML-encodes, so match around it).
+        Assert.Contains("Grant reward", html);
+        Assert.Contains("contains:", html);
+        Assert.Contains("Offer reward", html);
+        Assert.Contains("Offer reward (random)", html);
+        Assert.Contains("then pick", html);
+        Assert.Contains("Random", html);
+        Assert.Contains("outcome", html);
+        Assert.Contains("weight", html);
+        Assert.DoesNotContain("advanced reaction", html);
+    }
 }

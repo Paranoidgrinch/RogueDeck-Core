@@ -17,7 +17,9 @@ public static class RelicRequests
 {
     // The body-effect kinds offered as "+ …" buttons inside a Repeat/Conditional branch, a reward's contents, a
     // draw outcome or an offer grant (key → label). Covers the amount/state leaves, the grant leaves (a card, a
-    // relic, a consumable) plus nested control flow (Repeat / Conditional) so a body can itself branch or loop.
+    // relic, a consumable), nested control flow (Repeat / Conditional), and nested rewards / random draws (Grant
+    // reward, Offer reward fixed/random, Random draw / draw N) — so a body can itself branch, loop, grant/offer
+    // rewards and draw outcomes.
     public static readonly (string Kind, string Label)[] Kinds =
     {
         ("gold", "Gold"),
@@ -37,6 +39,11 @@ public static class RelicRequests
         ("consumable", "Consumable"),
         ("repeat", "Repeat…"),
         ("conditional", "If…"),
+        ("grantreward", "Grant reward…"),
+        ("offerreward", "Offer reward…"),
+        ("offerpool", "Offer reward (random)…"),
+        ("draw", "Random draw…"),
+        ("drawmany", "Random draw N…"),
     };
 
     public static IRunEffectRequest New(string kind) => kind switch
@@ -65,6 +72,20 @@ public static class RelicRequests
             RelicConditions.Build(new RelicConditionSpec("compare"))!,
             new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 5) },
             Array.Empty<IRunEffectRequest>()),
+        // Nested rewards / random draws: same IRunEffectRequests as the top-level templates, defaults mirror them.
+        "grantreward" => new GrantRewardRunEffect(new RewardId("reward"),
+            new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 10) }),
+        "offerreward" => new OfferRewardRunEffect(new RewardId("reward"),
+            new RewardOffer[]
+            {
+                new("offer-1", new IRunEffectRequest[] { new AddCardToDeckRunEffect(new CardDefinitionId("")) }),
+                new("offer-2", new IRunEffectRequest[] { new ChangeResourceRunEffect(StandardRunIds.Gold, 20) }),
+            },
+            pickCount: 1),
+        "offerpool" => new OfferRewardRunEffect(new RewardId("reward"),
+            new PoolRewardSource(DefaultOfferPool(), 2), pickCount: 1),
+        "draw" => new DrawEffectsRunEffect(DefaultBundlePool()),
+        "drawmany" => new DrawManyEffectsRunEffect(DefaultBundlePool(), 1),
         _ => new ChangeMaxHealthRunEffect(0),
     };
 
@@ -84,6 +105,13 @@ public static class RelicRequests
         RepeatRunEffect rp => !RelicAmounts.IsAdvanced(rp.Count) && rp.Effects.All(IsEditable),
         ConditionalRunEffect cnd => !RelicConditions.IsAdvanced(cnd.Condition)
             && cnd.WhenTrue.All(IsEditable) && cnd.WhenFalse.All(IsEditable),
+        // Nested rewards / draws are editable iff every effect they bundle is recursively editable (a fixed offer's
+        // grants, a pool offer's grants, a draw outcome's body). Delegate/Func reward sources stay non-editable.
+        GrantRewardRunEffect gr => gr.Effects.All(IsEditable),
+        OfferRewardRunEffect { Source: FixedRewardSource fs } => fs.Offers.All(o => o.Grant.All(IsEditable)),
+        OfferRewardRunEffect { Source: PoolRewardSource ps } => OfferPoolEditable(ps.Pool),
+        DrawEffectsRunEffect de => BundlePoolEditable(de.Pool),
+        DrawManyEffectsRunEffect dm => BundlePoolEditable(dm.Pool),
         _ => false,
     };
 

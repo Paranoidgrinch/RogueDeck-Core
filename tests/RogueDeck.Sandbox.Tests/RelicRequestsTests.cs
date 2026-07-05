@@ -27,6 +27,11 @@ public class RelicRequestsTests
     [InlineData("consumable")]
     [InlineData("repeat")]
     [InlineData("conditional")]
+    [InlineData("grantreward")]
+    [InlineData("offerreward")]
+    [InlineData("offerpool")]
+    [InlineData("draw")]
+    [InlineData("drawmany")]
     public void NewDefaults_AreAllEditable(string kind)
     {
         Assert.True(RelicRequests.IsEditable(RelicRequests.New(kind)));
@@ -84,6 +89,25 @@ public class RelicRequestsTests
                 new IRunEffectRequest[] { RelicRequests.New("heal") }),
         });
         Assert.True(RelicRequests.IsEditable(nested));
+    }
+
+    [Fact]
+    public void IsEditable_RecursesIntoNestedRewardsAndDraws()
+    {
+        // Rewards and random draws may nest in a body too, and their editability recurses through their bundled
+        // effects: a GrantReward containing a random Draw whose outcomes are leaves round-trips end-to-end.
+        var draw = RelicRequests.New("draw");
+        Assert.True(RelicRequests.IsEditable(draw));
+        var grant = new GrantRewardRunEffect(new RewardId("r"), new IRunEffectRequest[] { draw });
+        Assert.True(RelicRequests.IsEditable(grant));
+
+        // An offer (fixed or random) whose every grant is a leaf is editable; an un-modellable grant pins it.
+        Assert.True(RelicRequests.IsEditable(RelicRequests.New("offerreward")));
+        Assert.True(RelicRequests.IsEditable(RelicRequests.New("offerpool")));
+        var badOffer = new OfferRewardRunEffect(new RewardId("r"),
+            new RewardOffer[] { new("o", new IRunEffectRequest[] { new ComputedHealRunEffect(RunExpr.Add(RunExpr.CurrentHealth, RunExpr.Const(1))) }) },
+            pickCount: 1);
+        Assert.False(RelicRequests.IsEditable(badOffer));
     }
 
     [Fact]
