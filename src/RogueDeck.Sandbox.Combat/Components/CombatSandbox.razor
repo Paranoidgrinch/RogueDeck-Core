@@ -1,5 +1,5 @@
 @rendermode InteractiveServer
-@inject CombatDraft Draft
+@inject ProjectDraft Draft
 
 <h1>RogueDeck Sandbox</h1>
 <p class="muted">
@@ -486,9 +486,9 @@ else
 </style>
 
 @code {
-    // The authored model lives in the circuit-scoped CombatDraft so switching tabs keeps it (see CombatDraft).
-    private SandboxModel _model { get => Draft.Model!; set => Draft.Model = value; }
-    protected override void OnInitialized() => Draft.Model ??= DemoModel();
+    // The authored model lives in the circuit-scoped ProjectDraft so switching tabs keeps it (see ProjectDraft).
+    private SandboxModel _model { get => Draft.Combat!; set => Draft.Combat = value; }
+    protected override void OnInitialized() => Draft.Combat ??= DemoModel();
     private string? _log;
     private string? _error;
     private InteractiveCombat? _combat;

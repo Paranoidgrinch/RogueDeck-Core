@@ -1,8 +1,7 @@
 @rendermode InteractiveServer
 @implements IAsyncDisposable
 @inject IJSRuntime JS
-@inject RunDraft Draft
-@inject CombatDraft CombatDraft
+@inject ProjectDraft Draft
 
 <h1>RogueDeck Run Sandbox</h1>
 <p class="muted">
@@ -262,8 +261,8 @@
     private static readonly EncounterId GoblinFight = new("goblin-fight");
 
     private readonly JsonSerializerOptions _options = RunJson.CreateOptions();
-    // The run document lives in the circuit-scoped RunDraft so switching tabs keeps it (see RunDraft).
-    private string _json { get => Draft.Json ?? ""; set => Draft.Json = value; }
+    // The run document lives in the circuit-scoped ProjectDraft so switching tabs keeps it (see ProjectDraft).
+    private string _json { get => Draft.RunJson ?? ""; set => Draft.RunJson = value; }
     private int _seed = 1;
     private InteractiveRunSession? _session;
     private string? _error;
@@ -342,7 +341,7 @@
     {
         _importMsg = null;
         _error = null;
-        var model = CombatDraft.Model;
+        var model = Draft.Combat;
         if (model is null || model.Hero is null || model.Enemies.Count == 0)
         {
             _importMsg = "Define a hero and at least one enemy in the Combat tab first.";
@@ -382,7 +381,7 @@
 
     protected override void OnInitialized()
     {
-        Draft.Json ??= RunJson.ToJson(DemoBlueprint(), _options);
+        Draft.RunJson ??= RunJson.ToJson(DemoBlueprint(), _options);
         if (TryBlueprint(out var bp))
             _importEncounterId = CombatImport.SuggestEncounterId(bp);
     }

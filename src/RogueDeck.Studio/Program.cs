@@ -1,5 +1,4 @@
 using RogueDeck.Sandbox.Composition;
-using RogueDeck.Sandbox.Run;
 using RogueDeck.Studio.Components;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -15,10 +14,8 @@ builder.WebHost.UseStaticWebAssets();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-// Circuit-scoped working state so switching between the Combat / Run / Cards tabs keeps each tab's document.
-builder.Services.AddScoped<CombatDraft>();
-builder.Services.AddScoped<CardDraft>();
-builder.Services.AddScoped<RunDraft>();
+// One circuit-scoped project document so switching between the Combat / Run / Cards tabs keeps each tab's slice.
+builder.Services.AddScoped<ProjectDraft>();
 
 var app = builder.Build();
 
