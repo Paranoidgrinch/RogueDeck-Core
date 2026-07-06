@@ -423,10 +423,13 @@
                 .SelectMany(encounter => encounter.Enemies)
                 .GroupBy(enemy => enemy.Id)
                 .ToDictionary(g => g.Key, g => g.First().DisplayName ?? g.Key);
-            // The run has a single hero across encounters; take the first authored hero name (else fall back to "You").
-            _heroName = blueprint.Encounters
-                .Select(encounter => encounter.HeroDisplayName)
-                .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name));
+            // The run has a single hero across encounters; prefer the blueprint's authored hero name, else the first
+            // encounter's hero name (else fall back to "You").
+            _heroName = !string.IsNullOrWhiteSpace(blueprint.Start.HeroName)
+                ? blueprint.Start.HeroName
+                : blueprint.Encounters
+                    .Select(encounter => encounter.HeroDisplayName)
+                    .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name));
 
             // Interactive: a driver that hands each fight to the player (Current/Changed); headless: auto-resolve.
             ICombatDriver driver;
@@ -445,9 +448,7 @@
             new StandardRunPackage(driver, content).RegisterDefinitions(defs);
             var registry = defs.Build();
 
-            var run = new RunState(new RunId("demo"), new HealthState(30, 40), blueprint.Map, randomSeed: _seed);
-            foreach (var card in blueprint.Deck)
-                run.AddDeckCard(card);
+            var run = blueprint.CreateInitialRun(new RunId("demo"), _seed);
 
             var session = new InteractiveRunSession(run, registry, content);
             session.Changed += OnSessionChanged;
@@ -478,9 +479,7 @@
             long totalGold = 0;
             for (var seed = 1; seed <= runs; seed++)
             {
-                var run = new RunState(new RunId($"sim{seed}"), new HealthState(30, 40), blueprint.Map, randomSeed: seed);
-                foreach (var card in blueprint.Deck)
-                    run.AddDeckCard(card);
+                var run = blueprint.CreateInitialRun(new RunId($"sim{seed}"), seed);
                 new RunRunner(registry, new ScriptedChoiceProvider(), content: content).Run(run);
                 if (run.Result == RunResult.Victory)
                     wins++;

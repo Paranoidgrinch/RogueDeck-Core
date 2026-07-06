@@ -79,6 +79,43 @@ public class RunBlueprintTests
     }
 
     [Fact]
+    public void RunStart_round_trips_and_seeds_the_initial_run()
+    {
+        var blueprint = Demo() with
+        {
+            Start = new RunStart
+            {
+                HeroName = "Ironclad",
+                MaxHealth = 80,
+                StartingHealth = 72,
+                Resources = new Dictionary<string, int> { [Gold.Value] = 99 },
+            },
+        };
+
+        var back = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(blueprint, Options), Options);
+
+        Assert.Equal("Ironclad", back.Start.HeroName);
+        Assert.Equal(80, back.Start.MaxHealth);
+        Assert.Equal(72, back.Start.StartingHealth);
+        Assert.Equal(99, back.Start.Resources[Gold.Value]);
+
+        var run = back.CreateInitialRun(new RunId("t"), randomSeed: 1);
+        Assert.Equal(72, run.Health.Current);
+        Assert.Equal(80, run.Health.Max);
+        Assert.Equal(99, run.GetResource(Gold));
+        Assert.Equal(5, run.Deck.Count); // the demo deck (5 smites)
+    }
+
+    [Fact]
+    public void Default_RunStart_reproduces_the_historical_hard_coded_start()
+    {
+        var run = Demo().CreateInitialRun(new RunId("t"), randomSeed: 1);
+
+        Assert.Equal(30, run.Health.Current);
+        Assert.Equal(40, run.Health.Max);
+    }
+
+    [Fact]
     public void A_deserialized_blueprint_builds_and_runs_events_and_combat()
     {
         var blueprint = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(Demo(), Options), Options);

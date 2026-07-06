@@ -24,4 +24,21 @@ public sealed record RunBlueprint(
     // Relics the run defines as data (a relic = run-level triggered programs). Registered into the content so an
     // event that grants one by id resolves it. An init property, like Statuses, to keep constructions unchanged.
     public IReadOnlyList<RelicData> Relics { get; init; } = [];
+
+    // The run's starting state — hero identity + how the RunState is seeded (health, resources). Previously the
+    // sandbox hard-coded HP 30/40 and an empty inventory; carrying it here makes the run's opening data too. An init
+    // property with a default that reproduces the old hard-coded start, so existing blueprints are unaffected.
+    public RunStart Start { get; init; } = new();
+}
+
+// The authored opening state of a run: the hero's display name, starting/maximum health, and starting resources
+// (resource id → amount, e.g. gold). Kept flat + init-only so it round-trips through RunJson like the rest of the
+// blueprint. Starting relics/consumables are a later slice (they need content resolution); the default reproduces
+// the sandbox's historical hard-coded start (HP 30/40, empty resources).
+public sealed record RunStart
+{
+    public string HeroName { get; init; } = "Hero";
+    public int MaxHealth { get; init; } = 40;
+    public int StartingHealth { get; init; } = 30;
+    public IReadOnlyDictionary<string, int> Resources { get; init; } = new Dictionary<string, int>();
 }
