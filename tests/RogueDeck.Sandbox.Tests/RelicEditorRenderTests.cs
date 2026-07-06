@@ -114,8 +114,9 @@ public class RelicEditorRenderTests
     [Fact]
     public async Task RendersCombatRulesSectionForARelic()
     {
-        // Face (b) UI (R2): a relic with a combat rule renders the Combat-rules section — trigger select, priority,
-        // and the effect program serialized into a JSON textarea (the default turn-start rule gains block).
+        // Face (b) UI (R2 + R4): a relic with a combat rule renders the Combat-rules section — trigger select,
+        // priority, and (since the default turn-start rule is inside the editable subset) the VISUAL controls
+        // (node / selector / amount dropdowns), not the JSON textarea.
         var relic = new RelicData
         {
             Id = "aegis",
@@ -135,8 +136,40 @@ public class RelicEditorRenderTests
 
         Assert.Contains("Combat rules", html);
         Assert.Contains("turnStarted", html);
-        Assert.Contains("program (JSON", html);
         Assert.Contains("combat rule", html); // the add button ("+" HTML-encodes)
-        Assert.Contains("node.gainBlock", html); // the default program, serialized into the textarea
+        // Visual editor: node/selector/amount options + the escape hatch, NOT the JSON textarea.
+        Assert.Contains("gain block", html);
+        Assert.Contains("deal damage", html);
+        Assert.Contains("event amount", html);
+        Assert.Contains("edit as JSON", html);
+        Assert.DoesNotContain("program (JSON", html);
+    }
+
+    [Fact]
+    public async Task RendersJsonEditorForNonSimpleCombatRule()
+    {
+        // R4 escape: a combat rule whose program is OUTSIDE the editable subset (here an arithmetic amount) has no
+        // SimpleProgram, so the editor keeps the JSON textarea and offers to switch to the visual editor is absent.
+        var program = new EffectProgram<TurnStartedTriggeredEffectContext>(
+            new GainBlockNode<TurnStartedTriggeredEffectContext>(
+                CombatantTargetSelectors.Source,
+                new AddExpression<TurnStartedTriggeredEffectContext>(
+                    new ConstantExpression<TurnStartedTriggeredEffectContext>(1),
+                    new ConstantExpression<TurnStartedTriggeredEffectContext>(2))));
+        var relic = new RelicData
+        {
+            Id = "arith",
+            DisplayName = "Arith",
+            CombatRules = new[]
+            {
+                new RelicCombatRule { Trigger = "turnStarted", Program = program, Priority = 0 },
+            },
+        };
+
+        var html = await RenderAsync(BlueprintWith(relic));
+
+        Assert.Contains("program (JSON", html);
+        Assert.Contains("node.gainBlock", html); // the program serialized into the textarea
+        Assert.DoesNotContain("edit as JSON", html);
     }
 }

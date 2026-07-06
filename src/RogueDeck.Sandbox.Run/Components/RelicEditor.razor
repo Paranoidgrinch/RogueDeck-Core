@@ -132,13 +132,54 @@
                             <span class="muted">priority</span>
                             <input type="number" value="@rule.Priority" style="width:4rem"
                                    @onchange="e => SetRulePriority(relicIndex, ruleIndex, AsInt(e.Value, rule.Priority))" />
+                            @{ var simple = _jsonRules.Contains((relicIndex, ruleIndex)) ? null : SimpleOf(rule); }
+                            @if (simple is not null)
+                            {
+                                <button class="mini" @onclick="() => SetRuleJsonMode(relicIndex, ruleIndex, true)">edit as JSON</button>
+                            }
+                            else if (SimpleOf(rule) is not null)
+                            {
+                                <button class="mini" @onclick="() => SetRuleJsonMode(relicIndex, ruleIndex, false)">visual editor</button>
+                            }
                             <button class="mini" @onclick="() => RemoveCombatRule(relicIndex, ruleIndex)">✕ rule</button>
                         </div>
-                        <div class="fx-body">
-                            <span class="muted">program (JSON — edit &amp; blur to apply):</span>
-                            <textarea rows="6" style="width:100%;font-family:monospace"
-                                      @onchange="e => SetRuleProgram(relicIndex, ruleIndex, AsString(e.Value))">@ProgramJson(rule)</textarea>
-                        </div>
+                        @if (simple is { } spec)
+                        {
+                            <div class="run-bar">
+                                <select value="@spec.NodeKind" @onchange="e => SetRuleNode(relicIndex, ruleIndex, AsString(e.Value))">
+                                    @foreach (var kind in Enum.GetValues<SimpleNodeKind>())
+                                    {
+                                        <option value="@kind">@NodeLabel(kind)</option>
+                                    }
+                                </select>
+                                <select value="@spec.SelectorKey" @onchange="e => SetRuleSelector(relicIndex, ruleIndex, AsString(e.Value))">
+                                    @foreach (var key in SimpleCombatProgram.SelectorKeys)
+                                    {
+                                        <option value="@key">@key</option>
+                                    }
+                                </select>
+                                <span class="muted">amount</span>
+                                <select value="@spec.AmountKind" @onchange="e => SetRuleAmountKind(relicIndex, ruleIndex, AsString(e.Value))">
+                                    @foreach (var kind in Enum.GetValues<SimpleAmountKind>())
+                                    {
+                                        <option value="@kind">@AmountLabel(kind)</option>
+                                    }
+                                </select>
+                                @if (spec.AmountKind == SimpleAmountKind.Const)
+                                {
+                                    <input type="number" value="@spec.Const" style="width:4rem"
+                                           @onchange="e => SetRuleConst(relicIndex, ruleIndex, AsInt(e.Value, spec.Const))" />
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="fx-body">
+                                <span class="muted">program (JSON — edit &amp; blur to apply):</span>
+                                <textarea rows="6" style="width:100%;font-family:monospace"
+                                          @onchange="e => SetRuleProgram(relicIndex, ruleIndex, AsString(e.Value))">@ProgramJson(rule)</textarea>
+                            </div>
+                        }
                     </div>
                 }
                 @if (_combatRuleError is { } err)
@@ -307,6 +348,7 @@
     private Task RemoveCombatRule(int relicIndex, int ruleIndex)
     {
         _combatRuleError = null;
+        _jsonRules.Clear(); // indices shift after a removal — drop the (index-keyed) JSON-mode pins
         return EditCombatRules(relicIndex, rules =>
         {
             if (ruleIndex >= 0 && ruleIndex < rules.Count)
@@ -330,6 +372,7 @@
         _combatRuleError = null;
         if (!RelicCombatTriggers.TryGet(triggerKey, out var trigger))
             return Task.CompletedTask;
+        _jsonRules.Remove((relicIndex, ruleIndex)); // the reset program is the trigger's (visual) default
         return EditCombatRules(relicIndex, rules =>
         {
             if (ruleIndex >= 0 && ruleIndex < rules.Count)
@@ -367,6 +410,68 @@
             return Task.CompletedTask;
         }
     }
+
+    // ── combat rules: visual (SimpleProgram) editor (R4) ─────────────────────────
+    // A rule whose program falls inside the editable subset (single leaf node × selector × const|event amount) gets
+    // dropdowns instead of the JSON textarea; a per-rule "edit as JSON" toggle forces the escape. _jsonRules holds
+    // the (relic, rule) indices the user pinned to JSON; it's cleared on any structural change (remove / trigger
+    // change) since those shift indices or reset the program to a fresh (visual) default.
+    private readonly HashSet<(int Relic, int Rule)> _jsonRules = new();
+
+    private static SimpleProgram? SimpleOf(RelicCombatRule rule) =>
+        RelicCombatTriggers.TryGet(rule.Trigger, out var trigger) ? trigger.ToSimple(rule.Program) : null;
+
+    private static string NodeLabel(SimpleNodeKind kind) => kind switch
+    {
+        SimpleNodeKind.GainBlock => "gain block",
+        SimpleNodeKind.Heal => "heal",
+        SimpleNodeKind.DealDamage => "deal damage",
+        _ => kind.ToString(),
+    };
+
+    private static string AmountLabel(SimpleAmountKind kind) => kind switch
+    {
+        SimpleAmountKind.Const => "constant",
+        SimpleAmountKind.EventAmount => "event amount",
+        _ => kind.ToString(),
+    };
+
+    private void SetRuleJsonMode(int relicIndex, int ruleIndex, bool json)
+    {
+        if (json)
+            _jsonRules.Add((relicIndex, ruleIndex));
+        else
+            _jsonRules.Remove((relicIndex, ruleIndex));
+    }
+
+    // Rebuild the rule's program from an edited SimpleProgram via the trigger (fixes the context). The four setters
+    // read the current spec, apply one `with`, and route through here so a single place does the FromSimple build.
+    private Task SetRuleSimple(int relicIndex, int ruleIndex, Func<SimpleProgram, SimpleProgram> edit)
+    {
+        _combatRuleError = null;
+        return EditCombatRules(relicIndex, rules =>
+        {
+            if (ruleIndex >= 0 && ruleIndex < rules.Count
+                && RelicCombatTriggers.TryGet(rules[ruleIndex].Trigger, out var trigger)
+                && trigger.ToSimple(rules[ruleIndex].Program) is { } spec)
+            {
+                rules[ruleIndex] = rules[ruleIndex] with { Program = trigger.FromSimple(edit(spec)) };
+            }
+            return rules;
+        });
+    }
+
+    private Task SetRuleNode(int relicIndex, int ruleIndex, string node) =>
+        SetRuleSimple(relicIndex, ruleIndex, s => s with { NodeKind = Enum.Parse<SimpleNodeKind>(node) });
+
+    private Task SetRuleSelector(int relicIndex, int ruleIndex, string selector) =>
+        SetRuleSimple(relicIndex, ruleIndex, s => s with { SelectorKey = selector });
+
+    private Task SetRuleAmountKind(int relicIndex, int ruleIndex, string amount) =>
+        SetRuleSimple(relicIndex, ruleIndex, s => s with { AmountKind = Enum.Parse<SimpleAmountKind>(amount) });
+
+    private Task SetRuleConst(int relicIndex, int ruleIndex, int value) =>
+        SetRuleSimple(relicIndex, ruleIndex, s => s with { Const = value });
 
     // ── relic level ─────────────────────────────────────────────────────────────
     private Task SetRelicId(int relicIndex, string id) =>
