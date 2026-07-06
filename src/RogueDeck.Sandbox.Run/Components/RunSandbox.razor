@@ -5,10 +5,12 @@
 
 <h1>RogueDeck Run Sandbox</h1>
 <p class="muted">
-    A whole run authored as <strong>data</strong>: the starting deck, the events, and the map are a JSON
-    RunBlueprint you can edit below. The combat content (cards, the goblin encounter) and relics are provided by
-    code and referenced by id. Press <strong>Load &amp; drive</strong>, then click a choice at each event to
-    step through it; fights are played headlessly by the auto-play driver.
+    Assemble and drive the whole run. Its content — the hero, cards &amp; deck, enemies, encounters, relics and
+    events — is authored in the dedicated tabs; they all edit the one shared <strong>RunBlueprint</strong> shown
+    below. Here you arrange the <strong>map</strong> from that content, then press <strong>Load &amp; drive</strong>
+    to play through it (click a choice at each event; fights auto-resolve, or tick the box to play them yourself),
+    or <strong>Simulate</strong> to balance it over many seeds. The JSON is the whole document — edit it directly
+    for anything the tabs don't cover.
 </p>
 
 <div class="grid">
@@ -114,10 +116,6 @@
             <p class="muted">Relics, resources, and consumables start empty — the hero gains them from events
                 during the run.</p>
         </section>
-
-        <EncounterEditor Blueprint="editorBlueprint" BlueprintChanged="ApplyBlueprint" />
-        <RelicEditor Blueprint="editorBlueprint" BlueprintChanged="ApplyBlueprint" />
-        <EventEditor Blueprint="editorBlueprint" BlueprintChanged="ApplyBlueprint" />
     }
 
     @if (_session is { } session)
@@ -327,10 +325,6 @@
         (nodes[index], nodes[target]) = (nodes[target], nodes[index]);
         RebuildMap(blueprint, nodes);
     }
-
-    // Applied by the encounter/event editors: they hand back a mutated blueprint; we write it to the JSON (the
-    // single source of truth), which re-renders every visual editor from the new parse.
-    private void ApplyBlueprint(RunBlueprint blueprint) => _json = RunJson.ToJson(blueprint, _options);
 
     // Bring the hero, deck, cards and enemies authored in the Combat tab into this run. Reuses the sandbox's own
     // ScenarioComposer so imported cards/actions behave identically to how they play in the Combat tab. The whole
