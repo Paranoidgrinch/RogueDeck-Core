@@ -1,0 +1,218 @@
+@* The live view of an in-progress run: event choices, entity picks, the interactive fight (when an
+   InteractiveCombatDriver is surfacing one), plus the between-combat inventory and the run log. Extracted from
+   RunSandbox so the same session UI can be reused by the Playtest tab (a one-encounter run). The host owns the
+   session/driver lifecycle and re-renders this component when they change (their Changed events); this component
+   only owns the transient pick state (_selected / _combatTarget). *@
+@if (Session is { } session)
+{
+    <section class="panel">
+        @if (session.Error is { } runError)
+        {
+            <p class="error">@runError</p>
+        }
+        else if (session.IsAwaitingChoice && session.PendingSituation is { } situation)
+        {
+            <h2>@situation.TextKey</h2>
+            <div class="choices">
+                @foreach (var choice in session.PendingChoices)
+                {
+                    <button class="play" @onclick="() => session.Pick(choice.Id)">
+                        @(string.IsNullOrEmpty(choice.TextKey) ? choice.Id : choice.TextKey)
+                    </button>
+                }
+            </div>
+        }
+        else if (session.IsAwaitingEntities && session.PendingEntities is { } request)
+        {
+            <h2>@request.Purpose</h2>
+            <p class="muted">Pick @request.Count.</p>
+            <div class="choices">
+                @for (var i = 0; i < request.Displays.Count; i++)
+                {
+                    var index = i;
+                    <button class="play @(_selected.Contains(index) ? "active" : "")"
+                            @onclick="() => ToggleEntity(index)">
+                        @request.Displays[index]
+                    </button>
+                }
+            </div>
+            <button class="play" disabled="@(_selected.Count != request.Count)" @onclick="ConfirmEntities">
+                Confirm (@_selected.Count/@request.Count)
+            </button>
+        }
+        else if (CombatDriver?.Current is { } combat)
+        {
+            <h2>Combat — round @combat.Round</h2>
+            <div class="row"><span class="muted">Energy</span> @combat.HeroEnergy/@combat.HeroEnergyMax</div>
+            @foreach (var c in combat.State.Combatants)
+            {
+                <div class="row">
+                    <strong>@(c.Id == combat.HeroId ? (HeroName ?? "You") : EnemyName(c.Id))</strong>
+                    <span class="muted">
+                        @c.Health.Current/@c.Health.Max HP@(Block(c) > 0 ? $" · 🛡{Block(c)}" : "")@(c.IsAlive ? "" : " 💀")
+                    </span>
+                    @if (c.Statuses.Count > 0)
+                    {
+                        <span class="muted">· @CombatStatusLine(c)</span>
+                    }
+                </div>
+            }
+            @if (combat.IsHeroTurn)
+            {
+                <div class="row">
+                    <span class="muted">Target</span>
+                    <select @bind="_combatTarget">
+                        @foreach (var enemy in combat.State.Combatants.Where(x => x.Id != combat.HeroId && x.IsAlive))
+                        {
+                            <option value="@enemy.Id.value">@EnemyName(enemy.Id)</option>
+                        }
+                    </select>
+                </div>
+                <div class="choices">
+                    @foreach (var card in combat.Hand)
+                    {
+                        var cost = CardEnergyCost(card.DefinitionId.value);
+                        <button class="play" disabled="@(cost > combat.HeroEnergy)"
+                                @onclick="() => PlayCombatCard(card.Id)">
+                            @CardName(card.DefinitionId.value) ⚡@cost
+                        </button>
+                    }
+                    @if (combat.Hand.Count == 0)
+                    {
+                        <span class="muted">(empty hand)</span>
+                    }
+                </div>
+                <button class="play" @onclick="EndCombatTurn">End turn ▸</button>
+            }
+            else
+            {
+                <p class="muted">Resolving enemy actions…</p>
+            }
+        }
+        else if (session.IsComplete)
+        {
+            <h2>Run complete</h2>
+            <div class="row"><span class="muted">Outcome</span> <strong>@session.Run.Result</strong></div>
+        }
+        else
+        {
+            <p class="muted">Resolving…</p>
+        }
+
+        @* Inventory — a read-only lens over everything the hero carries between combats in this run. *@
+        <h2>Inventory</h2>
+        <div class="row"><span class="muted">HP</span> @session.Run.Health.Current / @session.Run.Health.Max</div>
+        <div class="row"><span class="muted">Resources</span>
+            @(session.Run.Resources.Count == 0 ? "none"
+                : string.Join(", ", session.Run.Resources.OrderBy(r => r.Key.Value).Select(r => $"{r.Key.Value} {r.Value}")))
+        </div>
+        <div class="row"><span class="muted">Relics</span>
+            @(session.Run.Relics.Count == 0 ? "none" : string.Join(", ",
+                session.Run.Relics.Select(r => r.Definition.DisplayName + (r.Enabled ? "" : " (disabled)"))))
+        </div>
+        <div class="row"><span class="muted">Consumables</span>
+            @(session.Run.Consumables.Count == 0 ? "none" : string.Join(", ",
+                session.Run.Consumables.GroupBy(c => c.DefinitionId.Value).Select(Tally)))
+        </div>
+        <div class="row"><span class="muted">Deck (@session.Run.Deck.Count)</span>
+            @(session.Run.Deck.Count == 0 ? "empty" : string.Join(", ",
+                session.Run.Deck.GroupBy(DeckCardLabel).Select(Tally)))
+        </div>
+        @if (session.Run.Flags.Count > 0)
+        {
+            <div class="row"><span class="muted">Flags</span> @string.Join(", ", session.Run.Flags)</div>
+        }
+        @foreach (var counter in session.Run.Counters)
+        {
+            <div class="row"><span class="muted">@counter.Key</span> @counter.Value</div>
+        }
+    </section>
+
+    <section class="panel">
+        <h2>Run log</h2>
+        <ul class="log">
+            @foreach (var entry in session.Run.Log)
+            {
+                <li><span class="line-kind">@entry.Type</span> @entry.Message</li>
+            }
+        </ul>
+    </section>
+}
+
+@code {
+    // The in-progress run to render; the host builds/starts it and re-renders us on its Changed events.
+    [Parameter, EditorRequired] public InteractiveRunSession? Session { get; set; }
+
+    // The interactive combat driver, present only when the host chose interactive fights; null = fights auto-resolve.
+    [Parameter] public InteractiveCombatDriver? CombatDriver { get; set; }
+
+    // Per-card energy cost + display name, and per-enemy display name, so the fight view can grey out unaffordable
+    // cards and show human-readable names. Keyed by the raw definition/enemy id.
+    [Parameter] public IReadOnlyDictionary<string, int> CardCosts { get; set; } = new Dictionary<string, int>();
+    [Parameter] public IReadOnlyDictionary<string, string> CardNames { get; set; } = new Dictionary<string, string>();
+    [Parameter] public IReadOnlyDictionary<string, string> EnemyNames { get; set; } = new Dictionary<string, string>();
+    [Parameter] public string? HeroName { get; set; }
+
+    // Transient pick state, owned here: which entity-request options are selected, and the current attack target.
+    private readonly HashSet<int> _selected = new();
+    private string _combatTarget = "";
+
+    private void ToggleEntity(int index)
+    {
+        var count = Session?.PendingEntities?.Count ?? 0;
+        if (_selected.Contains(index))
+            _selected.Remove(index);
+        else
+        {
+            if (count == 1)
+                _selected.Clear();
+            if (_selected.Count < count)
+                _selected.Add(index);
+        }
+    }
+
+    private void ConfirmEntities()
+    {
+        var indices = _selected.ToList();
+        _selected.Clear();
+        Session?.PickEntities(indices);
+    }
+
+    private void PlayCombatCard(CardInstanceId cardId)
+    {
+        var combat = CombatDriver?.Current;
+        if (combat is null)
+            return;
+        var target = !string.IsNullOrEmpty(_combatTarget)
+            ? new CombatantId(_combatTarget)
+            : combat.State.Combatants.FirstOrDefault(c => c.Id != combat.HeroId && c.IsAlive)?.Id;
+        CombatDriver!.PlayCard(cardId, target);
+    }
+
+    private void EndCombatTurn() => CombatDriver?.EndTurn();
+
+    private int CardEnergyCost(string definitionId) => CardCosts.TryGetValue(definitionId, out var cost) ? cost : 0;
+
+    private string CardName(string definitionId) => CardNames.TryGetValue(definitionId, out var name) ? name : definitionId;
+
+    private string EnemyName(CombatantId id) => EnemyNames.TryGetValue(id.value, out var name) ? name : id.value;
+
+    // A deck card's display name plus one "+" per upgrade level (matches the run's "+"-suffix upgrade convention).
+    private string DeckCardLabel(RunCardInstance card) => CardName(card.DefinitionId.value) + new string('+', card.UpgradeLevel);
+
+    // "Strike ×3" for a group of copies, or just "Strike" for a single one.
+    private static string Tally<T>(IGrouping<string, T> group) => group.Count() > 1 ? $"{group.Key} ×{group.Count()}" : group.Key;
+
+    private static int Block(CombatantState c) =>
+        c.DefensivePools.TryGetValue(StandardCombatIds.BlockDefensivePool, out var pool) ? pool.Current : 0;
+
+    private static string CombatStatusLine(CombatantState c) =>
+        string.Join(" ", c.Statuses.Select(s =>
+        {
+            var name = s.DefinitionId.value.Replace("standard.", "");
+            var magnitude = s.Stacks > 0 ? $"×{s.Stacks}"
+                : s.DurationTurns > 0 ? $" {s.DurationTurns}t"
+                : s.Charges > 0 ? $" {s.Charges}c" : "";
+            return $"{name}{magnitude}";
+        }));
+}
