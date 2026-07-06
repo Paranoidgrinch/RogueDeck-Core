@@ -1,0 +1,177 @@
+@rendermode InteractiveServer
+@inject RunDocument Doc
+
+@* The dedicated Cards & deck tab: authors the run's card definitions (RunBlueprint.Cards) and its starting deck
+   (RunBlueprint.Deck) on the shared document. Each card's effect program is edited with the visual
+   CombatProgramEditor (over CardPlayContext); a program outside the visual subset is left to the Run-tab JSON. The
+   deck is the multiset of card ids the hero starts with. This absorbs the standalone Cards tab (single-card JSON)
+   into the one project document. *@
+<section style="padding:1rem; max-width:72rem">
+    <h1>Cards &amp; deck</h1>
+    <p class="muted">Author the run's cards (their effect programs) and the starting deck. Part of the shared run
+        document.</p>
+
+    <h2>Cards (@Cards.Count)</h2>
+    @for (var i = 0; i < Cards.Count; i++)
+    {
+        var ci = i;
+        var card = Cards[ci];
+        <div class="fx-block">
+            <div class="run-bar">
+                <span class="muted">id</span>
+                <input value="@card.Id" style="width:9rem" @onchange="e => SetCardId(ci, AsString(e.Value))" />
+                <span class="muted">name</span>
+                <input value="@(card.NameKey ?? "")" style="width:11rem" @onchange="e => SetCardName(ci, AsString(e.Value))" />
+                <span class="muted">energy</span>
+                <input type="number" value="@EnergyCost(card)" style="width:4rem"
+                       @onchange="e => SetEnergy(ci, AsInt(e.Value, EnergyCost(card)))" />
+                <button class="mini" @onclick="() => RemoveCard(ci)">✕ card</button>
+            </div>
+            <div class="fx-body">
+                <span class="muted">program:</span>
+                @{ var model = ModelOf(card); }
+                @if (model is { } node)
+                {
+                    <CombatProgramEditor Node="node" NodeChanged="n => SetCardProgram(ci, n)" />
+                }
+                else if (card.Program is null)
+                {
+                    <button class="mini" @onclick="() => AddCardProgram(ci)">+ program</button>
+                }
+                else
+                {
+                    <span class="muted"> advanced program (outside the visual subset) — edit in the Run tab JSON</span>
+                }
+            </div>
+        </div>
+    }
+    <div class="run-bar">
+        <input placeholder="new card id" @bind="_newCardId" style="width:11rem" />
+        <button class="play" @onclick="AddCard">Add card</button>
+    </div>
+
+    <h2>Starting deck (@Deck.Count)</h2>
+    @if (Cards.Count == 0)
+    {
+        <p class="muted">Author a card first, then add copies to the deck.</p>
+    }
+    else
+    {
+        @foreach (var card in Cards)
+        {
+            var id = card.Id;
+            <div class="run-bar">
+                <span style="width:12rem; display:inline-block">@id</span>
+                <button class="mini" @onclick="() => RemoveDeckCopy(id)">−</button>
+                <span style="min-width:1.5rem; display:inline-block; text-align:center">@DeckCount(id)</span>
+                <button class="mini" @onclick="() => AddDeckCopy(id)">+</button>
+            </div>
+        }
+    }
+</section>
+
+@code {
+    private RunBlueprint _blueprint = default!;
+    private string _newCardId = "";
+
+    protected override void OnInitialized() => _blueprint = Doc.Load();
+
+    private IReadOnlyList<CardData> Cards => _blueprint.Cards;
+    private IReadOnlyList<CardDefinitionId> Deck => _blueprint.Deck;
+
+    private void Save() => Doc.Save(_blueprint);
+    private static string AsString(object? v) => v?.ToString() ?? "";
+    private static int AsInt(object? v, int fallback) => int.TryParse(v?.ToString(), out var n) ? n : fallback;
+
+    private static CombatNodeModel? ModelOf(CardData card) =>
+        card.Program is { } program ? CombatProgramModel.Classify(program) : null;
+
+    private static int EnergyCost(CardData card) =>
+        card.Costs.Where(c => c.ResourceId == StandardCombatIds.EnergyResource).Sum(c => c.Amount);
+
+    // ── cards ────────────────────────────────────────────────────────────────────
+    private void EditCards(Func<List<CardData>, List<CardData>> edit)
+    {
+        _blueprint = _blueprint with { Cards = edit(Cards.ToList()) };
+        Save();
+    }
+
+    private void EditCard(int index, Func<CardData, CardData> edit) =>
+        EditCards(list =>
+        {
+            if (index >= 0 && index < list.Count)
+                list[index] = edit(list[index]);
+            return list;
+        });
+
+    private void SetCardId(int index, string id)
+    {
+        if (!string.IsNullOrWhiteSpace(id))
+            EditCard(index, c => c with { Id = id.Trim() });
+    }
+
+    private void SetCardName(int index, string name) =>
+        EditCard(index, c => c with { NameKey = string.IsNullOrWhiteSpace(name) ? null : name.Trim() });
+
+    private void SetEnergy(int index, int energy) =>
+        EditCard(index, c => c with { Costs = WithEnergy(c.Costs, energy) });
+
+    private void SetCardProgram(int index, CombatNodeModel node) =>
+        EditCard(index, c => c with { Program = CombatProgramModel.Build<CardPlayContext>(node) });
+
+    private void AddCardProgram(int index) => SetCardProgram(index, CombatProgramModel.NewNode("dealDamage"));
+
+    private void RemoveCard(int index) =>
+        EditCards(list =>
+        {
+            if (index >= 0 && index < list.Count)
+                list.RemoveAt(index);
+            return list;
+        });
+
+    private void AddCard()
+    {
+        if (string.IsNullOrWhiteSpace(_newCardId))
+            return;
+        var id = _newCardId.Trim();
+        EditCards(list =>
+        {
+            list.Add(new CardData
+            {
+                Id = id,
+                Program = CombatProgramModel.Build<CardPlayContext>(CombatProgramModel.NewNode("dealDamage")),
+            });
+            return list;
+        });
+        _newCardId = "";
+    }
+
+    private static IReadOnlyList<ResourceCost> WithEnergy(IReadOnlyList<ResourceCost> costs, int energy)
+    {
+        var list = costs.Where(c => c.ResourceId != StandardCombatIds.EnergyResource).ToList();
+        if (energy > 0)
+            list.Add(new ResourceCost(StandardCombatIds.EnergyResource, energy));
+        return list;
+    }
+
+    // ── deck ─────────────────────────────────────────────────────────────────────
+    private int DeckCount(string id) => Deck.Count(c => c.value == id);
+
+    private void AddDeckCopy(string id)
+    {
+        _blueprint = _blueprint with { Deck = Deck.Append(new CardDefinitionId(id)).ToList() };
+        Save();
+    }
+
+    private void RemoveDeckCopy(string id)
+    {
+        var list = Deck.ToList();
+        var index = list.FindIndex(c => c.value == id);
+        if (index >= 0)
+        {
+            list.RemoveAt(index);
+            _blueprint = _blueprint with { Deck = list };
+            Save();
+        }
+    }
+}

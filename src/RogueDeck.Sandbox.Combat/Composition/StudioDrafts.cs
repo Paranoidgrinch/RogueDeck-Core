@@ -14,9 +14,7 @@ public sealed class ProjectDraft
     // The Combat tab's authored model (hero, cards, enemies, …).
     public SandboxModel? Combat { get; set; }
 
-    // The Cards tab's CardData JSON.
-    public string? CardJson { get; set; }
-
-    // The Run tab's RunBlueprint JSON.
+    // The Run tab's RunBlueprint JSON — the shared authoring document the focused tabs (Cards, Relics, Events,
+    // Encounters, Hero) all lens over via RunDocument.
     public string? RunJson { get; set; }
 }
