@@ -1,0 +1,352 @@
+@* Recursive visual editor for one combat effect node (CombatNodeModel). A leaf (deal damage / heal / gain block /
+   gain resource) renders as a one-line row; a composite (sequence / for-each / repeat / if) renders as a titled
+   block whose sub-nodes recurse back into this same component — so the markup lives in ONE place and serves every
+   depth. It is context-FREE: it edits a CombatNodeModel only; the host classifies a program into a model to feed
+   it and builds a model back into an EffectProgram<TContext> on change (that TContext boundary stays in the host).
+   Anything outside the modelled subset never reaches here — the host keeps the JSON escape when Classify returns
+   null. See CombatProgramModel for the classify/build layer this drives. *@
+
+@if (CombatProgramModel.IsComposite(Node.Kind))
+{
+    <div class="fx-block">
+        <div class="run-bar">
+            @KindSelect
+            @if (Node.Kind == "forEachTarget")
+            {
+                <span class="muted">of</span>
+                @SelectorSelect(CombatProgramModel.SelectorKeys, Node.SelectorKey, key => Set(Node with { SelectorKey = key }))
+            }
+            else if (Node.Kind == "repeat")
+            {
+                @AmountControls(Node.AmountOrDefault, spec => Set(Node with { Amount = spec }))
+                <span class="muted">×</span>
+            }
+            else if (Node.Kind == "conditional")
+            {
+                @ConditionControls(Node.Condition ?? new CombatConditionSpec(), spec => Set(Node with { Condition = spec }))
+            }
+            @RemoveButton
+        </div>
+
+        @if (Node.Kind == "sequence")
+        {
+            var children = Node.ChildrenOrEmpty;
+            @for (var i = 0; i < children.Count; i++)
+            {
+                var ix = i;
+                <div class="fx-body">
+                    <CombatProgramEditor Node="children[ix]"
+                                         NodeChanged="c => ReplaceChild(ix, c)"
+                                         Removed="() => RemoveChild(ix)" />
+                </div>
+            }
+            <div class="fx-body">
+                <span class="muted">add:</span>
+                @foreach (var (kind, label) in CombatProgramModel.AllKinds)
+                {
+                    var k = kind;
+                    <button class="mini" @onclick="() => AddChild(k)">+ @label</button>
+                }
+            </div>
+        }
+        else if (Node.Kind == "conditional")
+        {
+            var children = Node.ChildrenOrEmpty;
+            var thenNode = children.Count > 0 ? children[0] : CombatProgramModel.NewNode("dealDamage");
+            <div class="fx-body">
+                <span class="muted">then:</span>
+                <CombatProgramEditor Node="thenNode" NodeChanged="SetThen" />
+            </div>
+            @if (children.Count > 1)
+            {
+                <div class="fx-body">
+                    <span class="muted">else:</span>
+                    <CombatProgramEditor Node="children[1]" NodeChanged="SetElse" Removed="RemoveElse" />
+                </div>
+            }
+            else
+            {
+                <div class="fx-body">
+                    <button class="mini" @onclick="AddElse">+ else</button>
+                </div>
+            }
+        }
+        else
+        {
+            @* forEachTarget / repeat: a single body node *@
+            var children = Node.ChildrenOrEmpty;
+            var body = children.Count > 0 ? children[0] : CombatProgramModel.NewNode("dealDamage");
+            <div class="fx-body">
+                <CombatProgramEditor Node="body" NodeChanged="SetBody" />
+            </div>
+        }
+    </div>
+}
+else
+{
+    <span class="fx">
+        @KindSelect
+        @SelectorSelect(CombatProgramModel.SelectorKeys, Node.SelectorKey, key => Set(Node with { SelectorKey = key }))
+        @AmountControls(Node.AmountOrDefault, spec => Set(Node with { Amount = spec }))
+        @if (Node.Kind == "gainResource")
+        {
+            <input value="@Node.ResourceId" style="width:8rem" placeholder="resource id"
+                   @onchange="e => Set(Node with { ResourceId = AsString(e.Value) })" />
+        }
+        @RemoveButton
+    </span>
+}
+
+@code {
+    [Parameter] public CombatNodeModel Node { get; set; } = new();
+    [Parameter] public EventCallback<CombatNodeModel> NodeChanged { get; set; }
+
+    // Set by a parent that renders this node as a removable list item (a sequence child / an else branch); when it
+    // has no delegate (the program root, a fixed body slot) no ✕ is shown.
+    [Parameter] public EventCallback Removed { get; set; }
+
+    private static string AsString(object? v) => v?.ToString() ?? "";
+    private static int AsInt(object? v, int fallback) => int.TryParse(v?.ToString(), out var n) ? n : fallback;
+
+    private void Set(CombatNodeModel node) => _ = NodeChanged.InvokeAsync(node);
+
+    // ── node kind + shared widgets ───────────────────────────────────────────────
+    private RenderFragment KindSelect => builder =>
+    {
+        builder.OpenElement(0, "select");
+        builder.AddAttribute(1, "value", Node.Kind);
+        builder.AddAttribute(2, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(
+            this, e => Set(CombatProgramModel.ChangeKind(Node, AsString(e.Value)))));
+        var seq = 3;
+        foreach (var (kind, label) in CombatProgramModel.AllKinds)
+        {
+            builder.OpenElement(seq++, "option");
+            builder.AddAttribute(seq++, "value", kind);
+            builder.AddContent(seq++, label);
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+    };
+
+    private RenderFragment RemoveButton => builder =>
+    {
+        if (!Removed.HasDelegate)
+            return;
+        builder.OpenElement(0, "button");
+        builder.AddAttribute(1, "class", "mini");
+        builder.AddAttribute(2, "onclick", EventCallback.Factory.Create(this, () => Removed.InvokeAsync()));
+        builder.AddContent(3, "✕");
+        builder.CloseElement();
+    };
+
+    private RenderFragment SelectorSelect(IEnumerable<string> keys, string current, Action<string> onChange) => builder =>
+    {
+        builder.OpenElement(0, "select");
+        builder.AddAttribute(1, "value", current);
+        builder.AddAttribute(2, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e => onChange(AsString(e.Value))));
+        var seq = 3;
+        foreach (var key in keys)
+        {
+            builder.OpenElement(seq++, "option");
+            builder.AddAttribute(seq++, "value", key);
+            builder.AddContent(seq++, key);
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+    };
+
+    // Amount: a kind dropdown (constant / event amount) plus, for a constant, an int input.
+    private RenderFragment AmountControls(CombatAmountSpec spec, Action<CombatAmountSpec> onChange) => builder =>
+    {
+        var seq = 0;
+        builder.OpenElement(seq++, "select");
+        builder.AddAttribute(seq++, "value", spec.Kind);
+        builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+            onChange(AsString(e.Value) == "event" ? CombatAmountSpec.Event : CombatAmountSpec.FromConst(spec.Const))));
+        foreach (var (kind, label) in new[] { ("const", "constant"), ("event", "event amount") })
+        {
+            builder.OpenElement(seq++, "option");
+            builder.AddAttribute(seq++, "value", kind);
+            builder.AddContent(seq++, label);
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+
+        if (spec.Kind != "event")
+        {
+            builder.OpenElement(seq++, "input");
+            builder.AddAttribute(seq++, "type", "number");
+            builder.AddAttribute(seq++, "value", spec.Const);
+            builder.AddAttribute(seq++, "style", "width:4rem");
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+                onChange(CombatAmountSpec.FromConst(AsInt(e.Value, spec.Const)))));
+            builder.CloseElement();
+        }
+    };
+
+    // ── condition widget (for the conditional node) ──────────────────────────────
+    private static readonly (string Kind, string Label)[] ConditionKinds =
+    {
+        ("compare", "value compares"),
+        ("hasStatus", "has status"),
+        ("isAlive", "is alive"),
+        ("downed", "is downed"),
+        ("exists", "exists"),
+    };
+
+    private static readonly (string Kind, string Label)[] CompareValues =
+    {
+        ("currentHealth", "current HP"),
+        ("maxHealth", "max HP"),
+        ("missingHealth", "missing HP"),
+        ("healthPercentage", "HP %"),
+        ("currentResource", "resource…"),
+        ("statusStacks", "status stacks…"),
+    };
+
+    private RenderFragment ConditionControls(CombatConditionSpec spec, Action<CombatConditionSpec> onChange) => builder =>
+    {
+        var seq = 0;
+        // condition kind
+        builder.OpenElement(seq++, "select");
+        builder.AddAttribute(seq++, "value", spec.Kind);
+        builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+            onChange(spec with { Kind = AsString(e.Value) })));
+        foreach (var (kind, label) in ConditionKinds)
+        {
+            builder.OpenElement(seq++, "option");
+            builder.AddAttribute(seq++, "value", kind);
+            builder.AddContent(seq++, label);
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+
+        // target selector (single-target only — scalar reads reject multi-target selectors)
+        builder.OpenElement(seq++, "select");
+        builder.AddAttribute(seq++, "value", spec.SelectorKey);
+        builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+            onChange(spec with { SelectorKey = AsString(e.Value) })));
+        foreach (var key in CombatProgramModel.SingleTargetSelectorKeys)
+        {
+            builder.OpenElement(seq++, "option");
+            builder.AddAttribute(seq++, "value", key);
+            builder.AddContent(seq++, key);
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+
+        if (spec.Kind == "compare")
+        {
+            // value kind
+            builder.OpenElement(seq++, "select");
+            builder.AddAttribute(seq++, "value", spec.ValueKind);
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+                onChange(spec with { ValueKind = AsString(e.Value) })));
+            foreach (var (kind, label) in CompareValues)
+            {
+                builder.OpenElement(seq++, "option");
+                builder.AddAttribute(seq++, "value", kind);
+                builder.AddContent(seq++, label);
+                builder.CloseElement();
+            }
+            builder.CloseElement();
+
+            // operator
+            builder.OpenElement(seq++, "select");
+            builder.AddAttribute(seq++, "value", spec.Op.ToString());
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+                onChange(spec with { Op = Enum.Parse<ComparisonOperator>(AsString(e.Value)) })));
+            foreach (var op in Enum.GetValues<ComparisonOperator>())
+            {
+                builder.OpenElement(seq++, "option");
+                builder.AddAttribute(seq++, "value", op.ToString());
+                builder.AddContent(seq++, OpSymbol(op));
+                builder.CloseElement();
+            }
+            builder.CloseElement();
+
+            // right-hand constant
+            builder.OpenElement(seq++, "input");
+            builder.AddAttribute(seq++, "type", "number");
+            builder.AddAttribute(seq++, "value", spec.Right);
+            builder.AddAttribute(seq++, "style", "width:4rem");
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+                onChange(spec with { Right = AsInt(e.Value, spec.Right) })));
+            builder.CloseElement();
+
+            if (spec.ValueKind is "currentResource" or "statusStacks")
+            {
+                builder.OpenElement(seq++, "input");
+                builder.AddAttribute(seq++, "value", spec.Id);
+                builder.AddAttribute(seq++, "style", "width:8rem");
+                builder.AddAttribute(seq++, "placeholder", spec.ValueKind == "currentResource" ? "resource id" : "status id");
+                builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+                    onChange(spec with { Id = AsString(e.Value) })));
+                builder.CloseElement();
+            }
+        }
+        else if (spec.Kind == "hasStatus")
+        {
+            builder.OpenElement(seq++, "input");
+            builder.AddAttribute(seq++, "value", spec.Id);
+            builder.AddAttribute(seq++, "style", "width:8rem");
+            builder.AddAttribute(seq++, "placeholder", "status id");
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+                onChange(spec with { Id = AsString(e.Value) })));
+            builder.CloseElement();
+        }
+    };
+
+    private static string OpSymbol(ComparisonOperator op) => op switch
+    {
+        ComparisonOperator.Equal => "=",
+        ComparisonOperator.NotEqual => "≠",
+        ComparisonOperator.Less => "<",
+        ComparisonOperator.LessOrEqual => "≤",
+        ComparisonOperator.Greater => ">",
+        ComparisonOperator.GreaterOrEqual => "≥",
+        _ => op.ToString(),
+    };
+
+    // ── children / body / branch mutation ────────────────────────────────────────
+    private void ReplaceChild(int i, CombatNodeModel child)
+    {
+        var list = Node.ChildrenOrEmpty.ToList();
+        if (i >= 0 && i < list.Count)
+            list[i] = child;
+        Set(Node with { Children = list });
+    }
+
+    private void RemoveChild(int i)
+    {
+        var list = Node.ChildrenOrEmpty.ToList();
+        if (i >= 0 && i < list.Count)
+            list.RemoveAt(i);
+        Set(Node with { Children = list });
+    }
+
+    private void AddChild(string kind) =>
+        Set(Node with { Children = Node.ChildrenOrEmpty.Append(CombatProgramModel.NewNode(kind)).ToList() });
+
+    private void SetBody(CombatNodeModel body) => Set(Node with { Children = new[] { body } });
+
+    private void SetThen(CombatNodeModel then)
+    {
+        var children = Node.ChildrenOrEmpty;
+        Set(Node with { Children = children.Count > 1 ? new[] { then, children[1] } : new[] { then } });
+    }
+
+    private void SetElse(CombatNodeModel @else)
+    {
+        var then = Node.ChildrenOrEmpty.Count > 0 ? Node.ChildrenOrEmpty[0] : CombatProgramModel.NewNode("dealDamage");
+        Set(Node with { Children = new[] { then, @else } });
+    }
+
+    private void AddElse() => SetElse(CombatProgramModel.NewNode("dealDamage"));
+
+    private void RemoveElse()
+    {
+        var then = Node.ChildrenOrEmpty.Count > 0 ? Node.ChildrenOrEmpty[0] : CombatProgramModel.NewNode("dealDamage");
+        Set(Node with { Children = new[] { then } });
+    }
+}

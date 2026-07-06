@@ -138,6 +138,42 @@ public static class CombatProgramModel
         _ => new("gainBlock", "source", CombatAmountSpec.FromConst(5)),
     };
 
+    // Change a node's kind while preserving what carries over: between the amount-leaf kinds keep selector + amount
+    // (and fix ResourceId's applicability); between composites keep the body/children; otherwise start fresh from
+    // NewNode. Used by the editor's per-node kind dropdown so re-typing a node doesn't needlessly discard its work.
+    public static CombatNodeModel ChangeKind(CombatNodeModel node, string kind)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        if (kind == node.Kind)
+            return node;
+
+        var wasComposite = IsComposite(node.Kind);
+        var isComposite = IsComposite(kind);
+
+        if (!wasComposite && !isComposite)
+            return node with
+            {
+                Kind = kind,
+                ResourceId = kind == "gainResource" ? (node.ResourceId == "" ? "standard.energy" : node.ResourceId) : "",
+            };
+
+        if (wasComposite && isComposite)
+        {
+            if (kind == "sequence")
+                return CombatNodeModel.Sequence(node.ChildrenOrEmpty.Count > 0 ? node.ChildrenOrEmpty : new[] { NewNode("dealDamage") });
+            var body = node.ChildrenOrEmpty.Count > 0 ? node.ChildrenOrEmpty[0] : NewNode("dealDamage");
+            return kind switch
+            {
+                "forEachTarget" => CombatNodeModel.ForEach("allEnemies", body),
+                "repeat" => CombatNodeModel.Repeat(CombatAmountSpec.FromConst(2), body),
+                "conditional" => CombatNodeModel.Conditional(new CombatConditionSpec(), body),
+                _ => NewNode(kind),
+            };
+        }
+
+        return NewNode(kind);
+    }
+
     // The canonical target-selector catalog for combat authoring (key → static singleton). This is the shared home
     // R4's SimpleCombatProgram catalog will consolidate onto in Phase 1d; reverse-map is by ReferenceEquals since
     // the selectors are process-wide singletons.

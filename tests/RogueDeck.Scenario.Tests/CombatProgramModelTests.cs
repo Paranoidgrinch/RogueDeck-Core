@@ -237,6 +237,32 @@ public class CombatProgramModelTests
     }
 
     [Fact]
+    public void ChangeKind_between_leaves_preserves_selector_and_amount()
+    {
+        var node = new CombatNodeModel("dealDamage", "allEnemies", CombatAmountSpec.Event);
+
+        var healed = CombatProgramModel.ChangeKind(node, "heal");
+        Assert.Equal(new CombatNodeModel("heal", "allEnemies", CombatAmountSpec.Event), healed);
+
+        // gainResource gains a default resource id; switching away clears it.
+        var resource = CombatProgramModel.ChangeKind(node, "gainResource");
+        Assert.Equal("standard.energy", resource.ResourceId);
+        Assert.Equal("", CombatProgramModel.ChangeKind(resource, "gainBlock").ResourceId);
+    }
+
+    [Fact]
+    public void ChangeKind_between_composites_carries_the_body()
+    {
+        var body = new CombatNodeModel("dealDamage", "source", CombatAmountSpec.FromConst(7));
+        var forEach = CombatNodeModel.ForEach("allEnemies", body);
+
+        var repeat = CombatProgramModel.ChangeKind(forEach, "repeat");
+
+        Assert.Equal("repeat", repeat.Kind);
+        Assert.Equal(body, Assert.Single(repeat.ChildrenOrEmpty));
+    }
+
+    [Fact]
     public void Classify_returns_null_for_conditional_with_advanced_condition()
     {
         // An And condition is outside the modelled set → the whole conditional is JSON.
