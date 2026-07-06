@@ -118,8 +118,8 @@
         </section>
     }
 
-    <RunSessionView Session="_session" CombatDriver="_combatDriver" CardCosts="_cardCosts"
-                    CardNames="_cardNames" EnemyNames="_enemyNames" HeroName="_heroName" />
+    <RunSessionView Session="_play.Session" CombatDriver="_play.CombatDriver" CardCosts="_play.CardCosts"
+                    CardNames="_play.CardNames" EnemyNames="_play.EnemyNames" HeroName="_play.HeroName" />
 </div>
 
 @code {
@@ -129,7 +129,7 @@
     // The run document lives in the circuit-scoped ProjectDraft so switching tabs keeps it (see ProjectDraft).
     private string _json { get => Draft.RunJson ?? ""; set => Draft.RunJson = value; }
     private int _seed = 1;
-    private InteractiveRunSession? _session;
+    private RunPlayback _play = default!;
     private string? _error;
     private string? _importMsg;
     private int _simRuns = 50;
@@ -140,11 +140,6 @@
     private int _nodeSeq = 100;
     private string _importEncounterId = "combat-fight";
     private bool _interactiveCombat = true;
-    private InteractiveCombatDriver? _combatDriver;
-    private Dictionary<string, int> _cardCosts = new();
-    private Dictionary<string, string> _cardNames = new();
-    private Dictionary<string, string> _enemyNames = new();
-    private string? _heroName;
 
     // ── Visual map builder (edits the parsed blueprint, then writes it back to the JSON) ──
     private bool TryBlueprint(out RunBlueprint blueprint)
@@ -240,6 +235,7 @@
 
     protected override void OnInitialized()
     {
+        _play = new RunPlayback(OnSessionChanged);
         Draft.RunJson ??= RunJson.ToJson(DemoBlueprint(), _options);
         if (TryBlueprint(out var bp))
             _importEncounterId = CombatImport.SuggestEncounterId(bp);
@@ -262,60 +258,13 @@
 
     private void Start()
     {
-        _error = null;
-        DisposeSession();
-
-        try
+        if (!TryBlueprint(out var blueprint))
         {
-            var blueprint = RunJson.FromJson<RunBlueprint>(_json, _options);
-            var content = BuildContent(blueprint);
-
-            // Energy cost + display name per card id, and enemy display names per enemy id, so the interactive
-            // combat view can grey out unaffordable cards and show human-readable names instead of raw slugs.
-            _cardCosts = blueprint.Cards.ToDictionary(
-                card => card.Id,
-                card => card.Costs.Where(rc => rc.ResourceId == StandardCombatIds.EnergyResource).Sum(rc => rc.Amount));
-            _cardNames = blueprint.Cards.ToDictionary(card => card.Id, card => card.NameKey ?? card.Id);
-            _enemyNames = blueprint.Encounters
-                .SelectMany(encounter => encounter.Enemies)
-                .GroupBy(enemy => enemy.Id)
-                .ToDictionary(g => g.Key, g => g.First().DisplayName ?? g.Key);
-            // The run has a single hero across encounters; prefer the blueprint's authored hero name, else the first
-            // encounter's hero name (else fall back to "You").
-            _heroName = !string.IsNullOrWhiteSpace(blueprint.Start.HeroName)
-                ? blueprint.Start.HeroName
-                : blueprint.Encounters
-                    .Select(encounter => encounter.HeroDisplayName)
-                    .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name));
-
-            // Interactive: a driver that hands each fight to the player (Current/Changed); headless: auto-resolve.
-            ICombatDriver driver;
-            if (_interactiveCombat)
-            {
-                _combatDriver = new InteractiveCombatDriver();
-                _combatDriver.Changed += OnSessionChanged;
-                driver = _combatDriver;
-            }
-            else
-            {
-                driver = new AutoPlayCombatDriver();
-            }
-
-            var defs = new RunDefinitionRegistryBuilder();
-            new StandardRunPackage(driver, content).RegisterDefinitions(defs);
-            var registry = defs.Build();
-
-            var run = blueprint.CreateInitialRun(new RunId("demo"), _seed);
-
-            var session = new InteractiveRunSession(run, registry, content);
-            session.Changed += OnSessionChanged;
-            _session = session;
-            session.Start();
+            _error = "Fix the run JSON before driving.";
+            return;
         }
-        catch (Exception ex)
-        {
-            _error = $"{ex.GetType().Name}: {ex.Message}";
-        }
+        _play.Start(blueprint, _seed, _interactiveCombat);
+        _error = _play.Error;
     }
 
     // Headless balancing: auto-play the blueprint over many seeds and summarise outcomes.
@@ -325,7 +274,7 @@
         try
         {
             var blueprint = RunJson.FromJson<RunBlueprint>(_json, _options);
-            var content = BuildContent(blueprint);
+            var content = RunPlayback.BuildContent(blueprint);
             var defs = new RunDefinitionRegistryBuilder();
             new StandardRunPackage(new AutoPlayCombatDriver(), content).RegisterDefinitions(defs);
             var registry = defs.Build();
@@ -363,63 +312,14 @@
     private static string Tally<T>(IGrouping<string, T> group) =>
         group.Count() > 1 ? $"{group.Key} ×{group.Count()}" : group.Key;
 
-    private void DisposeSession()
-    {
-        if (_session is not null)
-        {
-            _session.Changed -= OnSessionChanged;
-            _session.Dispose();
-            _session = null;
-        }
-        if (_combatDriver is not null)
-        {
-            _combatDriver.Changed -= OnSessionChanged;
-            _combatDriver.Dispose();
-            _combatDriver = null;
-        }
-    }
-
     public async ValueTask DisposeAsync()
     {
-        DisposeSession();
+        _play.Dispose();
         if (_jsModule is not null)
         {
             try { await _jsModule.DisposeAsync(); }
             catch (JSDisconnectedException) { /* circuit already gone */ }
         }
-    }
-
-    // The whole combat content library (cards + enemy actions, including their effect programs) is now authored
-    // as data in the blueprint; only the relic is still code-provided by id.
-    private static RunContentRegistry BuildContent(RunBlueprint blueprint)
-    {
-        var interceptors = CombatImport.RebuildStatusInterceptors(blueprint.Statuses);
-        var library = new CombatContentLibrary(
-            cards: blueprint.Cards.Select(card => card.ToBlueprint()).ToArray(),
-            enemyActions: blueprint.EnemyActions.Select(action => action.ToBlueprint()).ToArray(),
-            statuses: blueprint.Statuses.Select(status => status.ToBlueprint()).ToArray(),
-            triggeredPrograms: CombatImport.RebuildStatusTriggers(blueprint.Statuses),
-            preDownInterceptors: interceptors.PreDown,
-            statusApplicationInterceptors: interceptors.StatusApplication);
-
-        var builder = new RunContentRegistryBuilder()
-            .SetEncounters(new EncounterCatalog(library, blueprint.Encounters));
-        RegisterRelics(builder, blueprint.Relics);
-        foreach (var (id, script) in blueprint.Events)
-            builder.RegisterEvent(new EventId(id), script);
-        return builder.Build();
-    }
-
-    // Registers the blueprint's authored relics, then the built-in sample relics (bloodstone/leech) unless an
-    // authored relic already claims that id. Keeps single-source data authoring while the samples stay available.
-    private static void RegisterRelics(RunContentRegistryBuilder builder, IReadOnlyList<RelicData> relics)
-    {
-        var ids = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var relic in relics)
-            if (ids.Add(relic.Id))
-                builder.RegisterRelic(relic.ToDefinition());
-        if (ids.Add("bloodstone")) builder.RegisterRelic(StandardRelics.Bloodstone());
-        if (ids.Add("leech")) builder.RegisterRelic(StandardRelics.Leech());
     }
 
     private static RunBlueprint DemoBlueprint()

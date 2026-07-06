@@ -1,0 +1,83 @@
+@rendermode InteractiveServer
+@implements IDisposable
+@inject RunDocument Doc
+
+@* The Playtest tab: drive a SINGLE encounter from the shared document, the way the old Combat tab let you play a
+   lone fight — but sourced entirely from the run document (hero, deck, cards, enemies, relics) instead of a separate
+   SandboxModel. Pick an encounter, press Play, and it builds a one-combat-node run and hands it to RunSessionView. *@
+<section style="padding:1rem; max-width:70rem">
+    <h1>Playtest an encounter</h1>
+    <p class="muted">Play one fight from the run document — the hero &amp; starting state (Hero tab), the deck &amp;
+        cards (Cards tab), and the encounter's enemies (Encounters tab) all as authored. A quick way to feel out a
+        single fight without arranging a whole map.</p>
+
+    @if (_encounters.Count == 0)
+    {
+        <p class="muted">No encounters yet — author one in the <strong>Encounters</strong> tab first.</p>
+    }
+    else
+    {
+        <div class="run-bar">
+            <label>Encounter
+                <select @bind="_encounterId">
+                    @foreach (var encounter in _encounters)
+                    {
+                        <option value="@encounter.Id.Value">@EncounterLabel(encounter)</option>
+                    }
+                </select>
+            </label>
+            <label>Seed <input type="number" @bind="_seed" style="width:6rem" /></label>
+            <label title="on: play the fight yourself (cards + end turn); off: it auto-resolves headlessly">
+                <input type="checkbox" @bind="_interactive" /> play interactively
+            </label>
+            <button class="play" @onclick="Play">▶ Play encounter</button>
+        </div>
+        @if (_play.Error is { } error)
+        {
+            <p class="error">@error</p>
+        }
+    }
+</section>
+
+<RunSessionView Session="_play.Session" CombatDriver="_play.CombatDriver" CardCosts="_play.CardCosts"
+                CardNames="_play.CardNames" EnemyNames="_play.EnemyNames" HeroName="_play.HeroName" />
+
+@code {
+    private RunBlueprint _blueprint = default!;
+    private RunPlayback _play = default!;
+    private IReadOnlyList<EncounterDefinition> _encounters = Array.Empty<EncounterDefinition>();
+    private string _encounterId = "";
+    private int _seed = 1;
+    private bool _interactive = true;
+
+    protected override void OnInitialized()
+    {
+        _play = new RunPlayback(() => InvokeAsync(StateHasChanged));
+        _blueprint = Doc.Load();
+        _encounters = _blueprint.Encounters;
+        _encounterId = _encounters.FirstOrDefault()?.Id.Value ?? "";
+    }
+
+    // Build a one-combat-node run for the chosen encounter and start it. The blueprint's deck/hero/relics all carry
+    // in via RunPlayback (same content path as the Run tab); only the map is swapped for a single fight.
+    private void Play()
+    {
+        // Re-read the document so edits made in other tabs since this tab opened are picked up.
+        _blueprint = Doc.Load();
+        _encounters = _blueprint.Encounters;
+        if (string.IsNullOrEmpty(_encounterId))
+            return;
+
+        var node = new Node(new NodeId("fight"), StandardRunIds.CombatNode, new EncounterRef(new EncounterId(_encounterId)));
+        var oneFight = _blueprint with { Map = new RunMap(new[] { node }) };
+        _play.Start(oneFight, _seed, _interactive);
+    }
+
+    private static string EncounterLabel(EncounterDefinition encounter)
+    {
+        var enemies = string.Join(", ", encounter.Enemies.Select(e => e.DisplayName ?? e.Id));
+        return string.IsNullOrEmpty(enemies) ? encounter.Id.Value : $"{encounter.Id.Value} — {enemies}";
+    }
+
+    public void Dispose() => _play.Dispose();
+}
