@@ -1,0 +1,25 @@
+@rendermode InteractiveServer
+@inject RunDocument Doc
+
+@* The dedicated Encounters tab: a lens over the shared run document, hosting the existing EncounterEditor. Enemy
+   rosters (their HP, actions, hero combat resources) are authored here and referenced by the map. Authoring enemy
+   ACTION programs visually (EnemyActionData via CombatProgramEditor over EnemyActionContext) is a later enrichment. *@
+<section style="padding:1rem; max-width:70rem">
+    <h1>Encounters</h1>
+    <p class="muted">Author the run's combat encounters — enemy rosters, their HP and actions, and the hero's combat
+        resources. Part of the shared run document (referenced by the map in the Run tab).</p>
+
+    <EncounterEditor Blueprint="_blueprint" BlueprintChanged="OnChanged" />
+</section>
+
+@code {
+    private RunBlueprint _blueprint = default!;
+
+    protected override void OnInitialized() => _blueprint = Doc.Load();
+
+    private void OnChanged(RunBlueprint blueprint)
+    {
+        Doc.Save(blueprint);
+        _blueprint = blueprint;
+    }
+}

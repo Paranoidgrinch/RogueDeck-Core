@@ -1,0 +1,24 @@
+@rendermode InteractiveServer
+@inject RunDocument Doc
+
+@* The dedicated Events tab: a lens over the shared run document, hosting the existing EventEditor. Authored
+   events (situations, choices, effects) persist in the one ProjectDraft document and are referenced by the map. *@
+<section style="padding:1rem; max-width:70rem">
+    <h1>Events</h1>
+    <p class="muted">Author the run's events — situations, choices and their effects. Part of the shared run
+        document (referenced by the map in the Run tab).</p>
+
+    <EventEditor Blueprint="_blueprint" BlueprintChanged="OnChanged" />
+</section>
+
+@code {
+    private RunBlueprint _blueprint = default!;
+
+    protected override void OnInitialized() => _blueprint = Doc.Load();
+
+    private void OnChanged(RunBlueprint blueprint)
+    {
+        Doc.Save(blueprint);
+        _blueprint = blueprint;
+    }
+}
