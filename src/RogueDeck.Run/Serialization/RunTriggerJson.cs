@@ -9,39 +9,6 @@ namespace RogueDeck.Run;
 // already in the options. The event kind ↔ type map covers the run event catalog.
 public sealed class TriggeredRunEffectJsonConverter : JsonConverter<ITriggeredRunEffectDefinition>
 {
-    private static readonly Dictionary<string, Type> ByKind = new()
-    {
-        ["cardAddedToDeck"] = typeof(CardAddedToDeckRunEvent),
-        ["cardRemovedFromDeck"] = typeof(CardRemovedFromDeckRunEvent),
-        ["cardTagChanged"] = typeof(CardTagChangedRunEvent),
-        ["cardTransformed"] = typeof(CardTransformedRunEvent),
-        ["cardUpgraded"] = typeof(CardUpgradedRunEvent),
-        ["combatResolved"] = typeof(CombatResolvedRunEvent),
-        ["consumableGained"] = typeof(ConsumableGainedRunEvent),
-        ["consumableUsed"] = typeof(ConsumableUsedRunEvent),
-        ["eventChoiceMade"] = typeof(EventChoiceMadeRunEvent),
-        ["nodeEntered"] = typeof(NodeEnteredRunEvent),
-        ["relicAcquired"] = typeof(RelicAcquiredRunEvent),
-        ["relicDisabled"] = typeof(RelicDisabledRunEvent),
-        ["relicEnabled"] = typeof(RelicEnabledRunEvent),
-        ["relicRemoved"] = typeof(RelicRemovedRunEvent),
-        ["resourceChanged"] = typeof(ResourceChangedRunEvent),
-        ["rewardChosen"] = typeof(RewardChosenRunEvent),
-        ["rewardGranted"] = typeof(RewardGrantedRunEvent),
-        ["rewardOffered"] = typeof(RewardOfferedRunEvent),
-        ["runCounterChanged"] = typeof(RunCounterChangedRunEvent),
-        ["runEnded"] = typeof(RunEndedRunEvent),
-        ["runFlagChanged"] = typeof(RunFlagChangedRunEvent),
-        ["runHealthChanged"] = typeof(RunHealthChangedRunEvent),
-        ["runMaxHealthChanged"] = typeof(RunMaxHealthChangedRunEvent),
-        ["runProgramInstalled"] = typeof(RunProgramInstalledRunEvent),
-        ["runProgramUninstalled"] = typeof(RunProgramUninstalledRunEvent),
-        ["runStarted"] = typeof(RunStartedRunEvent),
-    };
-
-    private static readonly Dictionary<Type, string> ByType =
-        ByKind.ToDictionary(kv => kv.Value, kv => kv.Key);
-
     public override void Write(
         Utf8JsonWriter writer, ITriggeredRunEffectDefinition value, JsonSerializerOptions options)
     {
@@ -49,8 +16,9 @@ public sealed class TriggeredRunEffectJsonConverter : JsonConverter<ITriggeredRu
         if (!type.IsGenericType || type.GetGenericTypeDefinition() != typeof(DataTriggeredRunEffect<>))
             throw new NotSupportedException(
                 $"Only DataTriggeredRunEffect run programs are serializable; got '{type.Name}'.");
-        if (!ByType.TryGetValue(value.EventType, out var kind))
+        if (!RunEventCatalog.TryByType(value.EventType, out var eventKind))
             throw new NotSupportedException($"Run event '{value.EventType.Name}' has no serialization kind.");
+        var kind = eventKind.Key;
 
         var condition = type.GetProperty("Condition")!.GetValue(value);
         var templates = type.GetProperty("Templates")!.GetValue(value);
@@ -71,7 +39,7 @@ public sealed class TriggeredRunEffectJsonConverter : JsonConverter<ITriggeredRu
         var root = document.RootElement;
         var kind = root.GetProperty("event").GetString()
             ?? throw new JsonException("Run program is missing its 'event' kind.");
-        if (!ByKind.TryGetValue(kind, out var eventType))
+        if (RunEventCatalog.TypeFor(kind) is not { } eventType)
             throw new JsonException($"Unknown run event kind '{kind}'.");
 
         IRunExpression<bool>? condition = null;

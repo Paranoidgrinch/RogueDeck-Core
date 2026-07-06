@@ -52,9 +52,9 @@
                             <label>When
                                 <select value="@EventKey(reaction.EventType)"
                                         @onchange="e => SetReactionEvent(relicIndex, reactionIndex, AsString(e.Value))">
-                                    @foreach (var (key, label) in ReactionEvents)
+                                    @foreach (var kind in RunEventCatalog.All)
                                     {
-                                        <option value="@key">@label</option>
+                                        <option value="@kind.Key">@kind.Label</option>
                                     }
                                 </select>
                             </label>
@@ -213,15 +213,6 @@
 
     private static string AsString(object? v) => v?.ToString() ?? "";
     private static int AsInt(object? v, int fallback) => int.TryParse(v?.ToString(), out var n) ? n : fallback;
-
-    private static readonly (string Key, string Label)[] ReactionEvents =
-    {
-        ("nodeEntered", "a node is entered"),
-        ("combatResolved", "a combat resolves"),
-        ("runStarted", "the run starts"),
-        ("rewardGranted", "a reward is granted"),
-        ("eventChoiceMade", "an event choice is made"),
-    };
 
     private static readonly (string Kind, string Label)[] EffectKinds =
     {
@@ -682,37 +673,12 @@
         reaction.GetType().GetProperty("Condition")?.GetValue(reaction) as IRunExpression<bool>;
 
     private static ITriggeredRunEffectDefinition BuildProgram(
-        string eventKey, IReadOnlyList<IRunEffectTemplate> templates, IRunExpression<bool>? condition)
-    {
-        var array = templates.ToArray();
-        return eventKey switch
-        {
-            "combatResolved" => Make<CombatResolvedRunEvent>(condition, array),
-            "runStarted" => Make<RunStartedRunEvent>(condition, array),
-            "rewardGranted" => Make<RewardGrantedRunEvent>(condition, array),
-            "eventChoiceMade" => Make<EventChoiceMadeRunEvent>(condition, array),
-            _ => Make<NodeEnteredRunEvent>(condition, array),
-        };
-    }
+        string eventKey, IReadOnlyList<IRunEffectTemplate> templates, IRunExpression<bool>? condition) =>
+        RunEventCatalog.Build(eventKey, condition, templates);
 
-    private static ITriggeredRunEffectDefinition Make<TEvent>(IRunExpression<bool>? condition, IRunEffectTemplate[] templates)
-        where TEvent : IRunEvent =>
-        condition is null ? RunPrograms.On<TEvent>(templates) : RunPrograms.When<TEvent>(condition, templates);
+    private static string EventKey(Type eventType) => RunEventCatalog.KeyFor(eventType);
 
-    private static string EventKey(Type eventType) => eventType.Name switch
-    {
-        nameof(CombatResolvedRunEvent) => "combatResolved",
-        nameof(RunStartedRunEvent) => "runStarted",
-        nameof(RewardGrantedRunEvent) => "rewardGranted",
-        nameof(EventChoiceMadeRunEvent) => "eventChoiceMade",
-        _ => "nodeEntered",
-    };
-
-    private static string EventLabel(Type eventType)
-    {
-        var key = EventKey(eventType);
-        return ReactionEvents.FirstOrDefault(e => e.Key == key).Label ?? eventType.Name;
-    }
+    private static string EventLabel(Type eventType) => RunEventCatalog.LabelFor(eventType);
 
     // Inline editor for one effect template: a constant/computed amount for gold/resource/heal/damage, or the
     // literal control for max-HP / flag / counter.
