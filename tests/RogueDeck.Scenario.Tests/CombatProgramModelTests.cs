@@ -46,14 +46,10 @@ public class CombatProgramModelTests
     }
 
     [Fact]
-    public void Classify_returns_null_for_composite_root()
+    public void Classify_returns_null_for_an_unmodelled_node()
     {
-        var program = new EffectProgram<CardPlayContext>(
-            new SequenceEffectNode<CardPlayContext>(new IEffectNode<CardPlayContext>[]
-            {
-                new GainBlockNode<CardPlayContext>(
-                    CombatantTargetSelectors.Source, new ConstantExpression<CardPlayContext>(1)),
-            }));
+        // NoOp is a real node but outside the modelled subset (as is conditional, deferred) → JSON escape.
+        var program = new EffectProgram<CardPlayContext>(new NoOpEffectNode<CardPlayContext>());
 
         Assert.Null(CombatProgramModel.Classify(program));
     }
@@ -92,5 +88,91 @@ public class CombatProgramModelTests
         var node = Assert.IsType<GainResourceNode<CardPlayContext>>(program.Root);
         Assert.Equal("standard.energy", node.ResourceId.value);
         Assert.Equal(model, CombatProgramModel.Classify(program));
+    }
+
+    // ── Phase 1b: control flow ─────────────────────────────────────────────────────
+
+    public static IEnumerable<object[]> ControlFlowCases()
+    {
+        var leaf = new CombatNodeModel("dealDamage", "allEnemies", CombatAmountSpec.FromConst(5));
+        var eventLeaf = new CombatNodeModel("gainBlock", "source", CombatAmountSpec.Event);
+
+        yield return [CombatNodeModel.Sequence(new[] { leaf, eventLeaf })];
+        yield return [CombatNodeModel.ForEach("allEnemies", leaf)];
+        yield return [CombatNodeModel.Repeat(CombatAmountSpec.FromConst(3), leaf)];
+        // Nested to depth: repeat { for-each { sequence [ deal, heal ] } }.
+        yield return
+        [
+            CombatNodeModel.Repeat(CombatAmountSpec.FromConst(2),
+                CombatNodeModel.ForEach("allEnemies",
+                    CombatNodeModel.Sequence(new[]
+                    {
+                        new CombatNodeModel("dealDamage", "source", CombatAmountSpec.FromConst(4)),
+                        new CombatNodeModel("heal", "source", CombatAmountSpec.FromConst(2)),
+                    }))),
+        ];
+    }
+
+    [Theory]
+    [MemberData(nameof(ControlFlowCases))]
+    public void Control_flow_round_trips(CombatNodeModel model)
+    {
+        var program = CombatProgramModel.Build<CardPlayContext>(model);
+
+        Assert.Equal(model, CombatProgramModel.Classify(program));
+    }
+
+    [Theory]
+    [InlineData("sequence")]
+    [InlineData("forEachTarget")]
+    [InlineData("repeat")]
+    public void NewNode_composite_round_trips(string kind)
+    {
+        var model = CombatProgramModel.NewNode(kind);
+
+        var program = CombatProgramModel.Build<CardPlayContext>(model);
+
+        Assert.True(CombatProgramModel.IsComposite(kind));
+        Assert.Equal(model, CombatProgramModel.Classify(program));
+    }
+
+    [Fact]
+    public void Model_equality_is_structural_over_children()
+    {
+        var a = CombatNodeModel.Sequence(new[] { new CombatNodeModel("heal", "source", CombatAmountSpec.FromConst(3)) });
+        var b = CombatNodeModel.Sequence(new[] { new CombatNodeModel("heal", "source", CombatAmountSpec.FromConst(3)) });
+
+        Assert.Equal(a, b);
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
+        Assert.NotEqual(a, CombatNodeModel.Sequence(new[] { new CombatNodeModel("heal", "source", CombatAmountSpec.FromConst(9)) }));
+    }
+
+    [Fact]
+    public void Classify_returns_null_when_a_composite_child_is_advanced()
+    {
+        // A sequence whose second child has an arithmetic (advanced) amount is not fully modelled → JSON escape.
+        var program = new EffectProgram<CardPlayContext>(
+            new SequenceEffectNode<CardPlayContext>(new IEffectNode<CardPlayContext>[]
+            {
+                new GainBlockNode<CardPlayContext>(CombatantTargetSelectors.Source, new ConstantExpression<CardPlayContext>(1)),
+                new HealNode<CardPlayContext>(
+                    CombatantTargetSelectors.Source,
+                    new AddExpression<CardPlayContext>(
+                        new ConstantExpression<CardPlayContext>(1), new ConstantExpression<CardPlayContext>(2))),
+            }));
+
+        Assert.Null(CombatProgramModel.Classify(program));
+    }
+
+    [Fact]
+    public void Classify_returns_null_for_repeat_with_non_default_max_count()
+    {
+        var program = new EffectProgram<CardPlayContext>(
+            new RepeatEffectNode<CardPlayContext>(
+                new ConstantExpression<CardPlayContext>(2),
+                new GainBlockNode<CardPlayContext>(CombatantTargetSelectors.Source, new ConstantExpression<CardPlayContext>(5)),
+                maxCount: 10));
+
+        Assert.Null(CombatProgramModel.Classify(program));
     }
 }
