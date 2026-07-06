@@ -28,18 +28,6 @@
                 <input type="checkbox" @bind="_interactiveCombat" /> play combats interactively
             </label>
         </div>
-        <div class="run-bar">
-            <button class="play" @onclick="ImportFromCombat" title="Bring the hero, deck, cards and enemies authored in the Combat tab into this run">
-                ⇐ Import from Combat tab
-            </button>
-            <label title="each import becomes a distinct encounter under this id; the next free id is suggested after each import so several different fights can live in one run">
-                as encounter <input @bind="_importEncounterId" style="width:10rem" />
-            </label>
-        </div>
-        @if (_importMsg is not null)
-        {
-            <p class="muted">@_importMsg</p>
-        }
         @if (_error is not null)
         {
             <p class="error">@_error</p>
@@ -131,14 +119,12 @@
     private int _seed = 1;
     private RunPlayback _play = default!;
     private string? _error;
-    private string? _importMsg;
     private int _simRuns = 50;
     private string? _simSummary;
     private IJSObjectReference? _jsModule;
     private string _newNodeType = "event";
     private string _newNodeTarget = "";
     private int _nodeSeq = 100;
-    private string _importEncounterId = "combat-fight";
     private bool _interactiveCombat = true;
 
     // ── Visual map builder (edits the parsed blueprint, then writes it back to the JSON) ──
@@ -186,44 +172,6 @@
         RebuildMap(blueprint, nodes);
     }
 
-    // Bring the hero, deck, cards and enemies authored in the Combat tab into this run. Reuses the sandbox's own
-    // ScenarioComposer so imported cards/actions behave identically to how they play in the Combat tab. The whole
-    // combat (its enemy roster + hero resources) lands as an encounter you can drop onto the map; its cards go
-    // into the run's card pool and starting deck. Custom status definitions do not carry over — the run blueprint
-    // has no status library — so encounters using them should stick to the built-in statuses.
-    private void ImportFromCombat()
-    {
-        _importMsg = null;
-        _error = null;
-        var model = Draft.Combat;
-        if (model is null || model.Hero is null || model.Enemies.Count == 0)
-        {
-            _importMsg = "Define a hero and at least one enemy in the Combat tab first.";
-            return;
-        }
-        if (!TryBlueprint(out var current))
-        {
-            _importMsg = "Fix the run JSON before importing.";
-            return;
-        }
-
-        var encounterId = string.IsNullOrWhiteSpace(_importEncounterId) ? "combat-fight" : _importEncounterId.Trim();
-        try
-        {
-            var result = CombatImport.Project(current, model, _options, encounterId);
-            _json = RunJson.ToJson(result.Blueprint, _options);
-            _importMsg = result.Summary;
-            // Suggest the next free id so a follow-up import (after editing the Combat tab) adds a distinct fight
-            // instead of overwriting the one just created.
-            if (TryBlueprint(out var updated))
-                _importEncounterId = CombatImport.SuggestEncounterId(updated, encounterId);
-        }
-        catch (Exception ex)
-        {
-            _importMsg = $"Import failed: {ex.GetType().Name}: {ex.Message}";
-        }
-    }
-
     private static string NodeKind(Node node) => node.Type == StandardRunIds.CombatNode ? "combat" : "event";
 
     private static string NodeTarget(Node node) => node.Payload switch
@@ -237,8 +185,6 @@
     {
         _play = new RunPlayback(OnSessionChanged);
         Draft.RunJson ??= RunJson.ToJson(DemoBlueprint(), _options);
-        if (TryBlueprint(out var bp))
-            _importEncounterId = CombatImport.SuggestEncounterId(bp);
     }
 
     // Save the current blueprint JSON as a file (via a small JS download helper).
