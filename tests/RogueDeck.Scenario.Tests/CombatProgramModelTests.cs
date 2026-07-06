@@ -1,3 +1,4 @@
+using System.Text.Json;
 using RogueDeck.Core.Combat;
 using RogueDeck.Scenario.Authoring;
 
@@ -31,6 +32,23 @@ public class CombatProgramModelTests
         var back = CombatProgramModel.Classify(program);
 
         Assert.Equal(model, back);
+    }
+
+    [Fact]
+    public void Classifies_a_program_round_tripped_through_CombatJson()
+    {
+        // A deserialized program holds fresh (non-singleton) selector instances; classify must still recognise them
+        // by type — otherwise a loaded card/relic would never show the visual editor.
+        var model = CombatNodeModel.Repeat(
+            CombatAmountSpec.FromConst(2),
+            new CombatNodeModel("dealDamage", "allEnemies", CombatAmountSpec.Event));
+        var options = CombatJson.CreateOptions<CardPlayContext>();
+
+        var program = CombatProgramModel.Build<CardPlayContext>(model);
+        var json = JsonSerializer.Serialize(program, options);
+        var back = JsonSerializer.Deserialize<EffectProgram<CardPlayContext>>(json, options)!;
+
+        Assert.Equal(model, CombatProgramModel.Classify(back));
     }
 
     [Fact]

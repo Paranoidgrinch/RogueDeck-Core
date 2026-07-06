@@ -1,5 +1,6 @@
 using System.Text.Json;
 using RogueDeck.Core.Combat;
+using RogueDeck.Scenario.Authoring;
 
 namespace RogueDeck.Run;
 
@@ -35,11 +36,11 @@ public sealed class RelicCombatTrigger
     // A minimal valid default program for this context (so a freshly-added rule is authorable / round-trips).
     public required Func<object> NewProgram { get; init; }
 
-    // The visual-editor bridge (R4): classify a boxed EffectProgram<TContext> into the editable SimpleProgram
-    // subset (null → out of subset, keep the JSON textarea), and build a boxed program back from a SimpleProgram.
-    // Both close over TContext exactly like Serialize/Deserialize, so the UI stays context-free.
-    public required Func<object, SimpleProgram?> ToSimple { get; init; }
-    public required Func<SimpleProgram, object> FromSimple { get; init; }
+    // The visual-editor bridge: classify a boxed EffectProgram<TContext> into the editable CombatNodeModel (null →
+    // outside the visual subset, keep the JSON textarea), and build a boxed program back from a model. Both close
+    // over TContext exactly like Serialize/Deserialize, so the UI (CombatProgramEditor) stays context-free.
+    public required Func<object, CombatNodeModel?> ToModel { get; init; }
+    public required Func<CombatNodeModel, object> FromModel { get; init; }
 }
 
 // The catalog of combat triggers a relic rule may hook. Each entry closes the engine's generic adapter +
@@ -65,8 +66,8 @@ public static class RelicCombatTriggers
             Serialize = program => JsonSerializer.SerializeToElement((EffectProgram<TContext>)program, options),
             Deserialize = element => JsonSerializer.Deserialize<EffectProgram<TContext>>(element, options)!,
             NewProgram = newProgram,
-            ToSimple = program => SimpleCombatProgram.Classify((EffectProgram<TContext>)program),
-            FromSimple = spec => SimpleCombatProgram.Build<TContext>(spec),
+            ToModel = program => CombatProgramModel.Classify((EffectProgram<TContext>)program),
+            FromModel = model => CombatProgramModel.Build<TContext>(model),
         };
     }
 

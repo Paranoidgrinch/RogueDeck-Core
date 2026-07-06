@@ -114,9 +114,9 @@ public class RelicEditorRenderTests
     [Fact]
     public async Task RendersCombatRulesSectionForARelic()
     {
-        // Face (b) UI (R2 + R4): a relic with a combat rule renders the Combat-rules section — trigger select,
-        // priority, and (since the default turn-start rule is inside the editable subset) the VISUAL controls
-        // (node / selector / amount dropdowns), not the JSON textarea.
+        // Face (b) UI: a relic with a combat rule renders the Combat-rules section — trigger select, priority, and
+        // (since the default turn-start rule is inside the visual subset) the CombatProgramEditor's controls (node /
+        // selector / amount dropdowns), not the JSON textarea.
         var relic = new RelicData
         {
             Id = "aegis",
@@ -146,10 +146,10 @@ public class RelicEditorRenderTests
     }
 
     [Fact]
-    public async Task RendersJsonEditorForNonSimpleCombatRule()
+    public async Task RendersJsonEditorForNonVisualCombatRule()
     {
-        // R4 escape: a combat rule whose program is OUTSIDE the editable subset (here an arithmetic amount) has no
-        // SimpleProgram, so the editor keeps the JSON textarea and offers to switch to the visual editor is absent.
+        // Escape: a combat rule whose program is OUTSIDE the visual subset (here an arithmetic amount) has no
+        // CombatNodeModel, so the editor keeps the JSON textarea and the "edit as JSON" toggle is absent.
         var program = new EffectProgram<TurnStartedTriggeredEffectContext>(
             new GainBlockNode<TurnStartedTriggeredEffectContext>(
                 CombatantTargetSelectors.Source,

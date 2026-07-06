@@ -5,9 +5,8 @@ namespace RogueDeck.Scenario.Authoring;
 // The visual-editor model of a combat EffectProgram — the combat counterpart of the run side's RelicRequests +
 // RelicAmounts classify/build helpers. The combat effect tree is GENERIC over TContext (CardPlayContext /
 // EnemyActionContext / the relic trigger contexts), but a Blazor editor must bind to a context-FREE shape, so
-// this models a program as a non-generic DTO tree (CombatNodeModel) and Build/Classify are the generic bridge —
-// exactly the pattern R4's SimpleCombatProgram proved for a single leaf, generalized here into the shared model
-// the Cards tab + relic combat-rule editor will grow onto.
+// this models a program as a non-generic DTO tree (CombatNodeModel) and Build/Classify are the generic bridge.
+// This is the shared model the Cards editor and the relic combat-rule editor both drive (via CombatProgramEditor).
 //
 // Phase 1a scope: the amount-bearing LEAF nodes (deal damage / heal / gain block / gain resource) over a catalog
 // target selector, with a constant or event-amount amount. Control flow (sequence / conditional / forEach /
@@ -174,9 +173,9 @@ public static class CombatProgramModel
         return NewNode(kind);
     }
 
-    // The canonical target-selector catalog for combat authoring (key → static singleton). This is the shared home
-    // R4's SimpleCombatProgram catalog will consolidate onto in Phase 1d; reverse-map is by ReferenceEquals since
-    // the selectors are process-wide singletons.
+    // The canonical target-selector catalog for combat authoring (key → static singleton). Build uses the singleton;
+    // reverse-map (KeyFor) is by concrete TYPE so it survives a JSON round-trip (deserialized selectors are fresh
+    // instances, not the singletons).
     public static readonly IReadOnlyList<(string Key, ICombatantTargetSelector Selector)> Selectors =
     [
         ("source", CombatantTargetSelectors.Source),
@@ -203,8 +202,11 @@ public static class CombatProgramModel
         ?? throw new KeyNotFoundException(
             $"Unknown combat selector '{key}'. Known: {string.Join(", ", SelectorKeys)}.");
 
+    // Reverse-map by concrete TYPE, not reference: a program deserialized from JSON holds fresh selector instances
+    // (not the process-wide singletons), and every catalog selector is a distinct parameterless type, so the type
+    // identifies it robustly whether the program was built in memory or round-tripped through CombatJson.
     private static string? KeyFor(ICombatantTargetSelector selector) =>
-        Selectors.FirstOrDefault(s => ReferenceEquals(s.Selector, selector)).Key;
+        Selectors.FirstOrDefault(s => s.Selector.GetType() == selector.GetType()).Key;
 
     // ── amounts ──────────────────────────────────────────────────────────────────
     public static ICombatExpression<TContext, int> BuildAmount<TContext>(CombatAmountSpec spec)

@@ -4,15 +4,38 @@
 
 <section style="padding:1rem; max-width:64rem">
     <h1>Card authoring (data)</h1>
-    <p class="muted">Edit a card as JSON (<code>CardData</code>) and validate that it deserializes through
-        <code>CombatJson</code> and compiles to a runnable card definition.</p>
-
-    <textarea style="width:100%; height:24rem; font-family:monospace; font-size:0.85rem" @bind="_json" @bind:event="oninput"></textarea>
+    <p class="muted">Author a card's effect <code>Program</code> visually; anything outside the visual subset stays
+        editable as <code>CardData</code> JSON below (both round-trip through <code>CombatJson</code>).</p>
 
     <div style="margin:0.6rem 0">
-        <button class="play" @onclick="Validate">Parse &amp; validate</button>
-        <button class="play" @onclick="LoadDemo">Reset demo</button>
+        <span class="muted">Program:</span>
+        @if (_card is null)
+        {
+            <span class="error"> — fix the JSON below, then Parse</span>
+        }
+        else if (_model is not null)
+        {
+            <CombatProgramEditor Node="_model" NodeChanged="OnModelChanged" />
+        }
+        else if (_card.Program is null)
+        {
+            <span class="muted"> no program yet — </span>
+            <button class="mini" @onclick="AddProgram">+ program</button>
+        }
+        else
+        {
+            <span class="muted"> — advanced program (outside the visual subset); edit as JSON below</span>
+        }
     </div>
+
+    <details style="margin:0.6rem 0">
+        <summary class="muted">CardData JSON (advanced / escape)</summary>
+        <textarea style="width:100%; height:20rem; font-family:monospace; font-size:0.85rem" @bind="_json" @bind:event="oninput"></textarea>
+        <div style="margin:0.4rem 0">
+            <button class="play" @onclick="Validate">Parse &amp; validate</button>
+            <button class="play" @onclick="LoadDemo">Reset demo</button>
+        </div>
+    </details>
 
     @if (_error is not null)
     {
@@ -31,17 +54,22 @@
     private string? _error;
     private string? _summary;
 
+    // The last successfully-parsed card + its program classified into the visual model (null = no/advanced program).
+    private CardData? _card;
+    private CombatNodeModel? _model;
+
     protected override void OnInitialized()
     {
         if (Draft.Json is null)
             LoadDemo();
+        else
+            Validate(); // rebuild _card/_model from the persisted draft
     }
 
     private void LoadDemo()
     {
-        _error = null;
-        _summary = null;
         _json = JsonSerializer.Serialize(DemoCard(), _options);
+        Validate();
     }
 
     private void Validate()
@@ -55,33 +83,50 @@
             // Prove it maps to a runnable definition.
             _ = data.ToBlueprint().Compile().Build();
 
-            var roundTrips = JsonSerializer.Serialize(data, _options)
-                == JsonSerializer.Serialize(JsonSerializer.Deserialize<CardData>(_json, _options), _options);
+            _card = data;
+            _model = data.Program is { } program ? CombatProgramModel.Classify(program) : null;
+
             var root = data.Program?.Root;
             _summary =
                 $"✔ Deserialized and compiled card '{data.Id}'.\n" +
                 $"  costs: {data.Costs.Count}   tags: {data.Tags.Count}\n" +
                 $"  program root: {root?.GetType().Name ?? "(none)"}" +
                 (root is null ? "" : $" ({root.Children.Count} children)") + "\n" +
-                $"  round-trips: {roundTrips}";
+                $"  visual editor: {(_model is not null ? "yes" : "no (JSON)")}";
         }
         catch (Exception ex)
         {
+            _card = null;
+            _model = null;
             _error = $"{ex.GetType().Name}: {ex.Message}";
         }
     }
 
+    // A visual edit rebuilds the card's program from the model and re-serializes it into the JSON draft, keeping the
+    // two views in sync (the JSON textarea is the escape / advanced view of the same document).
+    private void OnModelChanged(CombatNodeModel node)
+    {
+        if (_card is null)
+            return;
+        _model = node;
+        _card = _card with { Program = CombatProgramModel.Build<CardPlayContext>(node) };
+        _json = JsonSerializer.Serialize(_card, _options);
+    }
+
+    private void AddProgram() => OnModelChanged(CombatProgramModel.NewNode("dealDamage"));
+
     private static CardData DemoCard()
     {
+        // Uses catalog target selectors so the demo program classifies into the visual editor out of the box.
         var card = new CardBlueprint("cleave")
         {
             Program = new EffectProgram<CardPlayContext>(
                 new SequenceEffectNode<CardPlayContext>(new IEffectNode<CardPlayContext>[]
                 {
                     new DealDamageNode<CardPlayContext>(
-                        new EventTargetCombatantTargetSelector(), new ConstantExpression<CardPlayContext>(8)),
+                        CombatantTargetSelectors.AllEnemiesOfSource, new ConstantExpression<CardPlayContext>(8)),
                     new GainBlockNode<CardPlayContext>(
-                        new SourceCombatantTargetSelector(), new ConstantExpression<CardPlayContext>(5)),
+                        CombatantTargetSelectors.Source, new ConstantExpression<CardPlayContext>(5)),
                 })),
         };
         card.Cost(new ResourceId("energy"), 1);
