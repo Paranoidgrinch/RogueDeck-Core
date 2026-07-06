@@ -14,8 +14,10 @@ builder.WebHost.UseStaticWebAssets();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-// One circuit-scoped project document so switching between the Combat / Run / Cards tabs keeps each tab's slice.
+// One circuit-scoped project document so switching between the tabs keeps each tab's slice; RunDocument is the
+// shared accessor the focused tabs (Relics, …) use as a lens over the one RunBlueprint JSON.
 builder.Services.AddScoped<ProjectDraft>();
+builder.Services.AddScoped<RunDocument>();
 
 var app = builder.Build();
 

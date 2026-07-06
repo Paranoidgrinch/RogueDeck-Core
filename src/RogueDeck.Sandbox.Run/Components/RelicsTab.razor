@@ -1,0 +1,25 @@
+@rendermode InteractiveServer
+@inject RunDocument Doc
+
+@* The dedicated Relics tab: a lens over the shared run document (RunDocument), hosting the existing RelicEditor.
+   Run reactions (face a) + combat rules (face b) are authored here and persist in the one ProjectDraft document,
+   so the Run tab and the other focused tabs see the same relics. *@
+<section style="padding:1rem; max-width:70rem">
+    <h1>Relics</h1>
+    <p class="muted">Author the run's relics — run-level reactions and injected combat rules. Part of the shared
+        run document (also visible in the Run tab).</p>
+
+    <RelicEditor Blueprint="_blueprint" BlueprintChanged="OnChanged" />
+</section>
+
+@code {
+    private RunBlueprint _blueprint = default!;
+
+    protected override void OnInitialized() => _blueprint = Doc.Load();
+
+    private void OnChanged(RunBlueprint blueprint)
+    {
+        Doc.Save(blueprint);
+        _blueprint = blueprint;
+    }
+}
