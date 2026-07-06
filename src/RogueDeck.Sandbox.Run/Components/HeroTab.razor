@@ -1,0 +1,68 @@
+@rendermode InteractiveServer
+@inject RunDocument Doc
+
+@* The dedicated Hero tab: edits the run's starting state (RunStart) on the shared document — hero name, health,
+   and starting resources. Starting relics/consumables are a later slice (they need content resolution). *@
+<section style="padding:1rem; max-width:60rem">
+    <h1>Hero &amp; starting state</h1>
+    <p class="muted">The run's hero and how the RunState opens. Part of the shared run document (the Run tab plays
+        from it).</p>
+
+    <div class="run-bar">
+        <label>Name
+            <input value="@Start.HeroName" style="width:12rem" @onchange="e => SetName(AsString(e.Value))" />
+        </label>
+    </div>
+    <div class="run-bar">
+        <label>Max HP
+            <input type="number" value="@Start.MaxHealth" style="width:5rem"
+                   @onchange="e => SetMaxHealth(AsInt(e.Value, Start.MaxHealth))" />
+        </label>
+        <label>Starting HP
+            <input type="number" value="@Start.StartingHealth" style="width:5rem"
+                   @onchange="e => SetStartingHealth(AsInt(e.Value, Start.StartingHealth))" />
+        </label>
+    </div>
+    <div class="run-bar">
+        <label>Starting gold
+            <input type="number" value="@Gold" style="width:5rem"
+                   @onchange="e => SetGold(AsInt(e.Value, Gold))" />
+        </label>
+    </div>
+</section>
+
+@code {
+    private RunBlueprint _blueprint = default!;
+
+    protected override void OnInitialized() => _blueprint = Doc.Load();
+
+    private RunStart Start => _blueprint.Start;
+    private int Gold => Start.Resources.TryGetValue(StandardRunIds.Gold.Value, out var g) ? g : 0;
+
+    private static string AsString(object? v) => v?.ToString() ?? "";
+    private static int AsInt(object? v, int fallback) => int.TryParse(v?.ToString(), out var n) ? n : fallback;
+
+    private void Apply(RunStart start)
+    {
+        _blueprint = _blueprint with { Start = start };
+        Doc.Save(_blueprint);
+    }
+
+    private void SetName(string name) => Apply(Start with { HeroName = string.IsNullOrWhiteSpace(name) ? "Hero" : name.Trim() });
+
+    // Keep starting HP within [1, max]; raising max never lowers starting HP.
+    private void SetMaxHealth(int value)
+    {
+        var max = Math.Max(1, value);
+        Apply(Start with { MaxHealth = max, StartingHealth = Math.Clamp(Start.StartingHealth, 1, max) });
+    }
+
+    private void SetStartingHealth(int value) =>
+        Apply(Start with { StartingHealth = Math.Clamp(value, 1, Start.MaxHealth) });
+
+    private void SetGold(int value)
+    {
+        var resources = new Dictionary<string, int>(Start.Resources) { [StandardRunIds.Gold.Value] = Math.Max(0, value) };
+        Apply(Start with { Resources = resources });
+    }
+}
