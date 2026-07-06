@@ -175,4 +175,78 @@ public class CombatProgramModelTests
 
         Assert.Null(CombatProgramModel.Classify(program));
     }
+
+    // ── Phase 1b-cond: conditional + condition spec ─────────────────────────────────
+
+    public static IEnumerable<object[]> ConditionCases()
+    {
+        yield return [new CombatConditionSpec("compare", "source", "currentHealth", ComparisonOperator.LessOrEqual, 10)];
+        yield return [new CombatConditionSpec("compare", "lowestHealthEnemy", "healthPercentage", ComparisonOperator.Less, 50)];
+        yield return [new CombatConditionSpec("compare", "source", "currentResource", ComparisonOperator.GreaterOrEqual, 2, "standard.energy")];
+        yield return [new CombatConditionSpec("compare", "source", "statusStacks", ComparisonOperator.Greater, 0, "poison")];
+        // Conditions read a single target — see SingleTargetSelectorKeys (multi-target reads throw as scalars).
+        yield return [new CombatConditionSpec("hasStatus", "lowestHealthEnemy", Id: "poison")];
+        yield return [new CombatConditionSpec("isAlive", "source")];
+        yield return [new CombatConditionSpec("downed", "lowestHealthEnemy")];
+        yield return [new CombatConditionSpec("exists", "highestHealthAlly")];
+    }
+
+    [Theory]
+    [MemberData(nameof(ConditionCases))]
+    public void Condition_round_trips(CombatConditionSpec spec)
+    {
+        var built = CombatProgramModel.BuildCondition<CardPlayContext>(spec);
+
+        Assert.Equal(spec, CombatProgramModel.ClassifyCondition(built));
+    }
+
+    [Fact]
+    public void Conditional_node_round_trips_with_then_and_else()
+    {
+        var model = CombatNodeModel.Conditional(
+            new CombatConditionSpec("compare", "source", "missingHealth", ComparisonOperator.GreaterOrEqual, 10),
+            new CombatNodeModel("heal", "source", CombatAmountSpec.FromConst(6)),
+            new CombatNodeModel("gainBlock", "source", CombatAmountSpec.FromConst(4)));
+
+        var program = CombatProgramModel.Build<CardPlayContext>(model);
+
+        Assert.Equal(model, CombatProgramModel.Classify(program));
+    }
+
+    [Fact]
+    public void Conditional_node_round_trips_without_else()
+    {
+        var model = CombatNodeModel.Conditional(
+            new CombatConditionSpec("hasStatus", "source", Id: "weak"),
+            new CombatNodeModel("dealDamage", "allEnemies", CombatAmountSpec.Event));
+
+        var program = CombatProgramModel.Build<CardPlayContext>(model);
+        var back = CombatProgramModel.Classify(program);
+
+        Assert.Equal(model, back);
+        Assert.Single(back!.ChildrenOrEmpty); // then only, no else
+    }
+
+    [Fact]
+    public void NewNode_conditional_round_trips()
+    {
+        var model = CombatProgramModel.NewNode("conditional");
+
+        Assert.True(CombatProgramModel.IsComposite("conditional"));
+        Assert.Equal(model, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(model)));
+    }
+
+    [Fact]
+    public void Classify_returns_null_for_conditional_with_advanced_condition()
+    {
+        // An And condition is outside the modelled set → the whole conditional is JSON.
+        var program = new EffectProgram<CardPlayContext>(
+            new ConditionalEffectNode<CardPlayContext>(
+                new AndExpression<CardPlayContext>(
+                    new TargetIsAliveExpression<CardPlayContext>(CombatantTargetSelectors.Source),
+                    new TargetExistsExpression<CardPlayContext>(CombatantTargetSelectors.Source)),
+                new GainBlockNode<CardPlayContext>(CombatantTargetSelectors.Source, new ConstantExpression<CardPlayContext>(3))));
+
+        Assert.Null(CombatProgramModel.Classify(program));
+    }
 }

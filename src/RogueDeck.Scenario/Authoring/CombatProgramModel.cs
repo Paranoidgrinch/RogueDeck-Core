@@ -26,6 +26,21 @@ public sealed record CombatAmountSpec(string Kind = "const", int Const = 3)
     public bool IsAdvanced => Kind == "advanced";
 }
 
+// A conditional node's condition, in the small curated shape the editor authors, plus mapping to/from the engine's
+// ICombatExpression<TContext,bool>. Mirrors RelicConditionSpec on the run side. Modelled: a value comparison over a
+// target (health / resource / status stacks vs a constant), or a target-state predicate (has status / alive /
+// downed / exists). Anything richer (and/or/not, computed right operand) classifies "advanced" → JSON escape.
+public sealed record CombatConditionSpec(
+    string Kind = "compare",                                   // compare | hasStatus | isAlive | downed | exists | advanced
+    string SelectorKey = "source",                             // the inspected target
+    string ValueKind = "currentHealth",                        // compare left: currentHealth/maxHealth/missingHealth/healthPercentage/currentResource/statusStacks
+    ComparisonOperator Op = ComparisonOperator.GreaterOrEqual,
+    int Right = 1,
+    string Id = "")                                            // statusId (hasStatus/statusStacks) or resourceId (currentResource)
+{
+    public bool IsAdvanced => Kind == "advanced";
+}
+
 // One combat effect node in editor shape. Kind is the leaf/composite discriminator; SelectorKey names a catalog
 // target selector (leaves + forEachTarget); Amount is the curated amount for amount-bearing leaves + the repeat
 // count; ResourceId applies to gainResource. Children holds sub-nodes: empty for leaves, N for sequence, one body
@@ -37,7 +52,9 @@ public sealed record CombatNodeModel(
     CombatAmountSpec? Amount = null,
     // Only meaningful for gainResource; canonically empty for other kinds so classify/build round-trips exactly.
     string ResourceId = "",
-    IReadOnlyList<CombatNodeModel>? Children = null)
+    IReadOnlyList<CombatNodeModel>? Children = null,
+    // Only meaningful for the conditional node (its if-test); null for every other kind.
+    CombatConditionSpec? Condition = null)
 {
     public CombatAmountSpec AmountOrDefault => Amount ?? CombatAmountSpec.FromConst(3);
     public IReadOnlyList<CombatNodeModel> ChildrenOrEmpty => Children ?? Array.Empty<CombatNodeModel>();
@@ -51,6 +68,11 @@ public sealed record CombatNodeModel(
     public static CombatNodeModel Repeat(CombatAmountSpec count, CombatNodeModel body) =>
         new("repeat", Amount: count, Children: new[] { body });
 
+    // Conditional: if Condition then Children[0] [else Children[1]]. A branch is a single node (wrap a sequence for
+    // several effects), mirroring the engine's ConditionalEffectNode.Then/Else.
+    public static CombatNodeModel Conditional(CombatConditionSpec condition, CombatNodeModel then, CombatNodeModel? @else = null) =>
+        new("conditional", Children: @else is null ? new[] { then } : new[] { then, @else }, Condition: condition);
+
     // Records compare list-typed fields by reference; the model tree needs STRUCTURAL equality (recursive over
     // Children) so a classified tree equals a freshly-built one. Replaces the synthesized Equals/GetHashCode.
     public bool Equals(CombatNodeModel? other) =>
@@ -59,6 +81,7 @@ public sealed record CombatNodeModel(
         && SelectorKey == other.SelectorKey
         && Amount == other.Amount
         && ResourceId == other.ResourceId
+        && Condition == other.Condition
         && ChildrenOrEmpty.SequenceEqual(other.ChildrenOrEmpty);
 
     public override int GetHashCode()
@@ -68,6 +91,7 @@ public sealed record CombatNodeModel(
         hash.Add(SelectorKey);
         hash.Add(Amount);
         hash.Add(ResourceId);
+        hash.Add(Condition);
         foreach (var child in ChildrenOrEmpty)
             hash.Add(child);
         return hash.ToHashCode();
@@ -92,6 +116,7 @@ public static class CombatProgramModel
         ("sequence", "in sequence…"),
         ("forEachTarget", "for each target…"),
         ("repeat", "repeat…"),
+        ("conditional", "if…"),
     ];
 
     // Every kind offered in the "+ node" palette (leaves then composites).
@@ -109,6 +134,7 @@ public static class CombatProgramModel
         "sequence" => CombatNodeModel.Sequence(new[] { NewNode("dealDamage") }),
         "forEachTarget" => CombatNodeModel.ForEach("allEnemies", NewNode("dealDamage")),
         "repeat" => CombatNodeModel.Repeat(CombatAmountSpec.FromConst(2), NewNode("dealDamage")),
+        "conditional" => CombatNodeModel.Conditional(new CombatConditionSpec(), NewNode("dealDamage")),
         _ => new("gainBlock", "source", CombatAmountSpec.FromConst(5)),
     };
 
@@ -127,6 +153,14 @@ public static class CombatProgramModel
     ];
 
     public static IEnumerable<string> SelectorKeys => Selectors.Select(s => s.Key);
+
+    // The at-most-one-target selectors — the only ones valid for a scalar read (a condition's compare-left or a
+    // target-state predicate); multi-target selectors (allEnemies/allAllies) throw when read as a scalar. The 1c
+    // condition-selector dropdown offers this subset; leaf-node effect selectors may use the full catalog.
+    public static readonly IReadOnlyList<string> SingleTargetSelectorKeys =
+    [
+        "source", "lowestHealthEnemy", "highestHealthEnemy", "lowestHealthAlly", "highestHealthAlly",
+    ];
 
     private static ICombatantTargetSelector SelectorFor(string key) =>
         Selectors.FirstOrDefault(s => s.Key == key).Selector
@@ -157,6 +191,71 @@ public static class CombatProgramModel
             _ => CombatAmountSpec.Advanced,
         };
 
+    // ── conditions (conditional node's if-test) ────────────────────────────────────
+    public static ICombatExpression<TContext, bool> BuildCondition<TContext>(CombatConditionSpec spec)
+        where TContext : class
+    {
+        ArgumentNullException.ThrowIfNull(spec);
+        var selector = SelectorFor(spec.SelectorKey);
+        return spec.Kind switch
+        {
+            "hasStatus" => new TargetHasStatusExpression<TContext>(selector, new StatusDefinitionId(spec.Id)),
+            "isAlive" => new TargetIsAliveExpression<TContext>(selector),
+            "downed" => new TargetDownedExpression<TContext>(selector),
+            "exists" => new TargetExistsExpression<TContext>(selector),
+            _ => new ComparisonExpression<TContext>(
+                ConditionLeftValue<TContext>(selector, spec.ValueKind, spec.Id),
+                spec.Op,
+                new ConstantExpression<TContext>(spec.Right)),
+        };
+    }
+
+    public static CombatConditionSpec ClassifyCondition<TContext>(ICombatExpression<TContext, bool> condition)
+        where TContext : class
+    {
+        switch (condition)
+        {
+            case TargetHasStatusExpression<TContext> e when KeyFor(e.Selector) is { } key:
+                return new CombatConditionSpec("hasStatus", key, Id: e.StatusId.value);
+            case TargetIsAliveExpression<TContext> e when KeyFor(e.Selector) is { } key:
+                return new CombatConditionSpec("isAlive", key);
+            case TargetDownedExpression<TContext> e when KeyFor(e.Selector) is { } key:
+                return new CombatConditionSpec("downed", key);
+            case TargetExistsExpression<TContext> e when KeyFor(e.Selector) is { } key:
+                return new CombatConditionSpec("exists", key);
+            case ComparisonExpression<TContext> c
+                when c.Right is ConstantExpression<TContext> right && ConditionLeftKind<TContext>(c.Left) is { } left:
+                return new CombatConditionSpec("compare", left.SelectorKey, left.ValueKind, c.Op, right.Value, left.Id);
+            default:
+                return new CombatConditionSpec("advanced");
+        }
+    }
+
+    private static ICombatExpression<TContext, int> ConditionLeftValue<TContext>(
+        ICombatantTargetSelector selector, string valueKind, string id)
+        where TContext : class => valueKind switch
+        {
+            "maxHealth" => new CombatantMaxHealthExpression<TContext>(selector),
+            "missingHealth" => new CombatantMissingHealthExpression<TContext>(selector),
+            "healthPercentage" => new CombatantHealthPercentageExpression<TContext>(selector),
+            "currentResource" => new CombatantCurrentResourceExpression<TContext>(selector, new ResourceId(id)),
+            "statusStacks" => new CombatantStatusStacksExpression<TContext>(selector, new StatusDefinitionId(id)),
+            _ => new CombatantCurrentHealthExpression<TContext>(selector), // "currentHealth"
+        };
+
+    private static (string SelectorKey, string ValueKind, string Id)? ConditionLeftKind<TContext>(
+        ICombatExpression<TContext, int> left)
+        where TContext : class => left switch
+        {
+            CombatantCurrentHealthExpression<TContext> e when KeyFor(e.Selector) is { } k => (k, "currentHealth", ""),
+            CombatantMaxHealthExpression<TContext> e when KeyFor(e.Selector) is { } k => (k, "maxHealth", ""),
+            CombatantMissingHealthExpression<TContext> e when KeyFor(e.Selector) is { } k => (k, "missingHealth", ""),
+            CombatantHealthPercentageExpression<TContext> e when KeyFor(e.Selector) is { } k => (k, "healthPercentage", ""),
+            CombatantCurrentResourceExpression<TContext> e when KeyFor(e.Selector) is { } k => (k, "currentResource", e.ResourceId.value),
+            CombatantStatusStacksExpression<TContext> e when KeyFor(e.Selector) is { } k => (k, "statusStacks", e.StatusId.value),
+            _ => null,
+        };
+
     // ── program (single-node tree in 1a) ───────────────────────────────────────────
     public static EffectProgram<TContext> Build<TContext>(CombatNodeModel model)
         where TContext : class
@@ -177,6 +276,12 @@ public static class CombatProgramModel
                 return new ForEachTargetEffectNode<TContext>(SelectorFor(model.SelectorKey), BuildBody<TContext>(model));
             case "repeat":
                 return new RepeatEffectNode<TContext>(BuildAmount<TContext>(model.AmountOrDefault), BuildBody<TContext>(model));
+            case "conditional":
+                var children = model.ChildrenOrEmpty;
+                return new ConditionalEffectNode<TContext>(
+                    BuildCondition<TContext>(model.Condition ?? new CombatConditionSpec()),
+                    children.Count > 0 ? BuildNode<TContext>(children[0]) : BuildLeaf<TContext>(new CombatNodeModel()),
+                    children.Count > 1 ? BuildNode<TContext>(children[1]) : null);
             default:
                 return BuildLeaf<TContext>(model);
         }
@@ -240,10 +345,27 @@ public static class CombatProgramModel
                 return !count.IsAdvanced && ClassifyNode<TContext>(r.Body) is { } repeatBody
                     ? CombatNodeModel.Repeat(count, repeatBody)
                     : null;
+            case ConditionalEffectNode<TContext> cond:
+                return ClassifyConditional<TContext>(cond);
 
             default:
                 return null;
         }
+    }
+
+    private static CombatNodeModel? ClassifyConditional<TContext>(ConditionalEffectNode<TContext> node)
+        where TContext : class
+    {
+        var condition = ClassifyCondition(node.Condition);
+        if (condition.IsAdvanced)
+            return null;
+        if (ClassifyNode<TContext>(node.Then) is not { } then)
+            return null;
+        if (node.Else is null)
+            return CombatNodeModel.Conditional(condition, then);
+        return ClassifyNode<TContext>(node.Else) is { } @else
+            ? CombatNodeModel.Conditional(condition, then, @else)
+            : null;
     }
 
     // Classify every child, or null if any child is outside the modelled subset (the whole composite is then JSON).
