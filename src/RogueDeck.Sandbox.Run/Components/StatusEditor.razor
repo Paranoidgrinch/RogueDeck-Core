@@ -1,0 +1,160 @@
+@using Microsoft.AspNetCore.Components.Rendering
+@* Visual editor for the run's custom status definitions (StatusData) — the sibling of the Cards / Relics editors.
+   A status is id + display + polarity/stacking/flags/tags plus declarative PASSIVE MODIFIERS (e.g. Strength =
+   "+1 damage dealt per stack", Vulnerable = "×150% damage received"). Triggers (fire a program on an event) and
+   interceptors (death-prevention / debuff-block) are authored in the sections below. Registered into every combat
+   by RunPlayback.BuildContent, so a card/relic/enemy that applies the status resolves it. *@
+
+<section class="panel">
+    <h2>Statuses</h2>
+    <p class="muted">Custom status effects the run's content applies. Passive modifiers change combat math while a
+        combatant bears the status; triggers and interceptors add reactive behaviour.</p>
+
+    @if (Blueprint.Statuses.Count == 0)
+    {
+        <p class="muted">No statuses yet — add one below.</p>
+    }
+
+    @for (var si = 0; si < Blueprint.Statuses.Count; si++)
+    {
+        var index = si;
+        var status = Blueprint.Statuses[si];
+        <div class="editor-card">
+            <div class="run-bar">
+                <label>Status id
+                    <input value="@status.Id" style="width:9rem"
+                           @onchange="e => Edit(index, s => s with { Id = AsString(e.Value).Trim() })" />
+                </label>
+                <label>Name
+                    <input value="@status.NameKey" style="width:10rem"
+                           @onchange="e => Edit(index, s => s with { NameKey = Nullable(AsString(e.Value)) })" />
+                </label>
+                <button class="mini" @onclick="() => Remove(index)">✕ remove</button>
+            </div>
+            <div class="run-bar">
+                <label>Polarity @EnumSelect(status.Polarity, p => Edit(index, s => s with { Polarity = p }))</label>
+                <label>Stacking @EnumSelect(status.StackingBehavior, b => Edit(index, s => s with { StackingBehavior = b }))</label>
+                <label><input type="checkbox" checked="@status.UsesStacks"
+                              @onchange="e => Edit(index, s => s with { UsesStacks = AsBool(e.Value) })" /> stacks</label>
+                <label><input type="checkbox" checked="@status.UsesDuration"
+                              @onchange="e => Edit(index, s => s with { UsesDuration = AsBool(e.Value) })" /> duration</label>
+                <label><input type="checkbox" checked="@status.UsesCharges"
+                              @onchange="e => Edit(index, s => s with { UsesCharges = AsBool(e.Value) })" /> charges</label>
+            </div>
+            <div class="run-bar">
+                <label>Tags
+                    <input value="@string.Join(", ", status.Tags)" style="width:18rem" placeholder="comma, separated"
+                           @onchange="e => Edit(index, s => s with { Tags = ParseTags(AsString(e.Value)) })" />
+                </label>
+            </div>
+
+            <div class="editor-effects">
+                <span class="muted">Passive modifiers:</span>
+                @for (var pi = 0; pi < status.PassiveModifiers.Count; pi++)
+                {
+                    var modIndex = pi;
+                    var mod = status.PassiveModifiers[pi];
+                    <div class="run-bar">
+                        @EnumSelect(mod.Pipeline, p => SetModifier(index, modIndex, mod with { Pipeline = p }))
+                        @EnumSelect(mod.Operation, o => SetModifier(index, modIndex, mod with { Operation = o }))
+                        <label>mag
+                            <input type="number" value="@mod.Magnitude" style="width:4rem"
+                                   @onchange="e => SetModifier(index, modIndex, mod with { Magnitude = AsInt(e.Value, mod.Magnitude) })" />
+                        </label>
+                        <label>prio
+                            <input type="number" value="@mod.Priority" style="width:4rem"
+                                   @onchange="e => SetModifier(index, modIndex, mod with { Priority = AsInt(e.Value, mod.Priority) })" />
+                        </label>
+                        <label>damage @EnumSelect(mod.RestrictDamageKind ?? DamageKind.Direct, k => SetModifier(index, modIndex, mod with { RestrictDamageKind = k }))</label>
+                        <label>applies-to
+                            <input value="@mod.AppliesToStatusId" style="width:7rem" placeholder="status id (opt)"
+                                   @onchange="e => SetModifier(index, modIndex, mod with { AppliesToStatusId = Nullable(AsString(e.Value)) })" />
+                        </label>
+                        <button class="mini" @onclick="() => RemoveModifier(index, modIndex)">✕</button>
+                    </div>
+                }
+                <button class="mini" @onclick="() => AddModifier(index)">+ passive modifier</button>
+            </div>
+        </div>
+    }
+
+    <div class="run-bar">
+        <input value="@_newId" placeholder="new status id" style="width:12rem"
+               @onchange="e => _newId = AsString(e.Value)" />
+        <button class="mini" @onclick="Add" disabled="@string.IsNullOrWhiteSpace(_newId)">+ add status</button>
+    </div>
+</section>
+
+@code {
+    [Parameter] public RunBlueprint Blueprint { get; set; } = default!;
+    [Parameter] public EventCallback<RunBlueprint> BlueprintChanged { get; set; }
+
+    private string _newId = "";
+
+    private static string AsString(object? v) => v?.ToString() ?? "";
+    private static int AsInt(object? v, int fallback) => int.TryParse(v?.ToString(), out var n) ? n : fallback;
+    private static bool AsBool(object? v) => v is bool b ? b : bool.TryParse(v?.ToString(), out var r) && r;
+    private static string? Nullable(string v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();
+    private static IReadOnlyList<string> ParseTags(string v) =>
+        v.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    private Task Save(IReadOnlyList<StatusData> statuses) =>
+        BlueprintChanged.InvokeAsync(Blueprint with { Statuses = statuses });
+
+    private Task Edit(int index, Func<StatusData, StatusData> edit)
+    {
+        var list = Blueprint.Statuses.ToList();
+        list[index] = edit(list[index]);
+        return Save(list);
+    }
+
+    private Task Remove(int index) => Save(Blueprint.Statuses.Where((_, i) => i != index).ToList());
+
+    private Task Add()
+    {
+        var id = _newId.Trim();
+        if (id.Length == 0 || Blueprint.Statuses.Any(s => s.Id == id))
+            return Task.CompletedTask;
+        _newId = "";
+        return Save(Blueprint.Statuses.Append(new StatusData { Id = id, NameKey = id, UsesStacks = true }).ToList());
+    }
+
+    // ── passive modifiers ────────────────────────────────────────────────────────
+    private Task SetModifier(int index, int modIndex, PassiveModifierData mod) =>
+        Edit(index, s =>
+        {
+            var mods = s.PassiveModifiers.ToList();
+            mods[modIndex] = mod;
+            return s with { PassiveModifiers = mods };
+        });
+
+    private Task RemoveModifier(int index, int modIndex) =>
+        Edit(index, s => s with { PassiveModifiers = s.PassiveModifiers.Where((_, i) => i != modIndex).ToList() });
+
+    private Task AddModifier(int index) =>
+        Edit(index, s => s with
+        {
+            PassiveModifiers = s.PassiveModifiers.Append(new PassiveModifierData(
+                PassiveModifierPipeline.DamageDealt, PassiveModifierOperation.AddPerStack, 1)).ToList(),
+        });
+
+    // A generic enum dropdown bound to a value + change handler — keeps the many enum selects (polarity, stacking,
+    // pipeline, operation, damage kind) to one line each in the markup.
+    private RenderFragment EnumSelect<TEnum>(TEnum current, Func<TEnum, Task> onChange) where TEnum : struct, Enum => builder =>
+    {
+        builder.OpenElement(0, "select");
+        builder.AddAttribute(1, "value", current.ToString());
+        builder.AddAttribute(2, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+            Enum.TryParse<TEnum>(AsString(e.Value), out var value) ? onChange(value) : Task.CompletedTask));
+        var seq = 3;
+        foreach (var value in Enum.GetValues<TEnum>())
+        {
+            builder.OpenElement(seq++, "option");
+            builder.AddAttribute(seq++, "value", value.ToString());
+            builder.AddAttribute(seq++, "selected", value.Equals(current));
+            builder.AddContent(seq++, value.ToString());
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+    };
+}

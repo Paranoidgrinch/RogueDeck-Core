@@ -1,0 +1,25 @@
+@rendermode InteractiveServer
+@inject RunDocument Doc
+
+@* The dedicated Statuses tab: a lens over the shared run document (RunDocument), hosting the StatusEditor.
+   Custom status definitions authored here persist in the one ProjectDraft document and are registered into every
+   combat by RunPlayback.BuildContent, so cards / relics / enemy actions that apply them resolve the status. *@
+<section style="padding:1rem; max-width:72rem">
+    <h1>Statuses</h1>
+    <p class="muted">Author the run's custom status effects — passive modifiers, and (below) triggers and
+        interceptors. Part of the shared run document; referenced by id from card / relic / enemy-action effects.</p>
+
+    <StatusEditor Blueprint="_blueprint" BlueprintChanged="OnChanged" />
+</section>
+
+@code {
+    private RunBlueprint _blueprint = default!;
+
+    protected override void OnInitialized() => _blueprint = Doc.Load();
+
+    private void OnChanged(RunBlueprint blueprint)
+    {
+        Doc.Save(blueprint);
+        _blueprint = blueprint;
+    }
+}
