@@ -13,12 +13,17 @@ public class CombatProgramModelTests
     {
         foreach (var kind in CombatProgramModel.NodeKinds.Select(n => n.Kind))
         {
-            // ResourceId is part of a resource leaf's identity (gain/lose/modify); empty for the other kinds.
+            // removeStatus / cleanse carry no amount, so they don't fit this amount-bearing template — dedicated
+            // round-trip tests cover them below.
+            if (!CombatProgramModel.UsesAmount(kind))
+                continue;
+            // ResourceId is part of a resource leaf's identity (gain/lose/modify); StatusId of a status leaf's.
             var resourceId = CombatProgramModel.UsesResourceId(kind) ? "standard.energy" : "";
+            var statusId = CombatProgramModel.UsesStatusId(kind) ? "poison" : "";
             foreach (var selector in CombatProgramModel.SelectorKeys)
             {
-                yield return [new CombatNodeModel(kind, selector, CombatAmountSpec.FromConst(4), resourceId)];
-                yield return [new CombatNodeModel(kind, selector, CombatAmountSpec.Event, resourceId)];
+                yield return [new CombatNodeModel(kind, selector, CombatAmountSpec.FromConst(4), resourceId, StatusId: statusId)];
+                yield return [new CombatNodeModel(kind, selector, CombatAmountSpec.Event, resourceId, StatusId: statusId)];
             }
         }
     }
@@ -123,6 +128,54 @@ public class CombatProgramModelTests
         Assert.Equal("faith", Assert.IsType<ModifyResourceNode<CardPlayContext>>(modifyProgram.Root).ResourceId.value);
         Assert.Equal(lose, CombatProgramModel.Classify(loseProgram));
         Assert.Equal(modify, CombatProgramModel.Classify(modifyProgram));
+    }
+
+    [Fact]
+    public void ApplyStatus_leaf_round_trips_status_id_stacks_duration_and_charges()
+    {
+        var model = new CombatNodeModel(
+            "applyStatus", "eventTarget", CombatAmountSpec.FromConst(3),
+            StatusId: "poison", DurationTurns: 2, Charges: 1);
+
+        var program = CombatProgramModel.Build<CardPlayContext>(model);
+
+        var node = Assert.IsType<ApplyStatusNode<CardPlayContext>>(program.Root);
+        Assert.Equal("poison", node.StatusDefinitionId.value);
+        Assert.Equal(2, node.DurationTurns);
+        Assert.Equal(1, node.Charges);
+        Assert.Equal(model, CombatProgramModel.Classify(program));
+    }
+
+    [Fact]
+    public void RemoveStatus_and_cleanse_leaves_round_trip_without_an_amount()
+    {
+        var remove = new CombatNodeModel("removeStatus", "eventTarget", StatusId: "weak");
+        var cleanse = new CombatNodeModel("cleanse", "source", Polarity: StatusPolarity.Debuff);
+
+        var removeProgram = CombatProgramModel.Build<CardPlayContext>(remove);
+        var cleanseProgram = CombatProgramModel.Build<CardPlayContext>(cleanse);
+
+        Assert.Equal("weak", Assert.IsType<RemoveStatusNode<CardPlayContext>>(removeProgram.Root).StatusDefinitionId.value);
+        Assert.Equal(StatusPolarity.Debuff, Assert.IsType<RemoveStatusesByPolarityNode<CardPlayContext>>(cleanseProgram.Root).Polarity);
+        Assert.Equal(remove, CombatProgramModel.Classify(removeProgram));
+        Assert.Equal(cleanse, CombatProgramModel.Classify(cleanseProgram));
+    }
+
+    [Fact]
+    public void Status_leaf_classifies_after_a_CombatJson_round_trip()
+    {
+        // A status leaf nested in control flow, serialized + deserialized, must still classify (fresh selector +
+        // status-id instances by value/type) so a loaded card shows the visual editor.
+        var model = CombatNodeModel.Conditional(
+            new CombatConditionSpec("hasStatus", "eventTarget", Id: "weak"),
+            new CombatNodeModel("applyStatus", "eventTarget", CombatAmountSpec.FromConst(2), StatusId: "poison", DurationTurns: 3));
+        var options = CombatJson.CreateOptions<CardPlayContext>();
+
+        var program = CombatProgramModel.Build<CardPlayContext>(model);
+        var json = JsonSerializer.Serialize(program, options);
+        var back = JsonSerializer.Deserialize<EffectProgram<CardPlayContext>>(json, options)!;
+
+        Assert.Equal(model, CombatProgramModel.Classify(back));
     }
 
     [Fact]

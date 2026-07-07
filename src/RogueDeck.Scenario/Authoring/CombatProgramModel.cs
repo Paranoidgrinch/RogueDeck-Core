@@ -53,7 +53,14 @@ public sealed record CombatNodeModel(
     string ResourceId = "",
     IReadOnlyList<CombatNodeModel>? Children = null,
     // Only meaningful for the conditional node (its if-test); null for every other kind.
-    CombatConditionSpec? Condition = null)
+    CombatConditionSpec? Condition = null,
+    // Status leaves: the affected status id (applyStatus / removeStatus), applyStatus's duration (turns) and
+    // charges, and cleanse's polarity. Canonically at their defaults for kinds that don't use them ("" / 0 / 0 /
+    // Debuff) so build↔classify round-trips exactly. applyStatus's stacks live in Amount like any amount leaf.
+    string StatusId = "",
+    int DurationTurns = 0,
+    int Charges = 0,
+    StatusPolarity Polarity = StatusPolarity.Debuff)
 {
     public CombatAmountSpec AmountOrDefault => Amount ?? CombatAmountSpec.FromConst(3);
     public IReadOnlyList<CombatNodeModel> ChildrenOrEmpty => Children ?? Array.Empty<CombatNodeModel>();
@@ -81,6 +88,10 @@ public sealed record CombatNodeModel(
         && Amount == other.Amount
         && ResourceId == other.ResourceId
         && Condition == other.Condition
+        && StatusId == other.StatusId
+        && DurationTurns == other.DurationTurns
+        && Charges == other.Charges
+        && Polarity == other.Polarity
         && ChildrenOrEmpty.SequenceEqual(other.ChildrenOrEmpty);
 
     public override int GetHashCode()
@@ -91,6 +102,10 @@ public sealed record CombatNodeModel(
         hash.Add(Amount);
         hash.Add(ResourceId);
         hash.Add(Condition);
+        hash.Add(StatusId);
+        hash.Add(DurationTurns);
+        hash.Add(Charges);
+        hash.Add(Polarity);
         foreach (var child in ChildrenOrEmpty)
             hash.Add(child);
         return hash.ToHashCode();
@@ -112,11 +127,21 @@ public static class CombatProgramModel
         ("modifyMaxHealth", "modify max health"),
         ("setHealth", "set health"),
         ("drawCards", "draw cards"),
+        ("applyStatus", "apply status"),
+        ("removeStatus", "remove status"),
+        ("cleanse", "cleanse (by polarity)"),
     ];
 
     // The leaf kinds that carry a resource id (their editor row shows a resource-id field; ChangeKind seeds a
     // default when switching INTO one of these). Kept here so the razor editor and ChangeKind agree.
     public static bool UsesResourceId(string kind) => kind is "gainResource" or "loseResource" or "modifyResource";
+
+    // The leaf kinds that name a specific status (apply / remove show a status-id field).
+    public static bool UsesStatusId(string kind) => kind is "applyStatus" or "removeStatus";
+
+    // The leaf kinds that carry an amount (its stacks/value/count). removeStatus and cleanse take none, so the
+    // editor hides the amount control for them (and their model keeps Amount at the canonical null).
+    public static bool UsesAmount(string kind) => kind is not ("removeStatus" or "cleanse");
 
     // The control-flow (composite) kinds the editor offers as their own titled blocks with sub-bodies. Conditional
     // is deferred (it needs a combat condition spec). Each holds a Children body: N for sequence, one for the rest.
@@ -145,6 +170,9 @@ public static class CombatProgramModel
         "modifyMaxHealth" => new("modifyMaxHealth", "source", CombatAmountSpec.FromConst(5)),
         "setHealth" => new("setHealth", "source", CombatAmountSpec.FromConst(10)),
         "drawCards" => new("drawCards", "source", CombatAmountSpec.FromConst(1)),
+        "applyStatus" => new("applyStatus", "eventTarget", CombatAmountSpec.FromConst(1), StatusId: "poison"),
+        "removeStatus" => new("removeStatus", "eventTarget", StatusId: "poison"),
+        "cleanse" => new("cleanse", "source", Polarity: StatusPolarity.Debuff),
         "sequence" => CombatNodeModel.Sequence(new[] { NewNode("dealDamage") }),
         "forEachTarget" => CombatNodeModel.ForEach("allEnemies", NewNode("dealDamage")),
         "repeat" => CombatNodeModel.Repeat(CombatAmountSpec.FromConst(2), NewNode("dealDamage")),
@@ -169,6 +197,11 @@ public static class CombatProgramModel
             {
                 Kind = kind,
                 ResourceId = UsesResourceId(kind) ? (node.ResourceId == "" ? "standard.energy" : node.ResourceId) : "",
+                StatusId = UsesStatusId(kind) ? (node.StatusId == "" ? "poison" : node.StatusId) : "",
+                DurationTurns = kind == "applyStatus" ? node.DurationTurns : 0,
+                Charges = kind == "applyStatus" ? node.Charges : 0,
+                Polarity = kind == "cleanse" ? node.Polarity : StatusPolarity.Debuff,
+                Amount = UsesAmount(kind) ? (node.Amount ?? CombatAmountSpec.FromConst(3)) : null,
             };
 
         if (wasComposite && isComposite)
@@ -366,6 +399,10 @@ public static class CombatProgramModel
             "modifyMaxHealth" => new ModifyMaxHealthNode<TContext>(selector, amount),
             "setHealth" => new SetHealthNode<TContext>(selector, amount),
             "drawCards" => new DrawCardsNode<TContext>(selector, amount),
+            "applyStatus" => new ApplyStatusNode<TContext>(
+                selector, new StatusDefinitionId(model.StatusId), amount, model.DurationTurns, model.Charges),
+            "removeStatus" => new RemoveStatusNode<TContext>(selector, new StatusDefinitionId(model.StatusId)),
+            "cleanse" => new RemoveStatusesByPolarityNode<TContext>(selector, model.Polarity),
             _ => new GainBlockNode<TContext>(selector, amount),
         };
     }
@@ -401,6 +438,22 @@ public static class CombatProgramModel
                 return Leaf("setHealth", n.TargetSelector, n.Value);
             case DrawCardsNode<TContext> { ResultKey: null } n:
                 return Leaf("drawCards", n.TargetSelector, n.Count);
+            case ApplyStatusNode<TContext> { ResultKey: null } n:
+                if (KeyFor(n.TargetSelector) is not { } applyKey)
+                    return null;
+                var stacks = ClassifyAmount(n.Stacks);
+                return stacks.IsAdvanced
+                    ? null
+                    : new CombatNodeModel("applyStatus", applyKey, stacks,
+                        StatusId: n.StatusDefinitionId.value, DurationTurns: n.DurationTurns, Charges: n.Charges);
+            case RemoveStatusNode<TContext> { ResultKey: null } n:
+                return KeyFor(n.TargetSelector) is { } removeKey
+                    ? new CombatNodeModel("removeStatus", removeKey, StatusId: n.StatusDefinitionId.value)
+                    : null;
+            case RemoveStatusesByPolarityNode<TContext> { ResultKey: null } n:
+                return KeyFor(n.TargetSelector) is { } cleanseKey
+                    ? new CombatNodeModel("cleanse", cleanseKey, Polarity: n.Polarity)
+                    : null;
 
             case SequenceEffectNode<TContext> s:
                 return ClassifyChildren<TContext>(s.Children) is { } children

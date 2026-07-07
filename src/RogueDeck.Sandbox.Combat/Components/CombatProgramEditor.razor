@@ -87,11 +87,38 @@ else
     <span class="fx">
         @KindSelect
         @SelectorSelect(CombatProgramModel.SelectorKeys, Node.SelectorKey, key => Set(Node with { SelectorKey = key }))
-        @AmountControls(Node.AmountOrDefault, spec => Set(Node with { Amount = spec }))
+        @if (CombatProgramModel.UsesAmount(Node.Kind))
+        {
+            @AmountControls(Node.AmountOrDefault, spec => Set(Node with { Amount = spec }))
+        }
         @if (CombatProgramModel.UsesResourceId(Node.Kind))
         {
             <input value="@Node.ResourceId" style="width:8rem" placeholder="resource id"
                    @onchange="e => Set(Node with { ResourceId = AsString(e.Value) })" />
+        }
+        @if (CombatProgramModel.UsesStatusId(Node.Kind))
+        {
+            <input value="@Node.StatusId" style="width:8rem" placeholder="status id"
+                   @onchange="e => Set(Node with { StatusId = AsString(e.Value) })" />
+        }
+        @if (Node.Kind == "applyStatus")
+        {
+            <span class="muted">turns</span>
+            <input type="number" value="@Node.DurationTurns" style="width:3.5rem"
+                   @onchange="e => Set(Node with { DurationTurns = AsInt(e.Value, Node.DurationTurns) })" />
+            <span class="muted">charges</span>
+            <input type="number" value="@Node.Charges" style="width:3.5rem"
+                   @onchange="e => Set(Node with { Charges = AsInt(e.Value, Node.Charges) })" />
+        }
+        @if (Node.Kind == "cleanse")
+        {
+            <select value="@Node.Polarity"
+                    @onchange="e => Set(Node with { Polarity = ParsePolarity(e.Value) })">
+                @foreach (var p in Enum.GetValues<StatusPolarity>())
+                {
+                    <option value="@p" selected="@(p == Node.Polarity)">@p</option>
+                }
+            </select>
         }
         @RemoveButton
     </span>
@@ -107,6 +134,8 @@ else
 
     private static string AsString(object? v) => v?.ToString() ?? "";
     private static int AsInt(object? v, int fallback) => int.TryParse(v?.ToString(), out var n) ? n : fallback;
+    private static StatusPolarity ParsePolarity(object? v) =>
+        Enum.TryParse<StatusPolarity>(AsString(v), out var p) ? p : StatusPolarity.Debuff;
 
     private void Set(CombatNodeModel node) => _ = NodeChanged.InvokeAsync(node);
 

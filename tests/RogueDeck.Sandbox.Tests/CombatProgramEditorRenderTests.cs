@@ -66,13 +66,41 @@ public class CombatProgramEditorRenderTests
     [Fact]
     public async Task Palette_lists_the_widened_leaf_kinds()
     {
-        // The kind dropdown lists every AllKinds entry, so the B2a additions must appear as options on any node.
+        // The kind dropdown lists every AllKinds entry, so the B2a/B2b additions must appear as options on any node.
         var html = await RenderAsync(new CombatNodeModel("dealDamage", "source", CombatAmountSpec.FromConst(1)));
 
         Assert.Contains("modify max health", html);
         Assert.Contains("set health", html);
         Assert.Contains("draw cards", html);
         Assert.Contains("modify resource", html);
+        Assert.Contains("apply status", html);
+        Assert.Contains("remove status", html);
+        Assert.Contains("cleanse (by polarity)", html);
+    }
+
+    [Fact]
+    public async Task Renders_apply_status_with_id_duration_and_charges()
+    {
+        // B2b: applyStatus shows a status-id field plus turns/charges inputs (and the stacks amount control).
+        var html = await RenderAsync(
+            new CombatNodeModel("applyStatus", "eventTarget", CombatAmountSpec.FromConst(2), StatusId: "poison", DurationTurns: 3, Charges: 1));
+
+        Assert.Contains("apply status", html);
+        Assert.Contains("poison", html);
+        Assert.Contains("turns", html);
+        Assert.Contains("charges", html);
+    }
+
+    [Fact]
+    public async Task Renders_cleanse_with_a_polarity_dropdown_and_no_amount()
+    {
+        // cleanse takes no amount (UsesAmount false), so the amount kind-select is absent; it shows polarity options.
+        var html = await RenderAsync(new CombatNodeModel("cleanse", "source", Polarity: StatusPolarity.Debuff));
+
+        Assert.Contains("cleanse (by polarity)", html);
+        Assert.Contains("Buff", html);
+        Assert.Contains("Debuff", html);
+        Assert.DoesNotContain("event amount", html); // the amount control is hidden for a no-amount leaf
     }
 
     [Fact]
