@@ -8,7 +8,25 @@ Status-Legende: ☐ offen · ◐ teilweise (Engine hat's, UI-Lücke) · ✔ erle
 
 ---
 
-## A — Custom Resources in der UI ☐
+## A — Custom Resources in der UI ✔
+
+**Erledigt (2026-07-07):** Beide Welten (User-Entscheidung „Beide").
+- **A1 @ 4fff1b9:** HeroTab-Editor generalisiert von nur-Gold auf beliebige Run-Ressourcen (id + Startwert,
+  add/edit/remove). Daten (`RunStart.Resources`) trugen es bereits.
+- **A2 @ dde2ed4:** `CombatResourceData` (id/name/starting/max/refill) + `RunBlueprint.CombatResources`; der
+  run→combat Bridge (RunPlayback.BuildContent → CombatContentLibrary → EncounterCatalog.Build) injiziert sie in
+  jeden Hero (Pool + Max + Per-Turn-Refill via bestehendem `ResourceRefillSpec`/`TurnStartResourceRefillHandler`).
+  Encounter-eigene Ids gewinnen über run-globale (kein Doppel-Pool). RunJson-Roundtrip + Injektions-/Kollisions-Tests.
+- **A3 @ 4fff1b9:** HeroTab „Combat resources"-Sektion (id/name/start/max/refill-Toggle). Live via CDP verifiziert
+  (beide Sektionen rendern, Add-Flow wired, null Blazor-Errors).
+
+Erkenntnis: die Combat-Resource-Engine-Primitive existierten bereits (`ResourceSpec`, `ResourceRefillSpec`,
+`TurnStartResourceRefillHandler`, `ScenarioCombatFactory`); A2 war nur die run-globale Daten-Schicht + Bridge.
+
+---
+
+### (historischer Plan A — erledigt)
+## ~~A — Custom Resources in der UI~~ ☐
 
 **Ist-Zustand (Engine):** beliebige Resource-Ids funktionieren; `RunStart.Resources` ist `id → amount`.
 Es gibt aber **kein Resource-Definition-Slice** (Name/Anzeige/Defaults) analog zu `StatusData`/`RelicData`,
