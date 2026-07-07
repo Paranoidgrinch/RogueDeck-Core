@@ -111,8 +111,24 @@
                 session.Run.Relics.Select(r => r.Definition.DisplayName + (r.Enabled ? "" : " (disabled)"))))
         </div>
         <div class="row"><span class="muted">Consumables</span>
-            @(session.Run.Consumables.Count == 0 ? "none" : string.Join(", ",
-                session.Run.Consumables.GroupBy(c => c.DefinitionId.Value).Select(Tally)))
+            @if (session.Run.Consumables.Count == 0)
+            {
+                <text>none</text>
+            }
+            else if (session.IsAwaitingChoice)
+            {
+                @* At an event the run loop is safely parked, so a held consumable can be spent (applied on the loop
+                   thread), then the same choice re-parks. *@
+                @foreach (var consumable in session.Run.Consumables)
+                {
+                    <button class="mini" @onclick="() => session.UseConsumable(consumable.Id)">use @consumable.DefinitionId.Value</button>
+                }
+            }
+            else
+            {
+                @string.Join(", ", session.Run.Consumables.GroupBy(c => c.DefinitionId.Value).Select(Tally))
+                <span class="muted"> (usable at events)</span>
+            }
         </div>
         <div class="row"><span class="muted">Deck (@session.Run.Deck.Count)</span>
             @(session.Run.Deck.Count == 0 ? "empty" : string.Join(", ",

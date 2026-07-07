@@ -13,9 +13,14 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
     private readonly RunState _run;
     private readonly RunDefinitionRegistry _registry;
     private readonly RunContentRegistry? _content;
-    private TaskCompletionSource<EventChoice>? _pending;
+    private readonly RunEffectProcessor _processor = new();
+    private TaskCompletionSource<ChoiceResolution>? _pending;
     private TaskCompletionSource<IReadOnlyList<int>>? _pendingEntities;
     private volatile bool _disposed;
+
+    // How a parked Choose resumes: either the player picked a choice, or asked to use a consumable first (applied on
+    // the run-loop thread, then the same choice re-parks). A record-struct union keeps the single TCS type-safe.
+    private readonly record struct ChoiceResolution(EventChoice? Choice, ConsumableInstanceId? Use);
 
     public RunState Run => _run;
     public EventSituation? PendingSituation { get; private set; }
@@ -66,27 +71,47 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
         }
     }
 
-    // IRunChoiceProvider — parks the background run thread until the UI picks a choice.
+    // IRunChoiceProvider — parks the background run thread until the UI picks a choice. While parked, the UI can ask
+    // to use a consumable first; that is applied HERE (on the run-loop thread, the only place RunState is mutated),
+    // then the same choice re-parks — so the player can spend consumables at an event before choosing.
     public EventChoice Choose(EventSituation situation, IReadOnlyList<EventChoice> available, RunState run)
     {
-        TaskCompletionSource<EventChoice> tcs;
-        lock (_gate)
+        while (true)
         {
-            if (_disposed)
-                throw new OperationCanceledException();
-            tcs = new TaskCompletionSource<EventChoice>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _pending = tcs;
-            PendingSituation = situation;
-            PendingChoices = available;
+            TaskCompletionSource<ChoiceResolution> tcs;
+            lock (_gate)
+            {
+                if (_disposed)
+                    throw new OperationCanceledException();
+                tcs = new TaskCompletionSource<ChoiceResolution>(TaskCreationOptions.RunContinuationsAsynchronously);
+                _pending = tcs;
+                PendingSituation = situation;
+                PendingChoices = available;
+            }
+            Changed?.Invoke();
+
+            var resolution = tcs.Task.GetAwaiter().GetResult();
+            if (resolution.Use is { } instance)
+            {
+                _run.EnqueueEffect(new UseConsumableRunEffect(instance));
+                _processor.ResolvePending(_run, _registry);
+                continue; // re-park at the same choice, now with the consumable spent
+            }
+
+            lock (_gate)
+            {
+                _pending = null;
+                PendingSituation = null;
+                PendingChoices = Array.Empty<EventChoice>();
+            }
+            return resolution.Choice ?? available[0];
         }
-        Changed?.Invoke();
-        return tcs.Task.GetAwaiter().GetResult();
     }
 
     // Called by the UI when the player clicks a choice; resumes the background run.
     public void Pick(string choiceId)
     {
-        TaskCompletionSource<EventChoice>? tcs;
+        TaskCompletionSource<ChoiceResolution>? tcs;
         EventChoice choice;
         lock (_gate)
         {
@@ -95,10 +120,23 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
                 return;
             choice = PendingChoices.FirstOrDefault(c => c.Id == choiceId) ?? PendingChoices[0];
             _pending = null;
-            PendingSituation = null;
-            PendingChoices = Array.Empty<EventChoice>();
         }
-        tcs.SetResult(choice);
+        tcs.SetResult(new ChoiceResolution(choice, null));
+    }
+
+    // Called by the UI while parked at a choice to spend a held consumable; the run-loop thread applies it and the
+    // same choice re-parks. No-op if the run is not currently awaiting a choice (the only safe point to mutate).
+    public void UseConsumable(ConsumableInstanceId instance)
+    {
+        TaskCompletionSource<ChoiceResolution>? tcs;
+        lock (_gate)
+        {
+            tcs = _pending;
+            if (tcs is null)
+                return;
+            _pending = null;
+        }
+        tcs.SetResult(new ChoiceResolution(null, instance));
     }
 
     // IRunEntityChooser — parks the background run thread until the UI selects entities (e.g. cards to remove).
@@ -149,7 +187,7 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
 
     public void Dispose()
     {
-        TaskCompletionSource<EventChoice>? choice;
+        TaskCompletionSource<ChoiceResolution>? choice;
         TaskCompletionSource<IReadOnlyList<int>>? entities;
         lock (_gate)
         {
