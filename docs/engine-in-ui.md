@@ -82,9 +82,16 @@ Starting-Consumables im HeroTab, Verbrauch im Run-Play-Inventory.
     pro Consumable, solange eine Choice ansteht. Threaded End-to-End-Test. **Scope:** nur an Event-Choices (sichere
     Park-Punkte); Verbrauch ohne vorangehendes Event (combat→combat) bräuchte einen Between-Nodes-Hook (Follow-up).
 
-## ★★ ARC ABGESCHLOSSEN (2026-07-07)
-B (Palette 16 Leaves) + A (Custom Resources Run+Combat) + C1/C2/C3 alle erledigt & gepusht. Offener Follow-up:
-C3c's Between-Nodes-Use-Hook (Consumables außerhalb von Events nutzen) — braucht einen RunRunner-Interaktionspunkt.
+## Consumable-Interaktion E1/E2 ✔ (Follow-up zu C3c, erledigt 2026-07-07)
+- **E1 ✔ @ 37e1fb1:** Combat-Use-Pfad. Consumable trägt optionales `CombatUse` (turnStarted-RelicCombatRule),
+  beim Benutzen am Zug sofort auf die lebende `CombatState` angewandt (`InteractiveCombat.UseHeroCombatProgram` +
+  Driver.UseConsumable + RunPlayback.UseConsumableInCombat). In-Combat-„use"-Buttons + Editor-Authoring.
+- **E2 ✔ @ 86e2062:** Between-Nodes-Interlude. `RunRunner` bekommt optionales `IRunInterlude` (nach jedem Node
+  außer dem letzten); Session parkt dort (`BetweenNodes` + `Continue()`), UI zeigt Consumable-Use + Inventar/Deck.
+
+## ★★ ARC + E1/E2 ABGESCHLOSSEN (2026-07-07)
+B (16 Leaves) + A (Resources Run+Combat) + C1/C2/C3 + E1 (Combat-Use) + E2 (Between-Nodes) — alles erledigt &
+gepusht. Consumables jetzt nutzbar an Events, im Kampf (am Zug) UND zwischen Nodes. Keine offenen Follow-ups.
 
 ## (Detailplan) C — Consumables end-to-end (Engine + UI) ☐
 
