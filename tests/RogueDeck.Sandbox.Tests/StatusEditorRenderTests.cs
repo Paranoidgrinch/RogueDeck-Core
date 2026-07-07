@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using RogueDeck.Core.Combat;
 using RogueDeck.Run;
+using RogueDeck.Sandbox.Composition;
 using RogueDeck.Sandbox.Run.Components;
 using RogueDeck.Scenario.Authoring;
 
@@ -65,6 +66,26 @@ public class StatusEditorRenderTests
         Assert.Contains("DamageDealt", html);       // pipeline option
         Assert.Contains("AddPerStack", html);        // operation option
         Assert.Contains("+ passive modifier", html); // add control
+    }
+
+    [Fact]
+    public async Task Renders_a_status_trigger_through_the_combat_program_editor()
+    {
+        // A "thorns"-style trigger: on DamageTaken, run a combat program (the default gain-block leaf), authored via
+        // the shared CombatProgramEditor under the event's context.
+        var html = await RenderAsync(BlueprintWith(new StatusData
+        {
+            Id = "thorns",
+            Triggers = new[]
+            {
+                new StatusTriggerData("DamageTaken", StatusTriggerPrograms.Get(TriggerEvent.DamageTaken).NewProgram()),
+            },
+        }));
+
+        Assert.Contains("Triggers", html);
+        Assert.Contains("DamageTaken", html); // the event dropdown
+        Assert.Contains("gain block", html);   // the CombatProgramEditor leaf renders
+        Assert.Contains("+ trigger", html);
     }
 
     [Fact]

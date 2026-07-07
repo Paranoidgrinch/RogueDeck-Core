@@ -75,6 +75,26 @@
                 }
                 <button class="mini" @onclick="() => AddModifier(index)">+ passive modifier</button>
             </div>
+
+            <div class="editor-effects">
+                <span class="muted">Triggers:</span>
+                @for (var ti = 0; ti < status.Triggers.Count; ti++)
+                {
+                    var trigIndex = ti;
+                    var trigger = status.Triggers[ti];
+                    var ev = ParseEvent(trigger.Event);
+                    <div class="editor-choice">
+                        <div class="run-bar">
+                            <span class="muted">On</span> @EnumSelect(ev, e => SetTriggerEvent(index, trigIndex, e))
+                            <button class="mini" @onclick="() => RemoveTrigger(index, trigIndex)">✕ trigger</button>
+                        </div>
+                        <div class="fx-body">
+                            @TriggerProgramEditor(index, trigIndex, ev, trigger)
+                        </div>
+                    </div>
+                }
+                <button class="mini" @onclick="() => AddTrigger(index)">+ trigger</button>
+            </div>
         </div>
     }
 
@@ -137,6 +157,70 @@
             PassiveModifiers = s.PassiveModifiers.Append(new PassiveModifierData(
                 PassiveModifierPipeline.DamageDealt, PassiveModifierOperation.AddPerStack, 1)).ToList(),
         });
+
+    // ── triggers (fire a program on a combat event while the status is borne) ─────────
+    private static TriggerEvent ParseEvent(string ev) =>
+        Enum.TryParse<TriggerEvent>(ev, out var e) ? e : TriggerEvent.TurnStarted;
+
+    // Deserialize + classify the stored context-free program under its event's context; a malformed / advanced
+    // program yields null so the editor shows a read-only note instead of throwing.
+    private static CombatNodeModel? TryToModel(TriggerEvent ev, JsonElement program)
+    {
+        try { return StatusTriggerPrograms.Get(ev).ToModel(program); }
+        catch { return null; }
+    }
+
+    private Task SetTrigger(int index, int trigIndex, StatusTriggerData trigger) =>
+        Edit(index, s =>
+        {
+            var triggers = s.Triggers.ToList();
+            triggers[trigIndex] = trigger;
+            return s with { Triggers = triggers };
+        });
+
+    private Task RemoveTrigger(int index, int trigIndex) =>
+        Edit(index, s => s with { Triggers = s.Triggers.Where((_, i) => i != trigIndex).ToList() });
+
+    private Task AddTrigger(int index) =>
+        Edit(index, s => s with
+        {
+            Triggers = s.Triggers.Append(new StatusTriggerData(
+                TriggerEvent.TurnStarted.ToString(),
+                StatusTriggerPrograms.Get(TriggerEvent.TurnStarted).NewProgram())).ToList(),
+        });
+
+    // Changing the event re-hosts the SAME visual program under the new event's context (or a fresh default if the
+    // old program was outside the visual subset), so the designer keeps their work when switching triggers.
+    private Task SetTriggerEvent(int index, int trigIndex, TriggerEvent ev)
+    {
+        var old = Blueprint.Statuses[index].Triggers[trigIndex];
+        var model = TryToModel(ParseEvent(old.Event), old.Program);
+        var program = model is { } m ? StatusTriggerPrograms.Get(ev).FromModel(m) : StatusTriggerPrograms.Get(ev).NewProgram();
+        return SetTrigger(index, trigIndex, new StatusTriggerData(ev.ToString(), program));
+    }
+
+    private Task SetTriggerModel(int index, int trigIndex, TriggerEvent ev, CombatNodeModel model) =>
+        SetTrigger(index, trigIndex, new StatusTriggerData(ev.ToString(), StatusTriggerPrograms.Get(ev).FromModel(model)));
+
+    private RenderFragment TriggerProgramEditor(int index, int trigIndex, TriggerEvent ev, StatusTriggerData trigger) => builder =>
+    {
+        var model = TryToModel(ev, trigger.Program);
+        if (model is { } node)
+        {
+            builder.OpenComponent<RogueDeck.Sandbox.Combat.Components.CombatProgramEditor>(0);
+            builder.AddAttribute(1, "Node", node);
+            builder.AddAttribute(2, "NodeChanged",
+                EventCallback.Factory.Create<CombatNodeModel>(this, m => SetTriggerModel(index, trigIndex, ev, m)));
+            builder.CloseComponent();
+        }
+        else
+        {
+            builder.OpenElement(3, "span");
+            builder.AddAttribute(4, "class", "muted");
+            builder.AddContent(5, "(advanced trigger program — edit in the Run tab's JSON)");
+            builder.CloseElement();
+        }
+    };
 
     // A generic enum dropdown bound to a value + change handler — keeps the many enum selects (polarity, stacking,
     // pipeline, operation, damage kind) to one line each in the markup.
