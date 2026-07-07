@@ -76,10 +76,15 @@ getestet Block-Potion→20 Block). **C3 ☐ = UI**: Consumables-Editor (ala Reli
 Starting-Consumables im HeroTab, Verbrauch im Run-Play-Inventory.
   - **C3a/C3b ✔ @ cb7acfb:** Consumables-Tab (/consumables + Nav) mit `ConsumableEditor` (id/name + UseEffects:
     heal, gain resource, next-combat opening via CombatProgramEditor); HeroTab-Starting-Consumables. Render-Tests.
-  - **C3c ☐ DEFERRED:** interaktiver Verbrauch mitten im Lauf. Engine kann es (UseConsumableRunEffect), aber die
-    `InteractiveRunSession` läuft autonom auf einem Background-Thread (RunRunner.Run) und blockiert nur an Choices
-    — kein sicherer Hook, um mitten im Lauf ein Use-Effekt einzuspeisen. Braucht Run-Loop-Interaktionspunkte
-    (Session-/Engine-Feature), also ein eigener Follow-up, keine reine UI-Lücke.
+  - **C3c ✔ @ d9e2cbe:** Consumable-Verbrauch an Event-Choices. `InteractiveRunSession.Choose` schleift jetzt: die
+    geparkte TCS löst zu Choice ODER `UseConsumable(instance)` auf; bei Use wendet der **Loop-Thread** den Effekt an
+    und re-parkt an derselben Choice → alle Mutation bleibt auf dem Loop-Thread. RunSessionView zeigt „use"-Buttons
+    pro Consumable, solange eine Choice ansteht. Threaded End-to-End-Test. **Scope:** nur an Event-Choices (sichere
+    Park-Punkte); Verbrauch ohne vorangehendes Event (combat→combat) bräuchte einen Between-Nodes-Hook (Follow-up).
+
+## ★★ ARC ABGESCHLOSSEN (2026-07-07)
+B (Palette 16 Leaves) + A (Custom Resources Run+Combat) + C1/C2/C3 alle erledigt & gepusht. Offener Follow-up:
+C3c's Between-Nodes-Use-Hook (Consumables außerhalb von Events nutzen) — braucht einen RunRunner-Interaktionspunkt.
 
 ## (Detailplan) C — Consumables end-to-end (Engine + UI) ☐
 
