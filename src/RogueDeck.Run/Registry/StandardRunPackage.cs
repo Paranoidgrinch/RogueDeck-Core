@@ -56,7 +56,8 @@ public sealed class StandardRunPackage : IRunPackage
             .RegisterEffectHandler(new AddRewardModifierRunEffectHandler())
             .RegisterEffectHandler(new AddConsumableRunEffectHandler())
             .RegisterEffectHandler(new AddConsumableByIdRunEffectHandler())
-            .RegisterEffectHandler(new UseConsumableRunEffectHandler());
+            .RegisterEffectHandler(new UseConsumableRunEffectHandler())
+            .RegisterEffectHandler(new InstallNextCombatOpeningRunEffectHandler());
 
         builder
             .RegisterResolver(new CombatNodeResolver(_combatDriver, encounters: _content?.Encounters))

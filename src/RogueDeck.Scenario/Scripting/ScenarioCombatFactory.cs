@@ -31,6 +31,10 @@ internal static class ScenarioCombatFactory
         foreach (var enemy in compiled.Enemies)
             ApplyStartingStatuses(combat, compiled.Registry, queues, enemy);
 
+        // Install the hero's opening temporary rules (e.g. a consumable's "next combat starts with 20 block"): a
+        // OneShot turnStarted program fires once at the hero's first turn start — after block's turn-start clear.
+        InstallOpeningTemporaryRules(combat, compiled.Registry, queues, compiled.Hero);
+
         return combat;
     }
 
@@ -50,6 +54,21 @@ internal static class ScenarioCombatFactory
         var combatant = combat.GetCombatant(blueprint.CombatantId);
         foreach (var resource in blueprint.Resources)
             combatant.AddResource(resource.Resource, new ValuePoolState(resource.Current, max: resource.Max));
+    }
+
+    private static void InstallOpeningTemporaryRules(
+        CombatState combat,
+        CombatDefinitionRegistry registry,
+        CombatQueueProcessor queues,
+        HeroBlueprint hero)
+    {
+        if (hero.OpeningTemporaryRules.Count == 0)
+            return;
+
+        foreach (var spec in hero.OpeningTemporaryRules)
+            combat.EnqueueEffect(new InstallTemporaryRuleEffectRequest(spec.Rule, spec.Lifetime));
+
+        queues.ResolvePendingQueues(combat, registry);
     }
 
     private static void ApplyStartingStatuses(

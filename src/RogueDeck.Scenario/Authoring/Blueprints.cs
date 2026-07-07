@@ -123,6 +123,12 @@ public sealed record ResourceRefillSpec(ResourceId Resource, int Max);
 public sealed record StartingStatusSpec(StatusDefinitionId Status, int Stacks = 0, int DurationTurns = 0, int Charges = 0);
 public sealed record DeckEntry(CardDefinitionId Card, int Count = 1);
 
+// A temporary triggered rule to install on the combatant when the combat opens — e.g. a consumable's "next combat
+// starts with X" opening: a OneShot turnStarted program that fires once at the hero's first turn start (after
+// block's turn-start clear), then removes itself. Installed by ScenarioCombatFactory via
+// InstallTemporaryRuleEffectRequest; Lifetime governs how long it lives within that fight.
+public sealed record TemporaryRuleInstallSpec(ITriggeredEffectDefinition Rule, TemporaryRuleLifetime Lifetime);
+
 public abstract class CombatantBlueprint
 {
     public string Id { get; }
@@ -149,6 +155,11 @@ public abstract class CombatantBlueprint
 public sealed class HeroBlueprint : CombatantBlueprint
 {
     public List<DeckEntry> Deck { get; } = new();
+
+    // Temporary rules installed when the combat opens (e.g. a consumable's "next combat starts with 20 block").
+    // Applied by the run→combat bridge as pending combat modifiers; installed by ScenarioCombatFactory at build.
+    public List<TemporaryRuleInstallSpec> OpeningTemporaryRules { get; } = new();
+
     public HeroBlueprint(string id) : base(id, "hero") { }
 }
 

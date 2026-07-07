@@ -209,6 +209,7 @@ public static class RunJson
          .Register("fx.offerReward", typeof(OfferRewardRunEffect))
          .Register("fx.addConsumable", typeof(AddConsumableRunEffect))
          .Register("fx.addConsumableById", typeof(AddConsumableByIdRunEffect))
+         .Register("fx.installNextCombatOpening", typeof(InstallNextCombatOpeningRunEffect))
          .Register("fx.removeCards", typeof(RemoveCardsRunEffect))
          .Register("fx.upgradeCards", typeof(UpgradeCardsRunEffect))
          .Register("fx.tagCards", typeof(TagCardsRunEffect))
