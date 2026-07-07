@@ -7,7 +7,7 @@ namespace RogueDeck.Sandbox.Run;
 // that task at each choice (via a TaskCompletionSource) until the UI calls Pick. State is only mutated on the
 // background thread, and while a choice is pending that thread is parked inside Choose, so the UI can safely
 // read RunState to render the current situation. Entity selection (ChooseByPlayer) is auto (first-N) for now.
-public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChooser, IDisposable
+public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChooser, IRunInterlude, IDisposable
 {
     private readonly object _gate = new();
     private readonly RunState _run;
@@ -18,9 +18,10 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
     private TaskCompletionSource<IReadOnlyList<int>>? _pendingEntities;
     private volatile bool _disposed;
 
-    // How a parked Choose resumes: either the player picked a choice, or asked to use a consumable first (applied on
-    // the run-loop thread, then the same choice re-parks). A record-struct union keeps the single TCS type-safe.
-    private readonly record struct ChoiceResolution(EventChoice? Choice, ConsumableInstanceId? Use);
+    // How a parked interaction (Choose or BetweenNodes) resumes: pick a choice, continue past an interlude, or use a
+    // consumable first (applied on the run-loop thread, then the same point re-parks). A record-struct union keeps
+    // the single TCS type-safe.
+    private readonly record struct ChoiceResolution(EventChoice? Choice, ConsumableInstanceId? Use, bool Continue = false);
 
     public RunState Run => _run;
     public EventSituation? PendingSituation { get; private set; }
@@ -29,6 +30,11 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
     public bool IsComplete { get; private set; }
     public bool IsAwaitingChoice => PendingSituation is not null;
     public bool IsAwaitingEntities => PendingEntities is not null;
+
+    // True while the run is parked BETWEEN nodes (not in an event/combat): the player can view the inventory/deck,
+    // use consumables (their run effects), and continue to the next node.
+    public bool PendingInterlude { get; private set; }
+    public bool IsAwaitingInterlude => PendingInterlude;
     public string? Error { get; private set; }
 
     // Raised (on the background thread) when a choice is needed or the run finished; the UI marshals it.
@@ -49,7 +55,7 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
     {
         try
         {
-            new RunRunner(_registry, this, content: _content).Run(_run);
+            new RunRunner(_registry, this, content: _content, interlude: this).Run(_run);
         }
         catch (OperationCanceledException)
         {
@@ -137,6 +143,55 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
             _pending = null;
         }
         tcs.SetResult(new ChoiceResolution(null, instance));
+    }
+
+    // IRunInterlude — parks the background run thread between map nodes so the player can view the inventory/deck and
+    // spend consumables (their run effects) before the next combat/event. Same loop as Choose: a use is applied on
+    // this thread and re-parks; Continue resumes the run to the next node.
+    public void BetweenNodes(RunState run)
+    {
+        while (true)
+        {
+            TaskCompletionSource<ChoiceResolution> tcs;
+            lock (_gate)
+            {
+                if (_disposed)
+                    throw new OperationCanceledException();
+                tcs = new TaskCompletionSource<ChoiceResolution>(TaskCreationOptions.RunContinuationsAsynchronously);
+                _pending = tcs;
+                PendingInterlude = true;
+            }
+            Changed?.Invoke();
+
+            var resolution = tcs.Task.GetAwaiter().GetResult();
+            if (resolution.Use is { } instance)
+            {
+                _run.EnqueueEffect(new UseConsumableRunEffect(instance));
+                _processor.ResolvePending(_run, _registry);
+                continue;
+            }
+
+            lock (_gate)
+            {
+                _pending = null;
+                PendingInterlude = false;
+            }
+            return;
+        }
+    }
+
+    // Called by the UI to resume past a between-nodes interlude.
+    public void Continue()
+    {
+        TaskCompletionSource<ChoiceResolution>? tcs;
+        lock (_gate)
+        {
+            tcs = _pending;
+            if (tcs is null || !PendingInterlude)
+                return;
+            _pending = null;
+        }
+        tcs.SetResult(new ChoiceResolution(null, null, Continue: true));
     }
 
     // IRunEntityChooser — parks the background run thread until the UI selects entities (e.g. cards to remove).

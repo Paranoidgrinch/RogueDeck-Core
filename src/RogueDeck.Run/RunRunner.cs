@@ -4,18 +4,28 @@ namespace RogueDeck.Run;
 // semantics — it only sequences: raise NodeEntered, dispatch to the registered resolver (purely by
 // NodeType — note there is no node-kind switch here), then resolve pending effects (where relics fire),
 // then check for defeat. A run ends when the map is exhausted or the hero's HP pool hits zero.
+// An optional between-nodes interaction: RunRunner calls BetweenNodes after each node (except the last) so a UI can
+// let the player act — view inventory, use consumables — before the next combat/event. Headless runs pass none, so
+// the run proceeds node-to-node without pausing.
+public interface IRunInterlude
+{
+    void BetweenNodes(RunState run);
+}
+
 public sealed class RunRunner
 {
     private readonly RunDefinitionRegistry _registry;
     private readonly IRunChoiceProvider _choices;
     private readonly RunEffectProcessor _processor;
     private readonly RunContentRegistry? _content;
+    private readonly IRunInterlude? _interlude;
 
     public RunRunner(
         RunDefinitionRegistry registry,
         IRunChoiceProvider choices,
         RunEffectProcessor? processor = null,
-        RunContentRegistry? content = null)
+        RunContentRegistry? content = null,
+        IRunInterlude? interlude = null)
     {
         ArgumentNullException.ThrowIfNull(registry);
         ArgumentNullException.ThrowIfNull(choices);
@@ -24,6 +34,7 @@ public sealed class RunRunner
         _choices = choices;
         _processor = processor ?? new RunEffectProcessor();
         _content = content;
+        _interlude = interlude;
     }
 
     public void Run(RunState run)
@@ -59,6 +70,14 @@ public sealed class RunRunner
             {
                 run.SetResult(RunResult.Defeat);
                 break;
+            }
+
+            // Between-nodes interlude: let a UI act (view inventory, use consumables) before the next node. Not
+            // after the last node (the run is about to end) and not headlessly (no interlude provided).
+            if (_interlude is not null && index < run.Map.Nodes.Count - 1)
+            {
+                _interlude.BetweenNodes(run);
+                _processor.ResolvePending(run, _registry);
             }
         }
 

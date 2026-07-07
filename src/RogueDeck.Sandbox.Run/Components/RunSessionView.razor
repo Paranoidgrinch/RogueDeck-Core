@@ -40,6 +40,21 @@
                 Confirm (@_selected.Count/@request.Count)
             </button>
         }
+        else if (session.IsAwaitingInterlude)
+        {
+            <h2>Before the next node</h2>
+            <p class="muted">Check your inventory and deck below; spend consumables, then continue.</p>
+            @if (session.Run.Consumables.Any(c => c.UseEffects.Count > 0))
+            {
+                <div class="choices">
+                    @foreach (var consumable in session.Run.Consumables.Where(c => c.UseEffects.Count > 0))
+                    {
+                        <button class="mini" @onclick="() => session.UseConsumable(consumable.Id)">use @consumable.DefinitionId.Value</button>
+                    }
+                </div>
+            }
+            <button class="play" @onclick="() => session.Continue()">Continue ▸</button>
+        }
         else if (CombatDriver?.Current is { } combat)
         {
             <h2>Combat — round @combat.Round</h2>
