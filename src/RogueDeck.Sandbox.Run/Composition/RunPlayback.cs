@@ -109,7 +109,12 @@ public sealed class RunPlayback(Action onChanged) : IDisposable
             statuses: blueprint.Statuses.Select(status => status.ToBlueprint()).ToArray(),
             triggeredPrograms: RebuildStatusTriggers(blueprint.Statuses),
             preDownInterceptors: interceptors.PreDown,
-            statusApplicationInterceptors: interceptors.StatusApplication);
+            statusApplicationInterceptors: interceptors.StatusApplication,
+            heroResources: blueprint.CombatResources
+                .Select(r => new ResourceSpec(new ResourceId(r.Id), r.StartingAmount, r.Max)).ToArray(),
+            heroResourceRefills: blueprint.CombatResources
+                .Where(r => r.RefillEachTurn)
+                .Select(r => new ResourceRefillSpec(new ResourceId(r.Id), r.Max)).ToArray());
 
         var builder = new RunContentRegistryBuilder()
             .SetEncounters(new EncounterCatalog(library, blueprint.Encounters));

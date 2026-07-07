@@ -25,6 +25,10 @@ public sealed record RunBlueprint(
     // event that grants one by id resolves it. An init property, like Statuses, to keep constructions unchanged.
     public IReadOnlyList<RelicData> Relics { get; init; } = [];
 
+    // Custom combat resources (energy-like) the hero carries into every fight — an id + max + optional per-turn
+    // refill. Injected into each combat's hero by the run→combat bridge. An init property, like Statuses/Relics.
+    public IReadOnlyList<CombatResourceData> CombatResources { get; init; } = [];
+
     // The run's starting state — hero identity + how the RunState is seeded (health, resources). Previously the
     // sandbox hard-coded HP 30/40 and an empty inventory; carrying it here makes the run's opening data too. An init
     // property with a default that reproduces the old hard-coded start, so existing blueprints are unaffected.

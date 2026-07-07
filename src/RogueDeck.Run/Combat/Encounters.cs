@@ -28,13 +28,20 @@ public sealed class CombatContentLibrary
     public IReadOnlyList<IPreDownInterceptor> PreDownInterceptors { get; }
     public IReadOnlyList<IStatusApplicationInterceptor> StatusApplicationInterceptors { get; }
 
+    // Run-global hero combat resources (energy-like pools) and their per-turn refills, added to every fight's hero
+    // (unless an encounter already defines that resource id). Empty for runs with no custom combat resources.
+    public IReadOnlyList<ResourceSpec> HeroResources { get; }
+    public IReadOnlyList<ResourceRefillSpec> HeroResourceRefills { get; }
+
     public CombatContentLibrary(
         IReadOnlyList<CardBlueprint>? cards = null,
         IReadOnlyList<EnemyActionBlueprint>? enemyActions = null,
         IReadOnlyList<StatusBlueprint>? statuses = null,
         IReadOnlyList<ITriggeredEffectDefinition>? triggeredPrograms = null,
         IReadOnlyList<IPreDownInterceptor>? preDownInterceptors = null,
-        IReadOnlyList<IStatusApplicationInterceptor>? statusApplicationInterceptors = null)
+        IReadOnlyList<IStatusApplicationInterceptor>? statusApplicationInterceptors = null,
+        IReadOnlyList<ResourceSpec>? heroResources = null,
+        IReadOnlyList<ResourceRefillSpec>? heroResourceRefills = null)
     {
         Cards = cards ?? Array.Empty<CardBlueprint>();
         EnemyActions = enemyActions ?? Array.Empty<EnemyActionBlueprint>();
@@ -42,6 +49,8 @@ public sealed class CombatContentLibrary
         TriggeredPrograms = triggeredPrograms ?? Array.Empty<ITriggeredEffectDefinition>();
         PreDownInterceptors = preDownInterceptors ?? Array.Empty<IPreDownInterceptor>();
         StatusApplicationInterceptors = statusApplicationInterceptors ?? Array.Empty<IStatusApplicationInterceptor>();
+        HeroResources = heroResources ?? Array.Empty<ResourceSpec>();
+        HeroResourceRefills = heroResourceRefills ?? Array.Empty<ResourceRefillSpec>();
     }
 }
 
@@ -125,6 +134,15 @@ public sealed class EncounterCatalog
         };
         foreach (var resource in encounter.HeroResources) blueprint.Hero.Resources.Add(resource);
         foreach (var status in encounter.HeroStartingStatuses) blueprint.Hero.StartingStatuses.Add(status);
+
+        // Run-global combat resources: add each to the hero unless the encounter already defines that id, and
+        // install its per-turn refill (energy-like). This is how a designer's custom combat resource reaches every fight.
+        var heroResourceIds = encounter.HeroResources.Select(r => r.Resource).ToHashSet();
+        foreach (var resource in _library.HeroResources)
+            if (heroResourceIds.Add(resource.Resource))
+                blueprint.Hero.Resources.Add(resource);
+        foreach (var refill in _library.HeroResourceRefills)
+            blueprint.TurnStartResourceRefills.Add(refill);
 
         foreach (var spec in encounter.Enemies)
         {

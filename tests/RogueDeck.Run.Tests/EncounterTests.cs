@@ -69,6 +69,40 @@ public class EncounterTests
     }
 
     [Fact]
+    public void Run_global_combat_resources_are_injected_into_every_hero_with_refills()
+    {
+        // A custom "mana" resource defined run-global (via the library) must appear on the fight's hero with its
+        // starting/max, plus a per-turn refill — alongside the encounter's own energy.
+        var library = new CombatContentLibrary(
+            heroResources: new[] { new ResourceSpec(new ResourceId("mana"), 2, 5) },
+            heroResourceRefills: new[] { new ResourceRefillSpec(new ResourceId("mana"), 5) });
+        var catalog = new EncounterCatalog(library, new[] { GoblinEncounter() });
+
+        var playthrough = catalog.Build(GoblinFight, NewRun(), randomSeed: 1);
+
+        var mana = Assert.Single(playthrough.Blueprint.Hero.Resources, r => r.Resource.value == "mana");
+        Assert.Equal(2, mana.Current);
+        Assert.Equal(5, mana.Max);
+        Assert.Contains(playthrough.Blueprint.TurnStartResourceRefills, r => r.Resource.value == "mana" && r.Max == 5);
+        Assert.Contains(playthrough.Blueprint.Hero.Resources, r => r.Resource == StandardCombatIds.EnergyResource);
+    }
+
+    [Fact]
+    public void An_encounter_resource_id_is_not_overridden_by_a_run_global_one()
+    {
+        // The encounter already defines energy 3/3; a run-global energy must not add a second pool or override it.
+        var library = new CombatContentLibrary(
+            heroResources: new[] { new ResourceSpec(StandardCombatIds.EnergyResource, 99, 99) });
+        var catalog = new EncounterCatalog(library, new[] { GoblinEncounter() });
+
+        var playthrough = catalog.Build(GoblinFight, NewRun(), randomSeed: 1);
+
+        var energy = Assert.Single(
+            playthrough.Blueprint.Hero.Resources, r => r.Resource == StandardCombatIds.EnergyResource);
+        Assert.Equal(3, energy.Current); // the encounter's 3/3 wins
+    }
+
+    [Fact]
     public void The_encounter_uses_the_run_deck_and_hp_projection()
     {
         var builder = new RunDefinitionRegistryBuilder();

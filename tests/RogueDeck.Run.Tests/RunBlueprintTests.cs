@@ -107,6 +107,27 @@ public class RunBlueprintTests
     }
 
     [Fact]
+    public void CombatResources_round_trip()
+    {
+        var blueprint = Demo() with
+        {
+            CombatResources = new[]
+            {
+                new CombatResourceData { Id = "mana", DisplayName = "Mana", StartingAmount = 2, Max = 5, RefillEachTurn = true },
+            },
+        };
+
+        var back = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(blueprint, Options), Options);
+
+        var mana = Assert.Single(back.CombatResources);
+        Assert.Equal("mana", mana.Id);
+        Assert.Equal("Mana", mana.DisplayName);
+        Assert.Equal(2, mana.StartingAmount);
+        Assert.Equal(5, mana.Max);
+        Assert.True(mana.RefillEachTurn);
+    }
+
+    [Fact]
     public void Default_RunStart_reproduces_the_historical_hard_coded_start()
     {
         var run = Demo().CreateInitialRun(new RunId("t"), randomSeed: 1);
