@@ -23,11 +23,54 @@
                    @onchange="e => SetStartingHealth(AsInt(e.Value, Start.StartingHealth))" />
         </label>
     </div>
+    <h2>Starting resources</h2>
+    <p class="muted">Run-level resources the hero begins with — gold or any custom resource id. Referenced by id in
+        run effects (events, relics). Combat resources like energy are authored in the Resources tab.</p>
+    @foreach (var (id, amount) in Resources)
+    {
+        <div class="run-bar">
+            <label>@id
+                <input type="number" value="@amount" style="width:5rem"
+                       @onchange="e => SetResource(id, AsInt(e.Value, amount))" />
+            </label>
+            <button class="mini" @onclick="() => RemoveResource(id)">✕</button>
+        </div>
+    }
     <div class="run-bar">
-        <label>Starting gold
-            <input type="number" value="@Gold" style="width:5rem"
-                   @onchange="e => SetGold(AsInt(e.Value, Gold))" />
-        </label>
+        <input value="@_newResourceId" placeholder="new resource id" style="width:10rem"
+               @onchange="e => _newResourceId = AsString(e.Value)" />
+        <input type="number" value="@_newResourceAmount" style="width:5rem"
+               @onchange="e => _newResourceAmount = AsInt(e.Value, _newResourceAmount)" />
+        <button class="mini" @onclick="AddResource" disabled="@string.IsNullOrWhiteSpace(_newResourceId)">+ add resource</button>
+    </div>
+
+    <h2>Combat resources</h2>
+    <p class="muted">Energy-like resources the hero has in every fight — id, starting amount, max cap, and whether it
+        refills to max each turn (as energy does). Reference them by id in card costs and combat effects.</p>
+    @foreach (var res in CombatResources)
+    {
+        <div class="run-bar">
+            <label>@res.Id
+                <input value="@res.DisplayName" placeholder="name" style="width:8rem"
+                       @onchange="e => SetCombatResource(res with { DisplayName = AsString(e.Value) })" />
+            </label>
+            <label>start
+                <input type="number" value="@res.StartingAmount" style="width:4rem"
+                       @onchange="e => SetCombatResource(res with { StartingAmount = AsInt(e.Value, res.StartingAmount) })" />
+            </label>
+            <label>max
+                <input type="number" value="@res.Max" style="width:4rem"
+                       @onchange="e => SetCombatResource(res with { Max = AsInt(e.Value, res.Max) })" />
+            </label>
+            <label><input type="checkbox" checked="@res.RefillEachTurn"
+                          @onchange="e => SetCombatResource(res with { RefillEachTurn = AsBool(e.Value) })" /> refill each turn</label>
+            <button class="mini" @onclick="() => RemoveCombatResource(res.Id)">✕</button>
+        </div>
+    }
+    <div class="run-bar">
+        <input value="@_newCombatResourceId" placeholder="new combat resource id" style="width:12rem"
+               @onchange="e => _newCombatResourceId = AsString(e.Value)" />
+        <button class="mini" @onclick="AddCombatResource" disabled="@string.IsNullOrWhiteSpace(_newCombatResourceId)">+ add combat resource</button>
     </div>
 
     <h2>Starting relics</h2>
@@ -50,7 +93,15 @@
     protected override void OnInitialized() => _blueprint = Doc.Load();
 
     private RunStart Start => _blueprint.Start;
-    private int Gold => Start.Resources.TryGetValue(StandardRunIds.Gold.Value, out var g) ? g : 0;
+
+    // Starting resources ordered by id for a stable render. Any id is allowed (gold is just a conventional one).
+    private IEnumerable<KeyValuePair<string, int>> Resources =>
+        Start.Resources.OrderBy(r => r.Key, StringComparer.Ordinal);
+    private string _newResourceId = "";
+    private int _newResourceAmount = 10;
+
+    private IReadOnlyList<CombatResourceData> CombatResources => _blueprint.CombatResources;
+    private string _newCombatResourceId = "";
 
     private static string AsString(object? v) => v?.ToString() ?? "";
     private static int AsInt(object? v, int fallback) => int.TryParse(v?.ToString(), out var n) ? n : fallback;
@@ -87,9 +138,48 @@
     private void SetStartingHealth(int value) =>
         Apply(Start with { StartingHealth = Math.Clamp(value, 1, Start.MaxHealth) });
 
-    private void SetGold(int value)
+    private void SetResource(string id, int value)
     {
-        var resources = new Dictionary<string, int>(Start.Resources) { [StandardRunIds.Gold.Value] = Math.Max(0, value) };
+        var resources = new Dictionary<string, int>(Start.Resources) { [id] = Math.Max(0, value) };
         Apply(Start with { Resources = resources });
+    }
+
+    private void RemoveResource(string id)
+    {
+        var resources = new Dictionary<string, int>(Start.Resources);
+        resources.Remove(id);
+        Apply(Start with { Resources = resources });
+    }
+
+    private void AddResource()
+    {
+        var id = _newResourceId.Trim();
+        if (id.Length == 0)
+            return;
+        SetResource(id, Math.Max(0, _newResourceAmount));
+        _newResourceId = "";
+    }
+
+    // ── combat resources (run-global, injected into every fight's hero) ──────────────
+    private void SaveResources(IReadOnlyList<CombatResourceData> resources)
+    {
+        _blueprint = _blueprint with { CombatResources = resources };
+        Doc.Save(_blueprint);
+    }
+
+    private void SetCombatResource(CombatResourceData updated) =>
+        SaveResources(CombatResources.Select(r => r.Id == updated.Id ? updated : r).ToList());
+
+    private void RemoveCombatResource(string id) =>
+        SaveResources(CombatResources.Where(r => r.Id != id).ToList());
+
+    private void AddCombatResource()
+    {
+        var id = _newCombatResourceId.Trim();
+        if (id.Length == 0 || CombatResources.Any(r => r.Id == id))
+            return;
+        var res = new CombatResourceData { Id = id, DisplayName = id, StartingAmount = 3, Max = 3, RefillEachTurn = true };
+        SaveResources(CombatResources.Append(res).ToList());
+        _newCombatResourceId = "";
     }
 }
