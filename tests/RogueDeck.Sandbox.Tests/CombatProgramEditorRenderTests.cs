@@ -76,6 +76,20 @@ public class CombatProgramEditorRenderTests
         Assert.Contains("apply status", html);
         Assert.Contains("remove status", html);
         Assert.Contains("cleanse (by polarity)", html);
+        Assert.Contains("modify status stacks", html);
+        Assert.Contains("move cards (zone → zone)", html);
+    }
+
+    [Fact]
+    public async Task Renders_move_cards_with_zone_dropdowns_and_no_amount()
+    {
+        // B2c: moveCards shows from/to zone dropdowns (CardZone options) and no amount control.
+        var html = await RenderAsync(new CombatNodeModel("moveCards", "source", FromZone: CardZone.Hand, ToZone: CardZone.DiscardPile));
+
+        Assert.Contains("move cards (zone → zone)", html);
+        Assert.Contains("DrawPile", html);
+        Assert.Contains("ExhaustPile", html);
+        Assert.DoesNotContain("event amount", html); // no amount control for a zone move
     }
 
     [Fact]

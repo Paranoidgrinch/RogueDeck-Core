@@ -22,7 +22,7 @@ Hero/Run), sodass eine benannte Custom-Resource überall im Effekt-/Kosten-/Star
 - A1 Engine/Daten: Resource-Definition-Shape + `RunBlueprint`-Slice + Registrierung in Content.
 - A2 UI: Editor zum Anlegen/Benennen; Startwerte in Hero-Tab; Verwendung in Effekt-/Kosten-Selektoren.
 
-## B — Custom Effects in der UI (voller Palette-Abgleich) ☐
+## B — Custom Effects in der UI (voller Palette-Abgleich) ✔ (Kern erledigt)
 
 **Scope (vom User bestätigt):** KEINE neue Engine-Vokabel. Alle bereits existierenden Engine-Effekt-Arten
 (`IEffectRequest` combat + `IRunEffectRequest` run), die der visuelle Editor noch NICHT als Leaf/Block
@@ -34,10 +34,18 @@ Palette der Relic/Run-Effect-Editoren). Die Engine hat deutlich mehr Effekt-Arte
 `IEffectRequest`; TemporaryRuleEffects, CombatStateEffects, CombatantLifecycleEffects, MoveCards, …).
 
 **Bounded steps:**
-- B1 Audit: vollständige Liste Engine-Effekt-Arten (combat + run) vs. was Palette/Editoren exponieren →
-  geordnete Gap-Liste (data-serialisierbar? ja/nein pro Kind).
-- B2..Bn: Gaps batchweise in die Palette (`EffectVocabulary` + Leaf-Widgets), jeder Batch mit Test +
-  Live-CDP-Verifikation (die Editoren rendern via Blazor — bewährter Weg: scratchpad CDP-Sweep).
+- B1 Audit ✔: `CombatProgramModel` (RogueDeck.Scenario) speist BEIDE Editoren (Cards/Enemy/Status +
+  Relic-Combat-Rules) und bot nur 4 Amount-Leaves vs. ~37 authorbare `IEffectNode<TContext>`-Typen.
+- B2a ✔ @ cfb513e: +5 Leaves (loseResource, modifyResource, modifyMaxHealth, setHealth, drawCards).
+- B2b ✔ @ e2c25de: +3 Status-Leaves (applyStatus, removeStatus, cleanse); `CombatNodeModel` um StatusId/
+  DurationTurns/Charges/Polarity erweitert.
+- B2c ✔: +4 Leaves (modifyStatus{Stacks,Duration,Charges}, moveCards Zone→Zone); FromZone/ToZone-Felder.
+  **Palette jetzt 16 Leaves** (von 4). Roundtrip- + CombatJson- + Render-Tests je Batch.
+
+**Bewusste JSON-Escape-Grenze (nicht als Leaf modelliert — wie die Run-Seite ihre Func-Escapes):** summon,
+create/play/replay card, moveCardToZone (per Instanz-Id, laufzeit-gewählt), install/removeTemporaryRule,
+changeTeam, modifyDefensivePool, setCombatResult, setCombatantLifecycleState, side-effect/NoOp/causalSequence/
+randomTargetSelection/repeatUntil. Diese bleiben über den JSON-Editor authorbar; bei Bedarf später als B2d.
 
 ## C — Consumables end-to-end (Engine + UI) ☐
 

@@ -120,6 +120,23 @@ else
                 }
             </select>
         }
+        @if (CombatProgramModel.UsesZones(Node.Kind))
+        {
+            <span class="muted">from</span>
+            <select value="@Node.FromZone" @onchange="e => Set(Node with { FromZone = ParseZone(e.Value) })">
+                @foreach (var z in Enum.GetValues<CardZone>())
+                {
+                    <option value="@z" selected="@(z == Node.FromZone)">@z</option>
+                }
+            </select>
+            <span class="muted">to</span>
+            <select value="@Node.ToZone" @onchange="e => Set(Node with { ToZone = ParseZone(e.Value) })">
+                @foreach (var z in Enum.GetValues<CardZone>())
+                {
+                    <option value="@z" selected="@(z == Node.ToZone)">@z</option>
+                }
+            </select>
+        }
         @RemoveButton
     </span>
 }
@@ -136,6 +153,8 @@ else
     private static int AsInt(object? v, int fallback) => int.TryParse(v?.ToString(), out var n) ? n : fallback;
     private static StatusPolarity ParsePolarity(object? v) =>
         Enum.TryParse<StatusPolarity>(AsString(v), out var p) ? p : StatusPolarity.Debuff;
+    private static CardZone ParseZone(object? v) =>
+        Enum.TryParse<CardZone>(AsString(v), out var z) ? z : CardZone.Hand;
 
     private void Set(CombatNodeModel node) => _ = NodeChanged.InvokeAsync(node);
 

@@ -179,6 +179,34 @@ public class CombatProgramModelTests
     }
 
     [Fact]
+    public void ModifyStatus_trio_build_their_nodes_and_round_trip()
+    {
+        var stacks = new CombatNodeModel("modifyStatusStacks", "eventTarget", CombatAmountSpec.FromConst(2), StatusId: "poison");
+        var duration = new CombatNodeModel("modifyStatusDuration", "source", CombatAmountSpec.FromConst(-1), StatusId: "weak");
+        var charges = new CombatNodeModel("modifyStatusCharges", "eventTarget", CombatAmountSpec.Event, StatusId: "thorns");
+
+        Assert.IsType<ModifyStatusStacksNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(stacks).Root);
+        Assert.IsType<ModifyStatusDurationNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(duration).Root);
+        Assert.IsType<ModifyStatusChargesNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(charges).Root);
+
+        foreach (var model in new[] { stacks, duration, charges })
+            Assert.Equal(model, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(model)));
+    }
+
+    [Fact]
+    public void MoveCards_leaf_round_trips_its_zones_without_an_amount()
+    {
+        var model = new CombatNodeModel("moveCards", "source", FromZone: CardZone.Hand, ToZone: CardZone.ExhaustPile);
+
+        var program = CombatProgramModel.Build<CardPlayContext>(model);
+
+        var node = Assert.IsType<MoveAllCardsFromZoneNode<CardPlayContext>>(program.Root);
+        Assert.Equal(CardZone.Hand, node.FromZone);
+        Assert.Equal(CardZone.ExhaustPile, node.ToZone);
+        Assert.Equal(model, CombatProgramModel.Classify(program));
+    }
+
+    [Fact]
     public void Health_and_draw_leaves_build_their_nodes()
     {
         var maxHp = CombatProgramModel.Build<CardPlayContext>(CombatProgramModel.NewNode("modifyMaxHealth"));

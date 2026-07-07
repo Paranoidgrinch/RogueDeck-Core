@@ -60,7 +60,11 @@ public sealed record CombatNodeModel(
     string StatusId = "",
     int DurationTurns = 0,
     int Charges = 0,
-    StatusPolarity Polarity = StatusPolarity.Debuff)
+    StatusPolarity Polarity = StatusPolarity.Debuff,
+    // moveCards leaf: move all cards from one zone to another (e.g. Hand → DiscardPile). Canonically Hand →
+    // DiscardPile for kinds that don't use them so build↔classify round-trips exactly.
+    CardZone FromZone = CardZone.Hand,
+    CardZone ToZone = CardZone.DiscardPile)
 {
     public CombatAmountSpec AmountOrDefault => Amount ?? CombatAmountSpec.FromConst(3);
     public IReadOnlyList<CombatNodeModel> ChildrenOrEmpty => Children ?? Array.Empty<CombatNodeModel>();
@@ -92,6 +96,8 @@ public sealed record CombatNodeModel(
         && DurationTurns == other.DurationTurns
         && Charges == other.Charges
         && Polarity == other.Polarity
+        && FromZone == other.FromZone
+        && ToZone == other.ToZone
         && ChildrenOrEmpty.SequenceEqual(other.ChildrenOrEmpty);
 
     public override int GetHashCode()
@@ -106,6 +112,8 @@ public sealed record CombatNodeModel(
         hash.Add(DurationTurns);
         hash.Add(Charges);
         hash.Add(Polarity);
+        hash.Add(FromZone);
+        hash.Add(ToZone);
         foreach (var child in ChildrenOrEmpty)
             hash.Add(child);
         return hash.ToHashCode();
@@ -130,18 +138,27 @@ public static class CombatProgramModel
         ("applyStatus", "apply status"),
         ("removeStatus", "remove status"),
         ("cleanse", "cleanse (by polarity)"),
+        ("modifyStatusStacks", "modify status stacks"),
+        ("modifyStatusDuration", "modify status duration"),
+        ("modifyStatusCharges", "modify status charges"),
+        ("moveCards", "move cards (zone → zone)"),
     ];
 
     // The leaf kinds that carry a resource id (their editor row shows a resource-id field; ChangeKind seeds a
     // default when switching INTO one of these). Kept here so the razor editor and ChangeKind agree.
     public static bool UsesResourceId(string kind) => kind is "gainResource" or "loseResource" or "modifyResource";
 
-    // The leaf kinds that name a specific status (apply / remove show a status-id field).
-    public static bool UsesStatusId(string kind) => kind is "applyStatus" or "removeStatus";
+    // The leaf kinds that name a specific status (apply / remove / modify-* show a status-id field).
+    public static bool UsesStatusId(string kind) =>
+        kind is "applyStatus" or "removeStatus"
+            or "modifyStatusStacks" or "modifyStatusDuration" or "modifyStatusCharges";
 
-    // The leaf kinds that carry an amount (its stacks/value/count). removeStatus and cleanse take none, so the
-    // editor hides the amount control for them (and their model keeps Amount at the canonical null).
-    public static bool UsesAmount(string kind) => kind is not ("removeStatus" or "cleanse");
+    // The leaf kinds that carry an amount (its stacks/value/count/delta). removeStatus, cleanse and moveCards take
+    // none, so the editor hides the amount control for them (and their model keeps Amount at the canonical null).
+    public static bool UsesAmount(string kind) => kind is not ("removeStatus" or "cleanse" or "moveCards");
+
+    // The leaf kind that moves cards between zones (its editor shows from/to zone dropdowns).
+    public static bool UsesZones(string kind) => kind is "moveCards";
 
     // The control-flow (composite) kinds the editor offers as their own titled blocks with sub-bodies. Conditional
     // is deferred (it needs a combat condition spec). Each holds a Children body: N for sequence, one for the rest.
@@ -173,6 +190,10 @@ public static class CombatProgramModel
         "applyStatus" => new("applyStatus", "eventTarget", CombatAmountSpec.FromConst(1), StatusId: "poison"),
         "removeStatus" => new("removeStatus", "eventTarget", StatusId: "poison"),
         "cleanse" => new("cleanse", "source", Polarity: StatusPolarity.Debuff),
+        "modifyStatusStacks" => new("modifyStatusStacks", "eventTarget", CombatAmountSpec.FromConst(1), StatusId: "poison"),
+        "modifyStatusDuration" => new("modifyStatusDuration", "eventTarget", CombatAmountSpec.FromConst(1), StatusId: "poison"),
+        "modifyStatusCharges" => new("modifyStatusCharges", "eventTarget", CombatAmountSpec.FromConst(1), StatusId: "poison"),
+        "moveCards" => new("moveCards", "source", FromZone: CardZone.Hand, ToZone: CardZone.DiscardPile),
         "sequence" => CombatNodeModel.Sequence(new[] { NewNode("dealDamage") }),
         "forEachTarget" => CombatNodeModel.ForEach("allEnemies", NewNode("dealDamage")),
         "repeat" => CombatNodeModel.Repeat(CombatAmountSpec.FromConst(2), NewNode("dealDamage")),
@@ -201,6 +222,8 @@ public static class CombatProgramModel
                 DurationTurns = kind == "applyStatus" ? node.DurationTurns : 0,
                 Charges = kind == "applyStatus" ? node.Charges : 0,
                 Polarity = kind == "cleanse" ? node.Polarity : StatusPolarity.Debuff,
+                FromZone = UsesZones(kind) ? node.FromZone : CardZone.Hand,
+                ToZone = UsesZones(kind) ? node.ToZone : CardZone.DiscardPile,
                 Amount = UsesAmount(kind) ? (node.Amount ?? CombatAmountSpec.FromConst(3)) : null,
             };
 
@@ -403,6 +426,10 @@ public static class CombatProgramModel
                 selector, new StatusDefinitionId(model.StatusId), amount, model.DurationTurns, model.Charges),
             "removeStatus" => new RemoveStatusNode<TContext>(selector, new StatusDefinitionId(model.StatusId)),
             "cleanse" => new RemoveStatusesByPolarityNode<TContext>(selector, model.Polarity),
+            "modifyStatusStacks" => new ModifyStatusStacksNode<TContext>(selector, new StatusDefinitionId(model.StatusId), amount),
+            "modifyStatusDuration" => new ModifyStatusDurationNode<TContext>(selector, new StatusDefinitionId(model.StatusId), amount),
+            "modifyStatusCharges" => new ModifyStatusChargesNode<TContext>(selector, new StatusDefinitionId(model.StatusId), amount),
+            "moveCards" => new MoveAllCardsFromZoneNode<TContext>(selector, model.FromZone, model.ToZone),
             _ => new GainBlockNode<TContext>(selector, amount),
         };
     }
@@ -453,6 +480,16 @@ public static class CombatProgramModel
             case RemoveStatusesByPolarityNode<TContext> { ResultKey: null } n:
                 return KeyFor(n.TargetSelector) is { } cleanseKey
                     ? new CombatNodeModel("cleanse", cleanseKey, Polarity: n.Polarity)
+                    : null;
+            case ModifyStatusStacksNode<TContext> { ResultKey: null } n:
+                return StatusDeltaLeaf("modifyStatusStacks", n.TargetSelector, n.StatusDefinitionId, n.Delta);
+            case ModifyStatusDurationNode<TContext> { ResultKey: null } n:
+                return StatusDeltaLeaf("modifyStatusDuration", n.TargetSelector, n.StatusDefinitionId, n.Delta);
+            case ModifyStatusChargesNode<TContext> { ResultKey: null } n:
+                return StatusDeltaLeaf("modifyStatusCharges", n.TargetSelector, n.StatusDefinitionId, n.Delta);
+            case MoveAllCardsFromZoneNode<TContext> { ResultKey: null } n:
+                return KeyFor(n.TargetSelector) is { } moveKey
+                    ? new CombatNodeModel("moveCards", moveKey, FromZone: n.FromZone, ToZone: n.ToZone)
                     : null;
 
             case SequenceEffectNode<TContext> s:
@@ -517,5 +554,16 @@ public static class CombatProgramModel
         if (spec.IsAdvanced)
             return null;
         return new CombatNodeModel(kind, selectorKey, spec, resourceId);
+    }
+
+    // A status-delta leaf (modify status stacks/duration/charges): a status id + an amount delta, no resource id.
+    private static CombatNodeModel? StatusDeltaLeaf<TContext>(
+        string kind, ICombatantTargetSelector selector, StatusDefinitionId statusId, ICombatExpression<TContext, int> amount)
+        where TContext : class
+    {
+        if (KeyFor(selector) is not { } selectorKey)
+            return null;
+        var spec = ClassifyAmount(amount);
+        return spec.IsAdvanced ? null : new CombatNodeModel(kind, selectorKey, spec, StatusId: statusId.value);
     }
 }
