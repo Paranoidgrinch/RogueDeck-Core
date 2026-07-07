@@ -13,8 +13,8 @@ public class CombatProgramModelTests
     {
         foreach (var kind in CombatProgramModel.NodeKinds.Select(n => n.Kind))
         {
-            // ResourceId is only part of a gainResource node's identity; empty for the other kinds (see model).
-            var resourceId = kind == "gainResource" ? "standard.energy" : "";
+            // ResourceId is part of a resource leaf's identity (gain/lose/modify); empty for the other kinds.
+            var resourceId = CombatProgramModel.UsesResourceId(kind) ? "standard.energy" : "";
             foreach (var selector in CombatProgramModel.SelectorKeys)
             {
                 yield return [new CombatNodeModel(kind, selector, CombatAmountSpec.FromConst(4), resourceId)];
@@ -106,6 +106,47 @@ public class CombatProgramModelTests
         var node = Assert.IsType<GainResourceNode<CardPlayContext>>(program.Root);
         Assert.Equal("standard.energy", node.ResourceId.value);
         Assert.Equal(model, CombatProgramModel.Classify(program));
+    }
+
+    [Fact]
+    public void Resource_leaves_build_their_distinct_nodes_and_carry_the_resource_id()
+    {
+        // The B2a widening added lose/modify resource alongside gain — each is a distinct native node, so classify
+        // stays unambiguous, and the resource id round-trips.
+        var lose = new CombatNodeModel("loseResource", "source", CombatAmountSpec.FromConst(1), "standard.energy");
+        var modify = new CombatNodeModel("modifyResource", "source", CombatAmountSpec.FromConst(2), "faith");
+
+        var loseProgram = CombatProgramModel.Build<CardPlayContext>(lose);
+        var modifyProgram = CombatProgramModel.Build<CardPlayContext>(modify);
+
+        Assert.Equal("standard.energy", Assert.IsType<LoseResourceNode<CardPlayContext>>(loseProgram.Root).ResourceId.value);
+        Assert.Equal("faith", Assert.IsType<ModifyResourceNode<CardPlayContext>>(modifyProgram.Root).ResourceId.value);
+        Assert.Equal(lose, CombatProgramModel.Classify(loseProgram));
+        Assert.Equal(modify, CombatProgramModel.Classify(modifyProgram));
+    }
+
+    [Fact]
+    public void Health_and_draw_leaves_build_their_nodes()
+    {
+        var maxHp = CombatProgramModel.Build<CardPlayContext>(CombatProgramModel.NewNode("modifyMaxHealth"));
+        var setHp = CombatProgramModel.Build<CardPlayContext>(CombatProgramModel.NewNode("setHealth"));
+        var draw = CombatProgramModel.Build<CardPlayContext>(CombatProgramModel.NewNode("drawCards"));
+
+        Assert.IsType<ModifyMaxHealthNode<CardPlayContext>>(maxHp.Root);
+        Assert.IsType<SetHealthNode<CardPlayContext>>(setHp.Root);
+        Assert.IsType<DrawCardsNode<CardPlayContext>>(draw.Root);
+    }
+
+    [Fact]
+    public void ChangeKind_into_a_resource_leaf_seeds_a_default_resource_id()
+    {
+        var node = new CombatNodeModel("dealDamage", "source", CombatAmountSpec.FromConst(3));
+
+        Assert.Equal("standard.energy", CombatProgramModel.ChangeKind(node, "loseResource").ResourceId);
+        Assert.Equal("standard.energy", CombatProgramModel.ChangeKind(node, "modifyResource").ResourceId);
+        // Switching to a non-resource leaf clears it again.
+        var withId = CombatProgramModel.ChangeKind(node, "modifyResource");
+        Assert.Equal("", CombatProgramModel.ChangeKind(withId, "drawCards").ResourceId);
     }
 
     // ── Phase 1b: control flow ─────────────────────────────────────────────────────

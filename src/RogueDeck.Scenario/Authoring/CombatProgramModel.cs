@@ -99,14 +99,24 @@ public sealed record CombatNodeModel(
 
 public static class CombatProgramModel
 {
-    // The leaf node kinds the editor offers (key → friendly label).
+    // The leaf node kinds the editor offers (key → friendly label). Each maps to one amount-bearing native effect
+    // node over a catalog selector; the amount is a constant or the triggering event's amount.
     public static readonly IReadOnlyList<(string Kind, string Label)> NodeKinds =
     [
         ("dealDamage", "deal damage"),
         ("heal", "heal"),
         ("gainBlock", "gain block"),
         ("gainResource", "gain resource"),
+        ("loseResource", "lose resource"),
+        ("modifyResource", "modify resource"),
+        ("modifyMaxHealth", "modify max health"),
+        ("setHealth", "set health"),
+        ("drawCards", "draw cards"),
     ];
+
+    // The leaf kinds that carry a resource id (their editor row shows a resource-id field; ChangeKind seeds a
+    // default when switching INTO one of these). Kept here so the razor editor and ChangeKind agree.
+    public static bool UsesResourceId(string kind) => kind is "gainResource" or "loseResource" or "modifyResource";
 
     // The control-flow (composite) kinds the editor offers as their own titled blocks with sub-bodies. Conditional
     // is deferred (it needs a combat condition spec). Each holds a Children body: N for sequence, one for the rest.
@@ -130,6 +140,11 @@ public static class CombatProgramModel
         "dealDamage" => new("dealDamage", "eventTarget", CombatAmountSpec.FromConst(6)),
         "heal" => new("heal", "source", CombatAmountSpec.FromConst(4)),
         "gainResource" => new("gainResource", "source", CombatAmountSpec.FromConst(1), "standard.energy"),
+        "loseResource" => new("loseResource", "source", CombatAmountSpec.FromConst(1), "standard.energy"),
+        "modifyResource" => new("modifyResource", "source", CombatAmountSpec.FromConst(1), "standard.energy"),
+        "modifyMaxHealth" => new("modifyMaxHealth", "source", CombatAmountSpec.FromConst(5)),
+        "setHealth" => new("setHealth", "source", CombatAmountSpec.FromConst(10)),
+        "drawCards" => new("drawCards", "source", CombatAmountSpec.FromConst(1)),
         "sequence" => CombatNodeModel.Sequence(new[] { NewNode("dealDamage") }),
         "forEachTarget" => CombatNodeModel.ForEach("allEnemies", NewNode("dealDamage")),
         "repeat" => CombatNodeModel.Repeat(CombatAmountSpec.FromConst(2), NewNode("dealDamage")),
@@ -153,7 +168,7 @@ public static class CombatProgramModel
             return node with
             {
                 Kind = kind,
-                ResourceId = kind == "gainResource" ? (node.ResourceId == "" ? "standard.energy" : node.ResourceId) : "",
+                ResourceId = UsesResourceId(kind) ? (node.ResourceId == "" ? "standard.energy" : node.ResourceId) : "",
             };
 
         if (wasComposite && isComposite)
@@ -346,6 +361,11 @@ public static class CombatProgramModel
             "dealDamage" => new DealDamageNode<TContext>(selector, amount),
             "heal" => new HealNode<TContext>(selector, amount),
             "gainResource" => new GainResourceNode<TContext>(selector, new ResourceId(model.ResourceId), amount),
+            "loseResource" => new LoseResourceNode<TContext>(selector, new ResourceId(model.ResourceId), amount),
+            "modifyResource" => new ModifyResourceNode<TContext>(selector, new ResourceId(model.ResourceId), amount),
+            "modifyMaxHealth" => new ModifyMaxHealthNode<TContext>(selector, amount),
+            "setHealth" => new SetHealthNode<TContext>(selector, amount),
+            "drawCards" => new DrawCardsNode<TContext>(selector, amount),
             _ => new GainBlockNode<TContext>(selector, amount),
         };
     }
@@ -371,6 +391,16 @@ public static class CombatProgramModel
                 return Leaf("gainBlock", n.TargetSelector, n.Amount);
             case GainResourceNode<TContext> { ResultKey: null, DefaultMax: null } n:
                 return Leaf("gainResource", n.TargetSelector, n.Amount, n.ResourceId.value);
+            case LoseResourceNode<TContext> { ResultKey: null } n:
+                return Leaf("loseResource", n.TargetSelector, n.Amount, n.ResourceId.value);
+            case ModifyResourceNode<TContext> { ResultKey: null, Min: null, Max: null } n:
+                return Leaf("modifyResource", n.TargetSelector, n.Delta, n.ResourceId.value);
+            case ModifyMaxHealthNode<TContext> { ResultKey: null } n:
+                return Leaf("modifyMaxHealth", n.TargetSelector, n.Delta);
+            case SetHealthNode<TContext> { ResultKey: null } n:
+                return Leaf("setHealth", n.TargetSelector, n.Value);
+            case DrawCardsNode<TContext> { ResultKey: null } n:
+                return Leaf("drawCards", n.TargetSelector, n.Count);
 
             case SequenceEffectNode<TContext> s:
                 return ClassifyChildren<TContext>(s.Children) is { } children

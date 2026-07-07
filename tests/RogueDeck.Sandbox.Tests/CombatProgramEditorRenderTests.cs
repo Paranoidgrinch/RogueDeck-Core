@@ -54,6 +54,28 @@ public class CombatProgramEditorRenderTests
     }
 
     [Fact]
+    public async Task Renders_the_new_resource_leaf_with_its_id_field()
+    {
+        // B2a: lose/modify resource now show the resource-id field via UsesResourceId (previously gainResource only).
+        var html = await RenderAsync(new CombatNodeModel("loseResource", "source", CombatAmountSpec.FromConst(2), "faith"));
+
+        Assert.Contains("lose resource", html);
+        Assert.Contains("faith", html);
+    }
+
+    [Fact]
+    public async Task Palette_lists_the_widened_leaf_kinds()
+    {
+        // The kind dropdown lists every AllKinds entry, so the B2a additions must appear as options on any node.
+        var html = await RenderAsync(new CombatNodeModel("dealDamage", "source", CombatAmountSpec.FromConst(1)));
+
+        Assert.Contains("modify max health", html);
+        Assert.Contains("set health", html);
+        Assert.Contains("draw cards", html);
+        Assert.Contains("modify resource", html);
+    }
+
+    [Fact]
     public async Task Renders_nested_control_flow_without_error()
     {
         // repeat 2× { if (source missing HP ≥ 10) then heal else deal damage }.

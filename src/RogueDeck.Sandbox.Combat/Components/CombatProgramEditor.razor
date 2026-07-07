@@ -88,7 +88,7 @@ else
         @KindSelect
         @SelectorSelect(CombatProgramModel.SelectorKeys, Node.SelectorKey, key => Set(Node with { SelectorKey = key }))
         @AmountControls(Node.AmountOrDefault, spec => Set(Node with { Amount = spec }))
-        @if (Node.Kind == "gainResource")
+        @if (CombatProgramModel.UsesResourceId(Node.Kind))
         {
             <input value="@Node.ResourceId" style="width:8rem" placeholder="resource id"
                    @onchange="e => Set(Node with { ResourceId = AsString(e.Value) })" />
