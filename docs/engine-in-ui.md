@@ -65,7 +65,17 @@ create/play/replay card, moveCardToZone (per Instanz-Id, laufzeit-gewählt), ins
 changeTeam, modifyDefensivePool, setCombatResult, setCombatantLifecycleState, side-effect/NoOp/causalSequence/
 randomTargetSelection/repeatUntil. Diese bleiben über den JSON-Editor authorbar; bei Bedarf später als B2d.
 
-## C — Consumables end-to-end (Engine + UI) ☐
+## C — Consumables end-to-end (Engine + UI) — C1✔ C2✔ C3☐
+
+**Status:** C1 ✔ @ 13a6b98 (ConsumableDefinition-Registry + AddConsumableById + ConsumableData +
+RunBlueprint.Consumables + RunStart.StartingConsumables + RunJson-Roundtrip). C2 ✔ @ 9ebbf3f (zeitlich
+begrenzte Wirkung: `InstallNextCombatOpeningRunEffect(RelicCombatRule)` → Pending-Combat-Modifier →
+nächster Kampf installiert die turnStarted-Rule als OneShot-Temporary-Rule am Hero; feuert einmal beim
+ersten Hero-Zug-Start, Block überlebt den Clear [empirisch verifiziert], verbraucht nach 1 Kampf; end-to-end
+getestet Block-Potion→20 Block). **C3 ☐ = UI**: Consumables-Editor (ala Relics; Use-Effect + Opening visuell),
+Starting-Consumables im HeroTab, Verbrauch im Run-Play-Inventory.
+
+## (Detailplan) C — Consumables end-to-end (Engine + UI) ☐
 
 **Ist-Zustand (Engine, TEILWEISE):** `RunConsumable`-Instanzen (id + definitionId + `UseEffects`) liegen im
 Inventory; `AddConsumableRunEffect` / `UseConsumableRunEffect` gewinnen/verbrauchen sie; Gained/Used-Events;
