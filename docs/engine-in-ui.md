@@ -74,6 +74,12 @@ nächster Kampf installiert die turnStarted-Rule als OneShot-Temporary-Rule am H
 ersten Hero-Zug-Start, Block überlebt den Clear [empirisch verifiziert], verbraucht nach 1 Kampf; end-to-end
 getestet Block-Potion→20 Block). **C3 ☐ = UI**: Consumables-Editor (ala Relics; Use-Effect + Opening visuell),
 Starting-Consumables im HeroTab, Verbrauch im Run-Play-Inventory.
+  - **C3a/C3b ✔ @ cb7acfb:** Consumables-Tab (/consumables + Nav) mit `ConsumableEditor` (id/name + UseEffects:
+    heal, gain resource, next-combat opening via CombatProgramEditor); HeroTab-Starting-Consumables. Render-Tests.
+  - **C3c ☐ DEFERRED:** interaktiver Verbrauch mitten im Lauf. Engine kann es (UseConsumableRunEffect), aber die
+    `InteractiveRunSession` läuft autonom auf einem Background-Thread (RunRunner.Run) und blockiert nur an Choices
+    — kein sicherer Hook, um mitten im Lauf ein Use-Effekt einzuspeisen. Braucht Run-Loop-Interaktionspunkte
+    (Session-/Engine-Feature), also ein eigener Follow-up, keine reine UI-Lücke.
 
 ## (Detailplan) C — Consumables end-to-end (Engine + UI) ☐
 
