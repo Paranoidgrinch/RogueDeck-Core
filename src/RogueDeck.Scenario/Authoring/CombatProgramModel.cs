@@ -127,7 +127,7 @@ public static class CombatProgramModel
     // A default node of the given kind, for the editor's "+ node" palette (composites seed a starter body).
     public static CombatNodeModel NewNode(string kind) => kind switch
     {
-        "dealDamage" => new("dealDamage", "source", CombatAmountSpec.FromConst(6)),
+        "dealDamage" => new("dealDamage", "eventTarget", CombatAmountSpec.FromConst(6)),
         "heal" => new("heal", "source", CombatAmountSpec.FromConst(4)),
         "gainResource" => new("gainResource", "source", CombatAmountSpec.FromConst(1), "standard.energy"),
         "sequence" => CombatNodeModel.Sequence(new[] { NewNode("dealDamage") }),
@@ -178,6 +178,10 @@ public static class CombatProgramModel
     // instances, not the singletons).
     public static readonly IReadOnlyList<(string Key, ICombatantTargetSelector Selector)> Selectors =
     [
+        // The designated target of this card/action (an enemy action's is the hero; a card's is what it's played on).
+        // The most common offensive selector — first so it's the prominent default. Resolves to nothing in a context
+        // with no event target (e.g. some trigger programs), so pair it with an event-bearing trigger.
+        ("eventTarget", CombatantTargetSelectors.EventTarget),
         ("source", CombatantTargetSelectors.Source),
         ("allEnemies", CombatantTargetSelectors.AllEnemiesOfSource),
         ("allAllies", CombatantTargetSelectors.AllAlliesOfSource),
@@ -194,7 +198,7 @@ public static class CombatProgramModel
     // condition-selector dropdown offers this subset; leaf-node effect selectors may use the full catalog.
     public static readonly IReadOnlyList<string> SingleTargetSelectorKeys =
     [
-        "source", "lowestHealthEnemy", "highestHealthEnemy", "lowestHealthAlly", "highestHealthAlly",
+        "eventTarget", "source", "lowestHealthEnemy", "highestHealthEnemy", "lowestHealthAlly", "highestHealthAlly",
     ];
 
     private static ICombatantTargetSelector SelectorFor(string key) =>

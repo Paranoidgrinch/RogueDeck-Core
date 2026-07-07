@@ -1,25 +1,152 @@
 @rendermode InteractiveServer
 @inject RunDocument Doc
 
-@* The dedicated Encounters tab: a lens over the shared run document, hosting the existing EncounterEditor. Enemy
-   rosters (their HP, actions, hero combat resources) are authored here and referenced by the map. Authoring enemy
-   ACTION programs visually (EnemyActionData via CombatProgramEditor over EnemyActionContext) is a later enrichment. *@
-<section style="padding:1rem; max-width:70rem">
-    <h1>Encounters</h1>
-    <p class="muted">Author the run's combat encounters — enemy rosters, their HP and actions, and the hero's combat
-        resources. Part of the shared run document (referenced by the map in the Run tab).</p>
+@* The dedicated Encounters tab: a lens over the shared run document. Authors the run's enemy ACTIONS (their
+   effect programs + telegraphed intents) visually with the CombatProgramEditor over EnemyActionContext — the
+   enemy-side sibling of the Cards tab — and the encounter rosters (which HP + which action ids each enemy runs)
+   via the existing EncounterEditor. Both are part of the shared document, referenced by the map in the Run tab. *@
+<section style="padding:1rem; max-width:72rem">
+    <h1>Encounters &amp; enemies</h1>
+    <p class="muted">Author the enemy actions (effect programs + intents) and the combat encounters — enemy rosters,
+        their HP, which actions they run, and the hero's combat resources. Part of the shared run document.</p>
 
+    <h2>Enemy actions (@Actions.Count)</h2>
+    <p class="muted">Each action is an effect program an enemy can run, plus a telegraphed intent. Reference an
+        action by its id in an enemy's roster below.</p>
+    @for (var i = 0; i < Actions.Count; i++)
+    {
+        var ai = i;
+        var action = Actions[ai];
+        <div class="fx-block">
+            <div class="run-bar">
+                <span class="muted">id</span>
+                <input value="@action.Id" style="width:9rem" @onchange="e => SetActionId(ai, AsString(e.Value))" />
+                <span class="muted">name</span>
+                <input value="@(action.NameKey ?? "")" style="width:11rem" @onchange="e => SetActionName(ai, AsString(e.Value))" />
+                <button class="mini" @onclick="() => RemoveAction(ai)">✕ action</button>
+            </div>
+            <div class="run-bar">
+                <span class="muted">intent</span>
+                <input value="@action.Intent.Label" style="width:9rem" title="telegraph label, e.g. Slam"
+                       @onchange="e => SetIntentLabel(ai, AsString(e.Value))" />
+                <select value="@action.Intent.Kind" @onchange="e => SetIntentKind(ai, AsString(e.Value))">
+                    @foreach (var kind in Enum.GetValues<IntentKind>())
+                    {
+                        <option value="@kind">@kind</option>
+                    }
+                </select>
+            </div>
+            <div class="fx-body">
+                <span class="muted">program:</span>
+                @{ var model = ModelOf(action); }
+                @if (model is { } node)
+                {
+                    <CombatProgramEditor Node="node" NodeChanged="n => SetActionProgram(ai, n)" />
+                }
+                else if (action.Program is null)
+                {
+                    <button class="mini" @onclick="() => AddActionProgram(ai)">+ program</button>
+                }
+                else
+                {
+                    <span class="muted"> advanced program (outside the visual subset) — edit in the Run tab JSON</span>
+                }
+            </div>
+        </div>
+    }
+    <div class="run-bar">
+        <input placeholder="new action id" @bind="_newActionId" style="width:11rem" />
+        <button class="play" @onclick="AddAction">Add action</button>
+    </div>
+
+    <h2>Encounter rosters</h2>
     <EncounterEditor Blueprint="_blueprint" BlueprintChanged="OnChanged" />
 </section>
 
 @code {
     private RunBlueprint _blueprint = default!;
+    private string _newActionId = "";
 
     protected override void OnInitialized() => _blueprint = Doc.Load();
+
+    private IReadOnlyList<EnemyActionData> Actions => _blueprint.EnemyActions;
 
     private void OnChanged(RunBlueprint blueprint)
     {
         Doc.Save(blueprint);
         _blueprint = blueprint;
+    }
+
+    private void Save() => Doc.Save(_blueprint);
+    private static string AsString(object? v) => v?.ToString() ?? "";
+
+    private static CombatNodeModel? ModelOf(EnemyActionData action) =>
+        action.Program is { } program ? CombatProgramModel.Classify(program) : null;
+
+    private void EditActions(Func<List<EnemyActionData>, List<EnemyActionData>> edit)
+    {
+        _blueprint = _blueprint with { EnemyActions = edit(Actions.ToList()) };
+        Save();
+    }
+
+    private void EditAction(int index, Func<EnemyActionData, EnemyActionData> edit) =>
+        EditActions(list =>
+        {
+            if (index >= 0 && index < list.Count)
+                list[index] = edit(list[index]);
+            return list;
+        });
+
+    private void SetActionId(int index, string id)
+    {
+        if (!string.IsNullOrWhiteSpace(id))
+            EditAction(index, a => a with { Id = id.Trim() });
+    }
+
+    private void SetActionName(int index, string name) =>
+        EditAction(index, a => a with { NameKey = string.IsNullOrWhiteSpace(name) ? null : name.Trim() });
+
+    // The intent label cannot be empty (ActionIntent enforces it), so blank input falls back to the action id.
+    private void SetIntentLabel(int index, string label) =>
+        EditAction(index, a => a with
+        {
+            Intent = new ActionIntent(string.IsNullOrWhiteSpace(label) ? a.Id : label.Trim(), a.Intent.Kind),
+        });
+
+    private void SetIntentKind(int index, string kind) =>
+        EditAction(index, a => a with
+        {
+            Intent = a.Intent with { Kind = Enum.TryParse<IntentKind>(kind, out var k) ? k : a.Intent.Kind },
+        });
+
+    private void SetActionProgram(int index, CombatNodeModel node) =>
+        EditAction(index, a => a with { Program = CombatProgramModel.Build<EnemyActionContext>(node) });
+
+    private void AddActionProgram(int index) => SetActionProgram(index, CombatProgramModel.NewNode("dealDamage"));
+
+    private void RemoveAction(int index) =>
+        EditActions(list =>
+        {
+            if (index >= 0 && index < list.Count)
+                list.RemoveAt(index);
+            return list;
+        });
+
+    private void AddAction()
+    {
+        if (string.IsNullOrWhiteSpace(_newActionId))
+            return;
+        var id = _newActionId.Trim();
+        EditActions(list =>
+        {
+            list.Add(new EnemyActionData
+            {
+                Id = id,
+                Intent = new ActionIntent(id, IntentKind.Attack),
+                Program = CombatProgramModel.Build<EnemyActionContext>(CombatProgramModel.NewNode("dealDamage")),
+            });
+            return list;
+        });
+        _newActionId = "";
     }
 }

@@ -90,7 +90,7 @@ public class CombatProgramModelTests
     {
         var program = new EffectProgram<CardPlayContext>(
             new GainBlockNode<CardPlayContext>(
-                CombatantTargetSelectors.EventTarget, // not in the CombatProgramModel.Selectors catalog
+                CombatantTargetSelectors.SourceIncludingDowned, // not in the CombatProgramModel.Selectors catalog
                 new ConstantExpression<CardPlayContext>(1)));
 
         Assert.Null(CombatProgramModel.Classify(program));
