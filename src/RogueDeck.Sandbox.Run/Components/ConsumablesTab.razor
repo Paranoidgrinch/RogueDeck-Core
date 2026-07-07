@@ -1,0 +1,25 @@
+@rendermode InteractiveServer
+@inject RunDocument Doc
+
+@* The dedicated Consumables tab: a lens over the shared run document (RunDocument), hosting the ConsumableEditor.
+   Consumable kinds authored here persist in the one ProjectDraft document, so the Hero tab (starting consumables),
+   events/rewards (grant by id) and the Run/Playtest tabs (use them) all see the same consumables. *@
+<section style="padding:1rem; max-width:70rem">
+    <h1>Consumables</h1>
+    <p class="muted">Author the run's consumables — one-shot items with use effects (heal, gain resource, or a
+        next-combat opening like "start with 20 block"). Part of the shared run document.</p>
+
+    <ConsumableEditor Blueprint="_blueprint" BlueprintChanged="OnChanged" />
+</section>
+
+@code {
+    private RunBlueprint _blueprint = default!;
+
+    protected override void OnInitialized() => _blueprint = Doc.Load();
+
+    private void OnChanged(RunBlueprint blueprint)
+    {
+        Doc.Save(blueprint);
+        _blueprint = blueprint;
+    }
+}

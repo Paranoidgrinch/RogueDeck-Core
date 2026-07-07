@@ -85,6 +85,23 @@
             </label>
         </div>
     }
+
+    <h2>Starting consumables</h2>
+    <p class="muted">Consumables the hero begins the run with (one instance each). Author them in the Consumables
+        tab; add one there first to make it selectable here.</p>
+    @if (AvailableConsumables.Count == 0)
+    {
+        <p class="muted">No consumables defined yet.</p>
+    }
+    @foreach (var id in AvailableConsumables)
+    {
+        <div class="run-bar">
+            <label>
+                <input type="checkbox" checked="@Start.StartingConsumables.Contains(id)"
+                       @onchange="e => ToggleConsumable(id, AsBool(e.Value))" /> @id
+            </label>
+        </div>
+    }
 </section>
 
 @code {
@@ -118,6 +135,18 @@
         if (on)
             relics.Add(id);
         Apply(Start with { StartingRelics = relics });
+    }
+
+    // Consumables the hero can start with: those authored in the document (no built-in samples, unlike relics).
+    private IReadOnlyList<string> AvailableConsumables =>
+        _blueprint.Consumables.Select(c => c.Id).Distinct(StringComparer.Ordinal).ToList();
+
+    private void ToggleConsumable(string id, bool on)
+    {
+        var consumables = Start.StartingConsumables.Where(c => c != id).ToList();
+        if (on)
+            consumables.Add(id);
+        Apply(Start with { StartingConsumables = consumables });
     }
 
     private void Apply(RunStart start)

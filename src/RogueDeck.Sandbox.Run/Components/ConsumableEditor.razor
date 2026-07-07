@@ -1,0 +1,221 @@
+@using Microsoft.AspNetCore.Components.Rendering
+@* Visual editor for the run's authored consumables (ConsumableData). A consumable is id + display name + the run
+   effects applied when a copy is used. The editor offers the common one-shot use effects (heal / gain resource) and
+   the C2 "next-combat opening" (a turnStarted combat program the next fight's hero runs once at its first turn
+   start — e.g. "start with 20 block"), authored via the shared CombatProgramEditor. Any use effect it can't model
+   is shown read-only so nothing is lost. Consumables round-trip in the one run document; grant one from an event /
+   reward, or list it as a starting consumable in the Hero tab. *@
+
+<section class="panel">
+    <h2>Consumables</h2>
+    <p class="muted">One-shot items the hero carries and spends. Each applies its use effects when used.</p>
+
+    @if (Blueprint.Consumables.Count == 0)
+    {
+        <p class="muted">No consumables yet — add one below.</p>
+    }
+
+    @for (var ci = 0; ci < Blueprint.Consumables.Count; ci++)
+    {
+        var index = ci;
+        var consumable = Blueprint.Consumables[ci];
+        <div class="editor-card">
+            <div class="run-bar">
+                <label>Consumable id
+                    <input value="@consumable.Id" @onchange="e => SetId(index, AsString(e.Value))" style="width:10rem" />
+                </label>
+                <label>Name
+                    <input value="@consumable.DisplayName" @onchange="e => SetName(index, AsString(e.Value))" style="width:11rem" />
+                </label>
+                <button class="mini" @onclick="() => Remove(index)">✕ remove</button>
+            </div>
+
+            <div class="editor-effects">
+                <span class="muted">On use:</span>
+                @for (var ei = 0; ei < consumable.UseEffects.Count; ei++)
+                {
+                    var effectIndex = ei;
+                    var effect = consumable.UseEffects[ei];
+                    <div class="editor-choice">
+                        @UseEffectEditor(index, effectIndex, effect)
+                        <button class="mini" @onclick="() => RemoveEffect(index, effectIndex)">✕ effect</button>
+                    </div>
+                }
+                <div class="add-effect">
+                    <span class="muted">+ </span>
+                    <button class="mini" @onclick='() => AddEffect(index, "heal")'>heal</button>
+                    <button class="mini" @onclick='() => AddEffect(index, "resource")'>gain resource</button>
+                    <button class="mini" @onclick='() => AddEffect(index, "opening")'>next-combat opening</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="run-bar">
+        <input value="@_newId" placeholder="new consumable id" style="width:12rem"
+               @onchange="e => _newId = AsString(e.Value)" />
+        <button class="mini" @onclick="Add" disabled="@string.IsNullOrWhiteSpace(_newId)">+ add consumable</button>
+    </div>
+</section>
+
+@code {
+    [Parameter] public RunBlueprint Blueprint { get; set; } = default!;
+    [Parameter] public EventCallback<RunBlueprint> BlueprintChanged { get; set; }
+
+    private string _newId = "";
+
+    private const string OpeningTrigger = "turnStarted";
+
+    private static string AsString(object? v) => v?.ToString() ?? "";
+    private static int AsInt(object? v, int fallback) => int.TryParse(v?.ToString(), out var n) ? n : fallback;
+
+    // ── document plumbing ────────────────────────────────────────────────────────
+    private Task Save(IReadOnlyList<ConsumableData> consumables) =>
+        BlueprintChanged.InvokeAsync(Blueprint with { Consumables = consumables });
+
+    private Task Edit(int index, Func<ConsumableData, ConsumableData> edit)
+    {
+        var list = Blueprint.Consumables.ToList();
+        list[index] = edit(list[index]);
+        return Save(list);
+    }
+
+    private Task SetId(int index, string id) => Edit(index, c => c with { Id = id.Trim() });
+    private Task SetName(int index, string name) => Edit(index, c => c with { DisplayName = name });
+    private Task Remove(int index) => Save(Blueprint.Consumables.Where((_, i) => i != index).ToList());
+
+    private Task Add()
+    {
+        var id = _newId.Trim();
+        if (id.Length == 0 || Blueprint.Consumables.Any(c => c.Id == id))
+            return Task.CompletedTask;
+        _newId = "";
+        return Save(Blueprint.Consumables.Append(new ConsumableData
+        {
+            Id = id,
+            DisplayName = id,
+            UseEffects = new IRunEffectRequest[] { new HealRunEffect(8) },
+        }).ToList());
+    }
+
+    // ── use effects ──────────────────────────────────────────────────────────────
+    private Task SetEffect(int index, int effectIndex, IRunEffectRequest effect) =>
+        Edit(index, c =>
+        {
+            var effects = c.UseEffects.ToList();
+            effects[effectIndex] = effect;
+            return c with { UseEffects = effects };
+        });
+
+    private Task RemoveEffect(int index, int effectIndex) =>
+        Edit(index, c => c with { UseEffects = c.UseEffects.Where((_, i) => i != effectIndex).ToList() });
+
+    private Task AddEffect(int index, string kind)
+    {
+        IRunEffectRequest effect = kind switch
+        {
+            "resource" => new ChangeResourceRunEffect(StandardRunIds.Gold, 10),
+            "opening" => new InstallNextCombatOpeningRunEffect(new RelicCombatRule
+            {
+                Trigger = OpeningTrigger,
+                Program = RelicCombatTriggers.Get(OpeningTrigger).NewProgram(),
+                Priority = 0,
+            }),
+            _ => new HealRunEffect(8),
+        };
+        return Edit(index, c => c with { UseEffects = c.UseEffects.Append(effect).ToList() });
+    }
+
+    // A compact per-effect editor: the common leaves inline, the next-combat opening via CombatProgramEditor, and
+    // anything else read-only so authored effects are never silently dropped.
+    private RenderFragment UseEffectEditor(int index, int effectIndex, IRunEffectRequest effect) => builder =>
+    {
+        switch (effect)
+        {
+            case HealRunEffect heal:
+                Row(builder, "heal", heal.Amount, v => SetEffect(index, effectIndex, new HealRunEffect(v)));
+                break;
+            case ChangeResourceRunEffect resource:
+                builder.OpenElement(0, "span");
+                builder.AddAttribute(1, "class", "fx");
+                builder.AddContent(2, "gain resource ");
+                Text(builder, 3, resource.Resource.Value, s =>
+                    SetEffect(index, effectIndex, resource with { Resource = new RunResourceId(s) }));
+                Number(builder, 6, resource.Delta, v =>
+                    SetEffect(index, effectIndex, resource with { Delta = v }));
+                builder.CloseElement();
+                break;
+            case InstallNextCombatOpeningRunEffect opening:
+                OpeningEditor(builder, index, effectIndex, opening);
+                break;
+            default:
+                builder.OpenElement(0, "span");
+                builder.AddAttribute(1, "class", "muted");
+                builder.AddContent(2, $"({effect.GetType().Name} — edit in the Run tab's JSON)");
+                builder.CloseElement();
+                break;
+        }
+    };
+
+    private void OpeningEditor(RenderTreeBuilder builder, int index, int effectIndex, InstallNextCombatOpeningRunEffect opening)
+    {
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "fx-body");
+        builder.AddContent(2, "next combat — at the hero's first turn start:");
+        var model = RelicCombatTriggers.Get(OpeningTrigger).ToModel(opening.Rule.Program);
+        if (model is { } node)
+        {
+            builder.OpenComponent<RogueDeck.Sandbox.Combat.Components.CombatProgramEditor>(3);
+            builder.AddAttribute(4, "Node", node);
+            builder.AddAttribute(5, "NodeChanged",
+                EventCallback.Factory.Create<CombatNodeModel>(this, m => SetOpeningModel(index, effectIndex, m)));
+            builder.CloseComponent();
+        }
+        else
+        {
+            builder.OpenElement(6, "span");
+            builder.AddAttribute(7, "class", "muted");
+            builder.AddContent(8, "(advanced opening program — edit in the Run tab's JSON)");
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+    }
+
+    private Task SetOpeningModel(int index, int effectIndex, CombatNodeModel model)
+    {
+        var program = RelicCombatTriggers.Get(OpeningTrigger).FromModel(model);
+        return SetEffect(index, effectIndex, new InstallNextCombatOpeningRunEffect(
+            new RelicCombatRule { Trigger = OpeningTrigger, Program = program, Priority = 0 }));
+    }
+
+    // ── small widgets ──────────────────────────────────────────────────────────────
+    private void Row(RenderTreeBuilder builder, string label, int value, Func<int, Task> onChange)
+    {
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", "fx");
+        builder.AddContent(2, label + " ");
+        Number(builder, 3, value, onChange);
+        builder.CloseElement();
+    }
+
+    private void Number(RenderTreeBuilder builder, int seq, int value, Func<int, Task> onChange)
+    {
+        builder.OpenElement(seq, "input");
+        builder.AddAttribute(seq + 1, "type", "number");
+        builder.AddAttribute(seq + 2, "value", value);
+        builder.AddAttribute(seq + 3, "style", "width:4rem");
+        builder.AddAttribute(seq + 4, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(
+            this, e => onChange(AsInt(e.Value, value))));
+        builder.CloseElement();
+    }
+
+    private void Text(RenderTreeBuilder builder, int seq, string value, Func<string, Task> onChange)
+    {
+        builder.OpenElement(seq, "input");
+        builder.AddAttribute(seq + 1, "value", value);
+        builder.AddAttribute(seq + 2, "style", "width:7rem");
+        builder.AddAttribute(seq + 3, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(
+            this, e => onChange(AsString(e.Value))));
+        builder.CloseElement();
+    }
+}
