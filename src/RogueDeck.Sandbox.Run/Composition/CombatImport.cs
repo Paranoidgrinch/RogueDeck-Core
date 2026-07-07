@@ -42,7 +42,7 @@ public static class CombatImport
         var programs = new List<ITriggeredEffectDefinition>();
         foreach (var status in statuses)
             for (var i = 0; i < status.Triggers.Count; i++)
-                programs.Add(ScenarioComposer.RebuildTrigger(status.Id, i, status.Triggers[i]));
+                programs.Add(StatusDataRebuild.RebuildTrigger(status.Id, i, status.Triggers[i]));
         return programs;
     }
 
@@ -57,9 +57,9 @@ public static class CombatImport
         foreach (var status in statuses)
         {
             if (status.DeathPrevention is { } deathPrevention)
-                preDown.Add(ScenarioComposer.RebuildDeathPrevention(status.Id, deathPrevention));
+                preDown.Add(StatusDataRebuild.RebuildDeathPrevention(status.Id, deathPrevention));
             if (status.DebuffBlock is { } debuffBlock)
-                statusApplication.Add(ScenarioComposer.RebuildDebuffBlock(status.Id, debuffBlock));
+                statusApplication.Add(StatusDataRebuild.RebuildDebuffBlock(status.Id, debuffBlock));
         }
         return (preDown, statusApplication);
     }
