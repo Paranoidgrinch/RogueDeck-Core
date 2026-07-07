@@ -25,6 +25,25 @@ public class CombatOpeningTests
         new(blueprint.Compile(), (_, _) => null);
 
     [Fact]
+    public void UseHeroCombatProgram_applies_immediately_to_the_live_fight()
+    {
+        // A consumable's combat-use program (E1): run "gain 20 block" NOW on the hero, mid-turn.
+        var blueprint = new ScenarioBlueprint { Hero = new HeroBlueprint("hero") { MaxHealth = 40 } };
+        blueprint.Hero.Resources.Add(new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3));
+        blueprint.Enemies.Add(new EnemyBlueprint("dummy") { MaxHealth = 20 });
+        var combat = new InteractiveCombat(blueprint.Compile(), (_, _) => null);
+
+        var applied = combat.UseHeroCombatProgram(new EffectProgram<TurnStartedTriggeredEffectContext>(
+            new GainBlockNode<TurnStartedTriggeredEffectContext>(
+                CombatantTargetSelectors.Source, new ConstantExpression<TurnStartedTriggeredEffectContext>(20))));
+
+        Assert.True(applied);
+        var block = combat.State.GetCombatant(combat.HeroId).DefensivePools
+            .TryGetValue(StandardCombatIds.BlockDefensivePool, out var pool) ? pool.Current : 0;
+        Assert.Equal(20, block);
+    }
+
+    [Fact]
     public void Opening_gain_block_reaches_the_hero_at_the_first_turn_start()
     {
         var program = new EffectProgram<TurnStartedTriggeredEffectContext>(

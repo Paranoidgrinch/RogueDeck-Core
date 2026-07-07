@@ -153,6 +153,36 @@ public class RunBlueprintTests
     }
 
     [Fact]
+    public void Consumable_combat_use_round_trips_and_carries_into_the_definition_and_instance()
+    {
+        var potion = new ConsumableData
+        {
+            Id = "potion.block",
+            DisplayName = "Block Potion",
+            CombatUse = new RelicCombatRule
+            {
+                Trigger = "turnStarted",
+                Program = new EffectProgram<TurnStartedTriggeredEffectContext>(
+                    new GainBlockNode<TurnStartedTriggeredEffectContext>(
+                        CombatantTargetSelectors.Source, new ConstantExpression<TurnStartedTriggeredEffectContext>(20))),
+                Priority = 0,
+            },
+        };
+        var blueprint = Demo() with { Consumables = new[] { potion } };
+
+        var back = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(blueprint, Options), Options);
+        var reloaded = Assert.Single(back.Consumables);
+        Assert.NotNull(reloaded.CombatUse);
+        Assert.Equal("turnStarted", reloaded.CombatUse!.Trigger);
+
+        // ToDefinition + a granted instance both carry the combat-use rule.
+        Assert.NotNull(reloaded.ToDefinition().CombatUse);
+        var run = new RunState(new RunId("r"), new HealthState(30, 40), new RunMap(Array.Empty<Node>()));
+        var instance = run.AddConsumable(new ConsumableId(reloaded.Id), reloaded.UseEffects, reloaded.CombatUse);
+        Assert.NotNull(instance.CombatUse);
+    }
+
+    [Fact]
     public void Starting_consumables_are_granted_at_run_start_from_content()
     {
         // Minimal blueprint (empty map) so only the run-start grant runs, isolating the feature.

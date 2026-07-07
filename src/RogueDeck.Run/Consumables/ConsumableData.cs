@@ -9,8 +9,12 @@ public sealed record ConsumableData
     public string DisplayName { get; init; } = "";
     public IReadOnlyList<IRunEffectRequest> UseEffects { get; init; } = [];
 
+    // Optional combat-use program (a turnStarted RelicCombatRule) applied to the live fight when used DURING combat.
+    // Round-trips via RunJson (RelicCombatRuleJsonConverter). Null for run-only consumables.
+    public RelicCombatRule? CombatUse { get; init; }
+
     public ConsumableDefinition ToDefinition() =>
-        new(new ConsumableId(Id), string.IsNullOrWhiteSpace(DisplayName) ? Id : DisplayName, UseEffects);
+        new(new ConsumableId(Id), string.IsNullOrWhiteSpace(DisplayName) ? Id : DisplayName, UseEffects, CombatUse);
 
     public static ConsumableData From(ConsumableDefinition definition)
     {
@@ -20,6 +24,7 @@ public sealed record ConsumableData
             Id = definition.Id.Value,
             DisplayName = definition.DisplayName,
             UseEffects = definition.UseEffects,
+            CombatUse = definition.CombatUse,
         };
     }
 }

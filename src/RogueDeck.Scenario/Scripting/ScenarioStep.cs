@@ -10,6 +10,9 @@ public sealed record HeroPlaysCard(string CardId, string? TargetId = null) : Sce
 // The hero declares its turn over; the engine ends it and starts the next combatant's turn.
 public sealed record HeroEndsTurn : ScenarioStep;
 
+// The hero uses a consumable during combat, running its combat-use program on the live fight.
+public sealed record HeroUsesConsumable : ScenarioStep;
+
 // A named enemy executes a registered action. The runner first advances real turns until it is that
 // enemy's turn, so the Round/Turn counters and turn automation reflect the true turn structure.
 public sealed record EnemyActs(string EnemyId, string ActionId, string? TargetId = null) : ScenarioStep;

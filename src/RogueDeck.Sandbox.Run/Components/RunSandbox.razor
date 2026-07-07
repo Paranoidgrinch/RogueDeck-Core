@@ -130,7 +130,8 @@
     }
 
     <RunSessionView Session="_play.Session" CombatDriver="_play.CombatDriver" CardCosts="_play.CardCosts"
-                    CardNames="_play.CardNames" EnemyNames="_play.EnemyNames" HeroName="_play.HeroName" />
+                    CardNames="_play.CardNames" EnemyNames="_play.EnemyNames" HeroName="_play.HeroName"
+                    UseConsumableInCombat="@(id => _play.UseConsumableInCombat(id))" />
 </div>
 
 @code {

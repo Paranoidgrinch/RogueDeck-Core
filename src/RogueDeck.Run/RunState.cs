@@ -131,10 +131,11 @@ public sealed class RunState
     public RelicInstance? FindRelic(RelicId id) => _relics.FirstOrDefault(r => r.Id == id);
 
     // Adds a consumable copy to the inventory and returns it (instance id from a run-scoped sequence).
-    public RunConsumable AddConsumable(ConsumableId definition, IReadOnlyList<IRunEffectRequest> useEffects)
+    public RunConsumable AddConsumable(
+        ConsumableId definition, IReadOnlyList<IRunEffectRequest> useEffects, RelicCombatRule? combatUse = null)
     {
         var consumable = new RunConsumable(
-            new ConsumableInstanceId($"consumable#{++_nextConsumableSeq}"), definition, useEffects);
+            new ConsumableInstanceId($"consumable#{++_nextConsumableSeq}"), definition, useEffects, combatUse);
         _consumables.Add(consumable);
         return consumable;
     }

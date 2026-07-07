@@ -48,6 +48,11 @@
                     <button class="mini" @onclick='() => AddEffect(index, "opening")'>next-combat opening</button>
                 </div>
             </div>
+
+            <div class="editor-effects">
+                <span class="muted">In combat (used on your turn):</span>
+                @CombatUseEditor(index, consumable)
+            </div>
         </div>
     }
 
@@ -187,6 +192,60 @@
         return SetEffect(index, effectIndex, new InstallNextCombatOpeningRunEffect(
             new RelicCombatRule { Trigger = OpeningTrigger, Program = program, Priority = 0 }));
     }
+
+    // ── combat use (the consumable's "on use during a fight" program) ────────────────
+    private static RelicCombatRule NewCombatUse() => new()
+    {
+        Trigger = OpeningTrigger,
+        Program = RelicCombatTriggers.Get(OpeningTrigger).NewProgram(),
+        Priority = 0,
+    };
+
+    private Task SetCombatUse(int index, RelicCombatRule? rule) => Edit(index, c => c with { CombatUse = rule });
+
+    private Task SetCombatUseModel(int index, CombatNodeModel model) =>
+        SetCombatUse(index, new RelicCombatRule
+        {
+            Trigger = OpeningTrigger,
+            Program = RelicCombatTriggers.Get(OpeningTrigger).FromModel(model),
+            Priority = 0,
+        });
+
+    private RenderFragment CombatUseEditor(int index, ConsumableData consumable) => builder =>
+    {
+        if (consumable.CombatUse is not { } combatUse)
+        {
+            builder.OpenElement(0, "button");
+            builder.AddAttribute(1, "class", "mini");
+            builder.AddAttribute(2, "onclick", EventCallback.Factory.Create(this, () => SetCombatUse(index, NewCombatUse())));
+            builder.AddContent(3, "+ combat use");
+            builder.CloseElement();
+            return;
+        }
+
+        var model = RelicCombatTriggers.Get(OpeningTrigger).ToModel(combatUse.Program);
+        if (model is { } node)
+        {
+            builder.OpenComponent<RogueDeck.Sandbox.Combat.Components.CombatProgramEditor>(4);
+            builder.AddAttribute(5, "Node", node);
+            builder.AddAttribute(6, "NodeChanged",
+                EventCallback.Factory.Create<CombatNodeModel>(this, m => SetCombatUseModel(index, m)));
+            builder.CloseComponent();
+        }
+        else
+        {
+            builder.OpenElement(7, "span");
+            builder.AddAttribute(8, "class", "muted");
+            builder.AddContent(9, "(advanced combat-use program — edit in the Run tab's JSON)");
+            builder.CloseElement();
+        }
+
+        builder.OpenElement(10, "button");
+        builder.AddAttribute(11, "class", "mini");
+        builder.AddAttribute(12, "onclick", EventCallback.Factory.Create(this, () => SetCombatUse(index, null)));
+        builder.AddContent(13, "✕ remove combat use");
+        builder.CloseElement();
+    };
 
     // ── small widgets ──────────────────────────────────────────────────────────────
     private void Row(RenderTreeBuilder builder, string label, int value, Func<int, Task> onChange)

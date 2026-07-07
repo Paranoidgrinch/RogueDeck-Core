@@ -9,24 +9,31 @@ public sealed class RunConsumable
     public ConsumableId DefinitionId { get; }
     public IReadOnlyList<IRunEffectRequest> UseEffects { get; }
 
+    // Optional combat-use program (a turnStarted RelicCombatRule) applied to the live fight when the consumable is
+    // used DURING combat — e.g. "gain 20 block now". Null for run-only consumables (heal run HP, gold, …).
+    public RelicCombatRule? CombatUse { get; }
+
     public RunConsumable(
-        ConsumableInstanceId id, ConsumableId definitionId, IReadOnlyList<IRunEffectRequest> useEffects)
+        ConsumableInstanceId id, ConsumableId definitionId, IReadOnlyList<IRunEffectRequest> useEffects,
+        RelicCombatRule? combatUse = null)
     {
         ArgumentNullException.ThrowIfNull(useEffects);
         Id = id;
         DefinitionId = definitionId;
         UseEffects = useEffects;
+        CombatUse = combatUse;
     }
 }
 
-public sealed record AddConsumableRunEffect(ConsumableId Definition, IReadOnlyList<IRunEffectRequest> UseEffects)
+public sealed record AddConsumableRunEffect(
+    ConsumableId Definition, IReadOnlyList<IRunEffectRequest> UseEffects, RelicCombatRule? CombatUse = null)
     : IRunEffectRequest;
 
 public sealed class AddConsumableRunEffectHandler : RunEffectHandler<AddConsumableRunEffect>
 {
     protected override void Resolve(RunState run, RunDefinitionRegistry registry, AddConsumableRunEffect request)
     {
-        var consumable = run.AddConsumable(request.Definition, request.UseEffects);
+        var consumable = run.AddConsumable(request.Definition, request.UseEffects, request.CombatUse);
         run.AddLog(StandardRunLogTypes.ConsumableGained, $"Gained consumable '{request.Definition}' ({consumable.Id}).");
         run.RaiseEvent(new ConsumableGainedRunEvent(consumable.Id, consumable.DefinitionId));
     }
@@ -41,13 +48,16 @@ public sealed class ConsumableDefinition
     public ConsumableId Id { get; }
     public string DisplayName { get; }
     public IReadOnlyList<IRunEffectRequest> UseEffects { get; }
+    public RelicCombatRule? CombatUse { get; }
 
-    public ConsumableDefinition(ConsumableId id, string displayName, IReadOnlyList<IRunEffectRequest> useEffects)
+    public ConsumableDefinition(
+        ConsumableId id, string displayName, IReadOnlyList<IRunEffectRequest> useEffects, RelicCombatRule? combatUse = null)
     {
         ArgumentNullException.ThrowIfNull(useEffects);
         Id = id;
         DisplayName = displayName ?? id.Value;
         UseEffects = useEffects;
+        CombatUse = combatUse;
     }
 }
 
@@ -64,7 +74,7 @@ public sealed class AddConsumableByIdRunEffectHandler : RunEffectHandler<AddCons
                 $"Cannot grant consumable '{request.Definition}' by id: the run has no content catalog.");
 
         var definition = run.Content.GetConsumable(request.Definition);
-        var consumable = run.AddConsumable(definition.Id, definition.UseEffects);
+        var consumable = run.AddConsumable(definition.Id, definition.UseEffects, definition.CombatUse);
         run.AddLog(StandardRunLogTypes.ConsumableGained, $"Gained consumable '{definition.Id}' ({consumable.Id}) by id.");
         run.RaiseEvent(new ConsumableGainedRunEvent(consumable.Id, consumable.DefinitionId));
     }

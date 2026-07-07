@@ -83,6 +83,16 @@
                     }
                 </div>
                 <button class="play" @onclick="EndCombatTurn">End turn ▸</button>
+                @if (session.Run.Consumables.Any(c => c.CombatUse is not null))
+                {
+                    <div class="row">
+                        <span class="muted">Consumables</span>
+                        @foreach (var consumable in session.Run.Consumables.Where(c => c.CombatUse is not null))
+                        {
+                            <button class="mini" @onclick="() => UseConsumableInCombat.InvokeAsync(consumable.Id)">use @consumable.DefinitionId.Value</button>
+                        }
+                    </div>
+                }
             }
             else
             {
@@ -161,6 +171,10 @@
 
     // The interactive combat driver, present only when the host chose interactive fights; null = fights auto-resolve.
     [Parameter] public InteractiveCombatDriver? CombatDriver { get; set; }
+
+    // Invoked when the player uses a consumable during a live fight (the host routes it to RunPlayback, which runs
+    // the consumable's combat-use program on the combat and removes it from the run inventory).
+    [Parameter] public EventCallback<ConsumableInstanceId> UseConsumableInCombat { get; set; }
 
     // Per-card energy cost + display name, and per-enemy display name, so the fight view can grey out unaffordable
     // cards and show human-readable names. Keyed by the raw definition/enemy id.

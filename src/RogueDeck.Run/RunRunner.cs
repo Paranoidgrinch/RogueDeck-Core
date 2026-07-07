@@ -98,7 +98,7 @@ public sealed class RunRunner
             if (!run.Content.HasConsumable(consumableId))
                 continue;
             var definition = run.Content.GetConsumable(consumableId);
-            var consumable = run.AddConsumable(definition.Id, definition.UseEffects);
+            var consumable = run.AddConsumable(definition.Id, definition.UseEffects, definition.CombatUse);
             run.AddLog(StandardRunLogTypes.ConsumableGained, $"Starting consumable '{id}' ({consumable.Id}).");
             run.RaiseEvent(new ConsumableGainedRunEvent(consumable.Id, consumable.DefinitionId));
         }

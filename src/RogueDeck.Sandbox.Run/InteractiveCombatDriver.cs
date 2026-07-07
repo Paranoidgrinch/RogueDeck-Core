@@ -74,6 +74,19 @@ public sealed class InteractiveCombatDriver : ICombatDriver, IDisposable
         AfterAction(combat);
     }
 
+    // Run a consumable's combat-use program on the live fight (called on the circuit thread while the run thread is
+    // parked in Drive). The caller (RunPlayback) removes the spent consumable from the run inventory.
+    public void UseConsumable(EffectProgram<TurnStartedTriggeredEffectContext> program)
+    {
+        InteractiveCombat? combat;
+        lock (_gate)
+            combat = Current;
+        if (combat is null)
+            return;
+        combat.UseHeroCombatProgram(program);
+        AfterAction(combat);
+    }
+
     private void AfterAction(InteractiveCombat combat)
     {
         if (combat.IsOver)

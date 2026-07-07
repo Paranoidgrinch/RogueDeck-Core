@@ -107,6 +107,39 @@ public sealed class InteractiveCombat
         Record(new HeroPlaysCard(cardId, target?.value), round, turn, _heroId, problems, before);
     }
 
+    // Run a consumable's combat-use program on the hero immediately (its "on use in combat" effects — gain block,
+    // heal now, hit the enemy, …). Authored like a turnStarted rule (source = the hero), but executed on demand
+    // rather than installed: a turnStarted context is fabricated for the hero (never dispatched, so no side effects)
+    // and the program runs through the real Effect Program runtime against the live combat. No-op off the hero's turn.
+    public bool UseHeroCombatProgram(EffectProgram<TurnStartedTriggeredEffectContext> program)
+    {
+        ArgumentNullException.ThrowIfNull(program);
+        if (!IsHeroTurn)
+            return false;
+
+        var before = _collector.Events.Count;
+        var round = _combat.CurrentRound;
+        var turn = _combat.CurrentTurn;
+        var problems = new List<string>();
+        try
+        {
+            var hero = _combat.GetCombatant(_heroId);
+            var context = new TurnStartedTriggeredEffectContext(
+                _combat, _registry, new TurnStartedCombatEvent(_heroId, round, turn), hero);
+            var execution = new EffectExecutionContext<TurnStartedTriggeredEffectContext>(
+                context, TurnStartedTriggeredEffectTargetResolver.CreateActionBuildContext(context));
+            EffectProgramExecutor.Execute(program, execution, _combat);
+            _queues.ResolvePendingQueues(_combat, _registry);
+        }
+        catch (Exception ex)
+        {
+            problems.Add($"Consumable use threw: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        Record(new HeroUsesConsumable(), round, turn, _heroId, problems, before);
+        return true;
+    }
+
     // End the hero's turn; every enemy then acts its intent for the current round, in turn order, until
     // the turn wraps back to the hero (whose next turn starts automatically). No-op unless it is the
     // hero's turn.

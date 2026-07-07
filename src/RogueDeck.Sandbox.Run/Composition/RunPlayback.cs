@@ -60,6 +60,21 @@ public sealed class RunPlayback(Action onChanged) : IDisposable
         }
     }
 
+    // Use a held consumable's combat-use program during a live fight: remove the spent consumable from the run
+    // inventory, then run its program on the combat. Runs on the circuit thread while the run thread is parked in
+    // Drive, so both mutations are single-threaded. No-op unless a fight is active and the consumable has a combat use.
+    public void UseConsumableInCombat(ConsumableInstanceId instance)
+    {
+        if (CombatDriver?.Current is null || Session is not { } session)
+            return;
+        var consumable = session.Run.FindConsumable(instance);
+        if (consumable?.CombatUse?.Program is not EffectProgram<TurnStartedTriggeredEffectContext> program)
+            return;
+
+        session.Run.RemoveConsumable(instance);
+        CombatDriver.UseConsumable(program); // applies the combat effect + re-renders via Changed
+    }
+
     public void Dispose()
     {
         if (Session is not null)
