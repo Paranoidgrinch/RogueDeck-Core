@@ -119,6 +119,8 @@ public sealed class RunPlayback(Action onChanged) : IDisposable
         var builder = new RunContentRegistryBuilder()
             .SetEncounters(new EncounterCatalog(library, blueprint.Encounters));
         RegisterRelics(builder, blueprint.Relics);
+        foreach (var consumable in blueprint.Consumables)
+            builder.RegisterConsumable(consumable.ToDefinition());
         foreach (var (id, script) in blueprint.Events)
             builder.RegisterEvent(new EventId(id), script);
         return builder.Build();

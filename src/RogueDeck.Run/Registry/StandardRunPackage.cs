@@ -55,6 +55,7 @@ public sealed class StandardRunPackage : IRunPackage
             .RegisterEffectHandler(new OfferRewardRunEffectHandler())
             .RegisterEffectHandler(new AddRewardModifierRunEffectHandler())
             .RegisterEffectHandler(new AddConsumableRunEffectHandler())
+            .RegisterEffectHandler(new AddConsumableByIdRunEffectHandler())
             .RegisterEffectHandler(new UseConsumableRunEffectHandler());
 
         builder

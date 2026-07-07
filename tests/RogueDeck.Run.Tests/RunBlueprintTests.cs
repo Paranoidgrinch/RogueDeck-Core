@@ -128,6 +128,70 @@ public class RunBlueprintTests
     }
 
     [Fact]
+    public void Consumables_and_starting_consumables_round_trip()
+    {
+        var blueprint = Demo() with
+        {
+            Consumables = new[]
+            {
+                new ConsumableData
+                {
+                    Id = "potion.fire",
+                    DisplayName = "Fire Potion",
+                    UseEffects = new IRunEffectRequest[] { new ChangeResourceRunEffect(Gold, 50) },
+                },
+            },
+            Start = new RunStart { StartingConsumables = new[] { "potion.fire" } },
+        };
+
+        var back = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(blueprint, Options), Options);
+
+        var potion = Assert.Single(back.Consumables);
+        Assert.Equal("potion.fire", potion.Id);
+        Assert.Equal("Fire Potion", potion.DisplayName);
+        Assert.Equal("potion.fire", Assert.Single(back.Start.StartingConsumables));
+    }
+
+    [Fact]
+    public void Starting_consumables_are_granted_at_run_start_from_content()
+    {
+        // Minimal blueprint (empty map) so only the run-start grant runs, isolating the feature.
+        var blueprint = new RunBlueprint(
+            Array.Empty<CardDefinitionId>(),
+            new Dictionary<string, EventScript>(),
+            Array.Empty<EncounterDefinition>(),
+            Array.Empty<CardData>(),
+            Array.Empty<EnemyActionData>(),
+            new RunMap(Array.Empty<Node>()))
+        {
+            Consumables = new[]
+            {
+                new ConsumableData
+                {
+                    Id = "potion.fire",
+                    DisplayName = "Fire Potion",
+                    UseEffects = new IRunEffectRequest[] { new ChangeResourceRunEffect(Gold, 50) },
+                },
+            },
+            Start = new RunStart { StartingConsumables = new[] { "potion.fire" } },
+        };
+
+        var contentBuilder = new RunContentRegistryBuilder();
+        foreach (var consumable in blueprint.Consumables)
+            contentBuilder.RegisterConsumable(consumable.ToDefinition());
+        var content = contentBuilder.Build();
+        var defs = new RunDefinitionRegistryBuilder();
+        new StandardRunPackage(new AutoPlayCombatDriver(), content).RegisterDefinitions(defs);
+
+        var run = blueprint.CreateInitialRun(new RunId("run"));
+        // Content must reach the runner too — it SetContent()s the run, the prerequisite for granting by id.
+        new RunRunner(defs.Build(), new ScriptedChoiceProvider(), content: content).Run(run);
+
+        Assert.Contains(run.Consumables, c => c.DefinitionId == new ConsumableId("potion.fire"));
+        Assert.Single(run.EventHistory.OfType<ConsumableGainedRunEvent>());
+    }
+
+    [Fact]
     public void Default_RunStart_reproduces_the_historical_hard_coded_start()
     {
         var run = Demo().CreateInitialRun(new RunId("t"), randomSeed: 1);

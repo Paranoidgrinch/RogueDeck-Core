@@ -10,6 +10,7 @@ public sealed class RunContentRegistry
     private readonly IReadOnlyDictionary<EventId, EventScript> _events;
     private readonly IReadOnlyDictionary<RelicId, RelicDefinition> _relics;
     private readonly IReadOnlyDictionary<RewardTableId, IRewardSource> _rewardTables;
+    private readonly IReadOnlyDictionary<ConsumableId, ConsumableDefinition> _consumables;
 
     public EncounterCatalog? Encounters { get; }
 
@@ -17,12 +18,14 @@ public sealed class RunContentRegistry
         IReadOnlyDictionary<EventId, EventScript> events,
         EncounterCatalog? encounters,
         IReadOnlyDictionary<RelicId, RelicDefinition> relics,
-        IReadOnlyDictionary<RewardTableId, IRewardSource> rewardTables)
+        IReadOnlyDictionary<RewardTableId, IRewardSource> rewardTables,
+        IReadOnlyDictionary<ConsumableId, ConsumableDefinition> consumables)
     {
         _events = events;
         Encounters = encounters;
         _relics = relics;
         _rewardTables = rewardTables;
+        _consumables = consumables;
     }
 
     public EventScript GetEvent(EventId id) =>
@@ -40,8 +43,14 @@ public sealed class RunContentRegistry
             ? table
             : throw new InvalidOperationException($"No reward table registered with id '{id}'.");
 
+    public ConsumableDefinition GetConsumable(ConsumableId id) =>
+        _consumables.TryGetValue(id, out var consumable)
+            ? consumable
+            : throw new InvalidOperationException($"No consumable registered with id '{id}'.");
+
     public bool HasEvent(EventId id) => _events.ContainsKey(id);
     public bool HasRelic(RelicId id) => _relics.ContainsKey(id);
+    public bool HasConsumable(ConsumableId id) => _consumables.ContainsKey(id);
 
     // Validates that every node in a map resolves: its node type has a resolver, and any EventRef / EncounterRef
     // it carries names registered content. Throws with all problems aggregated; returns nothing on success.
@@ -78,6 +87,7 @@ public sealed class RunContentRegistryBuilder
     private readonly Dictionary<EventId, EventScript> _events = new();
     private readonly Dictionary<RelicId, RelicDefinition> _relics = new();
     private readonly Dictionary<RewardTableId, IRewardSource> _rewardTables = new();
+    private readonly Dictionary<ConsumableId, ConsumableDefinition> _consumables = new();
     private EncounterCatalog? _encounters;
 
     public RunContentRegistryBuilder RegisterEvent(EventId id, EventScript script)
@@ -104,6 +114,14 @@ public sealed class RunContentRegistryBuilder
         return this;
     }
 
+    public RunContentRegistryBuilder RegisterConsumable(ConsumableDefinition consumable)
+    {
+        ArgumentNullException.ThrowIfNull(consumable);
+        if (!_consumables.TryAdd(consumable.Id, consumable))
+            throw new InvalidOperationException($"A consumable with id '{consumable.Id}' is already registered.");
+        return this;
+    }
+
     public RunContentRegistryBuilder SetEncounters(EncounterCatalog encounters)
     {
         ArgumentNullException.ThrowIfNull(encounters);
@@ -112,5 +130,5 @@ public sealed class RunContentRegistryBuilder
     }
 
     public RunContentRegistry Build() =>
-        new(_events, _encounters, _relics, _rewardTables);
+        new(_events, _encounters, _relics, _rewardTables, _consumables);
 }

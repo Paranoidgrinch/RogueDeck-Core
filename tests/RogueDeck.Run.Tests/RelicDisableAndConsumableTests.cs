@@ -90,6 +90,29 @@ public class RelicDisableAndConsumableTests
     }
 
     [Fact]
+    public void Add_a_consumable_by_id_resolves_its_use_effects_from_content()
+    {
+        var registry = BuildRegistry();
+        var run = NewRun();
+        run.SetContent(new RunContentRegistryBuilder()
+            .RegisterConsumable(new ConsumableDefinition(
+                FirePotion, "Fire Potion", new IRunEffectRequest[] { new ChangeResourceRunEffect(Gold, 50) }))
+            .Build());
+
+        run.EnqueueEffect(new AddConsumableByIdRunEffect(FirePotion));
+        Drain(run, registry);
+
+        var held = Assert.Single(run.Consumables);
+        Assert.Equal(FirePotion, held.DefinitionId);
+
+        // Using it applies the definition's effects (resolved from content, not carried inline).
+        run.EnqueueEffect(new UseConsumableRunEffect(held.Id));
+        Drain(run, registry);
+        Assert.Equal(50, run.GetResource(Gold));
+        Assert.Empty(run.Consumables);
+    }
+
+    [Fact]
     public void Using_an_absent_consumable_is_a_no_op()
     {
         var registry = BuildRegistry();

@@ -53,6 +53,12 @@ public sealed class RunState
 
     public void SetStartingRelics(IReadOnlyList<string> relicIds) => StartingRelicIds = relicIds ?? [];
 
+    // Consumable definition ids the hero should start with, seeded from RunStart.StartingConsumables and granted by
+    // the runner once content is attached (an id needs the content catalog to resolve to a consumable definition).
+    public IReadOnlyList<string> StartingConsumableIds { get; private set; } = [];
+
+    public void SetStartingConsumables(IReadOnlyList<string> consumableIds) => StartingConsumableIds = consumableIds ?? [];
+
     // A selector context bound to this run and its chooser — what effect handlers pass to selectors.
     public RunEvalContext SelectorContext => new(this, chooser: EntityChooser);
 

@@ -38,6 +38,7 @@ public sealed class RunRunner
             run.SetEntityChooser(chooser);
         run.SetContent(_content);
         GrantStartingRelics(run);
+        GrantStartingConsumables(run);
 
         run.AddLog(StandardRunLogTypes.RunStarted, $"Run '{run.Id}' started.");
         run.RaiseEvent(new RunStartedRunEvent(run.Id));
@@ -84,6 +85,22 @@ public sealed class RunRunner
                 continue;
             run.AddRelic(new RelicInstance(run.Content.GetRelic(relicId)));
             run.AddLog(StandardRunLogTypes.RelicAcquired, $"Starting relic '{id}'.");
+        }
+    }
+
+    private static void GrantStartingConsumables(RunState run)
+    {
+        if (run.Content is null)
+            return;
+        foreach (var id in run.StartingConsumableIds)
+        {
+            var consumableId = new ConsumableId(id);
+            if (!run.Content.HasConsumable(consumableId))
+                continue;
+            var definition = run.Content.GetConsumable(consumableId);
+            var consumable = run.AddConsumable(definition.Id, definition.UseEffects);
+            run.AddLog(StandardRunLogTypes.ConsumableGained, $"Starting consumable '{id}' ({consumable.Id}).");
+            run.RaiseEvent(new ConsumableGainedRunEvent(consumable.Id, consumable.DefinitionId));
         }
     }
 }

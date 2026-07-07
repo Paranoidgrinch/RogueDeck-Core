@@ -19,6 +19,7 @@ public static class RunSetup
             run.SetResource(new RunResourceId(resource), amount);
 
         run.SetStartingRelics(start.StartingRelics);
+        run.SetStartingConsumables(start.StartingConsumables);
 
         return run;
     }

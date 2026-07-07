@@ -29,6 +29,10 @@ public sealed record RunBlueprint(
     // refill. Injected into each combat's hero by the run→combat bridge. An init property, like Statuses/Relics.
     public IReadOnlyList<CombatResourceData> CombatResources { get; init; } = [];
 
+    // Consumable KINDS the run defines as data (id + name + use effects). Registered into the content so a reward /
+    // event / starting inventory can grant one by id. An init property, like Relics.
+    public IReadOnlyList<ConsumableData> Consumables { get; init; } = [];
+
     // The run's starting state — hero identity + how the RunState is seeded (health, resources). Previously the
     // sandbox hard-coded HP 30/40 and an empty inventory; carrying it here makes the run's opening data too. An init
     // property with a default that reproduces the old hard-coded start, so existing blueprints are unaffected.
@@ -50,4 +54,8 @@ public sealed record RunStart
     // Relic ids the hero starts with. Granted at run start from the content catalog (unknown ids are skipped); a
     // relic listed here should be defined in the blueprint's Relics (or be a built-in sample).
     public IReadOnlyList<string> StartingRelics { get; init; } = [];
+
+    // Consumable definition ids the hero starts with (one instance each). Granted at run start from the content
+    // catalog (unknown ids skipped); each id should be defined in the blueprint's Consumables.
+    public IReadOnlyList<string> StartingConsumables { get; init; } = [];
 }
