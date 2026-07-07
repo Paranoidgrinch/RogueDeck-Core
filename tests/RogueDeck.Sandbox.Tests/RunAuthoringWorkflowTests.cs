@@ -906,7 +906,8 @@ public class RunAuthoringWorkflowTests
         return null;
     }
 
-    // Headless drive of a whole run, exactly as the Run tab's Load & drive / Simulate does (via RunPlayback).
+    // Headless drive of a whole run, exactly as the Run tab's Load & drive / Simulate does (via RunPlayback +
+    // CreateInitialRun, which seeds health/resources/deck/starting-relics from the blueprint's Start).
     private static RunState Drive(RunBlueprint blueprint, int seed)
     {
         var content = RunPlayback.BuildContent(blueprint);
@@ -914,11 +915,26 @@ public class RunAuthoringWorkflowTests
         new StandardRunPackage(new AutoPlayCombatDriver(), content).RegisterDefinitions(defs);
         var registry = defs.Build();
 
-        var run = new RunState(new RunId("test"), new HealthState(30, 40), blueprint.Map, randomSeed: seed);
-        foreach (var card in blueprint.Deck)
-            run.AddDeckCard(card);
-
+        var run = blueprint.CreateInitialRun(new RunId("test"), seed);
         new RunRunner(registry, new ScriptedChoiceProvider(), content: content).Run(run);
         return run;
+    }
+
+    [Fact]
+    public void StartingRelics_AreGrantedWhenTheRunBegins()
+    {
+        var blueprint = SampleBlueprint() with
+        {
+            Start = new RunStart { StartingRelics = new[] { "bloodstone" } },
+            Map = new RunMap(new Node[]
+            {
+                new(new NodeId("n1"), StandardRunIds.CombatNode, new EncounterRef(new EncounterId("combat-fight"))),
+            }),
+        };
+
+        var run = Drive(blueprint, seed: 1);
+
+        Assert.NotNull(run.FindRelic(new RelicId("bloodstone")));
+        Assert.Contains(run.Log, e => e.Type == StandardRunLogTypes.RelicAcquired && e.Message.Contains("Starting relic"));
     }
 }

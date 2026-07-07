@@ -47,6 +47,12 @@ public sealed class RunState
 
     public void SetContent(RunContentRegistry? content) => Content = content;
 
+    // Relic ids the hero should start with, seeded from the blueprint (RunStart.StartingRelics) by CreateInitialRun
+    // and granted by the runner once content is attached (an id needs the content catalog to resolve to a relic).
+    public IReadOnlyList<string> StartingRelicIds { get; private set; } = [];
+
+    public void SetStartingRelics(IReadOnlyList<string> relicIds) => StartingRelicIds = relicIds ?? [];
+
     // A selector context bound to this run and its chooser — what effect handlers pass to selectors.
     public RunEvalContext SelectorContext => new(this, chooser: EntityChooser);
 

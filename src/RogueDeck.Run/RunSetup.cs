@@ -18,6 +18,8 @@ public static class RunSetup
         foreach (var (resource, amount) in start.Resources)
             run.SetResource(new RunResourceId(resource), amount);
 
+        run.SetStartingRelics(start.StartingRelics);
+
         return run;
     }
 }

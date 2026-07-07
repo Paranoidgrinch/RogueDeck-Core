@@ -37,6 +37,7 @@ public sealed class RunRunner
         if (_choices is IRunEntityChooser chooser)
             run.SetEntityChooser(chooser);
         run.SetContent(_content);
+        GrantStartingRelics(run);
 
         run.AddLog(StandardRunLogTypes.RunStarted, $"Run '{run.Id}' started.");
         run.RaiseEvent(new RunStartedRunEvent(run.Id));
@@ -66,5 +67,23 @@ public sealed class RunRunner
         run.AddLog(StandardRunLogTypes.RunEnded, $"Run '{run.Id}' ended: {run.Result}.");
         run.RaiseEvent(new RunEndedRunEvent(run.Result));
         _processor.ResolvePending(run, _registry);
+    }
+
+    // Grant the hero's starting relics (RunState.StartingRelicIds, seeded from RunStart) now that content is
+    // attached — resolving each id from the content catalog exactly as an event's "grant relic by id" does.
+    // Unknown ids are skipped (the document validator warns about them); this is initial state, so it raises no
+    // RelicAcquired event (nothing should react to a relic the hero simply started with).
+    private static void GrantStartingRelics(RunState run)
+    {
+        if (run.Content is null)
+            return;
+        foreach (var id in run.StartingRelicIds)
+        {
+            var relicId = new RelicId(id);
+            if (!run.Content.HasRelic(relicId))
+                continue;
+            run.AddRelic(new RelicInstance(run.Content.GetRelic(relicId)));
+            run.AddLog(StandardRunLogTypes.RelicAcquired, $"Starting relic '{id}'.");
+        }
     }
 }

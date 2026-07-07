@@ -31,14 +31,19 @@ public sealed record RunBlueprint(
     public RunStart Start { get; init; } = new();
 }
 
-// The authored opening state of a run: the hero's display name, starting/maximum health, and starting resources
-// (resource id → amount, e.g. gold). Kept flat + init-only so it round-trips through RunJson like the rest of the
-// blueprint. Starting relics/consumables are a later slice (they need content resolution); the default reproduces
-// the sandbox's historical hard-coded start (HP 30/40, empty resources).
+// The authored opening state of a run: the hero's display name, starting/maximum health, starting resources
+// (resource id → amount, e.g. gold), and the relics the hero begins with (ids resolved from the run's content when
+// the run starts). Kept flat + init-only so it round-trips through RunJson like the rest of the blueprint. The
+// default reproduces the sandbox's historical hard-coded start (HP 30/40, empty resources, no relics). Starting
+// consumables are still a later slice (they need a consumable-definition registry to resolve an id to use-effects).
 public sealed record RunStart
 {
     public string HeroName { get; init; } = "Hero";
     public int MaxHealth { get; init; } = 40;
     public int StartingHealth { get; init; } = 30;
     public IReadOnlyDictionary<string, int> Resources { get; init; } = new Dictionary<string, int>();
+
+    // Relic ids the hero starts with. Granted at run start from the content catalog (unknown ids are skipped); a
+    // relic listed here should be defined in the blueprint's Relics (or be a built-in sample).
+    public IReadOnlyList<string> StartingRelics { get; init; } = [];
 }

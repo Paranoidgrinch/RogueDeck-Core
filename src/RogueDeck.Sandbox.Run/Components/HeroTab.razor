@@ -29,6 +29,19 @@
                    @onchange="e => SetGold(AsInt(e.Value, Gold))" />
         </label>
     </div>
+
+    <h2>Starting relics</h2>
+    <p class="muted">Relics the hero begins the run with (granted when the run starts). Author relics in the Relics
+        tab; the built-in samples (bloodstone, leech) are always available.</p>
+    @foreach (var id in AvailableRelics)
+    {
+        <div class="run-bar">
+            <label>
+                <input type="checkbox" checked="@Start.StartingRelics.Contains(id)"
+                       @onchange="e => ToggleRelic(id, AsBool(e.Value))" /> @id
+            </label>
+        </div>
+    }
 </section>
 
 @code {
@@ -41,6 +54,20 @@
 
     private static string AsString(object? v) => v?.ToString() ?? "";
     private static int AsInt(object? v, int fallback) => int.TryParse(v?.ToString(), out var n) ? n : fallback;
+    private static bool AsBool(object? v) => v is bool b ? b : bool.TryParse(v?.ToString(), out var r) && r;
+
+    // The relics the hero can start with: those authored in the document plus the always-available built-in samples.
+    private static readonly string[] BuiltInRelics = { "bloodstone", "leech" };
+    private IReadOnlyList<string> AvailableRelics =>
+        _blueprint.Relics.Select(r => r.Id).Concat(BuiltInRelics).Distinct(StringComparer.Ordinal).ToList();
+
+    private void ToggleRelic(string id, bool on)
+    {
+        var relics = Start.StartingRelics.Where(r => r != id).ToList();
+        if (on)
+            relics.Add(id);
+        Apply(Start with { StartingRelics = relics });
+    }
 
     private void Apply(RunStart start)
     {
