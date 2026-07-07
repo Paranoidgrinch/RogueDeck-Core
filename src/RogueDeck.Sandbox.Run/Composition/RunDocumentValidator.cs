@@ -1,0 +1,73 @@
+using RogueDeck.Run;
+
+namespace RogueDeck.Sandbox.Composition;
+
+// Seal-time validation for the whole run document: cross-references between the tabs that only bite when the run is
+// assembled and played (a map node pointing at a deleted encounter, a deck card whose definition was renamed, an
+// enemy running an action that no longer exists, a duplicate id shadowing another). Returns a flat list of human-
+// readable problems (empty = the document is internally consistent). Each problem is prefixed with the tab that
+// owns the fix, so a tab can filter to its own concerns (see ForTab). Pure data-in/data-out — no engine build.
+public static class RunDocumentValidator
+{
+    public const string CardsTab = "Cards";
+    public const string EncountersTab = "Encounters";
+    public const string RunTab = "Run";
+
+    public static IReadOnlyList<string> Validate(RunBlueprint blueprint)
+    {
+        ArgumentNullException.ThrowIfNull(blueprint);
+        var problems = new List<string>();
+
+        var cardIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var card in blueprint.Cards)
+            if (!cardIds.Add(card.Id))
+                problems.Add($"{CardsTab}: duplicate card id '{card.Id}'.");
+
+        var actionIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var action in blueprint.EnemyActions)
+            if (!actionIds.Add(action.Id))
+                problems.Add($"{EncountersTab}: duplicate enemy-action id '{action.Id}'.");
+
+        var encounterIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var encounter in blueprint.Encounters)
+            if (!encounterIds.Add(encounter.Id.Value))
+                problems.Add($"{RunTab}: duplicate encounter id '{encounter.Id.Value}'.");
+
+        // Deck cards must have a definition on the Cards tab.
+        foreach (var card in blueprint.Deck.Select(c => c.value).Distinct())
+            if (!cardIds.Contains(card))
+                problems.Add($"{CardsTab}: the starting deck uses card '{card}', which has no definition.");
+
+        // Every enemy must run actions that are defined.
+        foreach (var encounter in blueprint.Encounters)
+            foreach (var enemy in encounter.Enemies)
+                foreach (var action in enemy.Actions.Select(a => a.value).Distinct())
+                    if (!actionIds.Contains(action))
+                        problems.Add(
+                            $"{EncountersTab}: enemy '{enemy.Id}' in encounter '{encounter.Id.Value}' runs action '{action}', which has no definition.");
+
+        // Map nodes must point at content that exists.
+        foreach (var node in blueprint.Map.Nodes)
+        {
+            switch (node.Payload)
+            {
+                case EncounterRef reference when !encounterIds.Contains(reference.Id.Value):
+                    problems.Add($"{RunTab}: map node '{node.Id.Value}' points at unknown encounter '{reference.Id.Value}'.");
+                    break;
+                case EventRef reference when !blueprint.Events.ContainsKey(reference.Id.Value):
+                    problems.Add($"{RunTab}: map node '{node.Id.Value}' points at unknown event '{reference.Id.Value}'.");
+                    break;
+            }
+        }
+
+        // Sanity: a run with no map has nothing to play.
+        if (blueprint.Map.Nodes.Count == 0)
+            problems.Add($"{RunTab}: the map is empty — add at least one node to play the run.");
+
+        return problems;
+    }
+
+    // The problems owned by one tab (by the prefix Validate stamps), so a tab can show only its own.
+    public static IReadOnlyList<string> ForTab(RunBlueprint blueprint, string tab) =>
+        Validate(blueprint).Where(p => p.StartsWith(tab + ":", StringComparison.Ordinal)).ToList();
+}

@@ -11,6 +11,17 @@
     <p class="muted">Author the run's cards (their effect programs) and the starting deck. Part of the shared run
         document.</p>
 
+    @{ var issues = RunDocumentValidator.ForTab(_blueprint, RunDocumentValidator.CardsTab); }
+    @if (issues.Count > 0)
+    {
+        <ul class="log">
+            @foreach (var issue in issues)
+            {
+                <li><span class="line-kind">⚠</span> @issue</li>
+            }
+        </ul>
+    }
+
     <h2>Cards (@Cards.Count)</h2>
     @for (var i = 0; i < Cards.Count; i++)
     {

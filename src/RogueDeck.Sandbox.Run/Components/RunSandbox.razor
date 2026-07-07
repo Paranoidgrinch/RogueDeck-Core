@@ -79,6 +79,29 @@
             <p class="muted">Fix the JSON to edit the map visually.</p>
         }
 
+        <h2>Validation</h2>
+        @if (TryBlueprint(out var validateBp))
+        {
+            var problems = RunDocumentValidator.Validate(validateBp);
+            @if (problems.Count == 0)
+            {
+                <p class="muted">✓ The document is internally consistent (deck, actions, and map all resolve).</p>
+            }
+            else
+            {
+                <ul class="log">
+                    @foreach (var problem in problems)
+                    {
+                        <li><span class="line-kind">⚠</span> @problem</li>
+                    }
+                </ul>
+            }
+        }
+        else
+        {
+            <p class="error">The run JSON does not parse — fix it to validate the document.</p>
+        }
+
         <h2>Headless balancing</h2>
         <p class="muted">Auto-play the blueprint over many seeds (choices auto-pick the first option) and tally outcomes.</p>
         <div class="run-bar">

@@ -10,6 +10,17 @@
     <p class="muted">Author the enemy actions (effect programs + intents) and the combat encounters — enemy rosters,
         their HP, which actions they run, and the hero's combat resources. Part of the shared run document.</p>
 
+    @{ var issues = RunDocumentValidator.ForTab(_blueprint, RunDocumentValidator.EncountersTab); }
+    @if (issues.Count > 0)
+    {
+        <ul class="log">
+            @foreach (var issue in issues)
+            {
+                <li><span class="line-kind">⚠</span> @issue</li>
+            }
+        </ul>
+    }
+
     <h2>Enemy actions (@Actions.Count)</h2>
     <p class="muted">Each action is an effect program an enemy can run, plus a telegraphed intent. Reference an
         action by its id in an enemy's roster below.</p>
