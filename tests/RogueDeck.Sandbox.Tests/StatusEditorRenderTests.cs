@@ -89,6 +89,27 @@ public class StatusEditorRenderTests
     }
 
     [Fact]
+    public async Task Renders_death_prevention_and_debuff_block_interceptors()
+    {
+        // A "soul anchor": prevents death (survive at 1 HP, heal 10) and blocks the first debuff.
+        var html = await RenderAsync(BlueprintWith(new StatusData
+        {
+            Id = "soulanchor",
+            DeathPrevention = new StatusDeathPreventionData(1, new[]
+            {
+                new InterceptorEffectData("Heal", "Self", 10, "", 0, StatusPolarity.Debuff),
+            }),
+            DebuffBlock = new StatusDebuffBlockData(Array.Empty<InterceptorEffectData>()),
+        }));
+
+        Assert.Contains("Death prevention", html);
+        Assert.Contains("survive at HP", html);
+        Assert.Contains("Heal", html);        // interceptor effect kind option
+        Assert.Contains("Debuff block", html);
+        Assert.Contains("+ effect", html);
+    }
+
+    [Fact]
     public async Task Renders_the_add_status_control_for_an_empty_blueprint()
     {
         var html = await RenderAsync(new RunBlueprint(

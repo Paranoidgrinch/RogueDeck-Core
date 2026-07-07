@@ -95,6 +95,40 @@
                 }
                 <button class="mini" @onclick="() => AddTrigger(index)">+ trigger</button>
             </div>
+
+            <div class="editor-effects">
+                <span class="muted">Death prevention:</span>
+                @if (status.DeathPrevention is { } dp)
+                {
+                    <div class="run-bar">
+                        <label>survive at HP
+                            <input type="number" value="@dp.SurvivingHealth" style="width:4rem"
+                                   @onchange="e => SetDeathPrevention(index, dp with { SurvivingHealth = AsInt(e.Value, dp.SurvivingHealth) })" />
+                        </label>
+                        <button class="mini" @onclick="() => SetDeathPrevention(index, null)">✕ remove</button>
+                    </div>
+                    @InterceptorEffectsEditor(dp.Effects, fx => SetDeathPrevention(index, dp with { Effects = fx }))
+                }
+                else
+                {
+                    <button class="mini" @onclick="() => SetDeathPrevention(index, new StatusDeathPreventionData(1, Array.Empty<InterceptorEffectData>()))">+ death prevention</button>
+                }
+            </div>
+
+            <div class="editor-effects">
+                <span class="muted">Debuff block:</span>
+                @if (status.DebuffBlock is { } db)
+                {
+                    <div class="run-bar">
+                        <button class="mini" @onclick="() => SetDebuffBlock(index, null)">✕ remove</button>
+                    </div>
+                    @InterceptorEffectsEditor(db.Effects, fx => SetDebuffBlock(index, new StatusDebuffBlockData(fx)))
+                }
+                else
+                {
+                    <button class="mini" @onclick="() => SetDebuffBlock(index, new StatusDebuffBlockData(Array.Empty<InterceptorEffectData>()))">+ debuff block</button>
+                }
+            </div>
         </div>
     }
 
@@ -220,6 +254,81 @@
             builder.AddContent(5, "(advanced trigger program — edit in the Run tab's JSON)");
             builder.CloseElement();
         }
+    };
+
+    // ── interceptors (death-prevention / debuff-block) ────────────────────────────────
+    private Task SetDeathPrevention(int index, StatusDeathPreventionData? data) =>
+        Edit(index, s => s with { DeathPrevention = data });
+
+    private Task SetDebuffBlock(int index, StatusDebuffBlockData? data) =>
+        Edit(index, s => s with { DebuffBlock = data });
+
+    // Shared editor for an interceptor's constant-valued effect lines (both death-prevention and debuff-block hold
+    // one). Each line = kind × target × amount, plus a status id / duration (apply/remove) and polarity (cleanse).
+    private RenderFragment InterceptorEffectsEditor(
+        IReadOnlyList<InterceptorEffectData> effects, Func<IReadOnlyList<InterceptorEffectData>, Task> onChange) => builder =>
+    {
+        Task SetLine(int i, InterceptorEffectData line)
+        {
+            var list = effects.ToList();
+            list[i] = line;
+            return onChange(list);
+        }
+
+        var seq = 0;
+        for (var i = 0; i < effects.Count; i++)
+        {
+            var line = effects[i];
+            var idx = i;
+            builder.OpenElement(seq++, "div");
+            builder.AddAttribute(seq++, "class", "run-bar");
+            builder.AddContent(seq++, EnumSelect(ParseEnum(line.Kind, EffectKind.DealDamage), k => SetLine(idx, line with { Kind = k.ToString() })));
+            builder.AddContent(seq++, EnumSelect(ParseEnum(line.Target, EffectTarget.Self), t => SetLine(idx, line with { Target = t.ToString() })));
+            builder.AddContent(seq++, Number("amt", line.Amount, v => SetLine(idx, line with { Amount = v })));
+            builder.AddContent(seq++, Text("status id", line.StatusId, v => SetLine(idx, line with { StatusId = v })));
+            builder.AddContent(seq++, Number("turns", line.DurationTurns, v => SetLine(idx, line with { DurationTurns = v })));
+            builder.AddContent(seq++, EnumSelect(line.Polarity, p => SetLine(idx, line with { Polarity = p })));
+            builder.OpenElement(seq++, "button");
+            builder.AddAttribute(seq++, "class", "mini");
+            builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create(this, () => onChange(effects.Where((_, j) => j != idx).ToList())));
+            builder.AddContent(seq++, "✕");
+            builder.CloseElement();
+            builder.CloseElement();
+        }
+
+        builder.OpenElement(seq++, "button");
+        builder.AddAttribute(seq++, "class", "mini");
+        builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create(this, () =>
+            onChange(effects.Append(new InterceptorEffectData(
+                EffectKind.Heal.ToString(), EffectTarget.Self.ToString(), 5, "", 0, StatusPolarity.Debuff)).ToList())));
+        builder.AddContent(seq++, "+ effect");
+        builder.CloseElement();
+    };
+
+    private static TEnum ParseEnum<TEnum>(string value, TEnum fallback) where TEnum : struct, Enum =>
+        Enum.TryParse<TEnum>(value, out var v) ? v : fallback;
+
+    private RenderFragment Number(string label, int value, Func<int, Task> onChange) => builder =>
+    {
+        builder.OpenElement(0, "label");
+        builder.AddContent(1, label + " ");
+        builder.OpenElement(2, "input");
+        builder.AddAttribute(3, "type", "number");
+        builder.AddAttribute(4, "value", value);
+        builder.AddAttribute(5, "style", "width:3.5rem");
+        builder.AddAttribute(6, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e => onChange(AsInt(e.Value, value))));
+        builder.CloseElement();
+        builder.CloseElement();
+    };
+
+    private RenderFragment Text(string placeholder, string value, Func<string, Task> onChange) => builder =>
+    {
+        builder.OpenElement(0, "input");
+        builder.AddAttribute(1, "value", value);
+        builder.AddAttribute(2, "placeholder", placeholder);
+        builder.AddAttribute(3, "style", "width:7rem");
+        builder.AddAttribute(4, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e => onChange(AsString(e.Value))));
+        builder.CloseElement();
     };
 
     // A generic enum dropdown bound to a value + change handler — keeps the many enum selects (polarity, stacking,
