@@ -61,7 +61,9 @@ public sealed record EncounterEnemy(
     int MaxHealth,
     IReadOnlyList<EnemyActionDefinitionId> Actions,
     IReadOnlyList<StartingStatusSpec>? StartingStatuses = null,
-    string? DisplayName = null);
+    string? DisplayName = null,
+    // Optional starting cell on the 2D combat grid; null = unplaced (flat arena). Round-trips via RunJson.
+    CombatPosition? Position = null);
 
 // A combat as data: the enemy roster plus the hero's combat resources / starting statuses. The hero's HP and
 // deck come from the run (projected by the bridge), so an encounter is reusable across runs.
@@ -146,7 +148,7 @@ public sealed class EncounterCatalog
 
         foreach (var spec in encounter.Enemies)
         {
-            var enemy = new EnemyBlueprint(spec.Id) { MaxHealth = spec.MaxHealth };
+            var enemy = new EnemyBlueprint(spec.Id) { MaxHealth = spec.MaxHealth, Position = spec.Position };
             foreach (var action in spec.Actions) enemy.Actions.Add(action);
             if (spec.StartingStatuses is { } statuses)
                 foreach (var status in statuses) enemy.StartingStatuses.Add(status);

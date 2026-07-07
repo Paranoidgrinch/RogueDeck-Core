@@ -142,6 +142,10 @@ public abstract class CombatantBlueprint
     public List<ResourceSpec> Resources { get; } = new();
     public List<StartingStatusSpec> StartingStatuses { get; } = new();
 
+    // Optional starting cell on the 2D combat grid; null = unplaced (flat arena, today's behavior). Applied by
+    // ScenarioCombatFactory when the combatant is added.
+    public CombatPosition? Position { get; init; }
+
     protected CombatantBlueprint(string id, string nameKeyPrefix)
     {
         if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("Combatant id cannot be empty.", nameof(id));

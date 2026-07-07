@@ -222,6 +222,24 @@ public class RunBlueprintTests
     }
 
     [Fact]
+    public void Encounter_enemy_grid_position_round_trips()
+    {
+        var encounter = new EncounterDefinition(
+            new EncounterId("goblin-fight"),
+            new[]
+            {
+                new EncounterEnemy("goblin", 20, new[] { new EnemyActionDefinitionId("slam") },
+                    Position: new CombatPosition(1, 2)),
+            });
+        var blueprint = Demo() with { Encounters = new[] { encounter } };
+
+        var back = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(blueprint, Options), Options);
+
+        var enemy = Assert.Single(Assert.Single(back.Encounters).Enemies);
+        Assert.Equal(new CombatPosition(1, 2), enemy.Position);
+    }
+
+    [Fact]
     public void Default_RunStart_reproduces_the_historical_hard_coded_start()
     {
         var run = Demo().CreateInitialRun(new RunId("t"), randomSeed: 1);

@@ -52,6 +52,13 @@ public enum StatusStackingBehavior
     MergeWithExistingInstance
 }
 
+// A combatant's cell on the optional 2D combat grid. Absent (null Position) means the combatant is not placed —
+// the default, in which the engine behaves exactly as the flat team arena it always has. When present, X is the
+// column/lane and Y the depth/row; selectors interpret "front/back" team-relative. Cells are non-exclusive (a
+// coordinate is a label; several combatants may share one). Purely opt-in: no engine code reads Position until the
+// positional selectors/effects (added additively in later phases) are used by content.
+public readonly record struct CombatPosition(int X, int Y);
+
 public interface IEffectRequest
 {
 }

@@ -1,5 +1,13 @@
 namespace RogueDeck.Core.Combat;
 
+// Raised when a combatant's grid position changes (by a movement effect). Unused until P2 introduces movement;
+// declared now so P0's substrate is complete. A null From means the combatant was just placed.
+public sealed record CombatantMovedCombatEvent(
+    CombatantId CombatantId,
+    CombatPosition? From,
+    CombatPosition To
+) : ICombatEvent;
+
 public sealed record TurnStartedCombatEvent(
     CombatantId CombatantId,
     int Round,

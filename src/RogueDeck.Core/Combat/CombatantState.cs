@@ -34,7 +34,10 @@ public sealed class CombatantState
     internal void AddStatus(StatusInstance status) => _statuses.Add(status);
     internal bool RemoveStatus(StatusInstance status) => _statuses.Remove(status);
 
-    public string? PositionKey { get; private set; }
+    // The combatant's cell on the optional 2D combat grid, or null when unplaced (the default — flat arena, today's
+    // behavior). Set at placement (ScenarioCombatFactory) or by movement effects; read only by the opt-in positional
+    // selectors/effects. Nothing in the core turn/effect loop reads it, so an unplaced combatant behaves as always.
+    public CombatPosition? Position { get; private set; }
     public string? IntentKey { get; private set; }
 
     public bool IsAlive => LifecycleState == CombatantLifecycleState.Alive;
@@ -77,9 +80,11 @@ public sealed class CombatantState
         LifecycleState = lifecycleState;
     }
 
-    public void SetPosition(string? positionKey)
+    // Place or move the combatant on the grid (null = remove from the grid). Used by placement + movement effects;
+    // does not itself raise CombatantMovedCombatEvent (the movement effect does, so setup placement stays silent).
+    public void SetPosition(CombatPosition? position)
     {
-        PositionKey = positionKey;
+        Position = position;
     }
 
     public void SetIntent(string? intentKey)
