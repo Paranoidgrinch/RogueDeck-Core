@@ -126,3 +126,12 @@ Gespeichert wird es — wie Relics — im Inventory.
 
 Reihenfolge ist ein Vorschlag; jede der drei ist unabhängig startbar. Beim Start jedes Workstreams zuerst
 den lesenden Audit-Schritt, dann bounded Implementierungs-Batches.
+
+## Statuses-Editor (S1/S2/S3) ✔ (2026-07-07) — letzte Authoring-Lücke geschlossen
+Custom-Statuses waren `StatusData`-only + JSON-authored (kein Tab). Neuer **Statuses-Tab** (/statuses + Nav) mit
+`StatusEditor`:
+- **S1 @ 8dd8338:** Basis (id/name/polarity/stacks-duration-charges/stacking/tags) + Passive Modifiers.
+- **S2 @ b139873:** Triggers (15 TriggerEvents × EffectProgram via CombatProgramEditor). Katalog
+  `StatusTriggerPrograms` brückt context-freies JSON ↔ CombatNodeModel pro Event-Kontext.
+- **S3 @ e92fad9:** Interceptors (Death-Prevention + Debuff-Block, `InterceptorEffectData`-Zeilen).
+Damit ist jede Content-Art (Karten, Enemies, Events, Relics, Consumables, **Statuses**) visuell authorbar.
