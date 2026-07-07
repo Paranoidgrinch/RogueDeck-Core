@@ -1,3 +1,4 @@
+using System.Text.Json;
 using RogueDeck.Core.Combat;
 using RogueDeck.Run;
 using RogueDeck.Sandbox.Composition;
@@ -6,43 +7,48 @@ using RogueDeck.Scenario.Authoring;
 
 namespace RogueDeck.Sandbox.Tests;
 
-// End-to-end coverage of the "build a small run in the UI" workflow: author a hero + deck and 5 enemies with
-// intents in the Combat tab (a SandboxModel), import that into a run, add events in the Run tab, arrange them
-// into a map, then drive the whole run — all through the same code the Studio uses (CombatImport → RunJson →
-// StandardRunPackage/RunRunner). Guards the seam between the two tabs that has no other automated coverage.
+// End-to-end coverage of the run authoring → play workflow over the shared document: author cards, enemy actions,
+// custom statuses (passives / triggers / death-prevention), relics and events as run data (RunBlueprint), arrange
+// them on a map, round-trip through RunJson, then drive the whole run — all through the same code the Studio uses
+// (RunPlayback.BuildContent → StandardRunPackage/RunRunner). The unique coverage of custom-status DATA in a run.
 public class RunAuthoringWorkflowTests
 {
-    // The Combat tab: a hero with a real 5-card deck and five enemies, each with a cycling attack intent.
-    private static SandboxModel CombatTabModel()
+    // A small run authored directly as data (the shape the retired Combat-tab import used to produce): a "Knight"
+    // with a 5×Strike deck versus five 5-HP goblins that each jab for 1. The "combat-fight" encounter is winnable.
+    private static RunBlueprint SampleBlueprint()
     {
-        EffectLineModel Damage(int n, EffectTarget target) =>
-            new() { Kind = EffectKind.DealDamage, Target = target, Amount = n };
-
-        var model = new SandboxModel
+        var strike = new CardData
         {
-            Hero = new HeroModel { Name = "Knight", Hp = 50, Energy = 3, UseRealDeck = true, DrawPerTurn = 5 },
-            Cards = { new CardModel { Name = "Strike", Cost = 1, Effects = { Damage(8, EffectTarget.Target) } } },
+            Id = "strike",
+            NameKey = "Strike",
+            Costs = new[] { new ResourceCost(StandardCombatIds.EnergyResource, 1) },
+            Program = CombatProgramModel.Build<CardPlayContext>(
+                new CombatNodeModel("dealDamage", "eventTarget", CombatAmountSpec.FromConst(8))),
         };
-        model.Hero.Deck.Add(new DeckCardModel { CardName = "Strike", Copies = 5 });
-
-        for (var i = 1; i <= 5; i++)
+        var jab = new EnemyActionData
         {
-            model.Enemies.Add(new EnemyModel
-            {
-                Name = $"Goblin{i}",
-                Hp = 5,
-                Intents =
-                {
-                    new IntentModel
-                    {
-                        Label = "Jab", Kind = IntentKind.Attack,
-                        Effects = { Damage(1, EffectTarget.Target) },
-                    },
-                },
-            });
-        }
-        return model;
+            Id = "jab",
+            Intent = new ActionIntent("Jab", IntentKind.Attack),
+            Program = new EffectProgram<EnemyActionContext>(new DealDamageNode<EnemyActionContext>(
+                CombatantTargetSelectors.EventTarget, new ConstantExpression<EnemyActionContext>(1))),
+        };
+        var enemies = Enumerable.Range(1, 5)
+            .Select(i => new EncounterEnemy($"goblin{i}", 5, new[] { new EnemyActionDefinitionId("jab") }, null, $"Goblin{i}"))
+            .ToList();
+        var encounter = new EncounterDefinition(
+            new EncounterId("combat-fight"), enemies,
+            new[] { new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3) }, heroDisplayName: "Knight");
+        var deck = Enumerable.Repeat(new CardDefinitionId("strike"), 5).ToList();
+        return new RunBlueprint(
+            deck, new Dictionary<string, EventScript>(), new[] { encounter },
+            new[] { strike }, new[] { jab }, new RunMap(Array.Empty<Node>()));
     }
+
+    // Serialize a trigger's effect program to StatusTriggerData exactly as the run document stores it (context-free
+    // CombatJson under the event's context) — what the old ScenarioComposer did from an editor model.
+    private static StatusTriggerData TriggerData<TContext>(TriggerEvent ev, EffectProgram<TContext> program)
+        where TContext : class =>
+        new(ev.ToString(), JsonSerializer.SerializeToElement(program, CombatJson.CreateOptions<TContext>()));
 
     // The Run tab: three simple events whose first (auto-picked) choice is benign.
     private static IReadOnlyDictionary<string, EventScript> ThreeEvents()
@@ -74,30 +80,12 @@ public class RunAuthoringWorkflowTests
         new RunMap(Array.Empty<Node>()));
 
     [Fact]
-    public void ImportBuildsAnEncounterWithEveryEnemyAndTheDeck()
-    {
-        var options = RunJson.CreateOptions();
-        var result = CombatImport.Project(EmptyBlueprint(), CombatTabModel(), options);
-
-        Assert.Empty(result.Skipped);
-        Assert.Equal("knight", result.HeroId);
-        Assert.Equal(5, result.EnemyCount);
-        Assert.Equal(5, result.DeckCount); // Strike × 5 copies
-
-        var encounter = Assert.Single(result.Blueprint.Encounters);
-        Assert.Equal("combat-fight", encounter.Id.Value);
-        Assert.Equal(5, encounter.Enemies.Count);
-        // Every enemy kept its (serializable) intent action.
-        Assert.All(encounter.Enemies, e => Assert.NotEmpty(e.Actions));
-    }
-
-    [Fact]
     public void AuthoredRun_RoundTripsAsJson_AndDrivesToVictory()
     {
         var options = RunJson.CreateOptions();
 
-        // 1) Combat tab → import into the run.
-        var imported = CombatImport.Project(EmptyBlueprint(), CombatTabModel(), options).Blueprint;
+        // 1) The authored combat content as run data.
+        var imported = SampleBlueprint();
 
         // 2) Run tab → add three events and arrange event/combat/event/event on the map.
         var events = ThreeEvents();
@@ -166,50 +154,44 @@ public class RunAuthoringWorkflowTests
     {
         var options = RunJson.CreateOptions();
 
-        // Combat tab: a custom "Blessing" buff and a card that applies it to the hero.
-        var model = new SandboxModel
+        // A custom "blessing" buff (passive: +2 damage dealt per stack) and a "bless" card that applies it to the
+        // hero — authored directly as run data.
+        var blessing = new StatusData
         {
-            Hero = new HeroModel { Name = "Cleric", Hp = 40, Energy = 3, UseRealDeck = true, DrawPerTurn = 5 },
-            Statuses =
+            Id = "blessing",
+            Polarity = StatusPolarity.Buff,
+            UsesStacks = true,
+            PassiveModifiers = new[]
             {
-                new CustomStatusModel
-                {
-                    Name = "Blessing", Polarity = StatusPolarity.Buff,
-                    Pipeline = PassiveModifierPipeline.DamageDealt,
-                    Operation = PassiveModifierOperation.AddPerStack, Magnitude = 2,
-                },
-            },
-            Cards =
-            {
-                new CardModel
-                {
-                    Name = "Bless", Cost = 1,
-                    Effects =
-                    {
-                        new EffectLineModel
-                        {
-                            Kind = EffectKind.ApplyStatus, Target = EffectTarget.Self,
-                            StatusId = "blessing", Amount = 2,
-                        },
-                    },
-                },
+                new PassiveModifierData(PassiveModifierPipeline.DamageDealt, PassiveModifierOperation.AddPerStack, 2),
             },
         };
-        model.Hero.Deck.Add(new DeckCardModel { CardName = "Bless", Copies = 3 });
-        model.Enemies.Add(new EnemyModel { Name = "Dummy", Hp = 30 });
-
-        var imported = CombatImport.Project(EmptyBlueprint(), model, options).Blueprint;
-        Assert.Contains(imported.Statuses, s => s.Id == "blessing");
+        var blessCard = new CardData
+        {
+            Id = "bless",
+            NameKey = "Bless",
+            Costs = new[] { new ResourceCost(StandardCombatIds.EnergyResource, 1) },
+            Program = new EffectProgram<CardPlayContext>(new ApplyStatusNode<CardPlayContext>(
+                CombatantTargetSelectors.Source, new StatusDefinitionId("blessing"), new ConstantExpression<CardPlayContext>(2))),
+        };
+        var encounter = new EncounterDefinition(
+            new EncounterId("combat-fight"),
+            new[] { new EncounterEnemy("dummy", 30, Array.Empty<EnemyActionDefinitionId>(), null, "Dummy") },
+            new[] { new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3) });
+        var authored = new RunBlueprint(
+            Enumerable.Repeat(new CardDefinitionId("bless"), 3).ToList(),
+            new Dictionary<string, EventScript>(), new[] { encounter },
+            new[] { blessCard }, Array.Empty<EnemyActionData>(), new RunMap(Array.Empty<Node>()))
+        { Statuses = new[] { blessing } };
 
         // The custom status — its flags + passive modifier — survives the JSON round-trip (Download/Upload).
-        var reloaded = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(imported, options), options);
+        var reloaded = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(authored, options), options);
         var status = Assert.Single(reloaded.Statuses, s => s.Id == "blessing");
         Assert.Single(status.PassiveModifiers);
         Assert.Equal(StatusPolarity.Buff, status.Polarity);
 
-        // The card is actually PLAYABLE in a run combat. Drive the reloaded run through the real resolver (which
-        // projects the deck and registers the content), then play Bless. Before the fix the status id was
-        // unregistered, so applying it recorded a problem and the card was unusable.
+        // The card is actually PLAYABLE in a run combat: drive the reloaded run and play Bless (a status id that is
+        // registered from the run's status library, so applying it records no problem).
         var blueprint = reloaded with
         {
             Map = new RunMap(new Node[]
@@ -217,7 +199,7 @@ public class RunAuthoringWorkflowTests
                 new(new NodeId("n1"), StandardRunIds.CombatNode, new EncounterRef(new EncounterId("combat-fight"))),
             }),
         };
-        var content = BuildContent(blueprint);
+        var content = RunPlayback.BuildContent(blueprint);
         var driver = new InteractiveCombatDriver();
         var defs = new RunDefinitionRegistryBuilder();
         new StandardRunPackage(driver, content).RegisterDefinitions(defs);
@@ -250,48 +232,32 @@ public class RunAuthoringWorkflowTests
     {
         var options = RunJson.CreateOptions();
 
-        // Combat tab: a "Spikes" marker status whose turn-start trigger deals 5 to all enemies; the hero starts
-        // the fight bearing it, so the trigger fires the moment the first turn begins.
-        var model = new SandboxModel
+        // A "spikes" marker status whose turn-start trigger deals 5 to all enemies; the hero starts the fight
+        // bearing it (via the encounter), so the trigger fires the moment the first turn begins. Authored as data.
+        var spikesProgram = new EffectProgram<TurnStartedTriggeredEffectContext>(
+            new DealDamageNode<TurnStartedTriggeredEffectContext>(
+                CombatantTargetSelectors.AllEnemiesOfSource, new ConstantExpression<TurnStartedTriggeredEffectContext>(5)));
+        var spikesStatus = new StatusData
         {
-            Hero = new HeroModel
-            {
-                Name = "Warden",
-                Hp = 40,
-                Energy = 3,
-                UseRealDeck = true,
-                DrawPerTurn = 5,
-                StartingStatuses = { new StartingStatusModel { StatusId = "spikes", Amount = 1 } },
-            },
-            Statuses =
-            {
-                new CustomStatusModel
-                {
-                    Name = "Spikes", Polarity = StatusPolarity.Buff, HasPassiveModifier = false,
-                    Triggers =
-                    {
-                        new StatusTriggerModel
-                        {
-                            Event = TriggerEvent.TurnStarted,
-                            Effects =
-                            {
-                                new EffectLineModel { Kind = EffectKind.DealDamage, Target = EffectTarget.AllEnemies, Amount = 5 },
-                            },
-                        },
-                    },
-                },
-            },
-            Cards = { new CardModel { Name = "Wait", Cost = 0 } },
+            Id = "spikes",
+            Polarity = StatusPolarity.Buff,
+            UsesStacks = true,
+            Triggers = new[] { TriggerData(TriggerEvent.TurnStarted, spikesProgram) },
         };
-        model.Hero.Deck.Add(new DeckCardModel { CardName = "Wait", Copies = 3 });
-        model.Enemies.Add(new EnemyModel { Name = "Dummy", Hp = 30 });
-
-        var imported = CombatImport.Project(EmptyBlueprint(), model, options).Blueprint;
-        var spikes = Assert.Single(imported.Statuses, s => s.Id == "spikes");
+        var encounter = new EncounterDefinition(
+            new EncounterId("combat-fight"),
+            new[] { new EncounterEnemy("dummy", 30, Array.Empty<EnemyActionDefinitionId>(), null, "Dummy") },
+            new[] { new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3) },
+            new[] { new StartingStatusSpec(new StatusDefinitionId("spikes"), 1) });
+        var authored = new RunBlueprint(
+            Array.Empty<CardDefinitionId>(), new Dictionary<string, EventScript>(), new[] { encounter },
+            Array.Empty<CardData>(), Array.Empty<EnemyActionData>(), new RunMap(Array.Empty<Node>()))
+        { Statuses = new[] { spikesStatus } };
+        var spikes = Assert.Single(authored.Statuses, s => s.Id == "spikes");
         Assert.Single(spikes.Triggers); // the turn-start trigger carried as data
 
         // Round-trip the whole blueprint (the trigger program travels as context-free JSON) and drive the run.
-        var reloaded = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(imported, options), options);
+        var reloaded = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(authored, options), options);
         Assert.Single(Assert.Single(reloaded.Statuses, s => s.Id == "spikes").Triggers);
 
         var blueprint = reloaded with
@@ -301,7 +267,7 @@ public class RunAuthoringWorkflowTests
                 new(new NodeId("n1"), StandardRunIds.CombatNode, new EncounterRef(new EncounterId("combat-fight"))),
             }),
         };
-        var content = BuildContent(blueprint);
+        var content = RunPlayback.BuildContent(blueprint);
         var driver = new InteractiveCombatDriver();
         var defs = new RunDefinitionRegistryBuilder();
         new StandardRunPackage(driver, content).RegisterDefinitions(defs);
@@ -337,46 +303,30 @@ public class RunAuthoringWorkflowTests
     {
         var options = RunJson.CreateOptions();
 
-        // A "Thorns" status that, when its bearer takes damage, deals that same amount back to the attacker —
-        // the iconic EventAmount reaction. It must carry as data (not be dropped) now that EventAmount serializes.
-        var model = new SandboxModel
+        // A "thorns" status that, when its bearer takes damage, deals that same amount back to the attacker — the
+        // iconic EventAmount reaction. It must carry as data (EventAmount serializes) and rebuild into a live trigger.
+        var reflect = new EffectProgram<DamageReceivedTriggeredEffectContext>(
+            new DealDamageNode<DamageReceivedTriggeredEffectContext>(
+                CombatantTargetSelectors.Attacker, new EventAmountExpression<DamageReceivedTriggeredEffectContext>()));
+        var thornsStatus = new StatusData
         {
-            Hero = new HeroModel { Name = "Bramble", Hp = 40, Energy = 3 },
-            Statuses =
-            {
-                new CustomStatusModel
-                {
-                    Name = "Thorns", Polarity = StatusPolarity.Buff, HasPassiveModifier = false,
-                    Triggers =
-                    {
-                        new StatusTriggerModel
-                        {
-                            Event = TriggerEvent.DamageTaken,
-                            Effects =
-                            {
-                                new EffectLineModel
-                                {
-                                    Kind = EffectKind.DealDamage, Target = EffectTarget.Target,
-                                    AmountSource = AmountSource.EventAmount,
-                                },
-                            },
-                        },
-                    },
-                },
-            },
-            Cards = { new CardModel { Name = "Wait", Cost = 0 } },
+            Id = "thorns",
+            Polarity = StatusPolarity.Buff,
+            Triggers = new[] { TriggerData(TriggerEvent.DamageTaken, reflect) },
         };
-        model.Enemies.Add(new EnemyModel { Name = "Dummy", Hp = 30 });
+        var authored = new RunBlueprint(
+            Array.Empty<CardDefinitionId>(), new Dictionary<string, EventScript>(),
+            new[] { new EncounterDefinition(new EncounterId("combat-fight"), new[] { new EncounterEnemy("dummy", 30, Array.Empty<EnemyActionDefinitionId>()) }) },
+            Array.Empty<CardData>(), Array.Empty<EnemyActionData>(), new RunMap(Array.Empty<Node>()))
+        { Statuses = new[] { thornsStatus } };
+        Assert.Single(Assert.Single(authored.Statuses, s => s.Id == "thorns").Triggers);
 
-        var result = CombatImport.Project(EmptyBlueprint(), model, options);
-        Assert.DoesNotContain(result.Skipped, s => s.Contains("thorns")); // the reflect trigger was not dropped
-        var thorns = Assert.Single(result.Blueprint.Statuses, s => s.Id == "thorns");
-        Assert.Single(thorns.Triggers);
-
-        // And it survives the JSON round-trip and rebuilds into a live triggered-effect definition.
-        var reloaded = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(result.Blueprint, options), options);
-        var programs = CombatImport.RebuildStatusTriggers(reloaded.Statuses);
-        Assert.Single(programs);
+        // It survives the JSON round-trip (the EventAmount program travels as context-free JSON) and rebuilds into a
+        // live triggered-effect definition.
+        var reloaded = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(authored, options), options);
+        var thorns = Assert.Single(reloaded.Statuses, s => s.Id == "thorns");
+        var program = StatusDataRebuild.RebuildTrigger(thorns.Id, 0, Assert.Single(thorns.Triggers));
+        Assert.NotNull(program);
     }
 
     [Fact]
@@ -384,45 +334,30 @@ public class RunAuthoringWorkflowTests
     {
         var options = RunJson.CreateOptions();
 
-        // A "PhoenixShield" status that cancels a lethal hit once, leaving the bearer at 5 HP. The hero starts
-        // with it on 10 HP and faces an enemy that hits for 50 — the interceptor must save them in the run.
-        var model = new SandboxModel
+        // A "phoenixshield" status that cancels a lethal hit once, leaving the bearer at 5 HP. The hero starts with
+        // it on 10 HP and faces an enemy that smashes for 50 — the interceptor must save them in the run. As data.
+        var shieldStatus = new StatusData
         {
-            Hero = new HeroModel
-            {
-                Name = "Martyr",
-                Hp = 10,
-                Energy = 3,
-                UseRealDeck = true,
-                DrawPerTurn = 5,
-                StartingStatuses = { new StartingStatusModel { StatusId = "phoenixshield", Amount = 1 } },
-            },
-            Statuses =
-            {
-                new CustomStatusModel
-                {
-                    Name = "PhoenixShield", Polarity = StatusPolarity.Buff, HasPassiveModifier = false,
-                    PreventsDeath = true, SurvivingHealth = 5,
-                },
-            },
-            Cards = { new CardModel { Name = "Wait", Cost = 0 } },
+            Id = "phoenixshield",
+            Polarity = StatusPolarity.Buff,
+            DeathPrevention = new StatusDeathPreventionData(5, Array.Empty<InterceptorEffectData>()),
         };
-        model.Hero.Deck.Add(new DeckCardModel { CardName = "Wait", Copies = 3 });
-        model.Enemies.Add(new EnemyModel
+        var smash = new EnemyActionData
         {
-            Name = "Smasher",
-            Hp = 30,
-            Intents =
-            {
-                new IntentModel
-                {
-                    Label = "Smash", Kind = IntentKind.Attack,
-                    Effects = { new EffectLineModel { Kind = EffectKind.DealDamage, Target = EffectTarget.Target, Amount = 50 } },
-                },
-            },
-        });
-
-        var imported = CombatImport.Project(EmptyBlueprint(), model, options).Blueprint;
+            Id = "smash",
+            Intent = new ActionIntent("Smash", IntentKind.Attack),
+            Program = new EffectProgram<EnemyActionContext>(new DealDamageNode<EnemyActionContext>(
+                CombatantTargetSelectors.EventTarget, new ConstantExpression<EnemyActionContext>(50))),
+        };
+        var encounter = new EncounterDefinition(
+            new EncounterId("combat-fight"),
+            new[] { new EncounterEnemy("smasher", 30, new[] { new EnemyActionDefinitionId("smash") }, null, "Smasher") },
+            new[] { new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3) },
+            new[] { new StartingStatusSpec(new StatusDefinitionId("phoenixshield"), 1) });
+        var imported = new RunBlueprint(
+            Array.Empty<CardDefinitionId>(), new Dictionary<string, EventScript>(), new[] { encounter },
+            Array.Empty<CardData>(), new[] { smash }, new RunMap(Array.Empty<Node>()))
+        { Statuses = new[] { shieldStatus } };
         var shield = Assert.Single(imported.Statuses, s => s.Id == "phoenixshield");
         Assert.NotNull(shield.DeathPrevention);
         Assert.Equal(5, shield.DeathPrevention!.SurvivingHealth);
@@ -437,7 +372,7 @@ public class RunAuthoringWorkflowTests
                 new(new NodeId("n1"), StandardRunIds.CombatNode, new EncounterRef(new EncounterId("combat-fight"))),
             }),
         };
-        var content = BuildContent(blueprint);
+        var content = RunPlayback.BuildContent(blueprint);
         var driver = new InteractiveCombatDriver();
         var defs = new RunDefinitionRegistryBuilder();
         new StandardRunPackage(driver, content).RegisterDefinitions(defs);
@@ -908,93 +843,9 @@ public class RunAuthoringWorkflowTests
     }
 
     [Fact]
-    public void Import_CarriesCardAndEnemyDisplayNames()
-    {
-        var options = RunJson.CreateOptions();
-        var blueprint = CombatImport.Project(EmptyBlueprint(), CombatTabModel(), options).Blueprint;
-
-        // The card's human-readable name rides along on NameKey (slug id stays "strike").
-        var strike = Assert.Single(blueprint.Cards, c => c.Id == "strike");
-        Assert.Equal("Strike", strike.NameKey);
-
-        // Each enemy keeps its slug Id but gains the display name from the Combat tab.
-        var encounter = Assert.Single(blueprint.Encounters);
-        for (var i = 1; i <= 5; i++)
-        {
-            var enemy = Assert.Single(encounter.Enemies, e => e.Id == $"goblin{i}");
-            Assert.Equal($"Goblin{i}", enemy.DisplayName);
-        }
-
-        // The hero name rides along on the encounter (the combat identity stays "hero").
-        Assert.Equal("Knight", encounter.HeroDisplayName);
-
-        // All three survive a JSON round-trip.
-        var reloaded = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(blueprint, options), options);
-        Assert.Equal("Strike", Assert.Single(reloaded.Cards, c => c.Id == "strike").NameKey);
-        var reEncounter = Assert.Single(reloaded.Encounters);
-        Assert.Equal("Knight", reEncounter.HeroDisplayName);
-        Assert.Equal("Goblin1", Assert.Single(reEncounter.Enemies, e => e.Id == "goblin1").DisplayName);
-    }
-
-    [Fact]
-    public void SuggestEncounterId_AvoidsCollisions()
-    {
-        var options = RunJson.CreateOptions();
-        var empty = EmptyBlueprint();
-        Assert.Equal("combat-fight", CombatImport.SuggestEncounterId(empty));
-
-        var one = CombatImport.Project(empty, CombatTabModel(), options).Blueprint; // has "combat-fight"
-        Assert.Equal("combat-fight-2", CombatImport.SuggestEncounterId(one));
-        // A numeric suffix on the desired id derives the stem, not "combat-fight-2-2".
-        Assert.Equal("combat-fight-2", CombatImport.SuggestEncounterId(one, "combat-fight-2"));
-        // A free custom name is returned unchanged.
-        Assert.Equal("elite-orc", CombatImport.SuggestEncounterId(one, "elite-orc"));
-    }
-
-    [Fact]
-    public void MultipleImports_ProduceDistinctEncounters_BothPlayable()
-    {
-        var options = RunJson.CreateOptions();
-
-        // Import the same Combat tab twice under successive suggested ids (what the UI does after each import).
-        var afterFirst = CombatImport.Project(EmptyBlueprint(), CombatTabModel(), options).Blueprint;
-        var nextId = CombatImport.SuggestEncounterId(afterFirst); // "combat-fight-2"
-        var afterSecond = CombatImport.Project(afterFirst, CombatTabModel(), options, nextId).Blueprint;
-
-        Assert.Equal(2, afterSecond.Encounters.Count);
-        Assert.Contains(afterSecond.Encounters, e => e.Id.Value == "combat-fight");
-        Assert.Contains(afterSecond.Encounters, e => e.Id.Value == "combat-fight-2");
-
-        // Arrange both fights (with an event between) and drive the whole run to Victory.
-        var map = new RunMap(new Node[]
-        {
-            new(new NodeId("n1"), StandardRunIds.CombatNode, new EncounterRef(new EncounterId("combat-fight"))),
-            new(new NodeId("n2"), StandardRunIds.EventNode, new EventRef(new EventId("shrine"))),
-            new(new NodeId("n3"), StandardRunIds.CombatNode, new EncounterRef(new EncounterId("combat-fight-2"))),
-        });
-        var events = new Dictionary<string, EventScript>
-        {
-            ["shrine"] = new EventScriptBuilder("shrine")
-                .Situation("shrine", "A shrine hums.", s => s
-                    .Choice("heal", c => c.TextKey("Pray (+8 HP)").Heal(8))
-                    .Choice("leave", c => c.TextKey("Leave")))
-                .Build(),
-        };
-        var blueprint = afterSecond with { Events = events, Map = map };
-
-        var reloaded = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(blueprint, options), options);
-        var run = Drive(reloaded, seed: 1);
-
-        Assert.Equal(RunResult.Victory, run.Result);
-        Assert.Equal(2, run.Log.Count(e => e.Type == StandardRunLogTypes.CombatResolved));
-    }
-
-    [Fact]
     public async Task InteractiveCombatDriver_LetsThePlayerFinishTheFight_AndTheRunContinues()
     {
-        var options = RunJson.CreateOptions();
-        var imported = CombatImport.Project(EmptyBlueprint(), CombatTabModel(), options).Blueprint;
-        var blueprint = imported with
+        var blueprint = SampleBlueprint() with
         {
             Map = new RunMap(new Node[]
             {
@@ -1002,7 +853,7 @@ public class RunAuthoringWorkflowTests
             }),
         };
 
-        var content = BuildContent(blueprint);
+        var content = RunPlayback.BuildContent(blueprint);
         var driver = new InteractiveCombatDriver();
         var defs = new RunDefinitionRegistryBuilder();
         new StandardRunPackage(driver, content).RegisterDefinitions(defs);
@@ -1055,34 +906,10 @@ public class RunAuthoringWorkflowTests
         return null;
     }
 
-    // Mirror of RunSandbox.BuildContent: assemble the content registry from the blueprint's cards/actions/events.
-    private static RunContentRegistry BuildContent(RunBlueprint blueprint)
-    {
-        var interceptors = CombatImport.RebuildStatusInterceptors(blueprint.Statuses);
-        var library = new CombatContentLibrary(
-            cards: blueprint.Cards.Select(card => card.ToBlueprint()).ToArray(),
-            enemyActions: blueprint.EnemyActions.Select(action => action.ToBlueprint()).ToArray(),
-            statuses: blueprint.Statuses.Select(status => status.ToBlueprint()).ToArray(),
-            triggeredPrograms: CombatImport.RebuildStatusTriggers(blueprint.Statuses),
-            preDownInterceptors: interceptors.PreDown,
-            statusApplicationInterceptors: interceptors.StatusApplication);
-        var contentBuilder = new RunContentRegistryBuilder()
-            .SetEncounters(new EncounterCatalog(library, blueprint.Encounters));
-        var relicIds = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var relic in blueprint.Relics)
-            if (relicIds.Add(relic.Id))
-                contentBuilder.RegisterRelic(relic.ToDefinition());
-        if (relicIds.Add("bloodstone")) contentBuilder.RegisterRelic(StandardRelics.Bloodstone());
-        if (relicIds.Add("leech")) contentBuilder.RegisterRelic(StandardRelics.Leech());
-        foreach (var (id, script) in blueprint.Events)
-            contentBuilder.RegisterEvent(new EventId(id), script);
-        return contentBuilder.Build();
-    }
-
-    // Mirror of RunSandbox.Start (headless): build the registry from the blueprint and run it to completion.
+    // Headless drive of a whole run, exactly as the Run tab's Load & drive / Simulate does (via RunPlayback).
     private static RunState Drive(RunBlueprint blueprint, int seed)
     {
-        var content = BuildContent(blueprint);
+        var content = RunPlayback.BuildContent(blueprint);
         var defs = new RunDefinitionRegistryBuilder();
         new StandardRunPackage(new AutoPlayCombatDriver(), content).RegisterDefinitions(defs);
         var registry = defs.Build();
