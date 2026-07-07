@@ -1,6 +1,7 @@
 using RogueDeck.Core.Combat;
 using RogueDeck.Run;
 using RogueDeck.Sandbox.Run;
+using RogueDeck.Scenario.Authoring;
 
 namespace RogueDeck.Sandbox.Composition;
 
@@ -101,12 +102,12 @@ public sealed class RunPlayback(Action onChanged) : IDisposable
     // and the Playtest tab.
     public static RunContentRegistry BuildContent(RunBlueprint blueprint)
     {
-        var interceptors = CombatImport.RebuildStatusInterceptors(blueprint.Statuses);
+        var interceptors = RebuildStatusInterceptors(blueprint.Statuses);
         var library = new CombatContentLibrary(
             cards: blueprint.Cards.Select(card => card.ToBlueprint()).ToArray(),
             enemyActions: blueprint.EnemyActions.Select(action => action.ToBlueprint()).ToArray(),
             statuses: blueprint.Statuses.Select(status => status.ToBlueprint()).ToArray(),
-            triggeredPrograms: CombatImport.RebuildStatusTriggers(blueprint.Statuses),
+            triggeredPrograms: RebuildStatusTriggers(blueprint.Statuses),
             preDownInterceptors: interceptors.PreDown,
             statusApplicationInterceptors: interceptors.StatusApplication);
 
@@ -128,5 +129,32 @@ public sealed class RunPlayback(Action onChanged) : IDisposable
                 builder.RegisterRelic(relic.ToDefinition());
         if (ids.Add("bloodstone")) builder.RegisterRelic(StandardRelics.Bloodstone());
         if (ids.Add("leech")) builder.RegisterRelic(StandardRelics.Leech());
+    }
+
+    // Rebuild every status' serialized triggers into live triggered-effect definitions (data→engine, via
+    // StatusDataRebuild), ready to register into a combat. The per-status index keeps definition ids unique.
+    private static IReadOnlyList<ITriggeredEffectDefinition> RebuildStatusTriggers(IReadOnlyList<StatusData> statuses)
+    {
+        var programs = new List<ITriggeredEffectDefinition>();
+        foreach (var status in statuses)
+            for (var i = 0; i < status.Triggers.Count; i++)
+                programs.Add(StatusDataRebuild.RebuildTrigger(status.Id, i, status.Triggers[i]));
+        return programs;
+    }
+
+    // Rebuild every status' death-prevention / debuff-block interceptors from data into live engine interceptors.
+    private static (IReadOnlyList<IPreDownInterceptor> PreDown, IReadOnlyList<IStatusApplicationInterceptor> StatusApplication)
+        RebuildStatusInterceptors(IReadOnlyList<StatusData> statuses)
+    {
+        var preDown = new List<IPreDownInterceptor>();
+        var statusApplication = new List<IStatusApplicationInterceptor>();
+        foreach (var status in statuses)
+        {
+            if (status.DeathPrevention is { } deathPrevention)
+                preDown.Add(StatusDataRebuild.RebuildDeathPrevention(status.Id, deathPrevention));
+            if (status.DebuffBlock is { } debuffBlock)
+                statusApplication.Add(StatusDataRebuild.RebuildDebuffBlock(status.Id, debuffBlock));
+        }
+        return (preDown, statusApplication);
     }
 }
