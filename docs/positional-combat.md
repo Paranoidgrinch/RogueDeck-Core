@@ -102,10 +102,15 @@ dies, after which the back becomes frontmost and takes the hit. Full suite green
 Builds directly on Part A (positions + summon-at-position). Reuses the **enemy-action/intent** machinery on the
 player team so player units act with no new turn engine (invariant #5).
 
-**P5a — Multiple acting player units in one combat.** Allow player-team combatants (beyond the hero) that act
-via the existing action/intent system on the player's turn (auto-resolving intents, like enemies but allied).
-Turn loop already iterates combatants per team — verify it cycles allied non-hero units; add player-unit intent
-resolution. Additive; a combat with only a hero is unchanged.
+**P5a — Multiple acting player units in one combat. ✅ DONE (no engine code).** Verified the turn loop is already
+team-agnostic: `AddCombatant` puts every combatant (any team) into `TurnOrder`, `CombatTurnProcessor` cycles them
+by living-combatant regardless of team, and `ExecuteEnemyActionEffectRequest` / triggered programs / selectors are
+all relative to the acting `Source`. So a player-team unit beyond the hero already gets its own turn and acts on the
+ENEMY team through the existing machinery — invariant #5 (no new turn engine) holds by construction. "Auto-action"
+is the idiomatic marker-status-filtered TurnStarted-triggered program (the same pattern enemies/rules already use).
+Proven by `PlayerBoardUnitsTests.cs`: a fielded player unit takes its turn (hero → ally → goblin) and strikes the
+enemy team while the enemy strikes the player team; multiple player units each act. No Core change needed; full
+suite green (Core 1316).
 
 **P5b — Cards that field units onto the board (deck→board).** A card/effect that summons a unit at a position on
 the player team with a given action set (P2's summon-at-position + P5a's acting units). "Play a creature card."
