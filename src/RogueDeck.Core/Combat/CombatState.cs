@@ -37,6 +37,18 @@ public sealed class CombatState
     // behave exactly as before (not part of the state hash/snapshot; it is immutable rule config, not gameplay state).
     public bool CellExclusive { get; init; }
 
+    // Opt-in party rule (party deckbuilding A2): when true, a team's members take their turn SIMULTANEOUSLY — the
+    // whole team gets TurnStarted at once and each member ends independently, driven by SimultaneousTurnProcessor
+    // instead of the round-robin CombatTurnProcessor. Default false ⇒ today's one-active-combatant round-robin, so
+    // existing combats are byte-for-byte unchanged (not part of the hash/snapshot; it is immutable rule config).
+    public bool SimultaneousTeamTurns { get; init; }
+
+    // The team whose phase is currently active under SimultaneousTeamTurns (null in round-robin mode).
+    public TeamId? CurrentPhaseTeam { get; private set; }
+
+    private readonly HashSet<CombatantId> _endedThisPhase = new();
+    public IReadOnlyCollection<CombatantId> EndedThisPhase => _endedThisPhase;
+
     public int RandomStep { get; private set; }
 
     // The definition registry this combat is running against. Bound when queue processing begins so
@@ -174,6 +186,30 @@ public sealed class CombatState
     {
         return Combatants.Any(combatant => combatant.TeamId == teamId && combatant.IsAlive);
     }
+
+    // ── Simultaneous team phase (party deckbuilding A2) ───────────────────────────
+
+    // Open a team's phase: it becomes the current phase team and no member has ended yet.
+    internal void BeginTeamPhase(TeamId teamId)
+    {
+        CurrentPhaseTeam = teamId;
+        _endedThisPhase.Clear();
+    }
+
+    internal void MarkMemberEnded(CombatantId combatantId) => _endedThisPhase.Add(combatantId);
+
+    public bool HasMemberEnded(CombatantId combatantId) => _endedThisPhase.Contains(combatantId);
+
+    // Living members of the current phase team that have not yet ended their turn — the ones still able to act.
+    public IReadOnlyList<CombatantState> ActivePhaseMembers() =>
+        CurrentPhaseTeam is { } team
+            ? Combatants.Where(c => c.TeamId == team && c.IsAlive && !_endedThisPhase.Contains(c.Id)).ToArray()
+            : [];
+
+    // True once every living member of the current phase team has ended (the phase is complete).
+    public bool AllPhaseMembersEnded() =>
+        CurrentPhaseTeam is { } team
+        && Combatants.Where(c => c.TeamId == team && c.IsAlive).All(c => _endedThisPhase.Contains(c.Id));
 
     public void SetActiveCombatant(CombatantId combatantId)
     {
