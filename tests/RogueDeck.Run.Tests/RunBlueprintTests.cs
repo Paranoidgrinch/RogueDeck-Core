@@ -107,6 +107,43 @@ public class RunBlueprintTests
     }
 
     [Fact]
+    public void StartingParty_round_trips_and_seeds_additional_members(/* party deckbuilding B1c */)
+    {
+        var blueprint = Demo() with
+        {
+            Start = new RunStart
+            {
+                StartingParty = new[]
+                {
+                    new RunMemberData
+                    {
+                        DefinitionId = "mage",
+                        DisplayNameKey = "party.mage",
+                        MaxHealth = 22,
+                        Deck = new[] { "smite", "smite" },
+                        Resources = new Dictionary<string, int> { [Gold.Value] = 15 },
+                    },
+                },
+            },
+        };
+
+        var back = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(blueprint, Options), Options);
+        var authored = Assert.Single(back.Start.StartingParty);
+        Assert.Equal("mage", authored.DefinitionId);
+        Assert.Equal(22, authored.MaxHealth);
+        Assert.Equal(new[] { "smite", "smite" }, authored.Deck);
+
+        // Seeds the hero (member 0) + the mage (member 1), each with its OWN hp / deck / gold.
+        var run = back.CreateInitialRun(new RunId("t"));
+        Assert.Equal(2, run.Party.Count);
+        var mage = run.Party[1];
+        Assert.Equal(22, mage.Health.Max);
+        Assert.Equal(2, mage.Deck.Count);
+        Assert.Equal(15, mage.GetResource(Gold));
+        Assert.Equal(0, run.Primary.GetResource(Gold)); // the hero's own wallet is separate
+    }
+
+    [Fact]
     public void StartingUnits_round_trip_and_seed_the_run_roster()
     {
         var blueprint = Demo() with

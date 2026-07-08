@@ -62,4 +62,21 @@ public sealed record RunStart
     // The persistent player-controlled board units the run begins with (P5c). Seeded into RunState.Units at run
     // start and projected into each fight's player team. Empty (the default) ⇒ today's single-hero run.
     public IReadOnlyList<RunUnitData> StartingUnits { get; init; } = [];
+
+    // Additional party members the run begins with, BESIDES the hero (member 0, seeded from the fields above).
+    // Each is a full player character with its own HP / deck / resources (party deckbuilding B1c). Empty (the
+    // default) ⇒ a single-hero run, exactly as before. Its relics/consumables are a later slice (need content).
+    public IReadOnlyList<RunMemberData> StartingParty { get; init; } = [];
+}
+
+// The authored description of an additional party member (party deckbuilding B1c): its combat identity + display
+// name, starting max HP, its own starting deck (card ids), and its own starting resources (currency included).
+// Seeded into RunState.Party by RunSetup. A plain record so it round-trips through RunJson like the rest of RunStart.
+public sealed record RunMemberData
+{
+    public string DefinitionId { get; init; } = "hero";
+    public string DisplayNameKey { get; init; } = "Member";
+    public int MaxHealth { get; init; } = 30;
+    public IReadOnlyList<string> Deck { get; init; } = [];
+    public IReadOnlyDictionary<string, int> Resources { get; init; } = new Dictionary<string, int>();
 }

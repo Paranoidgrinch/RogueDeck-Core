@@ -12,6 +12,11 @@ public sealed class PartyMember
     public RunMemberId Id { get; }
     public HealthState Health { get; }
 
+    // Combat identity, used when the member is projected into a fight (party deckbuilding B2). Member 0 (the hero)
+    // takes its combat identity from the scenario's HeroBlueprint, so its values here are only placeholders.
+    public string DisplayNameKey { get; }
+    public CombatantDefinitionId DefinitionId { get; }
+
     private readonly Dictionary<RunResourceId, int> _resources = new();
     private readonly List<RunCardInstance> _deck = new();
     private readonly List<RelicInstance> _relics = new();
@@ -22,11 +27,14 @@ public sealed class PartyMember
     public IReadOnlyList<RelicInstance> Relics => _relics;
     public IReadOnlyList<RunConsumable> Consumables => _consumables;
 
-    public PartyMember(RunMemberId id, HealthState health)
+    public PartyMember(
+        RunMemberId id, HealthState health, string? displayNameKey = null, CombatantDefinitionId? definitionId = null)
     {
         ArgumentNullException.ThrowIfNull(health);
         Id = id;
         Health = health;
+        DisplayNameKey = displayNameKey ?? $"party.{id.Value}";
+        DefinitionId = definitionId ?? new CombatantDefinitionId("hero");
     }
 
     public int GetResource(RunResourceId resource) =>

@@ -25,6 +25,19 @@ public static class RunSetup
         foreach (var unit in start.StartingUnits)
             run.AddUnit(unit);
 
+        // Seed additional party members besides the hero (party deckbuilding B1c) — each with its own HP, deck, and
+        // resources. Absent (the default) ⇒ a single-hero run.
+        foreach (var data in start.StartingParty)
+        {
+            var member = run.AddPartyMember(
+                new Core.Combat.HealthState(data.MaxHealth, data.MaxHealth),
+                data.DisplayNameKey, new Core.Combat.CombatantDefinitionId(data.DefinitionId));
+            foreach (var card in data.Deck)
+                run.AddDeckCardTo(member, new Core.Combat.CardDefinitionId(card));
+            foreach (var (resource, amount) in data.Resources)
+                member.SetResource(new RunResourceId(resource), amount);
+        }
+
         return run;
     }
 }

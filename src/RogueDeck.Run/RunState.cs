@@ -104,14 +104,23 @@ public sealed class RunState
         RandomSeed = randomSeed;
     }
 
-    // Add another player character to the party (party deckbuilding B1). Its HP pool is seeded here; its deck /
-    // resources / relics / consumables are populated through the run's normal effects, scoped to this member.
-    public PartyMember AddPartyMember(HealthState health)
+    // Add another player character to the party (party deckbuilding B1). Its HP pool + combat identity are seeded
+    // here; its deck / resources / relics / consumables are populated via AddDeckCardTo + the member's own ops.
+    public PartyMember AddPartyMember(
+        HealthState health, string? displayNameKey = null, CombatantDefinitionId? definitionId = null)
     {
         ArgumentNullException.ThrowIfNull(health);
-        var member = new PartyMember(new RunMemberId($"member#{_nextMemberSeq++}"), health);
+        var member = new PartyMember(
+            new RunMemberId($"member#{_nextMemberSeq++}"), health, displayNameKey, definitionId);
         _party.Add(member);
         return member;
+    }
+
+    // Add a card to a specific member's deck, minting a run-scoped (party-unique) instance id.
+    public RunCardInstance AddDeckCardTo(PartyMember member, CardDefinitionId card)
+    {
+        ArgumentNullException.ThrowIfNull(member);
+        return member.AddDeckCard(new RunCardInstance(new RunCardInstanceId($"card#{++_nextCardSeq}"), card));
     }
 
     // ── Setup / mutation (used by effect handlers and node resolvers) ──────────────
@@ -120,8 +129,7 @@ public sealed class RunState
     // from a run-scoped sequence so a replayed run reproduces them.
     // ── Single-hero accessors (delegate to the primary member; run-scoped instance ids stay here) ──────────────
 
-    public RunCardInstance AddDeckCard(CardDefinitionId card) =>
-        Primary.AddDeckCard(new RunCardInstance(new RunCardInstanceId($"card#{++_nextCardSeq}"), card));
+    public RunCardInstance AddDeckCard(CardDefinitionId card) => AddDeckCardTo(Primary, card);
 
     public bool RemoveDeckCard(RunCardInstanceId id) => Primary.RemoveDeckCard(id);
 
