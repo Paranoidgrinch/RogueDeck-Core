@@ -296,15 +296,17 @@ public sealed class RunState
         return true;
     }
 
-    // Removes the node and any edge touching it (and any entry reference), so the map stays consistent.
+    // Removes the node and any edge touching it (and any entry/layout reference), so the map stays consistent.
     public bool RemoveMapNode(NodeId nodeId)
     {
         if (!Map.Nodes.Any(node => node.Id == nodeId))
             return false;
-        Map = Rebuild(
-            Map.Nodes.Where(node => node.Id != nodeId).ToList(),
-            Map.Edges.Where(edge => edge.From != nodeId && edge.To != nodeId).ToList(),
-            Map.EntryNodeIds.Where(id => id != nodeId).ToList());
+        Map = new RunMap(Map.Nodes.Where(node => node.Id != nodeId).ToList())
+        {
+            Edges = Map.Edges.Where(edge => edge.From != nodeId && edge.To != nodeId).ToList(),
+            EntryNodeIds = Map.EntryNodeIds.Where(id => id != nodeId).ToList(),
+            Layout = Map.Layout.Where(l => l.Node != nodeId).ToList(),
+        };
         return true;
     }
 
@@ -326,9 +328,10 @@ public sealed class RunState
         return true;
     }
 
-    private static RunMap Rebuild(
+    // Preserves the map's layout (presentational coords) across a structural mutation.
+    private RunMap Rebuild(
         IReadOnlyList<Node> nodes, IReadOnlyList<MapEdge> edges, IReadOnlyList<NodeId> entries) =>
-        new(nodes) { Edges = edges, EntryNodeIds = entries };
+        new(nodes) { Edges = edges, EntryNodeIds = entries, Layout = Map.Layout };
 
     // The fork currently offered on a branching map: the unvisited successors of the current node, in edge order.
     // Empty on a linear map, before the walk starts, or at a leaf node. A map UI renders this as the choosable

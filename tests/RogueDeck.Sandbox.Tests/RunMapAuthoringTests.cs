@@ -82,4 +82,36 @@ public class RunMapAuthoringTests
     {
         Assert.Equal(Fork().EntryNodeIds.Count, RunMapAuthoring.ToggleEntry(Fork(), new NodeId("ghost")).EntryNodeIds.Count);
     }
+
+    // ── Layout (2D presentational coords) ────────────────────────────────────────
+
+    [Fact]
+    public void SetNodeLayout_places_then_moves_a_node()
+    {
+        var placed = RunMapAuthoring.SetNodeLayout(Fork(), new NodeId("a"), 30, 40);
+        Assert.Equal(new NodeLayout(new NodeId("a"), 30, 40), Assert.Single(placed.Layout));
+
+        var moved = RunMapAuthoring.SetNodeLayout(placed, new NodeId("a"), 99, 0);
+        Assert.Equal(new NodeLayout(new NodeId("a"), 99, 0), Assert.Single(moved.Layout)); // replaced, not duplicated
+    }
+
+    [Fact]
+    public void SetNodeLayout_ignores_an_unknown_node()
+    {
+        Assert.Empty(RunMapAuthoring.SetNodeLayout(Fork(), new NodeId("ghost"), 1, 2).Layout);
+    }
+
+    [Fact]
+    public void Layout_survives_structural_edits_and_a_removed_node_loses_its_coord()
+    {
+        var map = RunMapAuthoring.SetNodeLayout(RunMapAuthoring.SetNodeLayout(Fork(), new NodeId("a"), 1, 1), new NodeId("b"), 2, 2);
+
+        // An unrelated edit (adding an edge) keeps both coords.
+        var afterEdge = RunMapAuthoring.AddEdge(map, new NodeId("b"), new NodeId("c"));
+        Assert.Equal(2, afterEdge.Layout.Count);
+
+        // Removing 'a' drops only 'a's coord.
+        var afterRemove = RunMapAuthoring.RemoveNode(map, index: 0); // 'a'
+        Assert.Equal(new NodeLayout(new NodeId("b"), 2, 2), Assert.Single(afterRemove.Layout));
+    }
 }

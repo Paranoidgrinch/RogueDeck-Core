@@ -34,6 +34,7 @@ public class RunMapGraphTests
                 new MapEdge(new NodeId("right"), new NodeId("boss")),
             ],
             EntryNodeIds = [new NodeId("start")],
+            Layout = [new NodeLayout(new NodeId("start"), 10, 20), new NodeLayout(new NodeId("boss"), 10, 200)],
         };
 
         var json = RunJson.ToJson(map, Options);
@@ -43,6 +44,7 @@ public class RunMapGraphTests
         Assert.Equal(4, back.Edges.Count);
         Assert.Contains(new MapEdge(new NodeId("start"), new NodeId("right")), back.Edges);
         Assert.Equal(new NodeId("start"), Assert.Single(back.EntryNodeIds));
+        Assert.Contains(new NodeLayout(new NodeId("start"), 10, 20), back.Layout); // presentational coords round-trip
     }
 
     [Fact]

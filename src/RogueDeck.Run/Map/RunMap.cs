@@ -22,6 +22,11 @@ public sealed class Node
 // data; traversal that reads it arrives in B1. A readonly record struct so it round-trips through RunJson for free.
 public readonly record struct MapEdge(NodeId From, NodeId To);
 
+// Optional 2D screen coordinate for a node — purely presentational, so a map UI can draw the graph where the
+// author placed it. Traversal/validation ignore it entirely (like a combatant's grid position vs. the fight). A
+// list entry per placed node; unplaced nodes are auto-laid-out by the UI.
+public sealed record NodeLayout(NodeId Node, int X, int Y);
+
 // The shape of a run. Two shapes over one type:
 //   • Linear (Edges empty, the default): the nodes are an ordered list walked start-to-finish — today's behavior,
 //     byte-for-byte unchanged.
@@ -39,6 +44,10 @@ public sealed class RunMap
 
     // Where a graph walk may start. Empty ⇒ the traversal derives entry nodes. Ignored by a linear map.
     public IReadOnlyList<NodeId> EntryNodeIds { get; init; } = [];
+
+    // Optional 2D screen coordinates for the map UI (one entry per placed node). Purely presentational — traversal
+    // and validation never read it. Empty ⇒ the UI auto-lays-out the graph. Additive/init-only, round-trips as data.
+    public IReadOnlyList<NodeLayout> Layout { get; init; } = [];
 
     public RunMap(IReadOnlyList<Node> nodes)
     {

@@ -10,7 +10,7 @@ namespace RogueDeck.Sandbox.Composition;
 public static class RunMapAuthoring
 {
     public static RunMap AddNode(RunMap map, Node node) =>
-        Make([.. map.Nodes, node], map.Edges, map.EntryNodeIds);
+        Make([.. map.Nodes, node], map.Edges, map.EntryNodeIds, map.Layout);
 
     public static RunMap RemoveNode(RunMap map, int index)
     {
@@ -20,7 +20,8 @@ public static class RunMapAuthoring
         return Make(
             map.Nodes.Where((_, i) => i != index).ToList(),
             map.Edges.Where(edge => edge.From != id && edge.To != id).ToList(),
-            map.EntryNodeIds.Where(entry => entry != id).ToList());
+            map.EntryNodeIds.Where(entry => entry != id).ToList(),
+            map.Layout.Where(l => l.Node != id).ToList());
     }
 
     public static RunMap MoveNode(RunMap map, int index, int direction)
@@ -30,7 +31,16 @@ public static class RunMapAuthoring
             return map;
         var nodes = map.Nodes.ToList();
         (nodes[index], nodes[target]) = (nodes[target], nodes[index]);
-        return Make(nodes, map.Edges, map.EntryNodeIds);
+        return Make(nodes, map.Edges, map.EntryNodeIds, map.Layout);
+    }
+
+    // Sets (or moves) a node's presentational 2D coordinate for the map UI; a no-op for an unknown node.
+    public static RunMap SetNodeLayout(RunMap map, NodeId id, int x, int y)
+    {
+        if (!HasNode(map, id))
+            return map;
+        var layout = map.Layout.Where(l => l.Node != id).Append(new NodeLayout(id, x, y)).ToList();
+        return Make(map.Nodes, map.Edges, map.EntryNodeIds, layout);
     }
 
     // Adds a directed edge, guarding against self-loops, duplicates, and endpoints that are not real nodes.
@@ -39,11 +49,11 @@ public static class RunMapAuthoring
         var edge = new MapEdge(from, to);
         if (from == to || map.Edges.Contains(edge) || !HasNode(map, from) || !HasNode(map, to))
             return map;
-        return Make(map.Nodes, [.. map.Edges, edge], map.EntryNodeIds);
+        return Make(map.Nodes, [.. map.Edges, edge], map.EntryNodeIds, map.Layout);
     }
 
     public static RunMap RemoveEdge(RunMap map, MapEdge edge) =>
-        Make(map.Nodes, map.Edges.Where(existing => existing != edge).ToList(), map.EntryNodeIds);
+        Make(map.Nodes, map.Edges.Where(existing => existing != edge).ToList(), map.EntryNodeIds, map.Layout);
 
     // Marks/unmarks a node as an entry (where a graph walk may begin). No declared entries ⇒ the runner derives
     // them (roots), so clearing all entries is valid.
@@ -54,12 +64,13 @@ public static class RunMapAuthoring
         var entries = map.EntryNodeIds.Contains(id)
             ? map.EntryNodeIds.Where(entry => entry != id).ToList()
             : [.. map.EntryNodeIds, id];
-        return Make(map.Nodes, map.Edges, entries);
+        return Make(map.Nodes, map.Edges, entries, map.Layout);
     }
 
     private static bool HasNode(RunMap map, NodeId id) => map.Nodes.Any(node => node.Id == id);
 
     private static RunMap Make(
-        IReadOnlyList<Node> nodes, IReadOnlyList<MapEdge> edges, IReadOnlyList<NodeId> entries) =>
-        new(nodes) { Edges = edges, EntryNodeIds = entries };
+        IReadOnlyList<Node> nodes, IReadOnlyList<MapEdge> edges,
+        IReadOnlyList<NodeId> entries, IReadOnlyList<NodeLayout> layout) =>
+        new(nodes) { Edges = edges, EntryNodeIds = entries, Layout = layout };
 }
