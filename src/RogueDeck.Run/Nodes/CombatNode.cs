@@ -258,6 +258,28 @@ public sealed class CombatNodeResolver : INodeResolver
             blueprint.Allies.Add(ally);
         }
 
+        // Party projection (party deckbuilding B2): each additional member (beyond the hero = member 0) joins the
+        // fight as a player-team ally carrying its OWN wounded HP, its OWN deck (mapped copy-by-copy), and its own
+        // energy — so it draws and plays from its own deck. A party (>1 member) fights with simultaneous team turns
+        // so members act concurrently. A single-member run adds nothing and is unchanged.
+        if (run.Party.Count > 1)
+        {
+            blueprint.SimultaneousTeamTurns = true;
+            foreach (var member in run.Party.Skip(1))
+            {
+                var ally = new AllyBlueprint(member.Id.Value)
+                {
+                    NameKey = member.DisplayNameKey,
+                    MaxHealth = member.Health.Max,
+                    CurrentHealth = member.Health.Current,
+                };
+                ally.Resources.Add(new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3));
+                foreach (var card in member.Deck)
+                    ally.Deck.Add(new DeckEntry(_deckMapper(card), 1));
+                blueprint.Allies.Add(ally);
+            }
+        }
+
         // Pending combat modifiers apply last so a "next fight" consequence can override the encounter, and
         // are consumed here so each affects exactly one fight.
         foreach (var modifier in run.ConsumePendingCombatModifiers())

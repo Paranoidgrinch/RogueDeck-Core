@@ -170,6 +170,30 @@ public class CombatBridgeProjectionTests
     }
 
     [Fact]
+    public void A_party_member_projects_as_a_player_ally_with_its_own_deck_and_a_simultaneous_fight()
+    {
+        var run = NewRun("strike"); // the hero (member 0) carries the run deck as today
+        var mage = run.AddPartyMember(new HealthState(18, 22), "party.mage", new CombatantDefinitionId("mage"));
+        run.AddDeckCardTo(mage, new CardDefinitionId("firebolt"));
+        run.AddDeckCardTo(mage, new CardDefinitionId("firebolt"));
+
+        var driver = new CapturingDriver();
+        var resolver = new CombatNodeResolver(driver);
+        var node = new Node(new NodeId("fight"), StandardRunIds.CombatNode, new CombatNodePayload(BuildEncounter));
+
+        resolver.Resolve(Context(run, Registry()), node);
+
+        var bp = driver.Captured!;
+        Assert.True(bp.SimultaneousTeamTurns); // a party fights with simultaneous team turns
+        var ally = Assert.Single(bp.Allies);
+        Assert.Equal(mage.Id.Value, ally.Id);
+        Assert.Equal(22, ally.MaxHealth);
+        Assert.Equal(18, ally.CurrentHealth);  // its own carried wound
+        Assert.Equal(new[] { "firebolt", "firebolt" }, ally.Deck.Select(e => e.Card.value)); // its OWN deck
+        Assert.Contains(ally.Resources, r => r.Resource == StandardCombatIds.EnergyResource);
+    }
+
+    [Fact]
     public void A_dead_unit_is_removed_from_the_roster()
     {
         var run = RunWithUnit(maxHp: 20);
