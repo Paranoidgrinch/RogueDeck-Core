@@ -42,6 +42,11 @@
                     var index = i;
                     var node = bp.Map.Nodes[i];
                     <li>
+                        <label title="entry node — a graph walk may start here (ignored by a linear map)">
+                            <input type="checkbox" checked="@bp.Map.EntryNodeIds.Contains(node.Id)"
+                                   @onchange="() => ToggleEntry(node.Id)" />
+                        </label>
+                        <code>@node.Id.Value</code>
                         <span class="line-kind">@NodeKind(node)</span> <strong>@NodeTarget(node)</strong>
                         <button class="mini" @onclick="() => MoveNode(index, -1)">↑</button>
                         <button class="mini" @onclick="() => MoveNode(index, 1)">↓</button>
@@ -72,6 +77,45 @@
                     }
                 </select>
                 <button class="play" @onclick="AddNode">Add node</button>
+            </div>
+
+            <h3>Edges (branching)</h3>
+            <p class="muted">Add edges to turn the linear list into a branching graph: after a node resolves, the
+                player picks among its outgoing edges (tick a node above to make it an entry). No edges ⇒ the map
+                is walked top-to-bottom as a linear sequence, exactly as before.</p>
+            @if (bp.Map.Edges.Count == 0)
+            {
+                <p class="muted">No edges — linear map.</p>
+            }
+            else
+            {
+                <ol class="log">
+                    @foreach (var edge in bp.Map.Edges)
+                    {
+                        var e = edge;
+                        <li><code>@e.From.Value</code> → <code>@e.To.Value</code>
+                            <button class="mini" @onclick="() => RemoveEdge(e)">✕</button>
+                        </li>
+                    }
+                </ol>
+            }
+            <div class="run-bar">
+                <select @bind="_edgeFrom">
+                    <option value="">— from —</option>
+                    @foreach (var n in bp.Map.Nodes)
+                    {
+                        <option value="@n.Id.Value">@n.Id.Value</option>
+                    }
+                </select>
+                <span>→</span>
+                <select @bind="_edgeTo">
+                    <option value="">— to —</option>
+                    @foreach (var n in bp.Map.Nodes)
+                    {
+                        <option value="@n.Id.Value">@n.Id.Value</option>
+                    }
+                </select>
+                <button class="play" @onclick="AddEdge">Add edge</button>
             </div>
         }
         else
@@ -158,42 +202,56 @@
         catch { blueprint = null!; return false; }
     }
 
-    private void RebuildMap(RunBlueprint blueprint, List<Node> nodes) =>
-        _json = RunJson.ToJson(blueprint with { Map = new RunMap(nodes) }, _options);
+    private string _edgeFrom = "";
+    private string _edgeTo = "";
+
+    private void RebuildMap(RunBlueprint blueprint, RunMap map) =>
+        _json = RunJson.ToJson(blueprint with { Map = map }, _options);
 
     private void AddNode()
     {
         if (string.IsNullOrEmpty(_newNodeTarget) || !TryBlueprint(out var blueprint))
             return;
-        var nodes = blueprint.Map.Nodes.ToList();
         var (type, payload) = _newNodeType == "combat"
             ? (StandardRunIds.CombatNode, (IRunNodePayload)new EncounterRef(new EncounterId(_newNodeTarget)))
             : (StandardRunIds.EventNode, new EventRef(new EventId(_newNodeTarget)));
-        nodes.Add(new Node(new NodeId($"n{_nodeSeq++}"), type, payload));
-        RebuildMap(blueprint, nodes);
+        var node = new Node(new NodeId($"n{_nodeSeq++}"), type, payload);
+        RebuildMap(blueprint, RunMapAuthoring.AddNode(blueprint.Map, node));
     }
 
     private void RemoveNode(int index)
     {
         if (!TryBlueprint(out var blueprint))
             return;
-        var nodes = blueprint.Map.Nodes.ToList();
-        if (index < 0 || index >= nodes.Count)
-            return;
-        nodes.RemoveAt(index);
-        RebuildMap(blueprint, nodes);
+        RebuildMap(blueprint, RunMapAuthoring.RemoveNode(blueprint.Map, index));
     }
 
     private void MoveNode(int index, int direction)
     {
         if (!TryBlueprint(out var blueprint))
             return;
-        var nodes = blueprint.Map.Nodes.ToList();
-        var target = index + direction;
-        if (index < 0 || index >= nodes.Count || target < 0 || target >= nodes.Count)
+        RebuildMap(blueprint, RunMapAuthoring.MoveNode(blueprint.Map, index, direction));
+    }
+
+    private void AddEdge()
+    {
+        if (string.IsNullOrEmpty(_edgeFrom) || string.IsNullOrEmpty(_edgeTo) || !TryBlueprint(out var blueprint))
             return;
-        (nodes[index], nodes[target]) = (nodes[target], nodes[index]);
-        RebuildMap(blueprint, nodes);
+        RebuildMap(blueprint, RunMapAuthoring.AddEdge(blueprint.Map, new NodeId(_edgeFrom), new NodeId(_edgeTo)));
+    }
+
+    private void RemoveEdge(MapEdge edge)
+    {
+        if (!TryBlueprint(out var blueprint))
+            return;
+        RebuildMap(blueprint, RunMapAuthoring.RemoveEdge(blueprint.Map, edge));
+    }
+
+    private void ToggleEntry(NodeId id)
+    {
+        if (!TryBlueprint(out var blueprint))
+            return;
+        RebuildMap(blueprint, RunMapAuthoring.ToggleEntry(blueprint.Map, id));
     }
 
     private static string NodeKind(Node node) => node.Type == StandardRunIds.CombatNode ? "combat" : "event";

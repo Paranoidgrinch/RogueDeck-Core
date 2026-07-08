@@ -101,4 +101,59 @@ public class RunDocumentValidatorTests
         Assert.Contains(cards, p => p.Contains("card 'ghost'"));
         Assert.DoesNotContain(cards, p => p.Contains("boss"));
     }
+
+    // A map node pointing at the (existing) "fight" encounter, so only graph structure — not content — is at play.
+    private static Node Fight(string id) =>
+        new(new NodeId(id), StandardRunIds.CombatNode, new EncounterRef(new EncounterId("fight")));
+
+    [Fact]
+    public void A_valid_branching_map_has_no_problems()
+    {
+        var bp = Valid() with
+        {
+            Map = new RunMap(new[] { Fight("n1"), Fight("n2") })
+            {
+                Edges = new[] { new MapEdge(new NodeId("n1"), new NodeId("n2")) },
+                EntryNodeIds = new[] { new NodeId("n1") },
+            },
+        };
+
+        Assert.Empty(RunDocumentValidator.Validate(bp));
+    }
+
+    [Fact]
+    public void A_cyclic_branching_map_is_flagged_under_the_run_tab()
+    {
+        var bp = Valid() with
+        {
+            Map = new RunMap(new[] { Fight("n1"), Fight("n2") })
+            {
+                Edges = new[]
+                {
+                    new MapEdge(new NodeId("n1"), new NodeId("n2")),
+                    new MapEdge(new NodeId("n2"), new NodeId("n1")),
+                },
+            },
+        };
+
+        Assert.Contains(
+            RunDocumentValidator.Validate(bp),
+            p => p.StartsWith("Run:", StringComparison.Ordinal) && p.Contains("cycle"));
+    }
+
+    [Fact]
+    public void An_edge_to_a_missing_node_is_flagged_under_the_run_tab()
+    {
+        var bp = Valid() with
+        {
+            Map = new RunMap(new[] { Fight("n1") })
+            {
+                Edges = new[] { new MapEdge(new NodeId("n1"), new NodeId("ghost")) },
+            },
+        };
+
+        Assert.Contains(
+            RunDocumentValidator.Validate(bp),
+            p => p.StartsWith("Run:", StringComparison.Ordinal) && p.Contains("unknown target node 'ghost'"));
+    }
 }

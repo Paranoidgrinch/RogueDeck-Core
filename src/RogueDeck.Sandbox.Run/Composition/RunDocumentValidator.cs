@@ -64,6 +64,14 @@ public static class RunDocumentValidator
         if (blueprint.Map.Nodes.Count == 0)
             problems.Add($"{RunTab}: the map is empty — add at least one node to play the run.");
 
+        // Branching-map graph structure (forward-only DAG, valid edge endpoints, reachability). Only bites when
+        // the map declares edges; a linear map validates clean here.
+        foreach (var problem in RunMapValidator.Validate(blueprint.Map))
+        {
+            var text = problem.StartsWith("Map: ", StringComparison.Ordinal) ? problem["Map: ".Length..] : problem;
+            problems.Add($"{RunTab}: {text}");
+        }
+
         return problems;
     }
 
