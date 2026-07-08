@@ -6,8 +6,10 @@ map keeps the exact index loop byte-for-byte; `RunMapValidator` enforces a forwa
 `RunMapBuilder` + `LayeredMapGenerator` author graph maps (the latter a deterministic Slay-the-Spire act); worked
 examples drive real combat + event content end-to-end. Suite: Run 287 (+41 across the arc) / Scenario 512 / Sandbox
 121 / Core 1324, all green, `dotnet format` clean. Commits: B0 e17caa4 · B1 af8c393 · B2 08eb30a · B3 54b52e8 ·
-B4 7f9b4bc (plan @ 25c4cf1). Optional not-done: B5 map mutation (add/remove nodes/edges mid-run); exposing the
-branching map in the Studio UI when Studio comes off hold (node layout row/col coords were deferred to that phase).
+B4 7f9b4bc (plan @ 25c4cf1). **B5 map mutation also DONE @ 1fbce25** — mid-run map reshaping (RunState.Add/Remove
+MapNode/MapEdge + serializable Add/RemoveMapNode/Edge run effects + MapChangedRunEvent); open a hidden path /
+collapse a bridge from an event/relic. Suite Run 295. Optional not-done: exposing the branching map in the Studio
+UI when Studio comes off hold (node layout row/col coords were deferred to that phase).
 
 --- ORIGINAL PLAN (historical) ---
 
