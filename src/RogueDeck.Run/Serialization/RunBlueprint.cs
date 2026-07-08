@@ -58,4 +58,8 @@ public sealed record RunStart
     // Consumable definition ids the hero starts with (one instance each). Granted at run start from the content
     // catalog (unknown ids skipped); each id should be defined in the blueprint's Consumables.
     public IReadOnlyList<string> StartingConsumables { get; init; } = [];
+
+    // The persistent player-controlled board units the run begins with (P5c). Seeded into RunState.Units at run
+    // start and projected into each fight's player team. Empty (the default) ⇒ today's single-hero run.
+    public IReadOnlyList<RunUnitData> StartingUnits { get; init; } = [];
 }

@@ -107,6 +107,50 @@ public class RunBlueprintTests
     }
 
     [Fact]
+    public void StartingUnits_round_trip_and_seed_the_run_roster()
+    {
+        var blueprint = Demo() with
+        {
+            Start = new RunStart
+            {
+                StartingUnits = new[]
+                {
+                    new RunUnitData(
+                        DefinitionId: "board.knight",
+                        DisplayNameKey: "unit.knight",
+                        MaxHealth: 25,
+                        Position: new CombatPosition(0, 1),
+                        StartingStatuses: new[] { new StatusGrant(new StatusDefinitionId("board.creature"), Stacks: 1) }),
+                },
+            },
+        };
+
+        var back = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(blueprint, Options), Options);
+
+        var data = Assert.Single(back.Start.StartingUnits);
+        Assert.Equal("board.knight", data.DefinitionId);
+        Assert.Equal(25, data.MaxHealth);
+        Assert.Equal(new CombatPosition(0, 1), data.Position);
+        Assert.Equal("board.creature", Assert.Single(data.StartingStatuses).StatusDefinitionId.value);
+
+        // Seeded into RunState.Units at full HP with the carried position + statuses.
+        var run = back.CreateInitialRun(new RunId("t"), randomSeed: 1);
+        var unit = Assert.Single(run.Units);
+        Assert.Equal("board.knight", unit.DefinitionId.value);
+        Assert.Equal(25, unit.Health.Current);
+        Assert.Equal(25, unit.Health.Max);
+        Assert.Equal(new CombatPosition(0, 1), unit.Position);
+        Assert.Equal("board.creature", Assert.Single(unit.Statuses).StatusDefinitionId.value);
+    }
+
+    [Fact]
+    public void A_run_with_no_starting_units_has_an_empty_roster()
+    {
+        var run = Demo().CreateInitialRun(new RunId("t"), randomSeed: 1);
+        Assert.Empty(run.Units);
+    }
+
+    [Fact]
     public void CombatResources_round_trip()
     {
         var blueprint = Demo() with

@@ -19,6 +19,8 @@ public sealed class RunState
     private readonly List<RewardModifierRegistration> _rewardModifiers = new();
     private readonly List<RunConsumable> _consumables = new();
     private int _nextConsumableSeq;
+    private readonly List<RunUnit> _units = new();
+    private int _nextUnitSeq;
     private readonly Queue<IRunEffectRequest> _effects = new();
     private readonly Queue<IRunEvent> _undispatched = new();
     private readonly List<IRunEvent> _history = new();
@@ -71,6 +73,8 @@ public sealed class RunState
     public IReadOnlyList<IRunCombatModifier> PendingCombatModifiers => _pendingCombatModifiers;
     public int ActiveRewardModifierCount => _rewardModifiers.Count;
     public IReadOnlyList<RunConsumable> Consumables => _consumables;
+    // The persistent player-controlled board roster (P5c). Empty ⇒ today's single-hero run.
+    public IReadOnlyList<RunUnit> Units => _units;
     public IReadOnlyList<IRunEvent> EventHistory => _history;
     public IReadOnlyList<RunLogEntry> Log => _log;
 
@@ -149,6 +153,33 @@ public sealed class RunState
         if (index < 0)
             return false;
         _consumables.RemoveAt(index);
+        return true;
+    }
+
+    // Field a persistent board unit into the roster from its authored data (P5c). Generates a deterministic
+    // instance id, seeds a fresh HealthState at full HP, and copies its starting position + statuses.
+    public RunUnit AddUnit(RunUnitData data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        var unit = new RunUnit(
+            new RunUnitInstanceId($"unit#{++_nextUnitSeq}"),
+            new Core.Combat.CombatantDefinitionId(data.DefinitionId),
+            data.DisplayNameKey,
+            new Core.Combat.HealthState(data.MaxHealth, data.MaxHealth),
+            data.Position,
+            data.StartingStatuses);
+        _units.Add(unit);
+        return unit;
+    }
+
+    public RunUnit? FindUnit(RunUnitInstanceId id) => _units.FirstOrDefault(u => u.Id == id);
+
+    public bool RemoveUnit(RunUnitInstanceId id)
+    {
+        var index = _units.FindIndex(u => u.Id == id);
+        if (index < 0)
+            return false;
+        _units.RemoveAt(index);
         return true;
     }
 

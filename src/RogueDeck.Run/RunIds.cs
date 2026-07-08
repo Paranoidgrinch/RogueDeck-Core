@@ -93,6 +93,12 @@ public readonly record struct ConsumableInstanceId(string Value)
     public override string ToString() => Value;
 }
 
+// A persistent player-controlled board unit carried across combats (P5c). One per live RunUnit in the roster.
+public readonly record struct RunUnitInstanceId(string Value)
+{
+    public override string ToString() => Value;
+}
+
 // The kind of a map node. A string-backed id (not an enum) so new node kinds can be added by any package
 // without touching the core — resolvers are registered against these values.
 public readonly record struct NodeType(string Value)

@@ -126,6 +126,13 @@ on its turn it strikes the enemy team. Full suite green (Core 1318).
 survivors reconcile back to the roster after the fight (extends today's hero-HP reconciliation to N units).
 `RunBlueprint` gains an optional starting roster; RunJson round-trips it. Absent ⇒ today's single-hero run.
 
+- **P5c-1 — roster data model + storage + seeding + serialization. ✅ DONE.** `RunUnitData` (authored: def id,
+  name, max HP, optional position, `StartingStatuses` reusing P5b's `StatusGrant`) + `RunUnit` (live carried state:
+  a `HealthState`, position, statuses) + `RunUnitInstanceId`. `RunState` holds the roster (`Units`, `AddUnit` /
+  `FindUnit` / `RemoveUnit`, deterministic `unit#N` ids). `RunStart.StartingUnits` (init-only, default empty)
+  round-trips through RunJson and is seeded into `RunState.Units` at full HP by `RunSetup`. Absent ⇒ empty roster =
+  today's single-hero run. Run 239 green. **P5c-2 (combat projection + reconciliation) next** — no combat wiring yet.
+
 **P5d — Unit control model + placement UX-agnostic hooks.** Decide per-unit control: auto (intent-driven, for
 Monster Train / Inscryption) vs directed (player chooses the target/lane). Default auto (reuses intents); a
 directed hook via the existing `IRunEntityChooser` / combat-driver interaction points if a game needs it. Engine
