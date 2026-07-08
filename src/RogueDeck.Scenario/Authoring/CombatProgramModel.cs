@@ -260,6 +260,17 @@ public static class CombatProgramModel
         ("highestHealthEnemy", CombatantTargetSelectors.HighestHealthEnemyOfSource),
         ("lowestHealthAlly", CombatantTargetSelectors.LowestHealthAllyOfSource),
         ("highestHealthAlly", CombatantTargetSelectors.HighestHealthAllyOfSource),
+        // Positional (2D-grid) selectors (P1) — resolve to nothing in a flat (position-less) combat, so they are
+        // inert unless content places combatants on the grid.
+        ("adjacent", CombatantTargetSelectors.AdjacentToSource),
+        ("sameColumn", CombatantTargetSelectors.SameColumnAsSource),
+        ("sameRow", CombatantTargetSelectors.SameRowAsSource),
+        ("allInColumn", CombatantTargetSelectors.AllInSourceColumn),
+        ("allInRow", CombatantTargetSelectors.AllInSourceRow),
+        ("frontmostEnemy", CombatantTargetSelectors.FrontmostEnemyOfSource),
+        ("backmostEnemy", CombatantTargetSelectors.BackmostEnemyOfSource),
+        ("nearestEnemy", CombatantTargetSelectors.NearestEnemyOfSource),
+        ("opposingInColumn", CombatantTargetSelectors.OpposingInColumn),
     ];
 
     public static IEnumerable<string> SelectorKeys => Selectors.Select(s => s.Key);
@@ -270,6 +281,8 @@ public static class CombatProgramModel
     public static readonly IReadOnlyList<string> SingleTargetSelectorKeys =
     [
         "eventTarget", "source", "lowestHealthEnemy", "highestHealthEnemy", "lowestHealthAlly", "highestHealthAlly",
+        // Positional single-target selectors (P1) — each resolves to at most one combatant.
+        "frontmostEnemy", "backmostEnemy", "nearestEnemy",
     ];
 
     private static ICombatantTargetSelector SelectorFor(string key) =>

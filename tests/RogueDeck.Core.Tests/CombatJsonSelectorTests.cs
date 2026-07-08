@@ -49,4 +49,19 @@ public class CombatJsonSelectorTests
         var json = CombatJson.ToJson<ICombatantTargetSelector>(new EventTargetCombatantTargetSelector(), Options);
         Assert.Contains("\"kind\": \"sel.eventTarget\"", json);
     }
+
+    // P1: the positional (2D-grid) selectors are registered alongside the existing ones and round-trip.
+    [Fact]
+    public void Positional_selectors_round_trip()
+    {
+        RoundTrips(new AdjacentToSourceCombatantTargetSelector());
+        RoundTrips(new SameColumnAsSourceCombatantTargetSelector());
+        RoundTrips(new SameRowAsSourceCombatantTargetSelector());
+        RoundTrips(new AllInSourceColumnCombatantTargetSelector());
+        RoundTrips(new AllInSourceRowCombatantTargetSelector());
+        RoundTrips(new FrontmostEnemyOfSourceCombatantTargetSelector());
+        RoundTrips(new BackmostEnemyOfSourceCombatantTargetSelector());
+        RoundTrips(new NearestEnemyOfSourceCombatantTargetSelector());
+        RoundTrips(new OpposingInColumnCombatantTargetSelector());
+    }
 }

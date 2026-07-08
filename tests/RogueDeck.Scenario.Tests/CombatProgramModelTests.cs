@@ -402,6 +402,48 @@ public class CombatProgramModelTests
         Assert.Equal(body, Assert.Single(repeat.ChildrenOrEmpty));
     }
 
+    // ── P1: positional (2D-grid) selectors in the authoring catalog ─────────────────
+
+    [Fact]
+    public void Positional_selectors_are_in_the_authoring_catalog()
+    {
+        foreach (var key in new[]
+        {
+            "adjacent", "sameColumn", "sameRow", "allInColumn", "allInRow",
+            "frontmostEnemy", "backmostEnemy", "nearestEnemy", "opposingInColumn",
+        })
+        {
+            Assert.Contains(key, CombatProgramModel.SelectorKeys);
+        }
+
+        // The three single-target positional selectors are also valid as scalar condition reads.
+        foreach (var key in new[] { "frontmostEnemy", "backmostEnemy", "nearestEnemy" })
+            Assert.Contains(key, CombatProgramModel.SingleTargetSelectorKeys);
+    }
+
+    [Fact]
+    public void Positional_selector_leaf_round_trips_through_build_and_classify()
+    {
+        // A deal-damage leaf targeting the front of the enemy line — the P1 vocabulary flowing through the editor.
+        var model = new CombatNodeModel("dealDamage", "frontmostEnemy", CombatAmountSpec.FromConst(6));
+
+        var program = CombatProgramModel.Build<CardPlayContext>(model);
+
+        Assert.Same(CombatantTargetSelectors.FrontmostEnemyOfSource,
+            Assert.IsType<DealDamageNode<CardPlayContext>>(program.Root).TargetSelector);
+        Assert.Equal(model, CombatProgramModel.Classify(program));
+    }
+
+    [Fact]
+    public void Positional_single_target_condition_round_trips()
+    {
+        var spec = new CombatConditionSpec("compare", "frontmostEnemy", "currentHealth", ComparisonOperator.LessOrEqual, 8);
+
+        var built = CombatProgramModel.BuildCondition<CardPlayContext>(spec);
+
+        Assert.Equal(spec, CombatProgramModel.ClassifyCondition(built));
+    }
+
     [Fact]
     public void Classify_returns_null_for_conditional_with_advanced_condition()
     {

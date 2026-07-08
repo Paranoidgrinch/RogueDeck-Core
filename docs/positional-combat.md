@@ -51,11 +51,17 @@ Semantics + choices:
 - A `CombatantMovedCombatEvent` type (unused yet) for P2/P3.
 - **Nothing reads Position yet** → whole suite unchanged. Safe foundation.
 
-**P1 — Positional targeting (selectors).** New `ICombatantTargetSelector`s (additive), each empty when combatants
-lack positions: `AdjacentToSource` (orthogonal distance 1; a diagonal variant later), `SameColumnAsSource` /
-`SameRowAsSource`, `FrontmostEnemy` / `BackmostEnemy` (team-relative along Y), `NearestEnemy` (min grid
-distance), `AllInSourceColumn` / `AllInSourceRow`, `OpposingInColumn`. Registered in CombatJson + the
-CombatProgramModel selector catalog (so they show in the visual editor). Resolution + "no-positions ⇒ empty" tests.
+**P1 — Positional targeting (selectors). ✅ DONE.** 9 new `ICombatantTargetSelector`s (additive, in
+`PositionalTargetSelectors.cs`), each resolving EMPTY when the source is unplaced and skipping any unplaced
+candidate: `AdjacentToSource` (Manhattan distance 1, any team), `SameColumnAsSource` / `SameRowAsSource` (same
+X / Y, excluding source), `AllInSourceColumn` / `AllInSourceRow` (same X / Y, INCLUDING source — a full line),
+`FrontmostEnemyOfSource` / `BackmostEnemyOfSource` (team-relative along Y via `PositionalTargeting.ForwardSign` —
+front = enemy end nearest the source's team; ties break by column then id), `NearestEnemyOfSource` (min Manhattan
+distance), `OpposingInColumn` (enemies sharing source's X — the lane-duel target). Registered in CombatJson
+(`sel.adjacent` … `sel.opposingInColumn`) + the CombatProgramModel catalog (all 9 in `Selectors`; the three
+single-target ones also in `SingleTargetSelectorKeys` for scalar condition reads). Tests: resolution on a canonical
+grid, team-relative mirror, unplaced-candidate skipping, "no-positions ⇒ empty" for every selector (source
+unplaced + source null), JSON round-trip, catalog membership + build↔classify. Full suite green (Core 1289).
 
 **P2 — Positional movement (effects).** New effect nodes (additive): `MoveTo(x,y)`, `MoveTowardEnemies` /
 `MoveAwayFromEnemies` (step along depth), `PushTarget` / `PullTarget` (move a target N along an axis),

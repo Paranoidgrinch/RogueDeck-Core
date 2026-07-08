@@ -200,7 +200,17 @@ public static class CombatJson
          .Register("sel.withStatus", typeof(CombatantsWithStatusTargetSelector))
          .Register("sel.alliesWithStatus", typeof(AllAlliesOfSourceWithStatusCombatantTargetSelector))
          .Register("sel.enemiesWithStatus", typeof(AllEnemiesOfSourceWithStatusCombatantTargetSelector))
-         .Register("sel.union", typeof(UnionCombatantTargetSelector));
+         .Register("sel.union", typeof(UnionCombatantTargetSelector))
+         // Positional (2D-grid) selectors (P1) — additive; resolve empty in a flat (position-less) combat.
+         .Register("sel.adjacent", typeof(AdjacentToSourceCombatantTargetSelector))
+         .Register("sel.sameColumn", typeof(SameColumnAsSourceCombatantTargetSelector))
+         .Register("sel.sameRow", typeof(SameRowAsSourceCombatantTargetSelector))
+         .Register("sel.allInColumn", typeof(AllInSourceColumnCombatantTargetSelector))
+         .Register("sel.allInRow", typeof(AllInSourceRowCombatantTargetSelector))
+         .Register("sel.frontmostEnemy", typeof(FrontmostEnemyOfSourceCombatantTargetSelector))
+         .Register("sel.backmostEnemy", typeof(BackmostEnemyOfSourceCombatantTargetSelector))
+         .Register("sel.nearestEnemy", typeof(NearestEnemyOfSourceCombatantTargetSelector))
+         .Register("sel.opposingInColumn", typeof(OpposingInColumnCombatantTargetSelector));
     }
 
     // Leaf native operation nodes (they hold a selector + expressions, no child nodes) plus the composite/

@@ -708,6 +708,44 @@ public static class CombatantTargetSelectors
     {
         return new DownedCombatantsTargetSelector(inner);
     }
+
+    // --- Positional (2D-grid) selectors (P1). All read the source's Position and resolve empty when unplaced. ---
+
+    // Living combatants orthogonally adjacent to the source (Manhattan distance 1), any team.
+    public static ICombatantTargetSelector AdjacentToSource { get; } =
+        new AdjacentToSourceCombatantTargetSelector();
+
+    // Living combatants in the source's column (same X), excluding the source.
+    public static ICombatantTargetSelector SameColumnAsSource { get; } =
+        new SameColumnAsSourceCombatantTargetSelector();
+
+    // Living combatants in the source's row (same Y), excluding the source.
+    public static ICombatantTargetSelector SameRowAsSource { get; } =
+        new SameRowAsSourceCombatantTargetSelector();
+
+    // Every living combatant in the source's column (same X), including the source — a full-lane line.
+    public static ICombatantTargetSelector AllInSourceColumn { get; } =
+        new AllInSourceColumnCombatantTargetSelector();
+
+    // Every living combatant in the source's row (same Y), including the source — a full-row line.
+    public static ICombatantTargetSelector AllInSourceRow { get; } =
+        new AllInSourceRowCombatantTargetSelector();
+
+    // The single enemy at the front of the enemy team (team-relative along Y — nearest the source's team).
+    public static ICombatantTargetSelector FrontmostEnemyOfSource { get; } =
+        new FrontmostEnemyOfSourceCombatantTargetSelector();
+
+    // The single enemy at the back of the enemy team (team-relative along Y — furthest from the source's team).
+    public static ICombatantTargetSelector BackmostEnemyOfSource { get; } =
+        new BackmostEnemyOfSourceCombatantTargetSelector();
+
+    // The single enemy at the smallest grid (Manhattan) distance from the source.
+    public static ICombatantTargetSelector NearestEnemyOfSource { get; } =
+        new NearestEnemyOfSourceCombatantTargetSelector();
+
+    // Every living enemy sharing the source's column (same X) — the enemies "across the lane".
+    public static ICombatantTargetSelector OpposingInColumn { get; } =
+        new OpposingInColumnCombatantTargetSelector();
 }
 
 
