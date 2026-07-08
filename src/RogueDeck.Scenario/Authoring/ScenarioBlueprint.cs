@@ -43,6 +43,11 @@ public sealed class ScenarioBlueprint
     // unchanged.
     public bool CellExclusive { get; set; }
 
+    // Opt-in party rule (party deckbuilding A2): when true, each team's members take their turn SIMULTANEOUSLY
+    // (whole team gets TurnStarted at once, each ends independently), driven by SimultaneousTurnProcessor. Default
+    // false ⇒ round-robin, unchanged.
+    public bool SimultaneousTeamTurns { get; set; }
+
     public CompiledScenario Compile()
     {
         if (Hero is null)
@@ -84,7 +89,7 @@ public sealed class ScenarioBlueprint
 
         ValidateReferences(registry);
 
-        return new CompiledScenario(registry, intents, Hero, Enemies, Allies, CellExclusive);
+        return new CompiledScenario(registry, intents, Hero, Enemies, Allies, CellExclusive, SimultaneousTeamTurns);
     }
 
     private void ValidateReferences(CombatDefinitionRegistry registry)
@@ -117,13 +122,17 @@ public sealed class CompiledScenario
     // Whether the fight enforces one-combatant-per-cell (opt-in; default off).
     public bool CellExclusive { get; }
 
+    // Whether each team's members take their turn simultaneously (opt-in; default off ⇒ round-robin).
+    public bool SimultaneousTeamTurns { get; }
+
     internal CompiledScenario(
         CombatDefinitionRegistry registry,
         IReadOnlyDictionary<EnemyActionDefinitionId, ActionIntent> intents,
         HeroBlueprint hero,
         IReadOnlyList<EnemyBlueprint> enemies,
         IReadOnlyList<AllyBlueprint>? allies = null,
-        bool cellExclusive = false)
+        bool cellExclusive = false,
+        bool simultaneousTeamTurns = false)
     {
         Registry = registry;
         Intents = intents;
@@ -131,6 +140,7 @@ public sealed class CompiledScenario
         Enemies = enemies;
         Allies = allies ?? [];
         CellExclusive = cellExclusive;
+        SimultaneousTeamTurns = simultaneousTeamTurns;
     }
 
     public ActionIntent? IntentFor(EnemyActionDefinitionId actionId) =>
