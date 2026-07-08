@@ -76,9 +76,15 @@ public sealed class SummonCombatantEffectHandler : EffectRequestHandler<SummonCo
             id, request.DefinitionId, request.DisplayNameKey, request.TeamId,
             new HealthState(current: request.MaxHealth, max: request.MaxHealth));
 
-        // Place the summon on the grid if requested (silent — placement, not a movement event).
-        if (request.Position is { } position)
+        // Place the summon on the grid if requested (silent — placement, not a movement event). Under the opt-in
+        // cell-exclusivity rule, a summon onto an already-occupied cell is left unplaced rather than double-stacked.
+        if (request.Position is { } position
+            && !(combat.CellExclusive && combat.IsCellOccupied(position)))
             summoned.SetPosition(position);
+        else if (request.Position is { } blocked && combat.CellExclusive)
+            combat.AddLogEntry(
+                StandardCombatLogTypes.MovementBlocked,
+                $"Summon '{id}' placement at {blocked} blocked: cell occupied; summoned unplaced.");
 
         combat.AddCombatant(summoned);
 

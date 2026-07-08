@@ -10,7 +10,7 @@ internal static class ScenarioCombatFactory
 {
     public static CombatState Build(CompiledScenario compiled, string combatId, int randomSeed)
     {
-        var combat = new CombatState(new CombatId(combatId), randomSeed);
+        var combat = new CombatState(new CombatId(combatId), randomSeed) { CellExclusive = compiled.CellExclusive };
 
         AddCombatant(combat, compiled.Hero, StandardCombatIds.PlayerTeam);
         // Fielded player-board units act right after the hero; enemies follow (positional combat P5c).

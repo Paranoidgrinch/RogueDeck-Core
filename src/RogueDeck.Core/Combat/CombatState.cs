@@ -32,6 +32,11 @@ public sealed class CombatState
 
     public int MaximumTriggerDepth { get; }
 
+    // Opt-in board rule: when true, at most one living combatant may stand on a grid cell — movement or summoning
+    // into an occupied cell is rejected. Default false ⇒ cells are non-exclusive, so flat and positional combats
+    // behave exactly as before (not part of the state hash/snapshot; it is immutable rule config, not gameplay state).
+    public bool CellExclusive { get; init; }
+
     public int RandomStep { get; private set; }
 
     // The definition registry this combat is running against. Bound when queue processing begins so
@@ -129,6 +134,12 @@ public sealed class CombatState
 
         return combatant is not null;
     }
+
+    // True when a living combatant (other than `excluding`) already occupies `cell`. Drives the opt-in
+    // cell-exclusivity rule: movement/summoning that would double-occupy a cell is rejected. Always false when
+    // CellExclusive is off, so callers can guard on the flag first.
+    public bool IsCellOccupied(CombatPosition cell, CombatantId? excluding = null) =>
+        _combatants.Any(c => c.IsAlive && c.Position == cell && (excluding is null || c.Id != excluding.Value));
 
     public CombatantCardZones GetCardZones(CombatantId combatantId)
     {

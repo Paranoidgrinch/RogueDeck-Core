@@ -38,6 +38,11 @@ public sealed class ScenarioBlueprint
     // hand; an editor/sandbox can raise it (e.g. to the whole deck) so every authored card is in hand.
     public int CardsDrawnPerTurn { get; set; } = 5;
 
+    // Opt-in board rule: when true, at most one living combatant may occupy a grid cell (movement/summoning into an
+    // occupied cell is rejected). Default false ⇒ cells are non-exclusive, so flat and positional combats are
+    // unchanged.
+    public bool CellExclusive { get; set; }
+
     public CompiledScenario Compile()
     {
         if (Hero is null)
@@ -79,7 +84,7 @@ public sealed class ScenarioBlueprint
 
         ValidateReferences(registry);
 
-        return new CompiledScenario(registry, intents, Hero, Enemies, Allies);
+        return new CompiledScenario(registry, intents, Hero, Enemies, Allies, CellExclusive);
     }
 
     private void ValidateReferences(CombatDefinitionRegistry registry)
@@ -109,18 +114,23 @@ public sealed class CompiledScenario
     public IReadOnlyList<EnemyBlueprint> Enemies { get; }
     public IReadOnlyList<AllyBlueprint> Allies { get; }
 
+    // Whether the fight enforces one-combatant-per-cell (opt-in; default off).
+    public bool CellExclusive { get; }
+
     internal CompiledScenario(
         CombatDefinitionRegistry registry,
         IReadOnlyDictionary<EnemyActionDefinitionId, ActionIntent> intents,
         HeroBlueprint hero,
         IReadOnlyList<EnemyBlueprint> enemies,
-        IReadOnlyList<AllyBlueprint>? allies = null)
+        IReadOnlyList<AllyBlueprint>? allies = null,
+        bool cellExclusive = false)
     {
         Registry = registry;
         Intents = intents;
         Hero = hero;
         Enemies = enemies;
         Allies = allies ?? [];
+        CellExclusive = cellExclusive;
     }
 
     public ActionIntent? IntentFor(EnemyActionDefinitionId actionId) =>

@@ -234,4 +234,79 @@ public class PositionalMovementTests
 
         Assert.Null(combat.GetCombatant(slot.Value!.SummonedCombatantId).Position);
     }
+
+    // ── Cell-exclusivity (opt-in board rule: one living combatant per cell) ────
+
+    private static CombatState ExclusiveHeroAndGoblin()
+    {
+        var combat = new CombatState(new CombatId("combat_excl"), randomSeed: 1) { CellExclusive = true };
+        combat.AddCombatant(new CombatantState(HeroId, new CombatantDefinitionId("standard.hero"),
+            "combatant.hero", StandardCombatIds.PlayerTeam, new HealthState(20, 20)));
+        combat.AddCombatant(new CombatantState(GoblinId, new CombatantDefinitionId("standard.goblin"),
+            "combatant.goblin", StandardCombatIds.EnemyTeam, new HealthState(12, 12)));
+        return combat;
+    }
+
+    [Fact]
+    public void CellExclusive_blocks_a_move_into_an_occupied_cell()
+    {
+        var registry = CombatTestFactory.CreateStandardRegistry();
+        var combat = ExclusiveHeroAndGoblin();
+        combat.GetCombatant(HeroId).SetPosition(new CombatPosition(1, 1));
+        combat.GetCombatant(GoblinId).SetPosition(new CombatPosition(1, 3));
+
+        combat.EnqueueEffect(new MoveCombatantEffectRequest(GoblinId, new CombatPosition(1, 1)));
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+
+        // Blocked: the goblin stays put and no CombatantMoved event is raised.
+        Assert.Equal(new CombatPosition(1, 3), combat.GetCombatant(GoblinId).Position);
+        Assert.Contains(combat.CombatLog, l => l.Type == StandardCombatLogTypes.MovementBlocked);
+        Assert.DoesNotContain(combat.CombatLog, l => l.Type == StandardCombatLogTypes.CombatantMoved);
+    }
+
+    [Fact]
+    public void CellExclusive_allows_a_move_into_an_empty_cell()
+    {
+        var registry = CombatTestFactory.CreateStandardRegistry();
+        var combat = ExclusiveHeroAndGoblin();
+        combat.GetCombatant(HeroId).SetPosition(new CombatPosition(1, 1));
+        combat.GetCombatant(GoblinId).SetPosition(new CombatPosition(1, 3));
+
+        combat.EnqueueEffect(new MoveCombatantEffectRequest(GoblinId, new CombatPosition(2, 2)));
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+
+        Assert.Equal(new CombatPosition(2, 2), combat.GetCombatant(GoblinId).Position);
+    }
+
+    [Fact]
+    public void Without_exclusivity_two_combatants_may_share_a_cell()
+    {
+        var registry = CombatTestFactory.CreateStandardRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin(); // CellExclusive defaults off
+        combat.GetCombatant(HeroId).SetPosition(new CombatPosition(1, 1));
+        combat.GetCombatant(GoblinId).SetPosition(new CombatPosition(1, 3));
+
+        combat.EnqueueEffect(new MoveCombatantEffectRequest(GoblinId, new CombatPosition(1, 1)));
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+
+        Assert.Equal(new CombatPosition(1, 1), combat.GetCombatant(GoblinId).Position); // stacked, allowed
+    }
+
+    [Fact]
+    public void CellExclusive_leaves_a_summon_onto_an_occupied_cell_unplaced()
+    {
+        var registry = CombatTestFactory.CreateStandardRegistry();
+        var combat = ExclusiveHeroAndGoblin();
+        combat.GetCombatant(HeroId).SetPosition(new CombatPosition(4, 2));
+
+        var slot = new SummonCombatantOutcomeSlot();
+        combat.EnqueueEffect(new SummonCombatantEffectRequest(
+            StandardCombatIds.EnemyTeam, MaxHealth: 10,
+            new CombatantDefinitionId("standard.goblin"), "combatant.goblin",
+            OutcomeSlot: slot, Position: new CombatPosition(4, 2)));
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+
+        Assert.Null(combat.GetCombatant(slot.Value!.SummonedCombatantId).Position);
+        Assert.Contains(combat.CombatLog, l => l.Type == StandardCombatLogTypes.MovementBlocked);
+    }
 }

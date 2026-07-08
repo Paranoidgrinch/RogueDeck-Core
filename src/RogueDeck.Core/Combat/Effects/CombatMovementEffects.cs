@@ -22,6 +22,16 @@ public sealed class MoveCombatantEffectHandler : EffectRequestHandler<MoveCombat
         if (from == request.Destination)
             return;
 
+        // Opt-in cell-exclusivity: a move into a cell already held by another living combatant is blocked (no-op,
+        // no CombatantMoved event) so the mover stays put. Off by default ⇒ cells stack, unchanged behavior.
+        if (combat.CellExclusive && combat.IsCellOccupied(request.Destination, excluding: request.CombatantId))
+        {
+            combat.AddLogEntry(
+                StandardCombatLogTypes.MovementBlocked,
+                $"Move of '{request.CombatantId}' to {request.Destination} blocked: cell occupied.");
+            return;
+        }
+
         combatant.SetPosition(request.Destination);
 
         combat.AddLogEntry(
