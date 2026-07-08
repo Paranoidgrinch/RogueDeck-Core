@@ -45,4 +45,24 @@ public sealed class RunMap
         ArgumentNullException.ThrowIfNull(nodes);
         Nodes = nodes;
     }
+
+    // ── Graph queries (pure; used by the runner's graph walk, the map validator, and a map UI) ────────────────
+
+    // The distinct successors of `from` in edge-declaration order — the nodes an edge leads to from `from`.
+    public IReadOnlyList<NodeId> SuccessorIds(NodeId from) =>
+        Edges.Where(edge => edge.From == from).Select(edge => edge.To).Distinct().ToList();
+
+    // The roots of the graph: nodes with no incoming edge. On a graph with no declared EntryNodeIds these are where
+    // a walk may begin. (A linear map, with no edges, treats every node as a root — callers guard on Edges first.)
+    public IReadOnlyList<NodeId> RootIds()
+    {
+        var hasIncoming = Edges.Select(edge => edge.To).ToHashSet();
+        return Nodes.Where(node => !hasIncoming.Contains(node.Id)).Select(node => node.Id).ToList();
+    }
+
+    public bool TryGetNode(NodeId id, out Node? node)
+    {
+        node = Nodes.FirstOrDefault(candidate => candidate.Id == id);
+        return node is not null;
+    }
 }

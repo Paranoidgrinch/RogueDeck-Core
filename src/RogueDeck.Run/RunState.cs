@@ -283,6 +283,21 @@ public sealed class RunState
 
     public bool HasVisited(NodeId nodeId) => _visitedNodes.Contains(nodeId);
 
+    // The fork currently offered on a branching map: the unvisited successors of the current node, in edge order.
+    // Empty on a linear map, before the walk starts, or at a leaf node. A map UI renders this as the choosable
+    // next steps; the runner uses it to drive the player's path pick.
+    public IReadOnlyList<Node> CurrentReachableNodes()
+    {
+        if (CurrentNodeId is not { } current || Map.Edges.Count == 0)
+            return [];
+
+        var reachable = new List<Node>();
+        foreach (var id in Map.SuccessorIds(current))
+            if (!HasVisited(id) && Map.TryGetNode(id, out var node))
+                reachable.Add(node!);
+        return reachable;
+    }
+
     // A deterministic, run-scoped random draw mirroring CombatRandom's hashing so a seed reproduces a run.
     public int NextRandom(int maxExclusive)
     {

@@ -97,10 +97,7 @@ public sealed class RunRunner
     // successor). A node with no such successor is a leaf — the boss / finish — and ends the run.
     private void WalkGraph(RunState run, NodeResolveContext context)
     {
-        var map = run.Map;
-        var byId = map.Nodes.ToDictionary(node => node.Id);
-
-        var entries = EntryNodes(map);
+        var entries = EntryNodes(run.Map);
         if (entries.Count == 0)
             return; // a map with edges but no reachable entry node has nothing to walk
 
@@ -114,7 +111,7 @@ public sealed class RunRunner
             if (!ResolveNode(run, context, current))
                 return;
 
-            var successors = ReachableUnvisited(map, byId, current, run);
+            var successors = run.CurrentReachableNodes();
             if (successors.Count == 0)
                 break; // leaf node: the run is complete
 
@@ -158,33 +155,19 @@ public sealed class RunRunner
     }
 
     // Where a graph walk may begin: the map's declared entry nodes, or — if none are declared — the roots (nodes
-    // with no incoming edge). Falls back to the first node if the graph names no root (defensive; B2 validates).
+    // with no incoming edge). Falls back to the first node if the graph names no root (defensive; RunMapValidator
+    // flags the malformed cases). Unknown declared entry ids are skipped.
     private static IReadOnlyList<Node> EntryNodes(RunMap map)
     {
-        if (map.EntryNodeIds.Count > 0)
-            return map.EntryNodeIds
-                .Where(id => map.Nodes.Any(node => node.Id == id))
-                .Select(id => map.Nodes.First(node => node.Id == id))
-                .ToList();
-
-        var hasIncoming = map.Edges.Select(edge => edge.To).ToHashSet();
-        var roots = map.Nodes.Where(node => !hasIncoming.Contains(node.Id)).ToList();
-        if (roots.Count > 0)
-            return roots;
+        var ids = map.EntryNodeIds.Count > 0 ? map.EntryNodeIds : map.RootIds();
+        var entries = ids
+            .Where(id => map.TryGetNode(id, out _))
+            .Select(id => map.Nodes.First(node => node.Id == id))
+            .ToList();
+        if (entries.Count > 0)
+            return entries;
         return map.Nodes.Count > 0 ? [map.Nodes[0]] : [];
     }
-
-    // The successors of `current` that are reachable by an edge and not yet visited — the fork offered to the
-    // player. Edge declaration order is preserved; duplicate targets collapse.
-    private static IReadOnlyList<Node> ReachableUnvisited(
-        RunMap map, IReadOnlyDictionary<NodeId, Node> byId, Node current, RunState run) =>
-        map.Edges
-            .Where(edge => edge.From == current.Id)
-            .Select(edge => edge.To)
-            .Distinct()
-            .Where(to => byId.ContainsKey(to) && !run.HasVisited(to))
-            .Select(to => byId[to])
-            .ToList();
 
     // Grant the hero's starting relics (RunState.StartingRelicIds, seeded from RunStart) now that content is
     // attached — resolving each id from the content catalog exactly as an event's "grant relic by id" does.
