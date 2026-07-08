@@ -1,5 +1,16 @@
 # Branching Run-Map
 
+**★ STATUS: ARC COMPLETE (2026-07-08).** All of B0–B4 done + committed. `RunMap` is now additively graph-shaped
+(`MapEdge` + `Edges`/`EntryNodeIds`); `RunRunner` walks a graph by player-chosen path (`WalkGraph`) while a linear
+map keeps the exact index loop byte-for-byte; `RunMapValidator` enforces a forward-only DAG with full reachability;
+`RunMapBuilder` + `LayeredMapGenerator` author graph maps (the latter a deterministic Slay-the-Spire act); worked
+examples drive real combat + event content end-to-end. Suite: Run 287 (+41 across the arc) / Scenario 512 / Sandbox
+121 / Core 1324, all green, `dotnet format` clean. Commits: B0 e17caa4 · B1 af8c393 · B2 08eb30a · B3 54b52e8 ·
+B4 7f9b4bc (plan @ 25c4cf1). Optional not-done: B5 map mutation (add/remove nodes/edges mid-run); exposing the
+branching map in the Studio UI when Studio comes off hold (node layout row/col coords were deferred to that phase).
+
+--- ORIGINAL PLAN (historical) ---
+
 **Status:** planned 2026-07-08 (not started). The next arc after positional-combat, chosen from a fresh
 gap-analysis: with positional combat + a persistent board done, the **branching run map** is the single
 remaining Tier-1 roguelike-deckbuilder structural gap. Every node *kind* it needs (combat / event / shop /
