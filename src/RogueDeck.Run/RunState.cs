@@ -36,6 +36,10 @@ public sealed class RunState
     // The primary member's HP pool — the historical single-hero accessor, delegating to member 0.
     public HealthState Health => Primary.Health;
 
+    // The run is defeated only when EVERY party member is down (party deckbuilding B2 — a downed member is out for
+    // the fight but the run continues while any member lives). For a single-hero run this is exactly "the hero died".
+    public bool IsPartyDefeated() => _party.All(member => member.Health.Current <= 0);
+
     public RunMap Map { get; private set; }
     public int Position { get; private set; } = -1;
 

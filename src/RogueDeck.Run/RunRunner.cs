@@ -136,7 +136,7 @@ public sealed class RunRunner
         _registry.GetResolver(node.Type).Resolve(context, node);
         _processor.ResolvePending(run, _registry);
 
-        if (run.Health.Current <= 0)
+        if (run.IsPartyDefeated())
         {
             run.SetResult(RunResult.Defeat);
             return false;

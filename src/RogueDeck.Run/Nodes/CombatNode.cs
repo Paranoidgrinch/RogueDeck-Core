@@ -160,6 +160,78 @@ public sealed class AutoPlayCombatDriver : ICombatDriver
     }
 }
 
+// Headless driver for a party fight (party deckbuilding B2): drives ALL player-team members through the
+// simultaneous phase via PartyCombat — each member auto-plays its whole hand at the first living enemy, then ends
+// its turn; when the last member ends, the enemy phase runs and a fresh player phase begins. For a non-party fight
+// (SimultaneousTeamTurns off) it delegates to AutoPlayCombatDriver, so it is a safe superset the run can always use.
+public sealed class PartyAutoPlayCombatDriver : ICombatDriver
+{
+    private readonly int _maxRounds;
+
+    public PartyAutoPlayCombatDriver(int maxRounds = 200)
+    {
+        if (maxRounds <= 0)
+            throw new ArgumentOutOfRangeException(nameof(maxRounds));
+        _maxRounds = maxRounds;
+    }
+
+    public CombatDriveResult Drive(Playthrough playthrough)
+    {
+        ArgumentNullException.ThrowIfNull(playthrough);
+
+        var compiled = playthrough.Blueprint.Compile();
+        if (!compiled.SimultaneousTeamTurns)
+            return new AutoPlayCombatDriver(_maxRounds).Drive(playthrough);
+
+        var party = new PartyCombat(
+            compiled, CyclingEnemyIntent(compiled), playthrough.CombatId, playthrough.RandomSeed);
+
+        var rounds = 0;
+        while (!party.IsOver && rounds++ < _maxRounds)
+        {
+            var members = party.ActiveMembers();
+            if (members.Count == 0)
+                break;
+
+            foreach (var memberId in members.ToArray())
+            {
+                foreach (var card in party.HandOf(memberId).ToArray())
+                {
+                    party.PlayCard(memberId, card.Id, FirstAliveEnemy(party.State, compiled));
+                    if (party.IsOver)
+                        break;
+                }
+                if (party.IsOver)
+                    break;
+                party.EndTurn(memberId); // ending the last living member runs the enemy phase + next player phase
+            }
+        }
+
+        var heroId = compiled.Hero.CombatantId;
+        var heroHp = party.State.TryGetCombatant(heroId, out var hero) && hero is not null ? hero.Health.Current : 0;
+        return new CombatDriveResult(
+            party.Result, heroHp, UnitDriveResults.Read(party.State, playthrough.Blueprint.Allies));
+    }
+
+    private static Func<CombatantId, int, EnemyActionDefinitionId?> CyclingEnemyIntent(CompiledScenario compiled)
+    {
+        var actionsByEnemy = compiled.Enemies.ToDictionary(e => e.CombatantId, e => e.Actions);
+        return (enemyId, round) =>
+            actionsByEnemy.TryGetValue(enemyId, out var actions) && actions.Count > 0
+                ? actions[(round - 1) % actions.Count]
+                : null;
+    }
+
+    private static CombatantId? FirstAliveEnemy(CombatState state, CompiledScenario compiled)
+    {
+        foreach (var enemy in compiled.Enemies)
+            if (state.TryGetCombatant(enemy.CombatantId, out var combatant)
+                && combatant is not null && combatant.Health.Current > 0)
+                return enemy.CombatantId;
+        return null;
+    }
+}
+
 public sealed class CombatNodeResolver : INodeResolver
 {
     private readonly ICombatDriver _driver;
@@ -192,6 +264,7 @@ public sealed class CombatNodeResolver : INodeResolver
 
         var result = _driver.Drive(playthrough);
         ReconcileUnits(run, result);
+        ReconcileParty(run, result);
         var damageTaken = Math.Max(0, before - result.HeroHpRemaining);
 
         // Reconcile the fight onto the run HP pool, then announce the outcome for relics to react to.
@@ -284,6 +357,20 @@ public sealed class CombatNodeResolver : INodeResolver
         // are consumed here so each affects exactly one fight.
         foreach (var modifier in run.ConsumePendingCombatModifiers())
             modifier.Apply(blueprint, run);
+    }
+
+    // Reconcile the party after the fight (party deckbuilding B2): each additional member (projected as an ally)
+    // carries its remaining HP back onto its PartyMember. A downed member (0 HP) is kept in the party — out for the
+    // fight, but the run continues as long as any member lives. Member 0 (the hero) reconciles via HeroHpRemaining.
+    private static void ReconcileParty(RunState run, CombatDriveResult result)
+    {
+        if (run.Party.Count <= 1 || result.Units is not { Count: > 0 } unitResults)
+            return;
+
+        var byId = unitResults.ToDictionary(u => u.Id.value);
+        foreach (var member in run.Party.Skip(1))
+            if (byId.TryGetValue(member.Id.Value, out var res))
+                member.Health.SetCurrent(Math.Clamp(res.HpRemaining, 0, member.Health.Max));
     }
 
     // Reconcile the fielded units back onto the run roster after the fight: survivors carry their remaining HP and
