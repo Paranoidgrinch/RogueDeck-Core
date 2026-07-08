@@ -63,6 +63,13 @@ public readonly record struct RunCardInstanceId(string Value)
     public override string ToString() => Value;
 }
 
+// Identifies one player character in the run's party (party deckbuilding B1). A single-hero run has one member
+// ("member#0", the primary); a party has up to four, each with its own health/deck/resources/relics/consumables.
+public readonly record struct RunMemberId(string Value)
+{
+    public override string ToString() => Value;
+}
+
 // A run-side tag on a card instance (e.g. "cursed", "scarred"). Open like the other run ids so content owns
 // its vocabulary. Kept distinct from any combat-layer tag — a run tag is metadata on the persistent copy.
 public readonly record struct RunCardTagId(string Value)

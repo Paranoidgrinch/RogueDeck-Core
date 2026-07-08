@@ -8,16 +8,17 @@ namespace RogueDeck.Run;
 // event bus (raised events are recorded for inspection and dispatched to relics by RunEffectProcessor).
 public sealed class RunState
 {
-    private readonly Dictionary<RunResourceId, int> _resources = new();
-    private readonly List<RunCardInstance> _deck = new();
+    // The run's party (party deckbuilding B1). A single-hero run has one member (the primary); the historical
+    // single-hero accessors below delegate to it, so existing runs are unchanged. Card/consumable instance ids are
+    // generated here (run-scoped) so they stay unique across the whole party.
+    private readonly List<PartyMember> _party = new();
+    private int _nextMemberSeq;
     private int _nextCardSeq;
-    private readonly List<RelicInstance> _relics = new();
     private readonly List<InstalledRunProgram> _installedPrograms = new();
     private readonly HashSet<RunFlagId> _flags = new();
     private readonly Dictionary<RunCounterId, int> _counters = new();
     private readonly List<IRunCombatModifier> _pendingCombatModifiers = new();
     private readonly List<RewardModifierRegistration> _rewardModifiers = new();
-    private readonly List<RunConsumable> _consumables = new();
     private int _nextConsumableSeq;
     private readonly List<RunUnit> _units = new();
     private int _nextUnitSeq;
@@ -27,7 +28,14 @@ public sealed class RunState
     private readonly List<RunLogEntry> _log = new();
 
     public RunId Id { get; }
-    public HealthState Health { get; }
+
+    // The party (party deckbuilding B1). Primary is member 0 — the historical single hero.
+    public IReadOnlyList<PartyMember> Party => _party;
+    public PartyMember Primary => _party[0];
+
+    // The primary member's HP pool — the historical single-hero accessor, delegating to member 0.
+    public HealthState Health => Primary.Health;
+
     public RunMap Map { get; private set; }
     public int Position { get; private set; } = -1;
 
@@ -71,15 +79,15 @@ public sealed class RunState
     // A selector context bound to this run and its chooser — what effect handlers pass to selectors.
     public RunEvalContext SelectorContext => new(this, chooser: EntityChooser);
 
-    public IReadOnlyDictionary<RunResourceId, int> Resources => _resources;
-    public IReadOnlyList<RunCardInstance> Deck => _deck;
-    public IReadOnlyList<RelicInstance> Relics => _relics;
+    public IReadOnlyDictionary<RunResourceId, int> Resources => Primary.Resources;
+    public IReadOnlyList<RunCardInstance> Deck => Primary.Deck;
+    public IReadOnlyList<RelicInstance> Relics => Primary.Relics;
     public IReadOnlyList<InstalledRunProgram> InstalledPrograms => _installedPrograms;
     public IReadOnlyCollection<RunFlagId> Flags => _flags;
     public IReadOnlyDictionary<RunCounterId, int> Counters => _counters;
     public IReadOnlyList<IRunCombatModifier> PendingCombatModifiers => _pendingCombatModifiers;
     public int ActiveRewardModifierCount => _rewardModifiers.Count;
-    public IReadOnlyList<RunConsumable> Consumables => _consumables;
+    public IReadOnlyList<RunConsumable> Consumables => Primary.Consumables;
     // The persistent player-controlled board roster (P5c). Empty ⇒ today's single-hero run.
     public IReadOnlyList<RunUnit> Units => _units;
     public IReadOnlyList<IRunEvent> EventHistory => _history;
@@ -91,77 +99,50 @@ public sealed class RunState
         ArgumentNullException.ThrowIfNull(map);
 
         Id = id;
-        Health = health;
+        _party.Add(new PartyMember(new RunMemberId($"member#{_nextMemberSeq++}"), health));
         Map = map;
         RandomSeed = randomSeed;
+    }
+
+    // Add another player character to the party (party deckbuilding B1). Its HP pool is seeded here; its deck /
+    // resources / relics / consumables are populated through the run's normal effects, scoped to this member.
+    public PartyMember AddPartyMember(HealthState health)
+    {
+        ArgumentNullException.ThrowIfNull(health);
+        var member = new PartyMember(new RunMemberId($"member#{_nextMemberSeq++}"), health);
+        _party.Add(member);
+        return member;
     }
 
     // ── Setup / mutation (used by effect handlers and node resolvers) ──────────────
 
     // Adds a fresh copy of a card kind to the deck and returns the created instance. Instance ids are minted
     // from a run-scoped sequence so a replayed run reproduces them.
-    public RunCardInstance AddDeckCard(CardDefinitionId card)
-    {
-        var instance = new RunCardInstance(new RunCardInstanceId($"card#{++_nextCardSeq}"), card);
-        _deck.Add(instance);
-        return instance;
-    }
+    // ── Single-hero accessors (delegate to the primary member; run-scoped instance ids stay here) ──────────────
 
-    // Removes a specific card copy by instance id; returns whether one was removed.
-    public bool RemoveDeckCard(RunCardInstanceId id)
-    {
-        var index = _deck.FindIndex(c => c.Id == id);
-        if (index < 0)
-            return false;
-        _deck.RemoveAt(index);
-        return true;
-    }
+    public RunCardInstance AddDeckCard(CardDefinitionId card) =>
+        Primary.AddDeckCard(new RunCardInstance(new RunCardInstanceId($"card#{++_nextCardSeq}"), card));
 
-    public int GetResource(RunResourceId resource) =>
-        _resources.TryGetValue(resource, out var value) ? value : 0;
+    public bool RemoveDeckCard(RunCardInstanceId id) => Primary.RemoveDeckCard(id);
 
-    public void SetResource(RunResourceId resource, int amount) =>
-        _resources[resource] = Math.Max(0, amount);
+    public int GetResource(RunResourceId resource) => Primary.GetResource(resource);
 
-    public void AddRelic(RelicInstance relic)
-    {
-        ArgumentNullException.ThrowIfNull(relic);
-        _relics.Add(relic);
-    }
+    public void SetResource(RunResourceId resource, int amount) => Primary.SetResource(resource, amount);
 
-    // Removes the first relic with this id; returns whether one was removed.
-    public bool RemoveRelic(RelicId id)
-    {
-        var index = _relics.FindIndex(r => r.Id == id);
-        if (index < 0)
-            return false;
-        _relics.RemoveAt(index);
-        return true;
-    }
+    public void AddRelic(RelicInstance relic) => Primary.AddRelic(relic);
 
-    public RelicInstance? FindRelic(RelicId id) => _relics.FirstOrDefault(r => r.Id == id);
+    public bool RemoveRelic(RelicId id) => Primary.RemoveRelic(id);
 
-    // Adds a consumable copy to the inventory and returns it (instance id from a run-scoped sequence).
+    public RelicInstance? FindRelic(RelicId id) => Primary.FindRelic(id);
+
     public RunConsumable AddConsumable(
-        ConsumableId definition, IReadOnlyList<IRunEffectRequest> useEffects, RelicCombatRule? combatUse = null)
-    {
-        var consumable = new RunConsumable(
-            new ConsumableInstanceId($"consumable#{++_nextConsumableSeq}"), definition, useEffects, combatUse);
-        _consumables.Add(consumable);
-        return consumable;
-    }
+        ConsumableId definition, IReadOnlyList<IRunEffectRequest> useEffects, RelicCombatRule? combatUse = null) =>
+        Primary.AddConsumable(new RunConsumable(
+            new ConsumableInstanceId($"consumable#{++_nextConsumableSeq}"), definition, useEffects, combatUse));
 
-    public RunConsumable? FindConsumable(ConsumableInstanceId id) =>
-        _consumables.FirstOrDefault(c => c.Id == id);
+    public RunConsumable? FindConsumable(ConsumableInstanceId id) => Primary.FindConsumable(id);
 
-    public bool RemoveConsumable(ConsumableInstanceId id)
-    {
-        var index = _consumables.FindIndex(c => c.Id == id);
-        if (index < 0)
-            return false;
-        _consumables.RemoveAt(index);
-        return true;
-    }
+    public bool RemoveConsumable(ConsumableInstanceId id) => Primary.RemoveConsumable(id);
 
     // Field a persistent board unit into the roster from its authored data (P5c). Generates a deterministic
     // instance id, seeds a fresh HealthState at full HP, and copies its starting position + statuses.
