@@ -54,7 +54,10 @@ public sealed record SummonCombatantEffectRequest(
     string DisplayNameKey,
     SummonCombatantOutcomeSlot? OutcomeSlot = null,
     // Optional grid cell to place the summon at (P2). Absent ⇒ the summon is unplaced (flat behavior).
-    CombatPosition? Position = null
+    CombatPosition? Position = null,
+    // Optional innate statuses the summon is born with (P5b) — e.g. an auto-action marker + keyword statuses for a
+    // fielded board unit. Applied (via the normal ApplyStatus pipeline) right after the combatant is created.
+    IReadOnlyList<StatusGrant>? StartingStatuses = null
 ) : IEffectRequest;
 
 public sealed class SummonCombatantEffectHandler : EffectRequestHandler<SummonCombatantEffectRequest>
@@ -85,6 +88,17 @@ public sealed class SummonCombatantEffectHandler : EffectRequestHandler<SummonCo
         combat.AddLogEntry(
             StandardCombatLogTypes.CombatantSummoned,
             $"Summoned '{id}' onto team '{request.TeamId}' with {request.MaxHealth} HP.");
+
+        // Grant innate statuses through the normal ApplyStatus pipeline (so interceptors/triggers see them), now
+        // that the combatant exists in the combat.
+        if (request.StartingStatuses is { Count: > 0 } grants)
+            foreach (var grant in grants)
+                combat.EnqueueEffect(new ApplyStatusEffectRequest(
+                    TargetCombatantId: id,
+                    StatusDefinitionId: grant.StatusDefinitionId,
+                    Stacks: grant.Stacks,
+                    DurationTurns: grant.DurationTurns,
+                    Charges: grant.Charges));
     }
 }
 

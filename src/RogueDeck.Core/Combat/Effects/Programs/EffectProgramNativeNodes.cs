@@ -735,6 +735,7 @@ public sealed class SummonCombatantNode<TContext> : ISummonCombatantNodeCore, IE
     public ICombatExpression<TContext, int> MaxHealth { get; }
     public EffectResultKey<SummonCombatantOutcome>? ResultKey { get; }
     public CombatPosition? Position { get; }
+    public IReadOnlyList<StatusGrant> StartingStatuses { get; }
 
     public IReadOnlyList<IEffectNode<TContext>> Children => [];
 
@@ -744,7 +745,8 @@ public sealed class SummonCombatantNode<TContext> : ISummonCombatantNodeCore, IE
         CombatantDefinitionId definitionId,
         string displayNameKey,
         EffectResultKey<SummonCombatantOutcome>? resultKey = null,
-        CombatPosition? position = null)
+        CombatPosition? position = null,
+        IReadOnlyList<StatusGrant>? startingStatuses = null)
     {
         ArgumentNullException.ThrowIfNull(maxHealth);
         if (string.IsNullOrWhiteSpace(displayNameKey))
@@ -756,6 +758,7 @@ public sealed class SummonCombatantNode<TContext> : ISummonCombatantNodeCore, IE
         DisplayNameKey = displayNameKey;
         ResultKey = resultKey;
         Position = position;
+        StartingStatuses = startingStatuses ?? [];
     }
 
     public ProducedResult? GetProducedResult() =>

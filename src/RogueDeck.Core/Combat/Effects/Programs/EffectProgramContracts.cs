@@ -333,6 +333,8 @@ public interface ISummonCombatantNodeCore : INativeEffectOperationNode
     EffectResultKey<SummonCombatantOutcome>? ResultKey { get; }
     // Optional grid cell to place the summon at (P2). Absent ⇒ unplaced.
     CombatPosition? Position => null;
+    // Optional innate statuses the summon is born with (P5b). Empty ⇒ none.
+    IReadOnlyList<StatusGrant> StartingStatuses => [];
     Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(SummonCombatantEffectRequest);
 }
 

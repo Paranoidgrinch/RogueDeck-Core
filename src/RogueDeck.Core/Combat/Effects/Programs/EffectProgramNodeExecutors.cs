@@ -1237,7 +1237,8 @@ internal sealed class SummonCombatantNodeExecutor : IEffectNodeExecutor
         var slot = typed.ResultKey is not null ? new SummonCombatantOutcomeSlot() : null;
 
         combat.EnqueueEffect(new SummonCombatantEffectRequest(
-            typed.TeamId, maxHealth, typed.DefinitionId, typed.DisplayNameKey, slot, typed.Position));
+            typed.TeamId, maxHealth, typed.DefinitionId, typed.DisplayNameKey, slot, typed.Position,
+            typed.StartingStatuses));
 
         if (typed.ResultKey is { } key && slot is not null)
         {

@@ -1,5 +1,14 @@
 ﻿namespace RogueDeck.Core.Combat;
 
+// A serializable "apply this status" grant — the data half of an ApplyStatusEffectRequest without a target. Used to
+// give a combatant innate statuses at creation (e.g. a summoned board unit is born with its auto-action marker and
+// keyword statuses). Additive: nothing consumes it unless content supplies it.
+public sealed record StatusGrant(
+    StatusDefinitionId StatusDefinitionId,
+    int Stacks = 0,
+    int DurationTurns = 0,
+    int Charges = 0);
+
 public sealed record ApplyStatusEffectRequest(
     CombatantId TargetCombatantId,
     StatusDefinitionId StatusDefinitionId,

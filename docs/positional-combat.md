@@ -112,8 +112,14 @@ Proven by `PlayerBoardUnitsTests.cs`: a fielded player unit takes its turn (hero
 enemy team while the enemy strikes the player team; multiple player units each act. No Core change needed; full
 suite green (Core 1316).
 
-**P5b — Cards that field units onto the board (deck→board).** A card/effect that summons a unit at a position on
-the player team with a given action set (P2's summon-at-position + P5a's acting units). "Play a creature card."
+**P5b — Cards that field units onto the board (deck→board). ✅ DONE.** One additive engine primitive: a summon can
+be born with innate statuses. `StatusGrant(StatusDefinitionId, Stacks, DurationTurns, Charges)` record +
+`SummonCombatantEffectRequest.StartingStatuses` (handler applies them via the normal ApplyStatus pipeline right
+after creation) + `SummonCombatantNode.StartingStatuses` (core/node/executor/serialization). A "creature card" is
+then just `SummonCombatantNode(PlayerTeam, hp, def, pos, startingStatuses: [marker])` — the summon-at-position (P2)
+gives placement, the marker + a registered TurnStarted rule (P5a) gives auto-action. `FieldUnitCardTests.cs` proves
+the whole loop: a played card summons a player unit at its cell carrying the marker, it enters the turn order, and
+on its turn it strikes the enemy team. Full suite green (Core 1318).
 
 **P5c — Run-level unit roster + run↔combat persistence.** A run holds an optional roster of player units
 (definition + carried state: HP, statuses, position). Projected into each combat's player team at start;

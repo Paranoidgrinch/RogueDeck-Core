@@ -144,4 +144,23 @@ public class CombatJsonNodeTests
         Assert.Equal(new CombatPosition(4, 2),
             Assert.IsType<SummonCombatantNode<CardPlayContext>>(back).Position);
     }
+
+    [Fact]
+    public void SummonCombatant_node_round_trips_its_starting_statuses()
+    {
+        IEffectNode<CardPlayContext> node = new SummonCombatantNode<CardPlayContext>(
+            StandardCombatIds.PlayerTeam, Const(30),
+            new CombatantDefinitionId("board.creature"), "combatant.creature",
+            startingStatuses: [new StatusGrant(new StatusDefinitionId("board.creature"), Stacks: 1, DurationTurns: 2)]);
+
+        var json1 = CombatJson.ToJson(node, Options);
+        var back = CombatJson.FromJson<IEffectNode<CardPlayContext>>(json1, Options);
+
+        Assert.Equal(json1, CombatJson.ToJson(back, Options));
+        var summon = Assert.IsType<SummonCombatantNode<CardPlayContext>>(back);
+        var grant = Assert.Single(summon.StartingStatuses);
+        Assert.Equal("board.creature", grant.StatusDefinitionId.value);
+        Assert.Equal(1, grant.Stacks);
+        Assert.Equal(2, grant.DurationTurns);
+    }
 }
