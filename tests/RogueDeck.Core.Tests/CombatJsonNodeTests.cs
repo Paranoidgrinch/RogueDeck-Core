@@ -72,4 +72,76 @@ public class CombatJsonNodeTests
         var deal = Assert.IsType<DealDamageNode<CardPlayContext>>(back.Root);
         Assert.Equal(6, Assert.IsType<ConstantExpression<CardPlayContext>>(deal.Amount).Value);
     }
+
+    // ── P2: positional movement nodes ─────────────────────────────────────────
+
+    [Fact]
+    public void MoveCombatant_absolute_node_round_trips_its_mode_and_coordinates()
+    {
+        IEffectNode<CardPlayContext> node = new MoveCombatantNode<CardPlayContext>(
+            new SourceCombatantTargetSelector(), MovementMode.ToAbsolute, x: Const(3), y: Const(5));
+
+        var json1 = CombatJson.ToJson(node, Options);
+        var back = CombatJson.FromJson<IEffectNode<CardPlayContext>>(json1, Options);
+
+        Assert.Equal(json1, CombatJson.ToJson(back, Options));
+        var move = Assert.IsType<MoveCombatantNode<CardPlayContext>>(back);
+        Assert.Equal(MovementMode.ToAbsolute, move.Mode);
+        Assert.Equal(3, Assert.IsType<ConstantExpression<CardPlayContext>>(move.X).Value);
+        Assert.Equal(5, Assert.IsType<ConstantExpression<CardPlayContext>>(move.Y).Value);
+        Assert.Null(move.Step);
+    }
+
+    [Fact]
+    public void MoveCombatant_relative_nodes_round_trip_their_step()
+    {
+        foreach (var mode in new[]
+        {
+            MovementMode.TowardEnemies, MovementMode.AwayFromEnemies,
+            MovementMode.PushFromSource, MovementMode.PullToSource,
+        })
+        {
+            IEffectNode<CardPlayContext> node = new MoveCombatantNode<CardPlayContext>(
+                new AllEnemiesOfSourceCombatantTargetSelector(), mode, step: Const(2));
+
+            var json = CombatJson.ToJson(node, Options);
+            var backNode = CombatJson.FromJson<IEffectNode<CardPlayContext>>(json, Options);
+
+            Assert.Equal(json, CombatJson.ToJson(backNode, Options));
+            var back = Assert.IsType<MoveCombatantNode<CardPlayContext>>(backNode);
+            Assert.Equal(mode, back.Mode);
+            Assert.Equal(2, Assert.IsType<ConstantExpression<CardPlayContext>>(back.Step).Value);
+        }
+    }
+
+    [Fact]
+    public void SwapPositions_node_round_trips_both_selectors()
+    {
+        IEffectNode<CardPlayContext> node = new SwapPositionsNode<CardPlayContext>(
+            new SourceCombatantTargetSelector(), new AllEnemiesOfSourceCombatantTargetSelector());
+
+        var json1 = CombatJson.ToJson(node, Options);
+        var back = CombatJson.FromJson<IEffectNode<CardPlayContext>>(json1, Options);
+
+        Assert.Equal(json1, CombatJson.ToJson(back, Options));
+        var swap = Assert.IsType<SwapPositionsNode<CardPlayContext>>(back);
+        Assert.IsType<SourceCombatantTargetSelector>(swap.FirstSelector);
+        Assert.IsType<AllEnemiesOfSourceCombatantTargetSelector>(swap.SecondSelector);
+    }
+
+    [Fact]
+    public void SummonCombatant_node_round_trips_an_optional_position()
+    {
+        IEffectNode<CardPlayContext> node = new SummonCombatantNode<CardPlayContext>(
+            StandardCombatIds.EnemyTeam, Const(10),
+            new CombatantDefinitionId("standard.goblin"), "combatant.goblin",
+            position: new CombatPosition(4, 2));
+
+        var json1 = CombatJson.ToJson(node, Options);
+        var back = CombatJson.FromJson<IEffectNode<CardPlayContext>>(json1, Options);
+
+        Assert.Equal(json1, CombatJson.ToJson(back, Options));
+        Assert.Equal(new CombatPosition(4, 2),
+            Assert.IsType<SummonCombatantNode<CardPlayContext>>(back).Position);
+    }
 }

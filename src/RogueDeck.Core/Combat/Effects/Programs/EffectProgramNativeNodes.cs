@@ -734,6 +734,7 @@ public sealed class SummonCombatantNode<TContext> : ISummonCombatantNodeCore, IE
     public string DisplayNameKey { get; }
     public ICombatExpression<TContext, int> MaxHealth { get; }
     public EffectResultKey<SummonCombatantOutcome>? ResultKey { get; }
+    public CombatPosition? Position { get; }
 
     public IReadOnlyList<IEffectNode<TContext>> Children => [];
 
@@ -742,7 +743,8 @@ public sealed class SummonCombatantNode<TContext> : ISummonCombatantNodeCore, IE
         ICombatExpression<TContext, int> maxHealth,
         CombatantDefinitionId definitionId,
         string displayNameKey,
-        EffectResultKey<SummonCombatantOutcome>? resultKey = null)
+        EffectResultKey<SummonCombatantOutcome>? resultKey = null,
+        CombatPosition? position = null)
     {
         ArgumentNullException.ThrowIfNull(maxHealth);
         if (string.IsNullOrWhiteSpace(displayNameKey))
@@ -753,6 +755,7 @@ public sealed class SummonCombatantNode<TContext> : ISummonCombatantNodeCore, IE
         DefinitionId = definitionId;
         DisplayNameKey = displayNameKey;
         ResultKey = resultKey;
+        Position = position;
     }
 
     public ProducedResult? GetProducedResult() =>
@@ -763,6 +766,92 @@ public sealed class SummonCombatantNode<TContext> : ISummonCombatantNodeCore, IE
 
     int ISummonCombatantNodeCore.EvaluateMaxHealth(IEffectExecutionContextCore ctx, CombatState combat) =>
         MaxHealth.Evaluate((EffectExecutionContext<TContext>)ctx, combat);
+}
+
+// Positional movement (P2): moves the target combatant(s) on the grid. The destination per target is derived from
+// Mode — ToAbsolute uses the X/Y expressions, the depth-axis modes use Step. Enqueues a MoveCombatantEffectRequest
+// per target; no result outcome.
+public sealed class MoveCombatantNode<TContext> : IMoveCombatantNodeCore, IEffectNode<TContext>
+    where TContext : class
+{
+    public ICombatantTargetSelector TargetSelector { get; }
+    public IEnumerable<ICombatantTargetSelector> GetTargetSelectors() => [TargetSelector];
+    public MovementMode Mode { get; }
+    public ICombatExpression<TContext, int>? X { get; }
+    public ICombatExpression<TContext, int>? Y { get; }
+    public ICombatExpression<TContext, int>? Step { get; }
+
+    public IReadOnlyList<IEffectNode<TContext>> Children => [];
+
+    public MoveCombatantNode(
+        ICombatantTargetSelector targetSelector,
+        MovementMode mode,
+        ICombatExpression<TContext, int>? x = null,
+        ICombatExpression<TContext, int>? y = null,
+        ICombatExpression<TContext, int>? step = null)
+    {
+        ArgumentNullException.ThrowIfNull(targetSelector);
+
+        if (mode == MovementMode.ToAbsolute)
+        {
+            ArgumentNullException.ThrowIfNull(x);
+            ArgumentNullException.ThrowIfNull(y);
+        }
+        else
+        {
+            ArgumentNullException.ThrowIfNull(step);
+        }
+
+        TargetSelector = targetSelector;
+        Mode = mode;
+        X = x;
+        Y = y;
+        Step = step;
+    }
+
+    public IEnumerable<IResultKeyConsumer> GetExpressionConsumers()
+    {
+        IEnumerable<IResultKeyConsumer> consumers = [];
+        if (X is not null)
+            consumers = consumers.Concat(X.GetAllConsumers());
+        if (Y is not null)
+            consumers = consumers.Concat(Y.GetAllConsumers());
+        if (Step is not null)
+            consumers = consumers.Concat(Step.GetAllConsumers());
+        return consumers;
+    }
+
+    (int X, int Y) IMoveCombatantNodeCore.EvaluateAbsolute(IEffectExecutionContextCore ctx, CombatState combat)
+    {
+        var typedCtx = (EffectExecutionContext<TContext>)ctx;
+        return (X?.Evaluate(typedCtx, combat) ?? 0, Y?.Evaluate(typedCtx, combat) ?? 0);
+    }
+
+    int IMoveCombatantNodeCore.EvaluateStep(IEffectExecutionContextCore ctx, CombatState combat) =>
+        Step?.Evaluate((EffectExecutionContext<TContext>)ctx, combat) ?? 0;
+}
+
+// Positional movement (P2): swaps the grid cells of the first target of each selector. A no-op when either side is
+// absent or unplaced. Enqueues (up to) two MoveCombatantEffectRequests.
+public sealed class SwapPositionsNode<TContext> : ISwapPositionsNodeCore, IEffectNode<TContext>
+    where TContext : class
+{
+    public ICombatantTargetSelector FirstSelector { get; }
+    public ICombatantTargetSelector SecondSelector { get; }
+    public IEnumerable<ICombatantTargetSelector> GetTargetSelectors() => [FirstSelector, SecondSelector];
+
+    public IReadOnlyList<IEffectNode<TContext>> Children => [];
+
+    public SwapPositionsNode(
+        ICombatantTargetSelector firstSelector,
+        ICombatantTargetSelector secondSelector)
+    {
+        ArgumentNullException.ThrowIfNull(firstSelector);
+        ArgumentNullException.ThrowIfNull(secondSelector);
+
+        FirstSelector = firstSelector;
+        SecondSelector = secondSelector;
+    }
 }
 
 public sealed class SetCombatantLifecycleStateNode<TContext> : ISetCombatantLifecycleStateNodeCore, IEffectNode<TContext>

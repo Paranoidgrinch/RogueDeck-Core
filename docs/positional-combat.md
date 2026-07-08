@@ -63,10 +63,19 @@ single-target ones also in `SingleTargetSelectorKeys` for scalar condition reads
 grid, team-relative mirror, unplaced-candidate skipping, "no-positions ⇒ empty" for every selector (source
 unplaced + source null), JSON round-trip, catalog membership + build↔classify. Full suite green (Core 1289).
 
-**P2 — Positional movement (effects).** New effect nodes (additive): `MoveTo(x,y)`, `MoveTowardEnemies` /
-`MoveAwayFromEnemies` (step along depth), `PushTarget` / `PullTarget` (move a target N along an axis),
-`SwapPositions`; extend `SummonCombatant` with an optional target position. Raise `CombatantMovedCombatEvent`.
-Build↔classify + execution tests.
+**P2 — Positional movement (effects). ✅ DONE.** One core `MoveCombatantEffectRequest` + handler (sets Position,
+raises `CombatantMovedCombatEvent` only on an actual change, logs `CombatantMoved`) — every movement node reduces
+to it. A single mode-parameterized `MoveCombatantNode<TContext>` (`MovementMode`: `ToAbsolute` reads X/Y exprs;
+`TowardEnemies`/`AwayFromEnemies` step along depth via the mover's team-relative `ForwardSign`;
+`PushFromSource`/`PullToSource` step along the source→mover depth axis) + a `SwapPositionsNode<TContext>` (exchanges
+the first target of each selector). Geometry lives as testable statics in `PositionalTargeting`
+(`StepAlongDepthTowardEnemies`, `StepAlongDepthFromSource`) — depth (Y) axis only, X preserved; return null (→
+executor skips) when the move is undefined (unplaced mover / no enemy to orient toward). `SummonCombatant` gained an
+optional `Position` (request + node + core; silent placement, no move event). Registered additively: handler in
+StandardCombatPackage, executors in both registries, `node.moveCombatant`/`node.swapPositions` in CombatJson.
+NOT added to the CombatProgramModel visual catalog (Studio on hold) — movement is JSON-escape in the editor for
+now. Tests: handler (set/no-op/place), geometry, end-to-end played-card moves (MoveTo/Push/Swap/unplaced no-op),
+summon-at-position, JSON round-trip for every mode. Full suite green (Core 1305).
 
 **P3 — Positional reads & reactions.** A position expression (`CombatantCoordExpression` / "distance-to-front")
 usable in conditions and amounts ("the frontmost ally", "damage = your column"). Optional `Moved` / `EnteredCell`

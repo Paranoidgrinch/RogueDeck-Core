@@ -73,6 +73,8 @@ public sealed class EffectNodeExecutorRegistry
         r.RegisterOpenGeneric(typeof(CreateCardCopyNode<>), new CreateCardCopyNodeExecutor());
         r.RegisterOpenGeneric(typeof(ReplayCardProgramNode<>), new ReplayCardProgramNodeExecutor());
         r.RegisterOpenGeneric(typeof(SummonCombatantNode<>), new SummonCombatantNodeExecutor());
+        r.RegisterOpenGeneric(typeof(MoveCombatantNode<>), new MoveCombatantNodeExecutor());
+        r.RegisterOpenGeneric(typeof(SwapPositionsNode<>), new SwapPositionsNodeExecutor());
         r.RegisterOpenGeneric(typeof(SetCombatantLifecycleStateNode<>), new SetCombatantLifecycleStateNodeExecutor());
         r.RegisterOpenGeneric(typeof(ChangeCombatantTeamNode<>), new ChangeCombatantTeamNodeExecutor());
         r.RegisterOpenGeneric(typeof(ModifyResourceNode<>), new ModifyResourceNodeExecutor());
@@ -1235,7 +1237,7 @@ internal sealed class SummonCombatantNodeExecutor : IEffectNodeExecutor
         var slot = typed.ResultKey is not null ? new SummonCombatantOutcomeSlot() : null;
 
         combat.EnqueueEffect(new SummonCombatantEffectRequest(
-            typed.TeamId, maxHealth, typed.DefinitionId, typed.DisplayNameKey, slot));
+            typed.TeamId, maxHealth, typed.DefinitionId, typed.DisplayNameKey, slot, typed.Position));
 
         if (typed.ResultKey is { } key && slot is not null)
         {
@@ -1251,6 +1253,81 @@ internal sealed class SummonCombatantNodeExecutor : IEffectNodeExecutor
         {
             combat.EnqueueContinuation(onComplete);
         }
+    }
+}
+
+internal sealed class MoveCombatantNodeExecutor : IEffectNodeExecutor
+{
+    public void Execute(IEffectNode node, IEffectExecutionContextCore ctx, CombatState combat,
+        Action<CombatState>? onComplete, Action<IEffectNode, CombatState, Action<CombatState>?> dispatch)
+    {
+        var typed = (IMoveCombatantNodeCore)node;
+        var targetList = typed.TargetSelector.ResolveTargetsTraced(ctx, combat).ToList();
+
+        var (x, y) = typed.Mode == MovementMode.ToAbsolute ? typed.EvaluateAbsolute(ctx, combat) : (0, 0);
+        var step = typed.Mode == MovementMode.ToAbsolute ? 0 : typed.EvaluateStep(ctx, combat);
+
+        // Push/pull orient off the effect's source combatant; resolve it once.
+        CombatantState? source = null;
+        if (typed.Mode is MovementMode.PushFromSource or MovementMode.PullToSource
+            && ctx.BuildContext.Source.SourceCombatantId is { } sourceId)
+            combat.TryGetCombatant(sourceId, out source);
+
+        foreach (var targetId in targetList)
+        {
+            if (!combat.TryGetCombatant(targetId, out var target) || target!.Position is null)
+                continue;
+
+            CombatPosition? destination = typed.Mode switch
+            {
+                MovementMode.ToAbsolute => new CombatPosition(x, y),
+                MovementMode.TowardEnemies =>
+                    PositionalTargeting.StepAlongDepthTowardEnemies(combat, target, step, away: false),
+                MovementMode.AwayFromEnemies =>
+                    PositionalTargeting.StepAlongDepthTowardEnemies(combat, target, step, away: true),
+                MovementMode.PushFromSource => source is null
+                    ? null
+                    : PositionalTargeting.StepAlongDepthFromSource(target, source, step, pull: false),
+                MovementMode.PullToSource => source is null
+                    ? null
+                    : PositionalTargeting.StepAlongDepthFromSource(target, source, step, pull: true),
+                _ => null,
+            };
+
+            if (destination is { } dest)
+                combat.EnqueueEffect(new MoveCombatantEffectRequest(targetId, dest));
+        }
+
+        if (onComplete is not null)
+            combat.EnqueueContinuation(onComplete);
+    }
+}
+
+internal sealed class SwapPositionsNodeExecutor : IEffectNodeExecutor
+{
+    public void Execute(IEffectNode node, IEffectExecutionContextCore ctx, CombatState combat,
+        Action<CombatState>? onComplete, Action<IEffectNode, CombatState, Action<CombatState>?> dispatch)
+    {
+        var typed = (ISwapPositionsNodeCore)node;
+        var firstIds = typed.FirstSelector.ResolveTargetsTraced(ctx, combat).ToList();
+        var secondIds = typed.SecondSelector.ResolveTargetsTraced(ctx, combat).ToList();
+
+        if (firstIds.Count > 0 && secondIds.Count > 0)
+        {
+            var aId = firstIds[0];
+            var bId = secondIds[0];
+
+            if (aId != bId
+                && combat.TryGetCombatant(aId, out var a) && a!.Position is { } aPos
+                && combat.TryGetCombatant(bId, out var b) && b!.Position is { } bPos)
+            {
+                combat.EnqueueEffect(new MoveCombatantEffectRequest(aId, bPos));
+                combat.EnqueueEffect(new MoveCombatantEffectRequest(bId, aPos));
+            }
+        }
+
+        if (onComplete is not null)
+            combat.EnqueueContinuation(onComplete);
     }
 }
 

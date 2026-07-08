@@ -238,6 +238,9 @@ public static class CombatJson
          .Register("node.moveAllCardsFromZone", typeof(MoveAllCardsFromZoneNode<>))
          .Register("node.createCardInstance", typeof(CreateCardInstanceNode<>))
          .Register("node.summonCombatant", typeof(SummonCombatantNode<>))
+         // Positional movement nodes (P2).
+         .Register("node.moveCombatant", typeof(MoveCombatantNode<>))
+         .Register("node.swapPositions", typeof(SwapPositionsNode<>))
          .Register("node.setCombatantLifecycleState", typeof(SetCombatantLifecycleStateNode<>))
          .Register("node.changeCombatantTeam", typeof(ChangeCombatantTeamNode<>))
          .Register("node.setCombatResult", typeof(SetCombatResultNode<>))

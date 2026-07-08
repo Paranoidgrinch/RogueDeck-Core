@@ -51,6 +51,44 @@ internal static class PositionalTargeting
         int sign = Math.Sign(enemyTeamY - sourceTeamY);
         return sign == 0 ? 1 : sign;
     }
+
+    // --- Movement geometry (P2). All operate on the depth (Y) axis; X (lane) is preserved. Return null when the
+    // move is undefined (mover unplaced, or no enemy to orient toward) so the executor simply skips it. ---
+
+    // The mover's cell stepped `step` cells along the depth axis toward (away=false) or away from (away=true) its
+    // own enemy team, using the team-relative forward direction. Null when the mover is unplaced or has no
+    // positioned enemy to orient toward.
+    public static CombatPosition? StepAlongDepthTowardEnemies(CombatState combat, CombatantState mover, int step, bool away)
+    {
+        if (mover.Position is not { } pos)
+            return null;
+
+        var context = new CombatantTargetSelectionContext(combat, mover);
+        var enemies = PositionedEnemies(context, mover);
+        if (enemies.Count == 0)
+            return null;
+
+        int sign = ForwardSign(context, mover, enemies);
+        int dy = (away ? -sign : sign) * step;
+        return pos with { Y = pos.Y + dy };
+    }
+
+    // The mover's cell stepped `step` cells along the depth axis away from (pull=false, a push) or toward
+    // (pull=true) the source, where "away/toward" follows the source→mover depth direction. When the two share a
+    // depth (dir == 0) the axis is undefined, so +Y is used as the default push direction. Null when either is
+    // unplaced.
+    public static CombatPosition? StepAlongDepthFromSource(CombatantState mover, CombatantState source, int step, bool pull)
+    {
+        if (mover.Position is not { } pos || source.Position is not { } src)
+            return null;
+
+        int dir = Math.Sign(pos.Y - src.Y);
+        if (dir == 0)
+            dir = 1;
+
+        int dy = (pull ? -dir : dir) * step;
+        return pos with { Y = pos.Y + dy };
+    }
 }
 
 // Living combatants (excluding the source) orthogonally adjacent to it — Manhattan grid distance exactly 1.

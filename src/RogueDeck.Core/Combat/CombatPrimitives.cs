@@ -59,6 +59,20 @@ public enum StatusStackingBehavior
 // positional selectors/effects (added additively in later phases) are used by content.
 public readonly record struct CombatPosition(int X, int Y);
 
+// How a positional movement node (P2) computes its destination for each moved combatant. ToAbsolute reads two
+// coordinate expressions (X, Y); the other modes step a distance along the depth (Y) axis: TowardEnemies /
+// AwayFromEnemies use the mover's team-relative forward direction, PushFromSource / PullToSource use the
+// source→mover depth direction (push = away from the source, pull = toward it). All are opt-in and no-op for an
+// unplaced mover.
+public enum MovementMode
+{
+    ToAbsolute,
+    TowardEnemies,
+    AwayFromEnemies,
+    PushFromSource,
+    PullToSource,
+}
+
 public interface IEffectRequest
 {
 }

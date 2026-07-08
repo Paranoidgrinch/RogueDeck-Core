@@ -331,6 +331,8 @@ public interface ISummonCombatantNodeCore : INativeEffectOperationNode
     string DisplayNameKey { get; }
     int EvaluateMaxHealth(IEffectExecutionContextCore ctx, CombatState combat);
     EffectResultKey<SummonCombatantOutcome>? ResultKey { get; }
+    // Optional grid cell to place the summon at (P2). Absent ⇒ unplaced.
+    CombatPosition? Position => null;
     Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(SummonCombatantEffectRequest);
 }
 
@@ -352,6 +354,27 @@ public interface IChangeCombatantTeamNodeCore : INativeEffectOperationNode
     Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(ChangeCombatantTeamEffectRequest);
     // Team changes address a combatant by id regardless of living status (revive-and-convert).
     TargetEligibility INativeEffectOperationNode.TargetEligibility => TargetEligibility.AnyCombatantIncludingDowned;
+}
+
+// Moves its target combatant(s) on the 2D grid (P2). The destination per target is computed from the Mode:
+// ToAbsolute reads the X/Y coordinate expressions; the depth-axis modes read the Step expression. Produces a
+// MoveCombatantEffectRequest per target; no result outcome (movement yields no consumable value).
+public interface IMoveCombatantNodeCore : INativeEffectOperationNode
+{
+    ICombatantTargetSelector TargetSelector { get; }
+    MovementMode Mode { get; }
+    (int X, int Y) EvaluateAbsolute(IEffectExecutionContextCore ctx, CombatState combat);
+    int EvaluateStep(IEffectExecutionContextCore ctx, CombatState combat);
+    Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(MoveCombatantEffectRequest);
+}
+
+// Swaps the grid cells of the first target of each selector (P2). Enqueues two MoveCombatantEffectRequests; a
+// no-op when either side is missing or unplaced.
+public interface ISwapPositionsNodeCore : INativeEffectOperationNode
+{
+    ICombatantTargetSelector FirstSelector { get; }
+    ICombatantTargetSelector SecondSelector { get; }
+    Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(MoveCombatantEffectRequest);
 }
 
 public interface IPlayCardNodeCore : INativeEffectOperationNode

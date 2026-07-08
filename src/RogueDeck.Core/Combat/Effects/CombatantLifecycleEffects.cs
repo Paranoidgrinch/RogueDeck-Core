@@ -52,7 +52,9 @@ public sealed record SummonCombatantEffectRequest(
     int MaxHealth,
     CombatantDefinitionId DefinitionId,
     string DisplayNameKey,
-    SummonCombatantOutcomeSlot? OutcomeSlot = null
+    SummonCombatantOutcomeSlot? OutcomeSlot = null,
+    // Optional grid cell to place the summon at (P2). Absent ⇒ the summon is unplaced (flat behavior).
+    CombatPosition? Position = null
 ) : IEffectRequest;
 
 public sealed class SummonCombatantEffectHandler : EffectRequestHandler<SummonCombatantEffectRequest>
@@ -67,9 +69,15 @@ public sealed class SummonCombatantEffectHandler : EffectRequestHandler<SummonCo
                 nameof(request.MaxHealth), "Summoned combatant max health must be greater than zero.");
 
         var id = combat.CreateNextSummonedCombatantId();
-        combat.AddCombatant(new CombatantState(
+        var summoned = new CombatantState(
             id, request.DefinitionId, request.DisplayNameKey, request.TeamId,
-            new HealthState(current: request.MaxHealth, max: request.MaxHealth)));
+            new HealthState(current: request.MaxHealth, max: request.MaxHealth));
+
+        // Place the summon on the grid if requested (silent — placement, not a movement event).
+        if (request.Position is { } position)
+            summoned.SetPosition(position);
+
+        combat.AddCombatant(summoned);
 
         if (request.OutcomeSlot is { } slot)
             slot.Value = new SummonCombatantOutcome(id, request.TeamId, request.MaxHealth);

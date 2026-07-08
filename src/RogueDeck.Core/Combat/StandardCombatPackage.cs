@@ -94,6 +94,7 @@ public sealed class StandardCombatPackage : ICombatPackage
         registry.RegisterEffectRequestHandler(new ClearDefensivePoolEffectHandler());
         registry.RegisterEffectRequestHandler(new SetCombatantLifecycleStateEffectHandler());
         registry.RegisterEffectRequestHandler(new SummonCombatantEffectHandler());
+        registry.RegisterEffectRequestHandler(new MoveCombatantEffectHandler());
         registry.RegisterEffectRequestHandler(new ChangeCombatantTeamEffectHandler());
         registry.RegisterEffectRequestHandler(new SetCombatResultEffectHandler());
         registry.RegisterEffectRequestHandler(new PlayCardEffectHandler());
@@ -180,6 +181,8 @@ public sealed class StandardCombatPackage : ICombatPackage
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(CreateCardCopyNode<>), new CreateCardCopyNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(ReplayCardProgramNode<>), new ReplayCardProgramNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(SummonCombatantNode<>), new SummonCombatantNodeExecutor());
+        registry.RegisterEffectNodeExecutorOpenGeneric(typeof(MoveCombatantNode<>), new MoveCombatantNodeExecutor());
+        registry.RegisterEffectNodeExecutorOpenGeneric(typeof(SwapPositionsNode<>), new SwapPositionsNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(SetCombatantLifecycleStateNode<>), new SetCombatantLifecycleStateNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(ChangeCombatantTeamNode<>), new ChangeCombatantTeamNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(ModifyResourceNode<>), new ModifyResourceNodeExecutor());

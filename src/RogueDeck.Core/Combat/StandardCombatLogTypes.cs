@@ -45,6 +45,7 @@ public static class StandardCombatLogTypes
     public const string CombatantLifecycleChanged = "CombatantLifecycleChanged";
     public const string CombatantSummoned = "CombatantSummoned";
     public const string CombatantTeamChanged = "CombatantTeamChanged";
+    public const string CombatantMoved = "CombatantMoved";
     public const string CombatResultChanged = "CombatResultChanged";
 
     public const string TurnAutomationSuppressed = "TurnAutomationSuppressed";
