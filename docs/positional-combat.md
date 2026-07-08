@@ -157,9 +157,21 @@ for the unit against a player-chosen target (the same team-agnostic request enem
 lane/target (the test directs a strike at the BACK enemy, which the auto frontmost policy would never pick). No new
 turn engine, no combat-side chooser hook needed — directed control lives at the driver level. Core 1320 green.
 
-**P5e — Game-shape composition for board games.** Worked examples: a Monster-Train-style floor defense (field
-units, enemies ascend, units auto-fight) and an Inscryption-style lane board (creatures face across columns),
-end-to-end as data. Proves Part B against real games.
+**P5e — Game-shape composition for board games. ✅ DONE.** Two run→combat→run end-to-end worked examples
+(`PositionalBoardGameShapesTests.cs`) composing the whole Part B stack (run roster P5c + fielding P5c-2 + acting
+units P5a + spatial vocabulary P1/P2) with NO new engine code: **Monster Train** — a fielded defender holds the
+front lane, one-shotting the frontmost ascender each turn while a pyre-scoped rule advances the enemy column toward
+it; the fight is won and the defender persists into the roster. **Inscryption** — two fielded units, one per lane,
+each strike `OpposingInColumn` and clear the enemy across their column; both survive into the roster. Each drives a
+real AutoPlay combat and asserts `CombatResult.Victory` + roster reconciliation. Run 246 green.
+
+## ★★ ARC COMPLETE (P0–P5)
+Additive 2D positional combat + a persistent player-controlled board, both strictly opt-in — a flat, single-hero,
+position-less combat behaves byte-for-byte as before (all 6 non-constraint invariants held every phase; full
+pre-existing suite green throughout). Part A (P0–P4): grid substrate → 9 targeting selectors → movement effects +
+Moved event → positional reads + Moved trigger → game-shape validation. Part B (P5): acting player units (no engine
+code) → creature cards (summon StartingStatuses) → run roster + run↔combat persistence → control-model validation →
+board worked examples. Final suite: Core 1320 / Scenario 512 / Run 246 / Sandbox 121.
 
 ## What each phase unlocks
 - After **P1+P2:** front/back targeting, adjacency AoE, push/pull, lane/column effects — the positional combat
