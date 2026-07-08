@@ -138,7 +138,16 @@ survivors reconcile back to the roster after the fight (extends today's hero-HP 
   `InteractiveCombat.EndTurn` already loops every non-hero combatant (enemy-intent returns null for allies) and an
   ally auto-acts via its marker-TurnStarted rule (P5a) when its turn starts. `ScenarioAllyTests.cs`: a fielded ally
   joins the player team placed on the grid and auto-attacks the enemy on its own turn. Scenario 512 green.
-  **P5c-2b (run→combat projection + reconciliation) next.**
+- **P5c-2b — run→combat projection + reconciliation. ✅ DONE.** `CombatNodeResolver.ApplyRunProjection` now projects
+  each `RunState.Units` unit into `blueprint.Allies` with a stable id (its `RunUnitInstanceId`), carried HP
+  (`CurrentHealth` so wounds persist), grid cell, and innate statuses. `CombatDriveResult` gained
+  `IReadOnlyList<UnitDriveResult>` (id, hp, alive, position); both drivers fill it from the final `CombatState` for
+  each ally (`UnitDriveResults.Read`). After the drive, `ReconcileUnits` writes survivors' HP + cell back onto the
+  roster and removes the dead (innate statuses kept; transient combat statuses do not persist). Absent roster ⇒ no
+  allies, single-hero fight byte-identical. Tests (`CombatBridgeProjectionTests`): projection shape, no-roster ⇒ no
+  allies, survivor HP/cell carry-back, dead removed, and a full end-to-end where a fielded unit wins a REAL AutoPlay
+  combat (empty hero deck) and reconciles into the roster. Run 244 green. **★ P5c COMPLETE** (run↔combat unit
+  persistence). Next = P5d (control model) / P5e (board worked examples).
 
 **P5d — Unit control model + placement UX-agnostic hooks.** Decide per-unit control: auto (intent-driven, for
 Monster Train / Inscryption) vs directed (player chooses the target/lane). Default auto (reuses intents); a

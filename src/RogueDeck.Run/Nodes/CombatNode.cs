@@ -18,13 +18,43 @@ public sealed class CombatNodePayload
     }
 }
 
-public sealed record CombatDriveResult(CombatResult Result, int HeroHpRemaining);
+public sealed record CombatDriveResult(
+    CombatResult Result,
+    int HeroHpRemaining,
+    // Per-unit final state for each projected board unit (positional combat P5c), keyed by the ally combatant id.
+    // Null / empty ⇒ a single-hero fight; the resolver reconciles these back onto the run roster.
+    IReadOnlyList<UnitDriveResult>? Units = null);
+
+// The outcome of a fielded board unit after a fight: its remaining HP, whether it survived, and its final grid
+// cell — enough for the run→combat bridge to reconcile the survivor back onto RunState.Units (dead ⇒ removed).
+public sealed record UnitDriveResult(CombatantId Id, int HpRemaining, bool Alive, CombatPosition? Position);
 
 // Abstracts how a fight is actually played out, so the resolver doesn't care whether it was scripted or
 // driven by a live player. Slice 1 ships only the scripted driver; an interactive driver is a later wire-up.
 public interface ICombatDriver
 {
     CombatDriveResult Drive(Playthrough playthrough);
+}
+
+// Reads the final state of each projected board unit (the blueprint's allies) off a finished CombatState, so a
+// driver can report them for run↔combat reconciliation. A missing combatant reads as dead.
+internal static class UnitDriveResults
+{
+    public static IReadOnlyList<UnitDriveResult> Read(CombatState state, IReadOnlyList<AllyBlueprint> allies)
+    {
+        if (allies.Count == 0)
+            return [];
+
+        var results = new List<UnitDriveResult>(allies.Count);
+        foreach (var ally in allies)
+        {
+            if (state.TryGetCombatant(ally.CombatantId, out var c) && c is not null)
+                results.Add(new UnitDriveResult(ally.CombatantId, c.Health.Current, c.IsAlive, c.Position));
+            else
+                results.Add(new UnitDriveResult(ally.CombatantId, 0, Alive: false, Position: null));
+        }
+        return results;
+    }
 }
 
 // Runs the fight through the proven scenario harness (ScenarioRunner drives REAL turns) and reads the hero's
@@ -44,7 +74,8 @@ public sealed class ScriptedCombatDriver : ICombatDriver
             ? hero.Health.Current
             : 0;
 
-        return new CombatDriveResult(report.Result, remaining);
+        return new CombatDriveResult(
+            report.Result, remaining, UnitDriveResults.Read(report.FinalState, playthrough.Blueprint.Allies));
     }
 }
 
@@ -90,7 +121,8 @@ public sealed class AutoPlayCombatDriver : ICombatDriver
         var remaining = combat.State.TryGetCombatant(compiled.Hero.CombatantId, out var hero) && hero is not null
             ? hero.Health.Current
             : 0;
-        return new CombatDriveResult(combat.Result, remaining);
+        return new CombatDriveResult(
+            combat.Result, remaining, UnitDriveResults.Read(combat.State, playthrough.Blueprint.Allies));
     }
 
     // Each enemy acts the next action in its list, cycling by round (round is 1-based).
@@ -144,6 +176,7 @@ public sealed class CombatNodeResolver : INodeResolver
         var before = run.Health.Current;
 
         var result = _driver.Drive(playthrough);
+        ReconcileUnits(run, result);
         var damageTaken = Math.Max(0, before - result.HeroHpRemaining);
 
         // Reconcile the fight onto the run HP pool, then announce the outcome for relics to react to.
@@ -193,9 +226,47 @@ public sealed class CombatNodeResolver : INodeResolver
                 blueprint.TriggeredPrograms.Add(contribution);
         }
 
+        // Persistent board roster (P5c): project each carried unit into the fight as a player-team ally with a
+        // stable id (its RunUnitInstanceId), its carried HP (CurrentHealth so wounds persist), grid cell, and innate
+        // statuses. Absent roster ⇒ no allies added, single-hero fight unchanged.
+        foreach (var unit in run.Units)
+        {
+            var ally = new AllyBlueprint(unit.Id.Value)
+            {
+                MaxHealth = unit.Health.Max,
+                CurrentHealth = unit.Health.Current,
+                Position = unit.Position,
+            };
+            foreach (var grant in unit.Statuses)
+                ally.StartingStatuses.Add(new StartingStatusSpec(
+                    grant.StatusDefinitionId, grant.Stacks, grant.DurationTurns, grant.Charges));
+            blueprint.Allies.Add(ally);
+        }
+
         // Pending combat modifiers apply last so a "next fight" consequence can override the encounter, and
         // are consumed here so each affects exactly one fight.
         foreach (var modifier in run.ConsumePendingCombatModifiers())
             modifier.Apply(blueprint, run);
+    }
+
+    // Reconcile the fielded units back onto the run roster after the fight: survivors carry their remaining HP and
+    // final grid cell forward; the dead (or any unit no longer present) are removed from the roster. Innate roster
+    // statuses are kept as authored (transient combat statuses do not persist between fights).
+    private static void ReconcileUnits(RunState run, CombatDriveResult result)
+    {
+        if (result.Units is not { Count: > 0 } unitResults)
+            return;
+
+        var byId = unitResults.ToDictionary(u => u.Id.value);
+        foreach (var unit in run.Units.ToList())
+        {
+            if (!byId.TryGetValue(unit.Id.Value, out var res) || !res.Alive)
+            {
+                run.RemoveUnit(unit.Id);
+                continue;
+            }
+            unit.Health.SetCurrent(Math.Clamp(res.HpRemaining, 0, unit.Health.Max));
+            unit.SetPosition(res.Position);
+        }
     }
 }

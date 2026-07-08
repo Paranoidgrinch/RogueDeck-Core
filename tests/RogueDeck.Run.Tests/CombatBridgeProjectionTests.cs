@@ -102,6 +102,126 @@ public class CombatBridgeProjectionTests
             driver.Captured!.Hero!.Deck.Select(e => e.Card.ToString()).ToArray());
     }
 
+    // Drives nothing; reports the given per-unit results so reconciliation can be exercised deterministically.
+    private sealed class ReconcilingDriver : ICombatDriver
+    {
+        private readonly Func<IReadOnlyList<AllyBlueprint>, IReadOnlyList<UnitDriveResult>> _units;
+        public ReconcilingDriver(Func<IReadOnlyList<AllyBlueprint>, IReadOnlyList<UnitDriveResult>> units) => _units = units;
+
+        public CombatDriveResult Drive(Playthrough playthrough) => new(
+            CombatResult.Victory, playthrough.Blueprint.Hero!.CurrentHealth ?? 0, _units(playthrough.Blueprint.Allies));
+    }
+
+    private static RunState RunWithUnit(CombatPosition? position = null, int maxHp = 20)
+    {
+        var run = NewRun("strike");
+        run.AddUnit(new RunUnitData("board.knight", "unit.knight", maxHp, position,
+            new[] { new StatusGrant(new StatusDefinitionId("creature"), Stacks: 1) }));
+        return run;
+    }
+
+    private static void Drive(RunState run, ICombatDriver driver)
+    {
+        var resolver = new CombatNodeResolver(driver);
+        var node = new Node(new NodeId("fight"), StandardRunIds.CombatNode, new CombatNodePayload(BuildEncounter));
+        resolver.Resolve(Context(run, Registry()), node);
+    }
+
+    [Fact]
+    public void Bridge_projects_the_roster_into_the_fight_as_player_allies()
+    {
+        var run = RunWithUnit(new CombatPosition(0, 1), maxHp: 20);
+        var unitId = run.Units[0].Id.Value;
+        var driver = new CapturingDriver();
+
+        Drive(run, driver);
+
+        var ally = Assert.Single(driver.Captured!.Allies);
+        Assert.Equal(unitId, ally.Id);
+        Assert.Equal(20, ally.MaxHealth);
+        Assert.Equal(new CombatPosition(0, 1), ally.Position);
+        Assert.Contains(ally.StartingStatuses, s => s.Status.value == "creature");
+    }
+
+    [Fact]
+    public void A_run_with_no_roster_projects_no_allies()
+    {
+        var run = NewRun("strike");
+        var driver = new CapturingDriver();
+
+        Drive(run, driver);
+
+        Assert.Empty(driver.Captured!.Allies);
+    }
+
+    [Fact]
+    public void A_surviving_unit_carries_its_remaining_hp_and_cell_back_to_the_roster()
+    {
+        var run = RunWithUnit(new CombatPosition(0, 1), maxHp: 20);
+
+        Drive(run, new ReconcilingDriver(allies => allies
+            .Select(a => new UnitDriveResult(a.CombatantId, HpRemaining: 12, Alive: true, new CombatPosition(0, 2)))
+            .ToList()));
+
+        var unit = Assert.Single(run.Units);
+        Assert.Equal(12, unit.Health.Current);
+        Assert.Equal(20, unit.Health.Max);
+        Assert.Equal(new CombatPosition(0, 2), unit.Position);
+    }
+
+    [Fact]
+    public void A_dead_unit_is_removed_from_the_roster()
+    {
+        var run = RunWithUnit(maxHp: 20);
+
+        Drive(run, new ReconcilingDriver(allies => allies
+            .Select(a => new UnitDriveResult(a.CombatantId, HpRemaining: 0, Alive: false, Position: null))
+            .ToList()));
+
+        Assert.Empty(run.Units);
+    }
+
+    // An encounter whose combat content lets a fielded creature auto-attack: the marker status + a TurnStarted rule
+    // that makes marker-carriers strike the enemy. The hero has no deck, so only the projected ally can win.
+    private static Playthrough BuildBoardEncounter(RunState run)
+    {
+        var blueprint = new ScenarioBlueprint
+        {
+            Hero = new HeroBlueprint("knight") { MaxHealth = run.Health.Max, CurrentHealth = run.Health.Current },
+        };
+        blueprint.Hero.Resources.Add(new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3));
+        blueprint.Statuses.Add(new StatusBlueprint("creature"));
+        blueprint.Enemies.Add(new EnemyBlueprint("goblin") { MaxHealth = 5 });
+        blueprint.TriggeredPrograms.Add(
+            TriggeredProgramContextAdapters.TurnStarted.Define(
+                new TriggeredEffectDefinitionId("creature_attacks"),
+                new EffectProgram<TurnStartedTriggeredEffectContext>(
+                    new DealDamageNode<TurnStartedTriggeredEffectContext>(
+                        CombatantTargetSelectors.AllEnemiesOfSource,
+                        new ConstantExpression<TurnStartedTriggeredEffectContext>(99))),
+                filters: [new TurnStartedCombatantHasStatusTriggerFilter(new StatusDefinitionId("creature"))]));
+        return new Playthrough(blueprint, new ScenarioScript().Build(), combatId: "fight");
+    }
+
+    [Fact]
+    public void A_fielded_roster_unit_fights_a_real_combat_and_survives_into_the_roster()
+    {
+        // Empty hero deck: the win is entirely the projected ally's doing, driven by the real AutoPlay driver.
+        var run = new RunState(new RunId("run"), new HealthState(25, 30), new RunMap(Array.Empty<Node>()));
+        run.AddUnit(new RunUnitData("board.knight", "unit.knight", MaxHealth: 20,
+            Position: new CombatPosition(0, 1),
+            StartingStatuses: new[] { new StatusGrant(new StatusDefinitionId("creature"), Stacks: 1) }));
+
+        var resolver = new CombatNodeResolver(new AutoPlayCombatDriver());
+        var node = new Node(new NodeId("fight"), StandardRunIds.CombatNode, new CombatNodePayload(BuildBoardEncounter));
+
+        resolver.Resolve(Context(run, Registry()), node);
+
+        // The unit did the fighting and survived, so it is reconciled back into the roster (alive, HP intact).
+        var unit = Assert.Single(run.Units);
+        Assert.Equal(20, unit.Health.Current);
+    }
+
     [Fact]
     public void Relic_combat_contributions_are_injected_into_the_fight()
     {
