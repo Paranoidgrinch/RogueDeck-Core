@@ -173,3 +173,12 @@ public sealed class EnemyBlueprint : CombatantBlueprint
     public List<EnemyActionDefinitionId> Actions { get; } = new();
     public EnemyBlueprint(string id) : base(id, "enemy") { }
 }
+
+// A persistent player-controlled board unit fielded alongside the hero (positional combat P5c). It is added to the
+// PLAYER team and acts on its own turn through the existing machinery — typically a marker-status-filtered
+// TurnStarted-triggered program (the P5a auto-action), so it carries no action script of its own. The run→combat
+// bridge projects each roster unit into an AllyBlueprint (id + carried HP via CurrentHealth + position + statuses).
+public sealed class AllyBlueprint : CombatantBlueprint
+{
+    public AllyBlueprint(string id) : base(id, "ally") { }
+}

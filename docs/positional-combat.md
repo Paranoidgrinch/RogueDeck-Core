@@ -131,7 +131,14 @@ survivors reconcile back to the roster after the fight (extends today's hero-HP 
   a `HealthState`, position, statuses) + `RunUnitInstanceId`. `RunState` holds the roster (`Units`, `AddUnit` /
   `FindUnit` / `RemoveUnit`, deterministic `unit#N` ids). `RunStart.StartingUnits` (init-only, default empty)
   round-trips through RunJson and is seeded into `RunState.Units` at full HP by `RunSetup`. Absent ⇒ empty roster =
-  today's single-hero run. Run 239 green. **P5c-2 (combat projection + reconciliation) next** — no combat wiring yet.
+  today's single-hero run. Run 239 green. No combat wiring yet.
+- **P5c-2a — Scenario ally support. ✅ DONE.** `AllyBlueprint : CombatantBlueprint` + `ScenarioBlueprint.Allies` +
+  `CompiledScenario.Allies`; `ScenarioCombatFactory` adds allies on the PLAYER team (after the hero, before enemies)
+  with their position + starting statuses, reusing the generic combatant placement. No driver changes needed:
+  `InteractiveCombat.EndTurn` already loops every non-hero combatant (enemy-intent returns null for allies) and an
+  ally auto-acts via its marker-TurnStarted rule (P5a) when its turn starts. `ScenarioAllyTests.cs`: a fielded ally
+  joins the player team placed on the grid and auto-attacks the enemy on its own turn. Scenario 512 green.
+  **P5c-2b (run→combat projection + reconciliation) next.**
 
 **P5d — Unit control model + placement UX-agnostic hooks.** Decide per-unit control: auto (intent-driven, for
 Monster Train / Inscryption) vs directed (player chooses the target/lane). Default auto (reuses intents); a

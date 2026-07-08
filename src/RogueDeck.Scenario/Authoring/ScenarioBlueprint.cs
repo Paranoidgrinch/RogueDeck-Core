@@ -14,6 +14,11 @@ public sealed class ScenarioBlueprint
     public HeroBlueprint? Hero { get; set; }
     public List<EnemyBlueprint> Enemies { get; } = new();
 
+    // Persistent player-controlled board units fielded alongside the hero (positional combat P5c). Added to the
+    // player team; they act on their own turn via the existing machinery (typically a marker-TurnStarted rule).
+    // Empty (the default) ⇒ today's single-hero combat, unchanged.
+    public List<AllyBlueprint> Allies { get; } = new();
+
     // Pre-built triggered programs (e.g. a status that runs effects on an event). Registered as-is.
     public List<ITriggeredEffectDefinition> TriggeredPrograms { get; } = new();
 
@@ -74,7 +79,7 @@ public sealed class ScenarioBlueprint
 
         ValidateReferences(registry);
 
-        return new CompiledScenario(registry, intents, Hero, Enemies);
+        return new CompiledScenario(registry, intents, Hero, Enemies, Allies);
     }
 
     private void ValidateReferences(CombatDefinitionRegistry registry)
@@ -102,17 +107,20 @@ public sealed class CompiledScenario
     public IReadOnlyDictionary<EnemyActionDefinitionId, ActionIntent> Intents { get; }
     public HeroBlueprint Hero { get; }
     public IReadOnlyList<EnemyBlueprint> Enemies { get; }
+    public IReadOnlyList<AllyBlueprint> Allies { get; }
 
     internal CompiledScenario(
         CombatDefinitionRegistry registry,
         IReadOnlyDictionary<EnemyActionDefinitionId, ActionIntent> intents,
         HeroBlueprint hero,
-        IReadOnlyList<EnemyBlueprint> enemies)
+        IReadOnlyList<EnemyBlueprint> enemies,
+        IReadOnlyList<AllyBlueprint>? allies = null)
     {
         Registry = registry;
         Intents = intents;
         Hero = hero;
         Enemies = enemies;
+        Allies = allies ?? [];
     }
 
     public ActionIntent? IntentFor(EnemyActionDefinitionId actionId) =>

@@ -13,6 +13,9 @@ internal static class ScenarioCombatFactory
         var combat = new CombatState(new CombatId(combatId), randomSeed);
 
         AddCombatant(combat, compiled.Hero, StandardCombatIds.PlayerTeam);
+        // Fielded player-board units act right after the hero; enemies follow (positional combat P5c).
+        foreach (var ally in compiled.Allies)
+            AddCombatant(combat, ally, StandardCombatIds.PlayerTeam);
         foreach (var enemy in compiled.Enemies)
             AddCombatant(combat, enemy, StandardCombatIds.EnemyTeam);
 
@@ -28,6 +31,8 @@ internal static class ScenarioCombatFactory
         // Apply starting statuses through the real pipeline so merge/stacking semantics are honoured.
         var queues = new CombatQueueProcessor();
         ApplyStartingStatuses(combat, compiled.Registry, queues, compiled.Hero);
+        foreach (var ally in compiled.Allies)
+            ApplyStartingStatuses(combat, compiled.Registry, queues, ally);
         foreach (var enemy in compiled.Enemies)
             ApplyStartingStatuses(combat, compiled.Registry, queues, enemy);
 
