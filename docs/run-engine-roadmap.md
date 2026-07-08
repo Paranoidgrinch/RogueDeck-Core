@@ -3,9 +3,12 @@
 The run/meta layer above combat. Derived from the "Generic Run & Event Engine Design" idea document,
 reconciled with two standing principles:
 
-1. **Run engine = define events (combat is one kind) + run them SEQUENTIALLY.** Path arrangement
-   (branching/map graph) is a *separate future feature* that hands the engine a finished linear sequence.
-   Do not build branching into the run engine.
+1. **Run engine = define events (combat is one kind) + resolve them one at a time.** Path arrangement
+   (branching/map graph) is a *separate concern* kept out of node resolution. **Delivered (2026-07-08, the
+   branching-map arc B0–B5 — see `docs/branching-map.md`):** `RunMap` is additively graph-shaped and
+   `RunRunner` walks it by player-chosen path, but the principle held — only *which node comes next* generalized;
+   node *resolution* (resolvers/effects/relics/interlude) is untouched, and an edge-less map still walks
+   byte-for-byte linearly. So branching is a traversal overlay, not built *into* resolution.
 2. **Any event is composed from a general substrate** (like combat effects: EffectProgram/nodes). Archetypes
    are pure content with zero engine privilege.
 
@@ -20,9 +23,13 @@ reconciled with two standing principles:
   engine). Split: `Require` (visibility, hides choice) vs cost (affordability, disables choice).
 - **State vocabulary (flags/counters/memory) = generic key-value on `RunState`**, surfaced through the
   existing expression/effect vocabulary — not new subsystems.
-- **Map mutation & branching deferred** (idea doc §10.6 / RunMapMutationSystem): conflicts with principle 1.
-  "At next shop/elite/before boss" still works — the scheduler filters `NodeEntered` by node type along the
-  linear sequence.
+- **Map mutation & branching — DONE (2026-07-08, arc B0–B5; was deferred).** Landed as a separate map layer that
+  honors principle 1: `MapEdge` + `RunMap.Edges`/`EntryNodeIds`; graph traversal in `RunRunner.WalkGraph`;
+  `RunMapValidator` (forward-only DAG + reachability); `RunMapBuilder` + `LayeredMapGenerator` (deterministic
+  Slay-the-Spire act); and mid-run mutation (idea doc §10.6 / RunMapMutationSystem) via `RunState.Add/RemoveMap
+  Node`/`Edge` + serializable `Add/RemoveMapNode/Edge` effects + `MapChangedRunEvent`. The scheduler's "at next
+  shop/elite/before boss" (filter `NodeEntered` by node type) still works, now along a chosen path rather than a
+  fixed sequence.
 - **Quests / rival runs / deck-as-dungeon are content**, buildable once counters, flags, scheduler, memory
   and selectors exist.
 
@@ -60,8 +67,8 @@ event DSL (`EventScript`/`Situation`/`Choice` + resolvers); relic = run-level tr
 
 ## Deferred (needs foundations that do not exist yet)
 
-Map mutation / branching (separate map feature); a dedicated quest layer (model via counters/flags/scheduler
-first); pure-content ideas (rival run, deck-as-dungeon, living-deck events, etc.).
+A dedicated quest layer (model via counters/flags/scheduler first); pure-content ideas (rival run,
+deck-as-dungeon, living-deck events, etc.). ~~Map mutation / branching~~ — **done** (arc B0–B5, see above).
 
 ## Status
 
@@ -78,7 +85,11 @@ first); pure-content ideas (rival run, deck-as-dungeon, living-deck events, etc.
   profiles carried to H.
 - Phase H: done — H1 reward offers + OfferRewardRunEffect (chooser picks; pool generation); H2 reward
   modifiers with a lifetime (reshape future rewards, expire after N).
+- Branching map (arc B0–B5, 2026-07-08; plan `docs/branching-map.md`): done — graph-shaped `RunMap` +
+  `RunRunner` graph traversal + `RunMapValidator` + `RunMapBuilder`/`LayeredMapGenerator` + mid-run map mutation.
+  Strictly additive; a linear map is byte-for-byte unchanged.
 
-**Phases A–H complete.** The run engine covers: generalized trigger substrate, flags/counters, scheduler,
-costs, expression/effect vocabulary, card instances + selectors, combat bridge, and rewards. Deferred (needs
-its own foundations): map mutation / branching, a dedicated quest layer, and pure-content event designs.
+**Phases A–H + the branching map complete.** The run engine covers: generalized trigger substrate,
+flags/counters, scheduler, costs, expression/effect vocabulary, card instances + selectors, combat bridge,
+rewards, and a branching/mutable map with player path choice. Still deferred (needs its own foundations): a
+dedicated quest layer and pure-content event designs.
