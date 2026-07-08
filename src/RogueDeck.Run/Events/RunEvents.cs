@@ -12,6 +12,10 @@ public sealed record RunStartedRunEvent(RunId RunId) : IRunEvent;
 
 public sealed record NodeEnteredRunEvent(NodeId NodeId, NodeType NodeType) : IRunEvent;
 
+// Raised on a branching map when the player (or the deterministic default) picks which node to walk to next —
+// including the initial entry node. NodeId is the chosen node. Never raised on a linear map (no forks).
+public sealed record NodeChosenRunEvent(NodeId NodeId) : IRunEvent;
+
 // Raised once a combat node has been driven to a terminal CombatResult. DamageTaken is the run HP the hero
 // actually lost in the fight (the bridge already reconciled it onto RunState before this fires).
 public sealed record CombatResolvedRunEvent(

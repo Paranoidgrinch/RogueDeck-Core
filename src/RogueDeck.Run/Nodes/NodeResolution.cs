@@ -51,6 +51,12 @@ public sealed record NodeOutcome(string Summary);
 public interface IRunChoiceProvider
 {
     EventChoice Choose(EventSituation situation, IReadOnlyList<EventChoice> available, RunState run);
+
+    // Pick which node to walk to next on a branching map (B1), among the reachable candidates — also used to pick
+    // the initial entry node when a map declares several. The default is a deterministic first-candidate pick
+    // (headless runs / providers that don't route); an interactive provider overrides to ask the player. Never
+    // called for a linear map. `candidates` is always non-empty.
+    NodeId ChooseNextNode(IReadOnlyList<Node> candidates, RunState run) => candidates[0].Id;
 }
 
 // Deterministic provider for tests/replays: picks choices by id in a fixed order, falling back to the first
@@ -83,4 +89,20 @@ public sealed class ScriptedChoiceProvider : IRunChoiceProvider, IRunEntityChoos
 
     public IReadOnlyList<T> ChooseEntities<T>(IReadOnlyList<T> candidates, int count, string purpose) =>
         candidates.Take(count).ToArray();
+
+    // Routes a branching map by scripted node id: consumes the same id queue as event choices (a scripted route
+    // lists the node ids to walk), falling back to the first candidate when the script runs out — keeping tests
+    // and replays deterministic.
+    public NodeId ChooseNextNode(IReadOnlyList<Node> candidates, RunState run)
+    {
+        while (_choiceIds.Count > 0)
+        {
+            var wanted = _choiceIds.Dequeue();
+            var match = candidates.FirstOrDefault(node => node.Id.Value == wanted);
+            if (match is not null)
+                return match.Id;
+        }
+
+        return candidates[0].Id;
+    }
 }

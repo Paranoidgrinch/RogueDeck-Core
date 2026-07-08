@@ -126,6 +126,7 @@ public static class StandardRunLogTypes
 {
     public const string RunStarted = "run.started";
     public const string NodeEntered = "run.node-entered";
+    public const string NodeChosen = "run.node-chosen";
     public const string CombatResolved = "run.combat-resolved";
     public const string EventChoiceMade = "run.event-choice";
     public const string ResourceChanged = "run.resource-changed";

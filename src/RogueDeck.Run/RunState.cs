@@ -30,6 +30,13 @@ public sealed class RunState
     public HealthState Health { get; }
     public RunMap Map { get; }
     public int Position { get; private set; } = -1;
+
+    // Branching-map traversal (B1). CurrentNodeId is the node being/just walked; the visited set records every node
+    // already walked so a graph walk never re-enters one. Both are unused by a linear map (which tracks Position).
+    public NodeId? CurrentNodeId { get; private set; }
+    private readonly HashSet<NodeId> _visitedNodes = new();
+    public IReadOnlyCollection<NodeId> VisitedNodes => _visitedNodes;
+
     public RunResult Result { get; private set; } = RunResult.Ongoing;
 
     public int RandomSeed { get; }
@@ -266,6 +273,15 @@ public sealed class RunState
     public void SetResult(RunResult result) => Result = result;
 
     public void AdvanceTo(int position) => Position = position;
+
+    // Enter a node on a branching-map walk: record it as current and mark it visited (B1).
+    public void AdvanceToNode(NodeId nodeId)
+    {
+        CurrentNodeId = nodeId;
+        _visitedNodes.Add(nodeId);
+    }
+
+    public bool HasVisited(NodeId nodeId) => _visitedNodes.Contains(nodeId);
 
     // A deterministic, run-scoped random draw mirroring CombatRandom's hashing so a seed reproduces a run.
     public int NextRandom(int maxExclusive)

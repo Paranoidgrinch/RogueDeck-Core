@@ -14,6 +14,7 @@ public static class RunEventCatalog
     [
         new("runStarted", typeof(RunStartedRunEvent), "the run starts"),
         new("nodeEntered", typeof(NodeEnteredRunEvent), "a node is entered"),
+        new("nodeChosen", typeof(NodeChosenRunEvent), "a next node is chosen"),
         new("combatResolved", typeof(CombatResolvedRunEvent), "a combat resolves"),
         new("eventChoiceMade", typeof(EventChoiceMadeRunEvent), "an event choice is made"),
         new("runEnded", typeof(RunEndedRunEvent), "the run ends"),
