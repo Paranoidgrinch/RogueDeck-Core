@@ -11,7 +11,10 @@ public sealed record RunUnitData(
     string DisplayNameKey,
     int MaxHealth,
     CombatPosition? Position = null,
-    IReadOnlyList<StatusGrant>? StartingStatuses = null)
+    IReadOnlyList<StatusGrant>? StartingStatuses = null,
+    // Opt-in: when true, the unit carries its final combat statuses onto the roster after each fight instead of
+    // resetting to its authored innate statuses. Default false ⇒ transient combat statuses do not persist.
+    bool PersistStatuses = false)
 {
     public IReadOnlyList<StatusGrant> StartingStatuses { get; init; } = StartingStatuses ?? [];
 }
@@ -28,6 +31,9 @@ public sealed class RunUnit
     public HealthState Health { get; }
     public CombatPosition? Position { get; private set; }
 
+    // When true, run↔combat reconciliation carries this unit's final combat statuses forward (opt-in).
+    public bool PersistStatuses { get; }
+
     private readonly List<StatusGrant> _statuses;
     public IReadOnlyList<StatusGrant> Statuses => _statuses;
 
@@ -37,7 +43,8 @@ public sealed class RunUnit
         string displayNameKey,
         HealthState health,
         CombatPosition? position = null,
-        IReadOnlyList<StatusGrant>? statuses = null)
+        IReadOnlyList<StatusGrant>? statuses = null,
+        bool persistStatuses = false)
     {
         ArgumentNullException.ThrowIfNull(health);
         if (string.IsNullOrWhiteSpace(displayNameKey))
@@ -49,6 +56,7 @@ public sealed class RunUnit
         Health = health;
         Position = position;
         _statuses = statuses?.ToList() ?? [];
+        PersistStatuses = persistStatuses;
     }
 
     public void SetPosition(CombatPosition? position) => Position = position;

@@ -25,9 +25,16 @@ public sealed record CombatDriveResult(
     // Null / empty ⇒ a single-hero fight; the resolver reconciles these back onto the run roster.
     IReadOnlyList<UnitDriveResult>? Units = null);
 
-// The outcome of a fielded board unit after a fight: its remaining HP, whether it survived, and its final grid
-// cell — enough for the run→combat bridge to reconcile the survivor back onto RunState.Units (dead ⇒ removed).
-public sealed record UnitDriveResult(CombatantId Id, int HpRemaining, bool Alive, CombatPosition? Position);
+// The outcome of a fielded board unit after a fight: its remaining HP, whether it survived, its final grid cell,
+// and the statuses left on it — enough for the run→combat bridge to reconcile the survivor back onto
+// RunState.Units (dead ⇒ removed). Statuses are only carried forward for units that opt in
+// (RunUnit.PersistStatuses); otherwise the roster keeps its authored innate statuses. Null ⇒ no statuses.
+public sealed record UnitDriveResult(
+    CombatantId Id,
+    int HpRemaining,
+    bool Alive,
+    CombatPosition? Position,
+    IReadOnlyList<StatusGrant>? Statuses = null);
 
 // Abstracts how a fight is actually played out, so the resolver doesn't care whether it was scripted or
 // driven by a live player. Slice 1 ships only the scripted driver; an interactive driver is a later wire-up.
@@ -49,12 +56,20 @@ internal static class UnitDriveResults
         foreach (var ally in allies)
         {
             if (state.TryGetCombatant(ally.CombatantId, out var c) && c is not null)
-                results.Add(new UnitDriveResult(ally.CombatantId, c.Health.Current, c.IsAlive, c.Position));
+                results.Add(new UnitDriveResult(
+                    ally.CombatantId, c.Health.Current, c.IsAlive, c.Position, ReadStatuses(c)));
             else
                 results.Add(new UnitDriveResult(ally.CombatantId, 0, Alive: false, Position: null));
         }
         return results;
     }
+
+    // Snapshot a combatant's live statuses as authorable StatusGrants, so a unit that opts into status persistence
+    // can carry its remaining combat statuses (buffs, keywords, stacks/duration/charges) back onto the roster.
+    private static IReadOnlyList<StatusGrant> ReadStatuses(CombatantState combatant) =>
+        combatant.Statuses
+            .Select(s => new StatusGrant(s.DefinitionId, s.Stacks, s.DurationTurns, s.Charges))
+            .ToList();
 }
 
 // Runs the fight through the proven scenario harness (ScenarioRunner drives REAL turns) and reads the hero's
@@ -250,8 +265,8 @@ public sealed class CombatNodeResolver : INodeResolver
     }
 
     // Reconcile the fielded units back onto the run roster after the fight: survivors carry their remaining HP and
-    // final grid cell forward; the dead (or any unit no longer present) are removed from the roster. Innate roster
-    // statuses are kept as authored (transient combat statuses do not persist between fights).
+    // final grid cell forward; the dead (or any unit no longer present) are removed from the roster. Roster statuses
+    // are kept as authored unless the unit opts into status persistence (RunUnit.PersistStatuses).
     private static void ReconcileUnits(RunState run, CombatDriveResult result)
     {
         if (result.Units is not { Count: > 0 } unitResults)
@@ -267,6 +282,10 @@ public sealed class CombatNodeResolver : INodeResolver
             }
             unit.Health.SetCurrent(Math.Clamp(res.HpRemaining, 0, unit.Health.Max));
             unit.SetPosition(res.Position);
+            // Opt-in: a unit can carry its final combat statuses forward to the next fight; otherwise the roster
+            // keeps its authored innate statuses (transient combat statuses do not persist).
+            if (unit.PersistStatuses)
+                unit.SetStatuses(res.Statuses ?? []);
         }
     }
 }

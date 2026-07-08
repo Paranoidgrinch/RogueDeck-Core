@@ -181,6 +181,44 @@ public class CombatBridgeProjectionTests
         Assert.Empty(run.Units);
     }
 
+    [Fact]
+    public void A_survivor_without_status_persistence_keeps_its_authored_statuses()
+    {
+        var run = RunWithUnit(maxHp: 20); // PersistStatuses defaults to false
+
+        // The fight ended with a transient buff on the unit, but persistence is off, so it is discarded.
+        Drive(run, new ReconcilingDriver(allies => allies
+            .Select(a => new UnitDriveResult(a.CombatantId, HpRemaining: 12, Alive: true, new CombatPosition(0, 1),
+                new[] { new StatusGrant(new StatusDefinitionId("rage"), Stacks: 3) }))
+            .ToList()));
+
+        var unit = Assert.Single(run.Units);
+        var status = Assert.Single(unit.Statuses);
+        Assert.Equal("creature", status.StatusDefinitionId.value); // still the authored innate status
+    }
+
+    [Fact]
+    public void A_survivor_with_status_persistence_carries_its_final_combat_statuses_forward()
+    {
+        var run = NewRun("strike");
+        run.AddUnit(new RunUnitData("board.knight", "unit.knight", MaxHealth: 20,
+            StartingStatuses: new[] { new StatusGrant(new StatusDefinitionId("creature"), Stacks: 1) },
+            PersistStatuses: true));
+
+        Drive(run, new ReconcilingDriver(allies => allies
+            .Select(a => new UnitDriveResult(a.CombatantId, HpRemaining: 12, Alive: true, new CombatPosition(0, 1),
+                new[]
+                {
+                    new StatusGrant(new StatusDefinitionId("creature"), Stacks: 1),
+                    new StatusGrant(new StatusDefinitionId("rage"), Stacks: 3),
+                }))
+            .ToList()));
+
+        var unit = Assert.Single(run.Units);
+        Assert.Equal(2, unit.Statuses.Count);
+        Assert.Contains(unit.Statuses, s => s.StatusDefinitionId.value == "rage" && s.Stacks == 3);
+    }
+
     // An encounter whose combat content lets a fielded creature auto-attack: the marker status + a TurnStarted rule
     // that makes marker-carriers strike the enemy. The hero has no deck, so only the projected ally can win.
     private static Playthrough BuildBoardEncounter(RunState run)

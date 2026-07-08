@@ -167,7 +167,8 @@ public sealed class RunState
             data.DisplayNameKey,
             new Core.Combat.HealthState(data.MaxHealth, data.MaxHealth),
             data.Position,
-            data.StartingStatuses);
+            data.StartingStatuses,
+            data.PersistStatuses);
         _units.Add(unit);
         return unit;
     }
