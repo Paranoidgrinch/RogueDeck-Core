@@ -149,10 +149,13 @@ survivors reconcile back to the roster after the fight (extends today's hero-HP 
   combat (empty hero deck) and reconciles into the roster. Run 244 green. **★ P5c COMPLETE** (run↔combat unit
   persistence). Next = P5d (control model) / P5e (board worked examples).
 
-**P5d — Unit control model + placement UX-agnostic hooks.** Decide per-unit control: auto (intent-driven, for
-Monster Train / Inscryption) vs directed (player chooses the target/lane). Default auto (reuses intents); a
-directed hook via the existing `IRunEntityChooser` / combat-driver interaction points if a game needs it. Engine
-hooks only — no Studio UI (the UI is on hold).
+**P5d — Unit control model. ✅ DONE (no engine code).** Both per-unit control models are expressible through
+existing machinery; the design decision is validated in `UnitControlModelTests.cs`. **Auto** (the default) — a
+marker-status TurnStarted rule runs a fixed policy on the unit's turn (e.g. `DealDamage(FrontmostEnemyOfSource)`),
+the unit acting by itself with no player input. **Directed** — a driver enqueues `ExecuteEnemyActionEffectRequest`
+for the unit against a player-chosen target (the same team-agnostic request enemies use), so the player picks the
+lane/target (the test directs a strike at the BACK enemy, which the auto frontmost policy would never pick). No new
+turn engine, no combat-side chooser hook needed — directed control lives at the driver level. Core 1320 green.
 
 **P5e — Game-shape composition for board games.** Worked examples: a Monster-Train-style floor defense (field
 units, enemies ascend, units auto-fight) and an Inscryption-style lane board (creatures face across columns),
