@@ -142,6 +142,11 @@ public abstract class CombatantBlueprint
     public List<ResourceSpec> Resources { get; } = new();
     public List<StartingStatusSpec> StartingStatuses { get; } = new();
 
+    // The combatant's own deck, dealt into its draw pile at combat start (party deckbuilding A1). Any player-team
+    // combatant — the hero or a fielded ally/party member — draws + plays from its own deck through the existing
+    // per-combatant card machinery. Empty (the default) ⇒ a deckless combatant (enemies, auto-acting board units).
+    public List<DeckEntry> Deck { get; } = new();
+
     // Optional starting cell on the 2D combat grid; null = unplaced (flat arena, today's behavior). Applied by
     // ScenarioCombatFactory when the combatant is added.
     public CombatPosition? Position { get; init; }
@@ -158,8 +163,6 @@ public abstract class CombatantBlueprint
 
 public sealed class HeroBlueprint : CombatantBlueprint
 {
-    public List<DeckEntry> Deck { get; } = new();
-
     // Temporary rules installed when the combat opens (e.g. a consumable's "next combat starts with 20 block").
     // Applied by the run→combat bridge as pending combat modifiers; installed by ScenarioCombatFactory at build.
     public List<TemporaryRuleInstallSpec> OpeningTemporaryRules { get; } = new();

@@ -21,12 +21,12 @@ internal static class ScenarioCombatFactory
 
         combat.SetActiveCombatant(compiled.Hero.CombatantId);
 
-        // Deal the hero's deck into the draw pile; the turn-start automation draws it into hand.
-        var heroZones = combat.GetCardZones(compiled.Hero.CombatantId);
-        foreach (var entry in compiled.Hero.Deck)
-            for (var copy = 0; copy < entry.Count; copy++)
-                heroZones.AddCard(new CardInstance(
-                    combat.CreateNextCardInstanceId(), entry.Card, compiled.Hero.CombatantId, CardZone.DrawPile));
+        // Deal each player-team combatant's own deck into its draw pile; the per-combatant turn-start automation
+        // draws it into that combatant's hand (party deckbuilding A1). The hero and any fielded ally/party member
+        // each play from their own deck; a deckless combatant (auto-acting board unit) simply gets no cards.
+        DealDeck(combat, compiled.Hero);
+        foreach (var ally in compiled.Allies)
+            DealDeck(combat, ally);
 
         // Apply starting statuses through the real pipeline so merge/stacking semantics are honoured.
         var queues = new CombatQueueProcessor();
@@ -41,6 +41,18 @@ internal static class ScenarioCombatFactory
         InstallOpeningTemporaryRules(combat, compiled.Registry, queues, compiled.Hero);
 
         return combat;
+    }
+
+    // Deal a combatant's own deck into its draw pile (copy-by-copy). Deckless combatants add nothing.
+    private static void DealDeck(CombatState combat, CombatantBlueprint blueprint)
+    {
+        if (blueprint.Deck.Count == 0)
+            return;
+        var zones = combat.GetCardZones(blueprint.CombatantId);
+        foreach (var entry in blueprint.Deck)
+            for (var copy = 0; copy < entry.Count; copy++)
+                zones.AddCard(new CardInstance(
+                    combat.CreateNextCardInstanceId(), entry.Card, blueprint.CombatantId, CardZone.DrawPile));
     }
 
     private static void AddCombatant(CombatState combat, CombatantBlueprint blueprint, TeamId team)
