@@ -89,10 +89,14 @@ the triggered program sees the NEW cell. Tests: coord-as-amount, flat-inert, dis
 CombatProgramModel visual condition/amount catalog (Studio on hold) — usable via hand-built/JSON programs. Full
 suite green (Core 1311).
 
-**P4 — Game-shape composition (validation).** Compose real patterns from P0–P3 primitives + small helpers:
-Monster-Train ascension (turn-start rule advancing enemies one column; optional ordered-column extent so "the
-floor above" is defined), Inscryption lane duel (`OpposingInColumn` target), Wildfrost front/back rows. Worked
-example blueprints; no new core.
+**P4 — Game-shape composition (validation). ✅ DONE.** Three worked-example integration tests
+(`PositionalGameShapesTests.cs`) proving the P0–P3 vocabulary expresses the signature spatial mechanics with NO new
+engine code: **Monster Train** — a single TurnStarted rule `MoveCombatantNode(AllEnemiesOfSource, TowardEnemies, 1)`
+advances the enemy column one row toward the player each turn (verified over two turns); **Inscryption** — a lane
+attack `DealDamage(OpposingInColumn)` strikes only the enemy across the hero's column, sparing other lanes;
+**Wildfrost** — `DealDamage(FrontmostEnemyOfSource)` hits the front row and the back row is shielded until the front
+dies, after which the back becomes frontmost and takes the hit. Full suite green (Core 1314). This closes Part A
+(positional vocabulary P0–P4).
 
 ### Part B — persistent player-controlled board (P5): the "field your own units" gap (Tier-1 #2)
 Builds directly on Part A (positions + summon-at-position). Reuses the **enemy-action/intent** machinery on the
