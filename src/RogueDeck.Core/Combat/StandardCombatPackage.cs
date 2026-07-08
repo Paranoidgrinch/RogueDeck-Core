@@ -152,6 +152,7 @@ public sealed class StandardCombatPackage : ICombatPackage
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.CombatantLifecycleChanged.CreateHandler());
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.TemporaryRuleActivated.CreateHandler());
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.EnemyActionExecuted.CreateHandler());
+        registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.CombatantMoved.CreateHandler());
 
         // Effect node executors — registered here so production execution uses the
         // combat registry instead of EffectNodeExecutorRegistry.Default.

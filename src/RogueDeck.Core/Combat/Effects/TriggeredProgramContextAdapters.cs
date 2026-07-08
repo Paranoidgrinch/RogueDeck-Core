@@ -343,6 +343,17 @@ public static class TriggeredProgramContextAdapters
             },
             CombatantDownedTriggeredEffectTargetResolver.CreateActionBuildContext);
 
+    // Positional movement trigger (P3): fires after a combatant changes its grid cell. The moved combatant is the
+    // context Source, so positional reads on Source see the new cell.
+    public static readonly TriggeredProgramAdapter<CombatantMovedCombatEvent, CombatantMovedTriggeredEffectContext>
+        CombatantMoved = new(
+            (combat, registry, e) =>
+            {
+                if (!combat.TryGetCombatant(e.CombatantId, out var c)) return null;
+                return new CombatantMovedTriggeredEffectContext(combat, registry, e, c!);
+            },
+            CombatantMovedTriggeredEffectTargetResolver.CreateActionBuildContext);
+
     public static readonly TriggeredProgramAdapter<EnemyActionExecutedCombatEvent, EnemyActionExecutedTriggeredEffectContext>
         EnemyActionExecuted = new(
             (combat, registry, e) =>

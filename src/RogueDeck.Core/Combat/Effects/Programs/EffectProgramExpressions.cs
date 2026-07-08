@@ -715,6 +715,65 @@ public sealed class CombatantMissingHealthExpression<TContext> : ICombatExpressi
     }
 }
 
+// Positional read (P3): one grid coordinate (X = column, Y = depth) of the single target. 0 when the target is
+// unplaced or resolves to nothing — so in a flat combat (no positions) this expression is inert (always 0).
+// Composes "damage = your column" and other position-scaled amounts, and reads a target's new cell inside a
+// Moved-triggered program.
+public sealed class CombatantCoordExpression<TContext> : ICombatExpression<TContext, int>
+    where TContext : class
+{
+    public ICombatantTargetSelector Selector { get; }
+    public GridAxis Axis { get; }
+
+    public CombatantCoordExpression(ICombatantTargetSelector selector, GridAxis axis)
+    {
+        ArgumentNullException.ThrowIfNull(selector);
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
+        Axis = axis;
+    }
+
+    public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        var selCtx = context.GetTargetSelectionContext();
+        var targets = Selector.ResolveTargets(selCtx);
+        if (targets.Count == 0) return 0;
+        if (!combat.TryGetCombatant(ScalarTargetExpression.RequireSingle(targets), out var c) || c!.Position is not { } p)
+            return 0;
+        return Axis == GridAxis.X ? p.X : p.Y;
+    }
+}
+
+// Positional read (P3): the Manhattan grid distance between the single targets of two selectors — e.g.
+// From = source, To = frontmost enemy gives "distance to front". 0 when either side is unplaced or resolves to
+// nothing (inert in a flat combat).
+public sealed class GridDistanceExpression<TContext> : ICombatExpression<TContext, int>
+    where TContext : class
+{
+    public ICombatantTargetSelector From { get; }
+    public ICombatantTargetSelector To { get; }
+
+    public GridDistanceExpression(ICombatantTargetSelector from, ICombatantTargetSelector to)
+    {
+        ArgumentNullException.ThrowIfNull(from);
+        ArgumentNullException.ThrowIfNull(to);
+        From = ScalarTargetExpression.RequireSingleSelector(from);
+        To = ScalarTargetExpression.RequireSingleSelector(to);
+    }
+
+    public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        var selCtx = context.GetTargetSelectionContext();
+        var fromTargets = From.ResolveTargets(selCtx);
+        var toTargets = To.ResolveTargets(selCtx);
+        if (fromTargets.Count == 0 || toTargets.Count == 0) return 0;
+        if (!combat.TryGetCombatant(ScalarTargetExpression.RequireSingle(fromTargets), out var a) || a!.Position is not { } ap)
+            return 0;
+        if (!combat.TryGetCombatant(ScalarTargetExpression.RequireSingle(toTargets), out var b) || b!.Position is not { } bp)
+            return 0;
+        return PositionalTargeting.ManhattanDistance(ap, bp);
+    }
+}
+
 public sealed class CombatantStatusStacksExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {

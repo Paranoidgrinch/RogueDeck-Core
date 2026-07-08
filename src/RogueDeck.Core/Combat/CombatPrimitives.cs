@@ -73,6 +73,13 @@ public enum MovementMode
     PullToSource,
 }
 
+// A grid axis for positional reads (P3): X = column/lane, Y = depth/row.
+public enum GridAxis
+{
+    X,
+    Y,
+}
+
 public interface IEffectRequest
 {
 }

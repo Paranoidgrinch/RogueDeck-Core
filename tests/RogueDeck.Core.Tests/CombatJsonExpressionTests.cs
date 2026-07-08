@@ -65,6 +65,24 @@ public class CombatJsonExpressionTests
     }
 
     [Fact]
+    public void Positional_read_expressions_round_trip()
+    {
+        RoundTripsInt(new CombatantCoordExpression<CardPlayContext>(
+            new SourceCombatantTargetSelector(), GridAxis.X));
+        RoundTripsInt(new CombatantCoordExpression<CardPlayContext>(
+            new SourceCombatantTargetSelector(), GridAxis.Y));
+        RoundTripsInt(new GridDistanceExpression<CardPlayContext>(
+            new SourceCombatantTargetSelector(), new FrontmostEnemyOfSourceCombatantTargetSelector()));
+
+        // Axis survives the round trip.
+        var back = CombatJson.FromJson<ICombatExpression<CardPlayContext, int>>(
+            CombatJson.ToJson<ICombatExpression<CardPlayContext, int>>(
+                new CombatantCoordExpression<CardPlayContext>(new SourceCombatantTargetSelector(), GridAxis.Y), Options),
+            Options);
+        Assert.Equal(GridAxis.Y, Assert.IsType<CombatantCoordExpression<CardPlayContext>>(back).Axis);
+    }
+
+    [Fact]
     public void Condition_tree_round_trips()
     {
         // (2 >= 1) AND NOT(3 == 4)  OR (5 < 6)

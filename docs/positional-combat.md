@@ -77,9 +77,17 @@ NOT added to the CombatProgramModel visual catalog (Studio on hold) — movement
 now. Tests: handler (set/no-op/place), geometry, end-to-end played-card moves (MoveTo/Push/Swap/unplaced no-op),
 summon-at-position, JSON round-trip for every mode. Full suite green (Core 1305).
 
-**P3 — Positional reads & reactions.** A position expression (`CombatantCoordExpression` / "distance-to-front")
-usable in conditions and amounts ("the frontmost ally", "damage = your column"). Optional `Moved` / `EnteredCell`
-trigger event added to the status/relic trigger catalogs (mirrors the existing 15 events) — additive.
+**P3 — Positional reads & reactions. ✅ DONE.** Two int expressions (in `EffectProgramExpressions.cs`, both inert
+→ 0 in a flat combat): `CombatantCoordExpression(selector, GridAxis X|Y)` — a target's column/depth ("damage =
+your column") — and `GridDistanceExpression(from, to)` — Manhattan distance between two single-target selectors, so
+`from = Source, to = FrontmostEnemyOfSource` is "distance to front". Registered in CombatJson (`combatantCoord`,
+`gridDistance`). `CombatantMovedCombatEvent` is now a triggerable event: `CombatantMovedTriggeredEffectContext`
+(+ target resolver, Source = the moved combatant) + `TriggeredProgramContextAdapters.CombatantMoved` + handler
+registered in StandardCombatPackage. The event fires AFTER the move applies, so a positional read on Source inside
+the triggered program sees the NEW cell. Tests: coord-as-amount, flat-inert, distance-to-front, Moved-trigger fires
++ reads new cell, Moved never fires in a flat combat, JSON round-trip (both exprs + axis). NOT added to the
+CombatProgramModel visual condition/amount catalog (Studio on hold) — usable via hand-built/JSON programs. Full
+suite green (Core 1311).
 
 **P4 — Game-shape composition (validation).** Compose real patterns from P0–P3 primitives + small helpers:
 Monster-Train ascension (turn-start rule advancing enemies one column; optional ordered-column extent so "the

@@ -157,6 +157,9 @@ public static class CombatJson
          .Register("combatantStatusDuration", typeof(CombatantStatusDurationExpression<>))
          .Register("combatantStatusCharges", typeof(CombatantStatusChargesExpression<>))
          .Register("combatantStacksByPolarity", typeof(CombatantStacksByPolarityExpression<>))
+         // Positional reads (P3) — inert (0) in a flat combat.
+         .Register("combatantCoord", typeof(CombatantCoordExpression<>))
+         .Register("gridDistance", typeof(GridDistanceExpression<>))
          .Register("cardsPlayedThisTurn", typeof(CardsPlayedThisTurnExpression<>))
          .Register("damageDealtThisTurn", typeof(DamageDealtThisTurnExpression<>))
          .Register("resourceGainedThisTurn", typeof(ResourceGainedThisTurnExpression<>))
