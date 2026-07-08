@@ -36,6 +36,45 @@
         <h2>Map</h2>
         @if (TryBlueprint(out var bp))
         {
+            var pos = MapGraphLayout.Resolve(bp.Map);
+            var (svgW, svgH) = MapGraphLayout.CanvasSize(pos);
+            <div class="run-bar">
+                <button class="mini" @onclick="AutoLayout" title="place every node by graph depth">Auto-layout</button>
+                <span class="muted">A branching map, drawn from its edges. Set each node's x/y below (or auto-layout),
+                    green outline = entry, pink = combat, blue = event.</span>
+            </div>
+            <div style="overflow:auto;border:1px solid #ccc;max-height:440px;background:#fafafa">
+                <svg width="@svgW" height="@svgH" viewBox="0 0 @svgW @svgH" xmlns="http://www.w3.org/2000/svg"
+                     style="font:11px sans-serif">
+                    <defs>
+                        <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"
+                                markerUnits="strokeWidth">
+                            <path d="M0,0 L7,3 L0,6 Z" fill="#888" />
+                        </marker>
+                    </defs>
+                    @foreach (var edge in bp.Map.Edges)
+                    {
+                        @if (pos.TryGetValue(edge.From, out var a) && pos.TryGetValue(edge.To, out var b))
+                        {
+                            <line x1="@(a.X + MapGraphLayout.NodeWidth / 2)" y1="@(a.Y + MapGraphLayout.NodeHeight / 2)"
+                                  x2="@(b.X + MapGraphLayout.NodeWidth / 2)" y2="@(b.Y + MapGraphLayout.NodeHeight / 2)"
+                                  stroke="#888" stroke-width="1.5" marker-end="url(#arrow)" />
+                        }
+                    }
+                    @foreach (var mapNode in bp.Map.Nodes)
+                    {
+                        var p = pos[mapNode.Id];
+                        var isEntry = bp.Map.EntryNodeIds.Contains(mapNode.Id);
+                        <g>
+                            <rect x="@p.X" y="@p.Y" width="@MapGraphLayout.NodeWidth" height="@MapGraphLayout.NodeHeight"
+                                  rx="6" fill="@(mapNode.Type == StandardRunIds.CombatNode ? "#fde2e2" : "#e2ecfd")"
+                                  stroke="@(isEntry ? "#1a7f37" : "#999")" stroke-width="@(isEntry ? "2.5" : "1")" />
+                            <text x="@(p.X + 8)" y="@(p.Y + 18)" font-weight="bold">@mapNode.Id.Value</text>
+                            <text x="@(p.X + 8)" y="@(p.Y + 34)" fill="#555">@NodeKind(mapNode): @NodeTarget(mapNode)</text>
+                        </g>
+                    }
+                </svg>
+            </div>
             <ol class="log">
                 @for (var i = 0; i < bp.Map.Nodes.Count; i++)
                 {
@@ -48,6 +87,10 @@
                         </label>
                         <code>@node.Id.Value</code>
                         <span class="line-kind">@NodeKind(node)</span> <strong>@NodeTarget(node)</strong>
+                        <label title="x">x<input type="number" value="@pos[node.Id].X" style="width:4.5rem"
+                                                  @onchange="e => SetCoordX(node.Id, e)" /></label>
+                        <label title="y">y<input type="number" value="@pos[node.Id].Y" style="width:4.5rem"
+                                                  @onchange="e => SetCoordY(node.Id, e)" /></label>
                         <button class="mini" @onclick="() => MoveNode(index, -1)">↑</button>
                         <button class="mini" @onclick="() => MoveNode(index, 1)">↓</button>
                         <button class="mini" @onclick="() => RemoveNode(index)">✕</button>
@@ -253,6 +296,34 @@
             return;
         RebuildMap(blueprint, RunMapAuthoring.ToggleEntry(blueprint.Map, id));
     }
+
+    // Materialize the auto (depth-based) layout as authored coords for every node, so the graph is laid out and the
+    // author can then nudge individual nodes. Resolves on a layout-cleared copy so it fully re-lays-out.
+    private void AutoLayout()
+    {
+        if (!TryBlueprint(out var blueprint))
+            return;
+        var map = blueprint.Map;
+        var cleared = new RunMap(map.Nodes) { Edges = map.Edges, EntryNodeIds = map.EntryNodeIds };
+        var pos = MapGraphLayout.Resolve(cleared);
+        foreach (var node in map.Nodes)
+            map = RunMapAuthoring.SetNodeLayout(map, node.Id, pos[node.Id].X, pos[node.Id].Y);
+        RebuildMap(blueprint, map);
+    }
+
+    private void SetCoordX(NodeId id, ChangeEventArgs e) => SetCoord(id, ParseInt(e), null);
+    private void SetCoordY(NodeId id, ChangeEventArgs e) => SetCoord(id, null, ParseInt(e));
+
+    private void SetCoord(NodeId id, int? x, int? y)
+    {
+        if ((x is null && y is null) || !TryBlueprint(out var blueprint))
+            return;
+        var current = MapGraphLayout.Resolve(blueprint.Map).GetValueOrDefault(id);
+        RebuildMap(blueprint, RunMapAuthoring.SetNodeLayout(blueprint.Map, id, x ?? current.X, y ?? current.Y));
+    }
+
+    private static int? ParseInt(ChangeEventArgs e) =>
+        int.TryParse(e.Value?.ToString(), out var value) ? value : null;
 
     private static string NodeKind(Node node) => node.Type == StandardRunIds.CombatNode ? "combat" : "event";
 
