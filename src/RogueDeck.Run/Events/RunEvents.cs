@@ -16,6 +16,10 @@ public sealed record NodeEnteredRunEvent(NodeId NodeId, NodeType NodeType) : IRu
 // including the initial entry node. NodeId is the chosen node. Never raised on a linear map (no forks).
 public sealed record NodeChosenRunEvent(NodeId NodeId) : IRunEvent;
 
+// Raised whenever content mutates the map topology mid-run (B5) — a node or edge added/removed. A marker for
+// reactions (a relic re-reading the map, a UI redrawing it); the specifics are in the log entry.
+public sealed record MapChangedRunEvent : IRunEvent;
+
 // Raised once a combat node has been driven to a terminal CombatResult. DamageTaken is the run HP the hero
 // actually lost in the fight (the bridge already reconciled it onto RunState before this fires).
 public sealed record CombatResolvedRunEvent(

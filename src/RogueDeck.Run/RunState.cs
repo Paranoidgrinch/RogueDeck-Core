@@ -28,7 +28,7 @@ public sealed class RunState
 
     public RunId Id { get; }
     public HealthState Health { get; }
-    public RunMap Map { get; }
+    public RunMap Map { get; private set; }
     public int Position { get; private set; } = -1;
 
     // Branching-map traversal (B1). CurrentNodeId is the node being/just walked; the visited set records every node
@@ -282,6 +282,53 @@ public sealed class RunState
     }
 
     public bool HasVisited(NodeId nodeId) => _visitedNodes.Contains(nodeId);
+
+    // ── Branching-map mutation (B5): content can reshape the map mid-run (open a hidden path, collapse a bridge,
+    // splice in a node). Each rebuilds the immutable RunMap preserving the rest; the graph walk reads Map fresh
+    // each step, so a change takes effect on the next fork. Each returns whether it actually changed the map. ──
+
+    public bool AddMapNode(Node node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        if (Map.Nodes.Any(existing => existing.Id == node.Id))
+            return false;
+        Map = Rebuild([.. Map.Nodes, node], Map.Edges, Map.EntryNodeIds);
+        return true;
+    }
+
+    // Removes the node and any edge touching it (and any entry reference), so the map stays consistent.
+    public bool RemoveMapNode(NodeId nodeId)
+    {
+        if (!Map.Nodes.Any(node => node.Id == nodeId))
+            return false;
+        Map = Rebuild(
+            Map.Nodes.Where(node => node.Id != nodeId).ToList(),
+            Map.Edges.Where(edge => edge.From != nodeId && edge.To != nodeId).ToList(),
+            Map.EntryNodeIds.Where(id => id != nodeId).ToList());
+        return true;
+    }
+
+    public bool AddMapEdge(NodeId from, NodeId to)
+    {
+        var edge = new MapEdge(from, to);
+        if (Map.Edges.Contains(edge))
+            return false;
+        Map = Rebuild(Map.Nodes, [.. Map.Edges, edge], Map.EntryNodeIds);
+        return true;
+    }
+
+    public bool RemoveMapEdge(NodeId from, NodeId to)
+    {
+        var edge = new MapEdge(from, to);
+        if (!Map.Edges.Contains(edge))
+            return false;
+        Map = Rebuild(Map.Nodes, Map.Edges.Where(existing => existing != edge).ToList(), Map.EntryNodeIds);
+        return true;
+    }
+
+    private static RunMap Rebuild(
+        IReadOnlyList<Node> nodes, IReadOnlyList<MapEdge> edges, IReadOnlyList<NodeId> entries) =>
+        new(nodes) { Edges = edges, EntryNodeIds = entries };
 
     // The fork currently offered on a branching map: the unvisited successors of the current node, in edge order.
     // Empty on a linear map, before the walk starts, or at a leaf node. A map UI renders this as the choosable
