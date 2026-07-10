@@ -130,6 +130,12 @@ public sealed record MoveCardToZoneOutcome(
     CardZone? CurrentZone,
     bool WasMoved);
 
+public sealed record TransformCardOutcome(
+    CardInstanceId? CardInstanceId,
+    CardDefinitionId? PreviousDefinition,
+    CardDefinitionId? CurrentDefinition,
+    bool WasTransformed);
+
 public sealed record SetCombatResultOutcome(
     CombatResult PreviousResult,
     CombatResult CurrentResult,
@@ -239,6 +245,8 @@ public sealed class ChangeCombatantTeamOutcomeSlot : OutcomeSlot<ChangeCombatant
 public sealed class ModifyResourceOutcomeSlot : OutcomeSlot<ModifyResourceOutcome>;
 
 public sealed class MoveCardToZoneOutcomeSlot : OutcomeSlot<MoveCardToZoneOutcome>;
+
+public sealed class TransformCardOutcomeSlot : OutcomeSlot<TransformCardOutcome>;
 
 public sealed class SetCombatResultOutcomeSlot : OutcomeSlot<SetCombatResultOutcome>;
 

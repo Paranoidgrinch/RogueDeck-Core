@@ -85,6 +85,7 @@ public sealed class StandardCombatPackage : ICombatPackage
         registry.RegisterEffectRequestHandler(new DiscardHandEffectHandler());
         registry.RegisterEffectRequestHandler(new MoveHandCardsOnTurnEndEffectHandler());
         registry.RegisterEffectRequestHandler(new MoveCardToZoneEffectHandler());
+        registry.RegisterEffectRequestHandler(new TransformCardEffectHandler());
         registry.RegisterEffectRequestHandler(new CreateCardInstanceEffectHandler());
         registry.RegisterEffectRequestHandler(new MoveAllCardsFromZoneEffectHandler());
         registry.RegisterEffectRequestHandler(new RefillResourceEffectHandler());
@@ -188,6 +189,7 @@ public sealed class StandardCombatPackage : ICombatPackage
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(ChangeCombatantTeamNode<>), new ChangeCombatantTeamNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(ModifyResourceNode<>), new ModifyResourceNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(MoveCardToZoneNode<>), new MoveCardToZoneNodeExecutor());
+        registry.RegisterEffectNodeExecutorOpenGeneric(typeof(TransformCardNode<>), new TransformCardNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(SetCombatResultNode<>), new SetCombatResultNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(PlayCardNode<>), new PlayCardNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(InstallTemporaryRuleNode<>), new InstallTemporaryRuleNodeExecutor());

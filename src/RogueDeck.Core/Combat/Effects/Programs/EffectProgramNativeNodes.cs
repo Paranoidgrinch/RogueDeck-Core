@@ -1020,6 +1020,59 @@ public sealed class MoveCardToZoneNode<TContext> : IMoveCardToZoneNodeCore, IEff
         CardExpression.Evaluate((EffectExecutionContext<TContext>)ctx, combat);
 }
 
+// ── TransformCardNode ─────────────────────────────────────────────────────────
+
+public interface ITransformCardNodeCore : INativeEffectOperationNode
+{
+    ICombatantTargetSelector OwnerSelector { get; }
+    CardDefinitionId ToDefinition { get; }
+    EffectResultKey<TransformCardOutcome>? ResultKey { get; }
+
+    CardInstanceId? EvaluateCardInstanceId(IEffectExecutionContextCore ctx, CombatState combat);
+
+    Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(TransformCardEffectRequest);
+}
+
+// Retargets a selected card (from a card expression — the played card, a chosen/positional card in a zone, …) to
+// a different definition: the in-combat transform / upgrade operation. Armaments = TransformCard(chosen hand card
+// → its upgraded definition). The owner selector names whose zones the card lives in.
+public sealed class TransformCardNode<TContext> : ITransformCardNodeCore, IEffectNode<TContext>
+    where TContext : class
+{
+    public ICombatantTargetSelector OwnerSelector { get; }
+    public IEnumerable<ICombatantTargetSelector> GetTargetSelectors() => [OwnerSelector];
+    public ICardInstanceExpression<TContext> CardExpression { get; }
+    public CardDefinitionId ToDefinition { get; }
+    public EffectResultKey<TransformCardOutcome>? ResultKey { get; }
+
+    public IReadOnlyList<IEffectNode<TContext>> Children => [];
+
+    public TransformCardNode(
+        ICombatantTargetSelector ownerSelector,
+        ICardInstanceExpression<TContext> cardExpression,
+        CardDefinitionId toDefinition,
+        EffectResultKey<TransformCardOutcome>? resultKey = null)
+    {
+        ArgumentNullException.ThrowIfNull(ownerSelector);
+        ArgumentNullException.ThrowIfNull(cardExpression);
+
+        OwnerSelector = ownerSelector;
+        CardExpression = cardExpression;
+        ToDefinition = toDefinition;
+        ResultKey = resultKey;
+    }
+
+    // The result is a single TransformCardOutcome (one card transformed), so it is single by nature.
+    public ProducedResult? GetProducedResult() =>
+        ResultKey is { } key
+            ? new ProducedResult(key.Name, key.GetType().GenericTypeArguments[0], TargetSelectorCardinality.ExactlyOne)
+            : null;
+    public IEnumerable<IResultKeyConsumer> GetExpressionConsumers() => [];
+
+    CardInstanceId? ITransformCardNodeCore.EvaluateCardInstanceId(IEffectExecutionContextCore ctx, CombatState combat) =>
+        CardExpression.Evaluate((EffectExecutionContext<TContext>)ctx, combat);
+}
+
 // ── SetCombatResultNode ───────────────────────────────────────────────────────
 
 public interface ISetCombatResultNodeCore : INativeEffectOperationNode

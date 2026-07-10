@@ -150,6 +150,55 @@ public class CardInZoneExpressionTests
     }
 
     [Fact]
+    public void Transforms_a_chosen_card_into_a_different_definition()
+    {
+        var registry = CombatTestFactory.CreateStandardRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        var target = AddCard(combat, "h1", CardZone.Hand); // definition "test.card"
+
+        var upgraded = new CardDefinitionId("test.card.plus");
+        var key = new EffectResultKey<TransformCardOutcome>("xf");
+        var program = new EffectProgram<Ctx>(new TransformCardNode<Ctx>(
+            CombatantTargetSelectors.Source,
+            new ChosenCardInZoneExpression<Ctx>(CardZone.Hand),
+            upgraded,
+            resultKey: key));
+
+        var ctx = MakeContext(combat);
+        EffectProgramExecutor.Execute(program, ctx, combat);
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+
+        // The instance keeps its id + zone but now plays as the upgraded definition.
+        Assert.Equal(upgraded, combat.GetCardZones(HeroId).GetCard(target).DefinitionId);
+        Assert.True(ctx.TryGet(key, out var outcome));
+        Assert.True(outcome!.WasTransformed);
+        Assert.Equal(new CardDefinitionId("test.card"), outcome.PreviousDefinition);
+        Assert.Equal(upgraded, outcome.CurrentDefinition);
+    }
+
+    [Fact]
+    public void Transforming_to_the_same_definition_is_a_no_op()
+    {
+        var registry = CombatTestFactory.CreateStandardRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        AddCard(combat, "h1", CardZone.Hand);
+
+        var key = new EffectResultKey<TransformCardOutcome>("xf");
+        var program = new EffectProgram<Ctx>(new TransformCardNode<Ctx>(
+            CombatantTargetSelectors.Source,
+            new CardInZoneExpression<Ctx>(CardZone.Hand, 0),
+            new CardDefinitionId("test.card"), // same as current
+            resultKey: key));
+
+        var ctx = MakeContext(combat);
+        EffectProgramExecutor.Execute(program, ctx, combat);
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+
+        Assert.True(ctx.TryGet(key, out var outcome));
+        Assert.False(outcome!.WasTransformed);
+    }
+
+    [Fact]
     public void An_out_of_range_index_selects_no_card_and_moves_nothing()
     {
         var registry = CombatTestFactory.CreateStandardRegistry();

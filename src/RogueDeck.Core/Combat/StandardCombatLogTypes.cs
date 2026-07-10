@@ -18,6 +18,7 @@ public static class StandardCombatLogTypes
     public const string DiscardPileShuffledIntoDrawPile = "DiscardPileShuffledIntoDrawPile";
     public const string HandDiscarded = "HandDiscarded";
     public const string CardMovedToZone = "CardMovedToZone";
+    public const string CardTransformed = "CardTransformed";
     public const string CardsMovedBetweenZones = "CardsMovedBetweenZones";
     public const string CardInstanceCreated = "CardInstanceCreated";
 

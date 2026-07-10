@@ -110,6 +110,13 @@ public sealed record CardMovedToZoneCombatEvent(
     CardZone ToZone
 ) : ICombatEvent;
 
+public sealed record CardTransformedCombatEvent(
+    CombatantId CombatantId,
+    CardInstanceId CardInstanceId,
+    CardDefinitionId FromDefinition,
+    CardDefinitionId ToDefinition
+) : ICombatEvent;
+
 public sealed record DamageDealtCombatEvent(
     CombatantId TargetCombatantId,
     int HealthDamage,

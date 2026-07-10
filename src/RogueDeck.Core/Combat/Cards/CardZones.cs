@@ -21,7 +21,7 @@ public interface ICombatCardChooser
 public sealed class CardInstance
 {
     public CardInstanceId Id { get; }
-    public CardDefinitionId DefinitionId { get; }
+    public CardDefinitionId DefinitionId { get; private set; }
     public CombatantId OwnerId { get; }
 
     public CardZone Zone { get; private set; }
@@ -41,6 +41,14 @@ public sealed class CardInstance
     public void SetZone(CardZone zone)
     {
         Zone = zone;
+    }
+
+    // Change which definition this instance plays as — the in-combat transform/upgrade primitive. The card keeps
+    // its stable Id/Owner; its program + costs are resolved from the definition registry by DefinitionId at play
+    // time, so retargeting the definition changes the card's behaviour for the rest of the fight.
+    public void SetDefinition(CardDefinitionId definitionId)
+    {
+        DefinitionId = definitionId;
     }
 }
 

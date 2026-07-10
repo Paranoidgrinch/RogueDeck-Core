@@ -183,6 +183,54 @@ public sealed class MoveCardToZoneEffectHandler : EffectRequestHandler<MoveCardT
     }
 }
 
+// Retarget a card instance to a different definition (in-combat transform / upgrade). The instance keeps its id +
+// zone; only what it plays as changes. A transform to the same definition is a no-op (still completes the slot).
+public sealed record TransformCardEffectRequest(
+    CombatantId CombatantId,
+    CardInstanceId CardInstanceId,
+    CardDefinitionId ToDefinition,
+    TransformCardOutcomeSlot? OutcomeSlot = null
+) : IEffectRequest;
+
+public sealed class TransformCardEffectHandler : EffectRequestHandler<TransformCardEffectRequest>
+{
+    protected override void Resolve(
+        CombatState combat,
+        CombatDefinitionRegistry registry,
+        TransformCardEffectRequest request)
+    {
+        var zones = combat.GetCardZones(request.CombatantId);
+        var card = zones.GetCard(request.CardInstanceId);
+
+        if (card.OwnerId != request.CombatantId)
+            throw new InvalidOperationException(
+                $"Card instance '{request.CardInstanceId}' is not owned by combatant '{request.CombatantId}'.");
+
+        var fromDefinition = card.DefinitionId;
+
+        if (fromDefinition == request.ToDefinition)
+        {
+            if (request.OutcomeSlot is { } noOpSlot)
+                noOpSlot.Value = new TransformCardOutcome(
+                    request.CardInstanceId, fromDefinition, fromDefinition, WasTransformed: false);
+            return;
+        }
+
+        card.SetDefinition(request.ToDefinition);
+
+        if (request.OutcomeSlot is { } slot)
+            slot.Value = new TransformCardOutcome(
+                request.CardInstanceId, fromDefinition, request.ToDefinition, WasTransformed: true);
+
+        combat.AddLogEntry(
+            StandardCombatLogTypes.CardTransformed,
+            $"Transformed card instance '{request.CardInstanceId}' for combatant '{request.CombatantId}' from '{fromDefinition}' to '{request.ToDefinition}'.");
+
+        combat.EnqueueEvent(new CardTransformedCombatEvent(
+            request.CombatantId, request.CardInstanceId, fromDefinition, request.ToDefinition));
+    }
+}
+
 public sealed record MoveHandCardsOnTurnEndEffectRequest(
     CombatantId CombatantId
 ) : IEffectRequest;

@@ -79,6 +79,7 @@ public sealed class EffectNodeExecutorRegistry
         r.RegisterOpenGeneric(typeof(ChangeCombatantTeamNode<>), new ChangeCombatantTeamNodeExecutor());
         r.RegisterOpenGeneric(typeof(ModifyResourceNode<>), new ModifyResourceNodeExecutor());
         r.RegisterOpenGeneric(typeof(MoveCardToZoneNode<>), new MoveCardToZoneNodeExecutor());
+        r.RegisterOpenGeneric(typeof(TransformCardNode<>), new TransformCardNodeExecutor());
         r.RegisterOpenGeneric(typeof(SetCombatResultNode<>), new SetCombatResultNodeExecutor());
         r.RegisterOpenGeneric(typeof(PlayCardNode<>), new PlayCardNodeExecutor());
         r.RegisterOpenGeneric(typeof(InstallTemporaryRuleNode<>), new InstallTemporaryRuleNodeExecutor());
@@ -1476,6 +1477,60 @@ internal sealed class LoseResourceNodeExecutor : IEffectNodeExecutor
                     .Select((tId, idx) => new TargetOutcome<LoseResourceOutcome>(tId, capturedSlots[idx].Value!, idx))
                     .ToList();
                 ctx.Store(key, new OrderedTargetOutcomes<LoseResourceOutcome>(results));
+                onComplete?.Invoke(c);
+            });
+        }
+        else if (onComplete is not null)
+        {
+            combat.EnqueueContinuation(onComplete);
+        }
+    }
+}
+
+internal sealed class TransformCardNodeExecutor : IEffectNodeExecutor
+{
+    public void Execute(IEffectNode node, IEffectExecutionContextCore ctx, CombatState combat,
+        Action<CombatState>? onComplete, Action<IEffectNode, CombatState, Action<CombatState>?> dispatch)
+    {
+        var typed = (ITransformCardNodeCore)node;
+        var cardInstId = typed.EvaluateCardInstanceId(ctx, combat);
+
+        if (cardInstId is null)
+        {
+            if (typed.ResultKey is { } missingKey)
+                ctx.Store(missingKey, new TransformCardOutcome(null, null, null, WasTransformed: false));
+            if (onComplete is not null)
+                combat.EnqueueContinuation(onComplete);
+            return;
+        }
+
+        var owners = typed.OwnerSelector.ResolveTargetsTraced(ctx, combat);
+        var owner = owners.FirstOrDefault();
+
+        if (owner == default)
+        {
+            if (typed.ResultKey is { } noOwnerKey)
+                ctx.Store(noOwnerKey, new TransformCardOutcome(cardInstId, null, null, WasTransformed: false));
+            if (onComplete is not null)
+                combat.EnqueueContinuation(onComplete);
+            return;
+        }
+
+        var slot = typed.ResultKey is not null ? new TransformCardOutcomeSlot() : null;
+
+        combat.EnqueueEffect(new TransformCardEffectRequest(
+            CombatantId: owner,
+            CardInstanceId: cardInstId.Value,
+            ToDefinition: typed.ToDefinition,
+            OutcomeSlot: slot));
+
+        if (typed.ResultKey is { } key && slot is not null)
+        {
+            var capturedSlot = slot;
+            combat.EnqueueContinuation(c =>
+            {
+                if (capturedSlot.Value is { } outcome)
+                    ctx.Store(key, outcome);
                 onComplete?.Invoke(c);
             });
         }
