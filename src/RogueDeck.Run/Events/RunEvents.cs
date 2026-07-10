@@ -31,6 +31,12 @@ public sealed record CombatResolvedRunEvent(
 
 public sealed record EventChoiceMadeRunEvent(NodeId NodeId, string ChoiceId) : IRunEvent;
 
+// A shop node's transactions (party deckbuilding follow-up / shop arc). ShopItemPurchased lets a relic react to
+// a purchase ("on buy, …"); ShopRerolled marks the stock being refreshed.
+public sealed record ShopItemPurchasedRunEvent(NodeId NodeId, string ItemId) : IRunEvent;
+
+public sealed record ShopRerolledRunEvent(NodeId NodeId) : IRunEvent;
+
 public sealed record ResourceChangedRunEvent(
     RunResourceId Resource,
     int PreviousAmount,

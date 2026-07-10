@@ -18,6 +18,8 @@ public static class RunEventCatalog
         new("mapChanged", typeof(MapChangedRunEvent), "the map topology changes"),
         new("combatResolved", typeof(CombatResolvedRunEvent), "a combat resolves"),
         new("eventChoiceMade", typeof(EventChoiceMadeRunEvent), "an event choice is made"),
+        new("shopItemPurchased", typeof(ShopItemPurchasedRunEvent), "a shop item is purchased"),
+        new("shopRerolled", typeof(ShopRerolledRunEvent), "a shop's stock is rerolled"),
         new("runEnded", typeof(RunEndedRunEvent), "the run ends"),
 
         new("rewardOffered", typeof(RewardOfferedRunEvent), "a reward is offered"),

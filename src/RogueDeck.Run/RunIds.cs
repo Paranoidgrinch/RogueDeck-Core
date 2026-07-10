@@ -127,6 +127,7 @@ public static class StandardRunIds
 
     public static readonly NodeType CombatNode = new("combat");
     public static readonly NodeType EventNode = new("event");
+    public static readonly NodeType ShopNode = new("shop");
 }
 
 public static class StandardRunLogTypes
@@ -159,4 +160,6 @@ public static class StandardRunLogTypes
     public const string CardUpgraded = "run.card-upgraded";
     public const string CardTransformed = "run.card-transformed";
     public const string CardTagChanged = "run.card-tag-changed";
+    public const string ShopPurchase = "run.shop-purchase";
+    public const string ShopRerolled = "run.shop-rerolled";
 }
