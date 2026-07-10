@@ -32,6 +32,7 @@ public sealed class StandardRunPackage : IRunPackage
             .RegisterEffectHandler(new EnableRelicRunEffectHandler())
             .RegisterEffectHandler(new ChangeMaxHealthRunEffectHandler())
             .RegisterEffectHandler(new GrantRewardRunEffectHandler())
+            .RegisterEffectHandler(new ForMemberRunEffectHandler())
             .RegisterEffectHandler(new ComputedResourceRunEffectHandler())
             .RegisterEffectHandler(new ConditionalRunEffectHandler())
             .RegisterEffectHandler(new DrawEffectsRunEffectHandler())

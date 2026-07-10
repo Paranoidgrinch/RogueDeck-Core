@@ -45,6 +45,47 @@ public sealed class InstanceSelector : IRunSelector<RunCardInstance>
         context.Run.Deck.Where(card => card.Id == Id).ToArray();
 }
 
+// Every party member (party deckbuilding B3). The source a member-scoped effect selects over; narrow it with
+// the ordinary combinators (Random/ChooseByPlayer) or the data reducers below.
+public sealed class PartyMembersSelector : IRunSelector<PartyMember>
+{
+    public IReadOnlyList<PartyMember> Select(RunEvalContext context) => context.Run.Party;
+}
+
+// Only the members still standing (HP > 0) — the usual target set, since a downed member is out for the fight.
+public sealed class LivingPartyMembersSelector : IRunSelector<PartyMember>
+{
+    public IReadOnlyList<PartyMember> Select(RunEvalContext context) =>
+        context.Run.Party.Where(m => m.Health.Current > 0).ToArray();
+}
+
+// The single member with this run-member id (empty if none) — the data way to target "member #2".
+public sealed class PartyMemberByIdSelector : IRunSelector<PartyMember>
+{
+    public RunMemberId Id { get; }
+    public PartyMemberByIdSelector(RunMemberId id) => Id = id;
+    public IReadOnlyList<PartyMember> Select(RunEvalContext context) =>
+        context.Run.Party.Where(m => m.Id == Id).ToArray();
+}
+
+// The living member with the least current HP (first in party order on a tie) — a common heal/target reducer.
+// Empty when the whole party is down.
+public sealed class LowestHealthPartyMemberSelector : IRunSelector<PartyMember>
+{
+    public IReadOnlyList<PartyMember> Select(RunEvalContext context)
+    {
+        PartyMember? lowest = null;
+        foreach (var member in context.Run.Party)
+        {
+            if (member.Health.Current <= 0)
+                continue;
+            if (lowest is null || member.Health.Current < lowest.Health.Current)
+                lowest = member;
+        }
+        return lowest is null ? Array.Empty<PartyMember>() : new[] { lowest };
+    }
+}
+
 // ── Combinators ───────────────────────────────────────────────────────────────────
 
 public sealed class WhereSelector<T> : IRunSelector<T>
@@ -154,6 +195,13 @@ public static class RunSelectors
 {
     public static IRunSelector<RunCardInstance> DeckCards { get; } = new DeckCardsSelector();
     public static IRunSelector<RelicInstance> Relics { get; } = new RelicsSelector();
+
+    // Party-member sources + reducers (party deckbuilding B3). Compose with Random/ChooseByPlayer for
+    // random / player-picked members.
+    public static IRunSelector<PartyMember> Party { get; } = new PartyMembersSelector();
+    public static IRunSelector<PartyMember> LivingParty { get; } = new LivingPartyMembersSelector();
+    public static IRunSelector<PartyMember> LowestHealthMember { get; } = new LowestHealthPartyMemberSelector();
+    public static IRunSelector<PartyMember> Member(RunMemberId id) => new PartyMemberByIdSelector(id);
 
     // A specific card copy by instance id (used by ForEach templates to target "this card").
     public static IRunSelector<RunCardInstance> Instance(RunCardInstanceId id) => new InstanceSelector(id);

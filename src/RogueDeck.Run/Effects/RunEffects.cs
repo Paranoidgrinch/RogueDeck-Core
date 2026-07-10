@@ -171,6 +171,32 @@ public sealed class AddRelicRunEffectHandler : RunEffectHandler<AddRelicRunEffec
     }
 }
 
+// Run a bundle of ordinary effects against each member a selector picks (party deckbuilding B3). This is how a
+// single-hero effect vocabulary (heal / damage / change-resource / add-card / add-relic …) becomes party-aware
+// without a parallel set of member-scoped handlers: for each selected member the run's single-hero accessors are
+// retargeted at it (RunState.PushActiveMember) and the inner effects are resolved INLINE, so they mutate that
+// member. Members resolve once up front (a snapshot), so an inner effect that changes the party mid-bundle
+// doesn't reshape who else is targeted. An empty selection is a no-op. For a single-hero run, selecting the
+// primary reduces to running the effects exactly as before.
+public sealed record ForMemberRunEffect(IRunSelector<PartyMember> Members, IReadOnlyList<IRunEffectRequest> Effects)
+    : IRunEffectRequest;
+
+public sealed class ForMemberRunEffectHandler : RunEffectHandler<ForMemberRunEffect>
+{
+    protected override void Resolve(RunState run, RunDefinitionRegistry registry, ForMemberRunEffect request)
+    {
+        var members = request.Members.Select(run.SelectorContext);
+        foreach (var member in members)
+        {
+            using (run.PushActiveMember(member))
+            {
+                foreach (var effect in request.Effects)
+                    registry.GetEffectHandler(effect.GetType()).Resolve(run, registry, effect);
+            }
+        }
+    }
+}
+
 // A reward is just a named bundle of other effects — the run author decides what it contains.
 public sealed record GrantRewardRunEffect(RewardId Reward, IReadOnlyList<IRunEffectRequest> Effects)
     : IRunEffectRequest;

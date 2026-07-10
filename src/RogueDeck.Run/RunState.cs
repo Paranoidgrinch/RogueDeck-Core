@@ -13,6 +13,11 @@ public sealed class RunState
     // generated here (run-scoped) so they stay unique across the whole party.
     private readonly List<PartyMember> _party = new();
     private int _nextMemberSeq;
+    // The member the single-hero accessors currently delegate to. Defaults to the primary (member 0), so a
+    // single-hero run is unchanged; a member-scoped effect temporarily retargets it via PushActiveMember, which
+    // is how ForMemberRunEffect makes the whole existing effect vocabulary (heal/damage/resource/card/relic) act
+    // on any chosen party member without a parallel set of member-aware handlers (party deckbuilding B3).
+    private PartyMember? _activeMember;
     private int _nextCardSeq;
     private readonly List<InstalledRunProgram> _installedPrograms = new();
     private readonly HashSet<RunFlagId> _flags = new();
@@ -33,8 +38,35 @@ public sealed class RunState
     public IReadOnlyList<PartyMember> Party => _party;
     public PartyMember Primary => _party[0];
 
-    // The primary member's HP pool — the historical single-hero accessor, delegating to member 0.
-    public HealthState Health => Primary.Health;
+    // The member the historical single-hero accessors resolve against — the primary unless a member scope is
+    // open (party deckbuilding B3). Callers that specifically mean "the hero" (projection/reconcile) use Primary.
+    public PartyMember ActiveMember => _activeMember ?? Primary;
+
+    // Retarget the single-hero accessors at `member` for the duration of the returned scope; disposing restores
+    // the previous target. ForMemberRunEffect wraps each selected member in one of these, then resolves ordinary
+    // effects inline so they mutate that member. Scopes nest (restore is stacked, not reset-to-primary).
+    public MemberScope PushActiveMember(PartyMember member)
+    {
+        ArgumentNullException.ThrowIfNull(member);
+        var previous = _activeMember;
+        _activeMember = member;
+        return new MemberScope(this, previous);
+    }
+
+    public readonly struct MemberScope : IDisposable
+    {
+        private readonly RunState _run;
+        private readonly PartyMember? _previous;
+        internal MemberScope(RunState run, PartyMember? previous)
+        {
+            _run = run;
+            _previous = previous;
+        }
+        public void Dispose() => _run._activeMember = _previous;
+    }
+
+    // The active member's HP pool — the historical single-hero accessor, delegating to member 0 by default.
+    public HealthState Health => ActiveMember.Health;
 
     // The run is defeated only when EVERY party member is down (party deckbuilding B2 — a downed member is out for
     // the fight but the run continues while any member lives). For a single-hero run this is exactly "the hero died".
@@ -83,15 +115,15 @@ public sealed class RunState
     // A selector context bound to this run and its chooser — what effect handlers pass to selectors.
     public RunEvalContext SelectorContext => new(this, chooser: EntityChooser);
 
-    public IReadOnlyDictionary<RunResourceId, int> Resources => Primary.Resources;
-    public IReadOnlyList<RunCardInstance> Deck => Primary.Deck;
-    public IReadOnlyList<RelicInstance> Relics => Primary.Relics;
+    public IReadOnlyDictionary<RunResourceId, int> Resources => ActiveMember.Resources;
+    public IReadOnlyList<RunCardInstance> Deck => ActiveMember.Deck;
+    public IReadOnlyList<RelicInstance> Relics => ActiveMember.Relics;
     public IReadOnlyList<InstalledRunProgram> InstalledPrograms => _installedPrograms;
     public IReadOnlyCollection<RunFlagId> Flags => _flags;
     public IReadOnlyDictionary<RunCounterId, int> Counters => _counters;
     public IReadOnlyList<IRunCombatModifier> PendingCombatModifiers => _pendingCombatModifiers;
     public int ActiveRewardModifierCount => _rewardModifiers.Count;
-    public IReadOnlyList<RunConsumable> Consumables => Primary.Consumables;
+    public IReadOnlyList<RunConsumable> Consumables => ActiveMember.Consumables;
     // The persistent player-controlled board roster (P5c). Empty ⇒ today's single-hero run.
     public IReadOnlyList<RunUnit> Units => _units;
     public IReadOnlyList<IRunEvent> EventHistory => _history;
@@ -133,28 +165,28 @@ public sealed class RunState
     // from a run-scoped sequence so a replayed run reproduces them.
     // ── Single-hero accessors (delegate to the primary member; run-scoped instance ids stay here) ──────────────
 
-    public RunCardInstance AddDeckCard(CardDefinitionId card) => AddDeckCardTo(Primary, card);
+    public RunCardInstance AddDeckCard(CardDefinitionId card) => AddDeckCardTo(ActiveMember, card);
 
-    public bool RemoveDeckCard(RunCardInstanceId id) => Primary.RemoveDeckCard(id);
+    public bool RemoveDeckCard(RunCardInstanceId id) => ActiveMember.RemoveDeckCard(id);
 
-    public int GetResource(RunResourceId resource) => Primary.GetResource(resource);
+    public int GetResource(RunResourceId resource) => ActiveMember.GetResource(resource);
 
-    public void SetResource(RunResourceId resource, int amount) => Primary.SetResource(resource, amount);
+    public void SetResource(RunResourceId resource, int amount) => ActiveMember.SetResource(resource, amount);
 
-    public void AddRelic(RelicInstance relic) => Primary.AddRelic(relic);
+    public void AddRelic(RelicInstance relic) => ActiveMember.AddRelic(relic);
 
-    public bool RemoveRelic(RelicId id) => Primary.RemoveRelic(id);
+    public bool RemoveRelic(RelicId id) => ActiveMember.RemoveRelic(id);
 
-    public RelicInstance? FindRelic(RelicId id) => Primary.FindRelic(id);
+    public RelicInstance? FindRelic(RelicId id) => ActiveMember.FindRelic(id);
 
     public RunConsumable AddConsumable(
         ConsumableId definition, IReadOnlyList<IRunEffectRequest> useEffects, RelicCombatRule? combatUse = null) =>
-        Primary.AddConsumable(new RunConsumable(
+        ActiveMember.AddConsumable(new RunConsumable(
             new ConsumableInstanceId($"consumable#{++_nextConsumableSeq}"), definition, useEffects, combatUse));
 
-    public RunConsumable? FindConsumable(ConsumableInstanceId id) => Primary.FindConsumable(id);
+    public RunConsumable? FindConsumable(ConsumableInstanceId id) => ActiveMember.FindConsumable(id);
 
-    public bool RemoveConsumable(ConsumableInstanceId id) => Primary.RemoveConsumable(id);
+    public bool RemoveConsumable(ConsumableInstanceId id) => ActiveMember.RemoveConsumable(id);
 
     // Field a persistent board unit into the roster from its authored data (P5c). Generates a deterministic
     // instance id, seeds a fresh HealthState at full HP, and copies its starting position + statuses.
