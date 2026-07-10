@@ -33,6 +33,10 @@ public sealed record RunBlueprint(
     // event / starting inventory can grant one by id. An init property, like Relics.
     public IReadOnlyList<ConsumableData> Consumables { get; init; } = [];
 
+    // Shops the run defines as data, keyed by id. A map's shop node references one by id (ShopRef), the shop
+    // counterpart of the Events dictionary. An init property, like the rest.
+    public IReadOnlyDictionary<string, ShopDefinition> Shops { get; init; } = new Dictionary<string, ShopDefinition>();
+
     // The run's starting state — hero identity + how the RunState is seeded (health, resources). Previously the
     // sandbox hard-coded HP 30/40 and an empty inventory; carrying it here makes the run's opening data too. An init
     // property with a default that reproduces the old hard-coded start, so existing blueprints are unaffected.

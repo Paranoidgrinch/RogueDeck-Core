@@ -11,6 +11,7 @@ public sealed class RunContentRegistry
     private readonly IReadOnlyDictionary<RelicId, RelicDefinition> _relics;
     private readonly IReadOnlyDictionary<RewardTableId, IRewardSource> _rewardTables;
     private readonly IReadOnlyDictionary<ConsumableId, ConsumableDefinition> _consumables;
+    private readonly IReadOnlyDictionary<ShopId, ShopDefinition> _shops;
 
     public EncounterCatalog? Encounters { get; }
 
@@ -19,13 +20,15 @@ public sealed class RunContentRegistry
         EncounterCatalog? encounters,
         IReadOnlyDictionary<RelicId, RelicDefinition> relics,
         IReadOnlyDictionary<RewardTableId, IRewardSource> rewardTables,
-        IReadOnlyDictionary<ConsumableId, ConsumableDefinition> consumables)
+        IReadOnlyDictionary<ConsumableId, ConsumableDefinition> consumables,
+        IReadOnlyDictionary<ShopId, ShopDefinition> shops)
     {
         _events = events;
         Encounters = encounters;
         _relics = relics;
         _rewardTables = rewardTables;
         _consumables = consumables;
+        _shops = shops;
     }
 
     public EventScript GetEvent(EventId id) =>
@@ -48,9 +51,15 @@ public sealed class RunContentRegistry
             ? consumable
             : throw new InvalidOperationException($"No consumable registered with id '{id}'.");
 
+    public ShopDefinition GetShop(ShopId id) =>
+        _shops.TryGetValue(id, out var shop)
+            ? shop
+            : throw new InvalidOperationException($"No shop registered with id '{id}'.");
+
     public bool HasEvent(EventId id) => _events.ContainsKey(id);
     public bool HasRelic(RelicId id) => _relics.ContainsKey(id);
     public bool HasConsumable(ConsumableId id) => _consumables.ContainsKey(id);
+    public bool HasShop(ShopId id) => _shops.ContainsKey(id);
 
     // Validates that every node in a map resolves: its node type has a resolver, and any EventRef / EncounterRef
     // it carries names registered content. Throws with all problems aggregated; returns nothing on success.
@@ -73,6 +82,9 @@ public sealed class RunContentRegistry
                 case EncounterRef reference when Encounters is null || !Encounters.Contains(reference.Id):
                     problems.Add($"Node '{node.Id}' references unknown encounter '{reference.Id}'.");
                     break;
+                case ShopRef reference when !HasShop(reference.Id):
+                    problems.Add($"Node '{node.Id}' references unknown shop '{reference.Id}'.");
+                    break;
             }
         }
 
@@ -88,6 +100,7 @@ public sealed class RunContentRegistryBuilder
     private readonly Dictionary<RelicId, RelicDefinition> _relics = new();
     private readonly Dictionary<RewardTableId, IRewardSource> _rewardTables = new();
     private readonly Dictionary<ConsumableId, ConsumableDefinition> _consumables = new();
+    private readonly Dictionary<ShopId, ShopDefinition> _shops = new();
     private EncounterCatalog? _encounters;
 
     public RunContentRegistryBuilder RegisterEvent(EventId id, EventScript script)
@@ -122,6 +135,14 @@ public sealed class RunContentRegistryBuilder
         return this;
     }
 
+    public RunContentRegistryBuilder RegisterShop(ShopId id, ShopDefinition shop)
+    {
+        ArgumentNullException.ThrowIfNull(shop);
+        if (!_shops.TryAdd(id, shop))
+            throw new InvalidOperationException($"A shop with id '{id}' is already registered.");
+        return this;
+    }
+
     public RunContentRegistryBuilder SetEncounters(EncounterCatalog encounters)
     {
         ArgumentNullException.ThrowIfNull(encounters);
@@ -130,5 +151,5 @@ public sealed class RunContentRegistryBuilder
     }
 
     public RunContentRegistry Build() =>
-        new(_events, _encounters, _relics, _rewardTables, _consumables);
+        new(_events, _encounters, _relics, _rewardTables, _consumables, _shops);
 }

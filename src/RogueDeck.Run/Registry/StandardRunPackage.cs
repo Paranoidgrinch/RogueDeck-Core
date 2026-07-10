@@ -67,6 +67,6 @@ public sealed class StandardRunPackage : IRunPackage
         builder
             .RegisterResolver(new CombatNodeResolver(_combatDriver, encounters: _content?.Encounters))
             .RegisterResolver(new EventNodeResolver(_content))
-            .RegisterResolver(new ShopNodeResolver());
+            .RegisterResolver(new ShopNodeResolver(_content));
     }
 }

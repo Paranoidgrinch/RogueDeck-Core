@@ -89,6 +89,12 @@ public readonly record struct EncounterId(string Value)
     public override string ToString() => Value;
 }
 
+// Identity of a data-defined shop, referenced by a shop node (ShopRef) instead of an inline ShopDefinition.
+public readonly record struct ShopId(string Value)
+{
+    public override string ToString() => Value;
+}
+
 // The kind of a consumable (e.g. "potion.fire"); and the identity of one owned copy in the run inventory.
 public readonly record struct ConsumableId(string Value)
 {

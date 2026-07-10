@@ -48,17 +48,23 @@ public sealed record ShopDefinition(
     ShopReroll? Reroll = null,
     IReadOnlyList<ShopService>? Services = null) : IRunNodePayload;
 
+// A shop node payload's reference form: name an authored shop by id (resolved via the content registry) instead
+// of embedding the ShopDefinition inline — the shop counterpart of EventRef, so a map can reference a shop as data.
+public sealed record ShopRef(ShopId Id) : IRunNodePayload;
+
 public sealed class ShopNodeResolver : INodeResolver
 {
     public const string RerollChoiceId = "reroll";
     public const string LeaveChoiceId = "leave";
 
+    private readonly RunContentRegistry? _content;
     private readonly int _maxRounds;
 
-    public ShopNodeResolver(int maxRounds = 256)
+    public ShopNodeResolver(RunContentRegistry? content = null, int maxRounds = 256)
     {
         if (maxRounds <= 0)
             throw new ArgumentOutOfRangeException(nameof(maxRounds));
+        _content = content;
         _maxRounds = maxRounds;
     }
 
@@ -66,9 +72,7 @@ public sealed class ShopNodeResolver : INodeResolver
 
     public NodeOutcome Resolve(NodeResolveContext context, Node node)
     {
-        if (node.Payload is not ShopDefinition shop)
-            throw new ArgumentException(
-                $"Shop node '{node.Id}' payload must be a ShopDefinition.", nameof(node));
+        var shop = ResolveShop(node);
 
         var run = context.Run;
         var display = Draw(run, shop);
@@ -165,6 +169,19 @@ public sealed class ShopNodeResolver : INodeResolver
         choices.Add(new EventChoice(LeaveChoiceId, Array.Empty<IRunEffectRequest>(), TextKey: "event.shop.leave"));
         return choices;
     }
+
+    // A shop node carries either an inline ShopDefinition (escape) or a data ShopRef resolved via the content
+    // registry — the same inline-or-reference shape as an event node.
+    private ShopDefinition ResolveShop(Node node) => node.Payload switch
+    {
+        ShopDefinition shop => shop,
+        ShopRef reference => _content is not null
+            ? _content.GetShop(reference.Id)
+            : throw new InvalidOperationException(
+                $"Shop node '{node.Id}' references shop '{reference.Id}' but the resolver has no content registry."),
+        _ => throw new ArgumentException(
+            $"Shop node '{node.Id}' payload must be a ShopDefinition or a ShopRef.", nameof(node)),
+    };
 
     // A resource cost: affordable when the balance covers it, paid by deducting it — the same shape as an event's
     // PayResource, so a purchase serialises and re-checks affordability uniformly.

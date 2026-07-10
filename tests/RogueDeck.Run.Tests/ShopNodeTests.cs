@@ -39,6 +39,53 @@ public class ShopNodeTests
     }
 
     [Fact]
+    public void A_shop_ref_resolves_the_named_shop_from_content_and_plays()
+    {
+        var shop = new ShopDefinition(new[] { Item("sword", 30, "sword") }, OfferCount: 4);
+        var content = new RunContentRegistryBuilder().RegisterShop(new ShopId("store"), shop).Build();
+        var defs = new RunDefinitionRegistryBuilder();
+        new StandardRunPackage(new AutoPlayCombatDriver(), content).RegisterDefinitions(defs);
+        var registry = defs.Build();
+
+        var run = NewRun(100);
+        var provider = new ScriptedChoiceProvider("sword", "leave");
+        run.SetEntityChooser(provider);
+        var context = new NodeResolveContext(run, provider, registry, new RunEffectProcessor());
+        var node = new Node(new NodeId("n"), StandardRunIds.ShopNode, new ShopRef(new ShopId("store")));
+
+        registry.GetResolver(StandardRunIds.ShopNode).Resolve(context, node);
+
+        Assert.Equal(70, run.GetResource(Gold));
+        Assert.Equal(new[] { "sword" }, run.Deck.Select(c => c.DefinitionId.value));
+    }
+
+    [Fact]
+    public void Content_validation_flags_a_map_shop_ref_with_no_shop()
+    {
+        var content = new RunContentRegistryBuilder().Build(); // no shops registered
+        var defs = new RunDefinitionRegistryBuilder();
+        new StandardRunPackage(new AutoPlayCombatDriver(), content).RegisterDefinitions(defs);
+        var map = new RunMap(new[]
+        {
+            new Node(new NodeId("n"), StandardRunIds.ShopNode, new ShopRef(new ShopId("ghost"))),
+        });
+
+        var ex = Assert.Throws<InvalidOperationException>(() => content.Validate(map, defs.Build()));
+        Assert.Contains("unknown shop 'ghost'", ex.Message);
+    }
+
+    [Fact]
+    public void A_shop_ref_round_trips_through_RunJson()
+    {
+        var options = RunJson.CreateOptions();
+        var node = new Node(new NodeId("n"), StandardRunIds.ShopNode, new ShopRef(new ShopId("store")));
+
+        var back = RunJson.FromJson<Node>(RunJson.ToJson(node, options), options);
+
+        Assert.Equal(new ShopId("store"), Assert.IsType<ShopRef>(back.Payload).Id);
+    }
+
+    [Fact]
     public void A_shop_node_round_trips_through_RunJson_and_still_works()
     {
         var options = RunJson.CreateOptions();

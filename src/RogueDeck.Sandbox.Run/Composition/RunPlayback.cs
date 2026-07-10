@@ -161,6 +161,8 @@ public sealed class RunPlayback(Action onChanged) : IDisposable
             builder.RegisterConsumable(consumable.ToDefinition());
         foreach (var (id, script) in blueprint.Events)
             builder.RegisterEvent(new EventId(id), script);
+        foreach (var (id, shop) in blueprint.Shops)
+            builder.RegisterShop(new ShopId(id), shop);
         return builder.Build();
     }
 
