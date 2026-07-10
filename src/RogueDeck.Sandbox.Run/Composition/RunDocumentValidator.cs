@@ -12,6 +12,10 @@ public static class RunDocumentValidator
     public const string CardsTab = "Cards";
     public const string EncountersTab = "Encounters";
     public const string RunTab = "Run";
+    public const string HeroTab = "Hero";
+
+    // Relics that are always available even without an authored definition (the built-in samples).
+    private static readonly string[] BuiltInRelics = { "bloodstone", "leech" };
 
     public static IReadOnlyList<string> Validate(RunBlueprint blueprint)
     {
@@ -37,6 +41,25 @@ public static class RunDocumentValidator
         foreach (var card in blueprint.Deck.Select(c => c.value).Distinct())
             if (!cardIds.Contains(card))
                 problems.Add($"{CardsTab}: the starting deck uses card '{card}', which has no definition.");
+
+        // Party members (party deckbuilding C2): each member's deck / starting relics / starting consumables must
+        // reference content that exists, the same cross-refs the hero's starting state relies on.
+        var relicIds = new HashSet<string>(blueprint.Relics.Select(r => r.Id).Concat(BuiltInRelics), StringComparer.Ordinal);
+        var consumableIds = new HashSet<string>(blueprint.Consumables.Select(c => c.Id), StringComparer.Ordinal);
+        for (var i = 0; i < blueprint.Start.StartingParty.Count; i++)
+        {
+            var member = blueprint.Start.StartingParty[i];
+            var who = $"party member {i + 2} ('{member.DisplayNameKey}')";
+            foreach (var card in member.Deck.Distinct(StringComparer.Ordinal))
+                if (!cardIds.Contains(card))
+                    problems.Add($"{CardsTab}: {who} has deck card '{card}', which has no definition.");
+            foreach (var relic in member.StartingRelics.Distinct(StringComparer.Ordinal))
+                if (!relicIds.Contains(relic))
+                    problems.Add($"{HeroTab}: {who} starts with relic '{relic}', which has no definition.");
+            foreach (var consumable in member.StartingConsumables.Distinct(StringComparer.Ordinal))
+                if (!consumableIds.Contains(consumable))
+                    problems.Add($"{HeroTab}: {who} starts with consumable '{consumable}', which has no definition.");
+        }
 
         // Every enemy must run actions that are defined.
         foreach (var encounter in blueprint.Encounters)

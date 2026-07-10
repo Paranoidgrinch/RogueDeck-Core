@@ -71,6 +71,44 @@ public class RunDocumentValidatorTests
     }
 
     [Fact]
+    public void A_valid_party_member_has_no_problems()
+    {
+        // The member's deck references the defined "strike" card and it starts with the built-in bloodstone relic.
+        var member = new RunMemberData
+        {
+            DisplayNameKey = "Mage",
+            Deck = new[] { "strike" },
+            StartingRelics = new[] { "bloodstone" },
+        };
+        var bp = Valid() with { Start = Valid().Start with { StartingParty = new[] { member } } };
+        Assert.Empty(RunDocumentValidator.Validate(bp));
+    }
+
+    [Fact]
+    public void Flags_a_party_member_deck_card_with_no_definition()
+    {
+        var member = new RunMemberData { DisplayNameKey = "Mage", Deck = new[] { "ghost" } };
+        var bp = Valid() with { Start = Valid().Start with { StartingParty = new[] { member } } };
+        Assert.Contains(RunDocumentValidator.Validate(bp),
+            p => p.StartsWith("Cards:") && p.Contains("deck card 'ghost'") && p.Contains("Mage"));
+    }
+
+    [Fact]
+    public void Flags_party_member_starting_relics_and_consumables_with_no_definition()
+    {
+        var member = new RunMemberData
+        {
+            DisplayNameKey = "Rogue",
+            StartingRelics = new[] { "phantom-relic" },
+            StartingConsumables = new[] { "phantom-potion" },
+        };
+        var bp = Valid() with { Start = Valid().Start with { StartingParty = new[] { member } } };
+        var problems = RunDocumentValidator.Validate(bp);
+        Assert.Contains(problems, p => p.StartsWith("Hero:") && p.Contains("relic 'phantom-relic'"));
+        Assert.Contains(problems, p => p.StartsWith("Hero:") && p.Contains("consumable 'phantom-potion'"));
+    }
+
+    [Fact]
     public void Flags_a_duplicate_card_id()
     {
         var bp = Valid() with { Cards = new[] { new CardData { Id = "strike" }, new CardData { Id = "strike" } } };

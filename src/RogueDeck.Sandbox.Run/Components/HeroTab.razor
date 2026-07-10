@@ -102,6 +102,98 @@
             </label>
         </div>
     }
+
+    <h2>Party (multiplayer)</h2>
+    <p class="muted">Extra player characters BESIDES the hero (member 0 above), for a party of 1–4. Each is a full
+        player: its own HP, deck, wallet (gold), relics, and consumables. In a fight all members act at once
+        (simultaneous phase); a downed member is out for that fight but the run continues while any member lives.
+        Empty ⇒ a single-hero run, exactly as before.</p>
+    @for (var i = 0; i < Party.Count; i++)
+    {
+        var index = i; // capture for the lambdas
+        var member = Party[index];
+        <div class="member-card" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:.75rem; margin:.5rem 0">
+            <div class="run-bar" style="justify-content:space-between">
+                <strong>Member @(index + 2)</strong>
+                <button class="mini" @onclick="() => RemoveMember(index)">✕ remove member</button>
+            </div>
+            <div class="run-bar">
+                <label>Name
+                    <input value="@member.DisplayNameKey" style="width:10rem"
+                           @onchange="e => SetMemberName(index, AsString(e.Value))" />
+                </label>
+                <label>Max HP
+                    <input type="number" value="@member.MaxHealth" style="width:5rem"
+                           @onchange="e => SetMemberMaxHp(index, AsInt(e.Value, member.MaxHealth))" />
+                </label>
+                <label>Gold
+                    <input type="number" value="@MemberGold(member)" style="width:5rem"
+                           @onchange="e => SetMemberGold(index, AsInt(e.Value, MemberGold(member)))" />
+                </label>
+            </div>
+
+            <div class="run-bar">
+                <span class="muted">Deck:</span>
+                @if (member.Deck.Count == 0)
+                {
+                    <span class="muted">(empty)</span>
+                }
+                @for (var c = 0; c < member.Deck.Count; c++)
+                {
+                    var cardIndex = c;
+                    <span class="chip" style="margin-right:.25rem">@member.Deck[cardIndex]
+                        <button class="mini" @onclick="() => RemoveMemberCard(index, cardIndex)">✕</button>
+                    </span>
+                }
+            </div>
+            <div class="run-bar">
+                <select value="" @onchange="e => AddMemberCard(index, AsString(e.Value))">
+                    <option value="">+ add card…</option>
+                    @foreach (var id in AvailableCards)
+                    {
+                        <option value="@id">@id</option>
+                    }
+                </select>
+                @if (AvailableCards.Count == 0)
+                {
+                    <span class="muted">Author cards in the Cards tab first.</span>
+                }
+            </div>
+
+            <div class="run-bar">
+                <span class="muted">Relics:</span>
+                @foreach (var id in AvailableRelics)
+                {
+                    <label style="margin-right:.5rem">
+                        <input type="checkbox" checked="@member.StartingRelics.Contains(id)"
+                               @onchange="e => ToggleMemberRelic(index, id, AsBool(e.Value))" /> @id
+                    </label>
+                }
+            </div>
+            <div class="run-bar">
+                <span class="muted">Consumables:</span>
+                @if (AvailableConsumables.Count == 0)
+                {
+                    <span class="muted">(none defined)</span>
+                }
+                @foreach (var id in AvailableConsumables)
+                {
+                    <label style="margin-right:.5rem">
+                        <input type="checkbox" checked="@member.StartingConsumables.Contains(id)"
+                               @onchange="e => ToggleMemberConsumable(index, id, AsBool(e.Value))" /> @id
+                    </label>
+                }
+            </div>
+        </div>
+    }
+    @if (Party.Count < 3)
+    {
+        <button class="mini" @onclick="AddMember">+ add party member</button>
+    }
+    else
+    {
+        <p class="muted">Party is full (4 members: the hero + 3).</p>
+    }
 </section>
 
 @code {
@@ -154,6 +246,88 @@
         _blueprint = _blueprint with { Start = start };
         Doc.Save(_blueprint);
     }
+
+    // ── party members (party deckbuilding C2: author 1–4 members besides the hero) ──────────────
+    private const string GoldResource = "gold";
+    private IReadOnlyList<RunMemberData> Party => Start.StartingParty;
+    private IReadOnlyList<string> AvailableCards =>
+        _blueprint.Cards.Select(c => c.Id).Distinct(StringComparer.Ordinal).ToList();
+
+    private static int MemberGold(RunMemberData member) =>
+        member.Resources.TryGetValue(GoldResource, out var g) ? g : 0;
+
+    private void EditParty(Func<List<RunMemberData>, List<RunMemberData>> edit) =>
+        Apply(Start with { StartingParty = edit(Party.ToList()) });
+
+    private void EditMember(int index, Func<RunMemberData, RunMemberData> edit) =>
+        EditParty(list =>
+        {
+            if (index >= 0 && index < list.Count)
+                list[index] = edit(list[index]);
+            return list;
+        });
+
+    private void AddMember() =>
+        EditParty(list =>
+        {
+            if (list.Count < 3)
+                list.Add(new RunMemberData { DisplayNameKey = $"Member {list.Count + 2}", MaxHealth = 30 });
+            return list;
+        });
+
+    private void RemoveMember(int index) =>
+        EditParty(list =>
+        {
+            if (index >= 0 && index < list.Count)
+                list.RemoveAt(index);
+            return list;
+        });
+
+    private void SetMemberName(int index, string name) =>
+        EditMember(index, m => m with { DisplayNameKey = string.IsNullOrWhiteSpace(name) ? m.DisplayNameKey : name.Trim() });
+
+    private void SetMemberMaxHp(int index, int value) =>
+        EditMember(index, m => m with { MaxHealth = Math.Max(1, value) });
+
+    private void SetMemberGold(int index, int value) =>
+        EditMember(index, m => m with
+        {
+            Resources = new Dictionary<string, int>(m.Resources) { [GoldResource] = Math.Max(0, value) },
+        });
+
+    private void AddMemberCard(int index, string cardId)
+    {
+        if (string.IsNullOrWhiteSpace(cardId))
+            return;
+        EditMember(index, m => m with { Deck = m.Deck.Append(cardId).ToList() });
+    }
+
+    private void RemoveMemberCard(int index, int cardIndex) =>
+        EditMember(index, m =>
+        {
+            var deck = m.Deck.ToList();
+            if (cardIndex >= 0 && cardIndex < deck.Count)
+                deck.RemoveAt(cardIndex);
+            return m with { Deck = deck };
+        });
+
+    private void ToggleMemberRelic(int index, string id, bool on) =>
+        EditMember(index, m =>
+        {
+            var relics = m.StartingRelics.Where(r => r != id).ToList();
+            if (on)
+                relics.Add(id);
+            return m with { StartingRelics = relics };
+        });
+
+    private void ToggleMemberConsumable(int index, string id, bool on) =>
+        EditMember(index, m =>
+        {
+            var consumables = m.StartingConsumables.Where(c => c != id).ToList();
+            if (on)
+                consumables.Add(id);
+            return m with { StartingConsumables = consumables };
+        });
 
     private void SetName(string name) => Apply(Start with { HeroName = string.IsNullOrWhiteSpace(name) ? "Hero" : name.Trim() });
 
