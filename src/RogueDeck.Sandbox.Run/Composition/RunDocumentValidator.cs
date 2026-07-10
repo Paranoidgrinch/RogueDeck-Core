@@ -80,6 +80,9 @@ public static class RunDocumentValidator
                 case EventRef reference when !blueprint.Events.ContainsKey(reference.Id.Value):
                     problems.Add($"{RunTab}: map node '{node.Id.Value}' points at unknown event '{reference.Id.Value}'.");
                     break;
+                case ShopRef reference when !blueprint.Shops.ContainsKey(reference.Id.Value):
+                    problems.Add($"{RunTab}: map node '{node.Id.Value}' points at unknown shop '{reference.Id.Value}'.");
+                    break;
             }
         }
 

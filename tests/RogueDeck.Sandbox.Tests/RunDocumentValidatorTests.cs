@@ -109,6 +109,34 @@ public class RunDocumentValidatorTests
     }
 
     [Fact]
+    public void Flags_a_map_node_pointing_at_an_unknown_shop()
+    {
+        var bp = Valid() with
+        {
+            Map = new RunMap(new Node[]
+            {
+                new(new NodeId("n1"), StandardRunIds.ShopNode, new ShopRef(new ShopId("store"))),
+            }),
+        };
+        Assert.Contains(RunDocumentValidator.Validate(bp), p => p.Contains("unknown shop 'store'"));
+    }
+
+    [Fact]
+    public void A_referenced_shop_that_exists_has_no_shop_problem()
+    {
+        var shop = new ShopDefinition(System.Array.Empty<ShopEntry>(), OfferCount: 3);
+        var bp = Valid() with
+        {
+            Shops = new Dictionary<string, ShopDefinition> { ["store"] = shop },
+            Map = new RunMap(new Node[]
+            {
+                new(new NodeId("n1"), StandardRunIds.ShopNode, new ShopRef(new ShopId("store"))),
+            }),
+        };
+        Assert.DoesNotContain(RunDocumentValidator.Validate(bp), p => p.Contains("shop"));
+    }
+
+    [Fact]
     public void Flags_a_duplicate_card_id()
     {
         var bp = Valid() with { Cards = new[] { new CardData { Id = "strike" }, new CardData { Id = "strike" } } };

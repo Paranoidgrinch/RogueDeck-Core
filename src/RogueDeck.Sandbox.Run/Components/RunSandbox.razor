@@ -67,7 +67,7 @@
                         var isEntry = bp.Map.EntryNodeIds.Contains(mapNode.Id);
                         <g>
                             <rect x="@p.X" y="@p.Y" width="@MapGraphLayout.NodeWidth" height="@MapGraphLayout.NodeHeight"
-                                  rx="6" fill="@(mapNode.Type == StandardRunIds.CombatNode ? "#fde2e2" : "#e2ecfd")"
+                                  rx="6" fill="@(mapNode.Type == StandardRunIds.CombatNode ? "#fde2e2" : mapNode.Type == StandardRunIds.ShopNode ? "#fef3c7" : "#e2ecfd")"
                                   stroke="@(isEntry ? "#1a7f37" : "#999")" stroke-width="@(isEntry ? "2.5" : "1")" />
                             <text x="@(p.X + 8)" y="@(p.Y + 18)" font-weight="bold">@mapNode.Id.Value</text>
                             <text x="@(p.X + 8)" y="@(p.Y + 34)" fill="#555">@NodeKind(mapNode): @NodeTarget(mapNode)</text>
@@ -101,10 +101,18 @@
                 <select @bind="_newNodeType">
                     <option value="event">event</option>
                     <option value="combat">combat</option>
+                    <option value="shop">shop</option>
                 </select>
                 <select @bind="_newNodeTarget">
                     <option value="">— target —</option>
-                    @if (_newNodeType == "combat")
+                    @if (_newNodeType == "shop")
+                    {
+                        @foreach (var key in bp.Shops.Keys)
+                        {
+                            <option value="@key">@key</option>
+                        }
+                    }
+                    else if (_newNodeType == "combat")
                     {
                         @foreach (var encounter in bp.Encounters)
                         {
@@ -255,9 +263,12 @@
     {
         if (string.IsNullOrEmpty(_newNodeTarget) || !TryBlueprint(out var blueprint))
             return;
-        var (type, payload) = _newNodeType == "combat"
-            ? (StandardRunIds.CombatNode, (IRunNodePayload)new EncounterRef(new EncounterId(_newNodeTarget)))
-            : (StandardRunIds.EventNode, new EventRef(new EventId(_newNodeTarget)));
+        var (type, payload) = _newNodeType switch
+        {
+            "combat" => (StandardRunIds.CombatNode, (IRunNodePayload)new EncounterRef(new EncounterId(_newNodeTarget))),
+            "shop" => (StandardRunIds.ShopNode, new ShopRef(new ShopId(_newNodeTarget))),
+            _ => (StandardRunIds.EventNode, new EventRef(new EventId(_newNodeTarget))),
+        };
         var node = new Node(new NodeId($"n{_nodeSeq++}"), type, payload);
         RebuildMap(blueprint, RunMapAuthoring.AddNode(blueprint.Map, node));
     }
@@ -325,12 +336,17 @@
     private static int? ParseInt(ChangeEventArgs e) =>
         int.TryParse(e.Value?.ToString(), out var value) ? value : null;
 
-    private static string NodeKind(Node node) => node.Type == StandardRunIds.CombatNode ? "combat" : "event";
+    private static string NodeKind(Node node) =>
+        node.Type == StandardRunIds.CombatNode ? "combat"
+        : node.Type == StandardRunIds.ShopNode ? "shop"
+        : "event";
 
     private static string NodeTarget(Node node) => node.Payload switch
     {
         EventRef e => e.Id.Value,
         EncounterRef en => en.Id.Value,
+        ShopRef sh => sh.Id.Value,
+        ShopDefinition => "(inline)",
         _ => "?",
     };
 

@@ -1,0 +1,247 @@
+@rendermode InteractiveServer
+@inject RunDocument Doc
+@using RogueDeck.Core.Combat
+
+@* The dedicated Shops tab: authors the run's named shops (RunBlueprint.Shops) on the shared document. A map's
+   shop node references one by id (ShopRef) — author the shop here, point a Run-tab node at it. Each shop has a
+   pool of buy-once items (a card or relic for a price), how many are shown at once, an optional paid reroll, and
+   an optional card-removal service. Prices use the shop's currency (gold by default). *@
+<section style="padding:1rem; max-width:70rem">
+    <h1>Shops</h1>
+    <p class="muted">Author named shops. A shop shows some of its item pool at once; items are buy-once, a paid
+        reroll refreshes the display, and the card-removal service lets the player pay to remove a deck card.
+        Reference a shop from a map node (kind "shop") on the Run tab.</p>
+
+    @foreach (var (id, shop) in Shops)
+    {
+        var shopId = id;
+        var s = shop;
+        <div class="member-card" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:.75rem; margin:.75rem 0">
+            <div class="run-bar" style="justify-content:space-between">
+                <strong>Shop "@shopId"</strong>
+                <button class="mini" @onclick="() => RemoveShop(shopId)">✕ remove shop</button>
+            </div>
+            <div class="run-bar">
+                <label>Currency
+                    <input value="@ShopCurrency(s)" style="width:6rem"
+                           @onchange="e => SetCurrency(shopId, AsString(e.Value))" />
+                </label>
+                <label>Show at once
+                    <input type="number" value="@s.OfferCount" style="width:4rem"
+                           @onchange="e => SetOfferCount(shopId, AsInt(e.Value, s.OfferCount))" />
+                </label>
+                <label><input type="checkbox" checked="@(s.Reroll is not null)"
+                              @onchange="e => ToggleReroll(shopId, AsBool(e.Value))" /> reroll</label>
+                @if (s.Reroll is { } rr)
+                {
+                    <label>price
+                        <input type="number" value="@rr.Price" style="width:4rem"
+                               @onchange="e => SetRerollPrice(shopId, AsInt(e.Value, rr.Price))" />
+                    </label>
+                }
+                <label><input type="checkbox" checked="@HasRemoval(s)"
+                              @onchange="e => ToggleRemoval(shopId, AsBool(e.Value))" /> card removal</label>
+                @if (RemovalService(s) is { } svc)
+                {
+                    <label>price
+                        <input type="number" value="@svc.Price" style="width:4rem"
+                               @onchange="e => SetRemovalPrice(shopId, AsInt(e.Value, svc.Price))" />
+                    </label>
+                }
+            </div>
+
+            <div class="run-bar"><span class="muted">Items (buy-once):</span></div>
+            @for (var i = 0; i < s.Offers.Count; i++)
+            {
+                var index = i;
+                var item = s.Offers[index];
+                <div class="run-bar">
+                    <label>id
+                        <input value="@item.Id" style="width:8rem"
+                               @onchange="e => SetItemId(shopId, index, AsString(e.Value))" />
+                    </label>
+                    <label>
+                        <select value="@PayloadKind(item)" @onchange="e => SetItemKind(shopId, index, AsString(e.Value))">
+                            <option value="card">add card</option>
+                            <option value="relic">add relic</option>
+                        </select>
+                    </label>
+                    <label>value
+                        <input value="@PayloadValue(item)" placeholder="card / relic id" style="width:8rem"
+                               @onchange="e => SetItemValue(shopId, index, AsString(e.Value))" />
+                    </label>
+                    <label>price
+                        <input type="number" value="@item.Price" style="width:5rem"
+                               @onchange="e => SetItemPrice(shopId, index, AsInt(e.Value, item.Price))" />
+                    </label>
+                    <button class="mini" @onclick="() => RemoveItem(shopId, index)">✕</button>
+                </div>
+            }
+            <button class="mini" @onclick="() => AddItem(shopId)">+ add item</button>
+        </div>
+    }
+
+    <div class="run-bar">
+        <input value="@_newShopId" placeholder="new shop id" style="width:10rem"
+               @onchange="e => _newShopId = AsString(e.Value)" />
+        <button class="mini" @onclick="AddShop" disabled="@string.IsNullOrWhiteSpace(_newShopId)">+ add shop</button>
+    </div>
+</section>
+
+@code {
+    private RunBlueprint _blueprint = default!;
+    private string _newShopId = "";
+
+    protected override void OnInitialized() => _blueprint = Doc.Load();
+
+    private IReadOnlyDictionary<string, ShopDefinition> Shops => _blueprint.Shops;
+
+    private static string AsString(object? v) => v?.ToString() ?? "";
+    private static int AsInt(object? v, int fallback) => int.TryParse(v?.ToString(), out var n) ? n : fallback;
+    private static bool AsBool(object? v) => v is bool b ? b : bool.TryParse(v?.ToString(), out var r) && r;
+
+    private const string DefaultCurrency = "gold";
+
+    // The shop's currency, read off its reroll / first item (all authored uniform here); gold by default.
+    private static string ShopCurrency(ShopDefinition s) =>
+        s.Reroll?.Currency.Value
+        ?? s.Offers.FirstOrDefault()?.Currency.Value
+        ?? s.Services?.FirstOrDefault()?.Currency.Value
+        ?? DefaultCurrency;
+
+    private static bool HasRemoval(ShopDefinition s) => RemovalService(s) is not null;
+    private static ShopService? RemovalService(ShopDefinition s) =>
+        s.Services?.FirstOrDefault(x => x.Id == "remove-card");
+
+    private static string PayloadKind(ShopEntry e) => e.Payload.FirstOrDefault() switch
+    {
+        AddRelicByIdRunEffect => "relic",
+        _ => "card",
+    };
+
+    private static string PayloadValue(ShopEntry e) => e.Payload.FirstOrDefault() switch
+    {
+        AddCardToDeckRunEffect c => c.Card.value,
+        AddRelicByIdRunEffect r => r.Relic.Value,
+        _ => "",
+    };
+
+    private static IReadOnlyList<IRunEffectRequest> BuildPayload(string kind, string value) => kind switch
+    {
+        "relic" => new IRunEffectRequest[] { new AddRelicByIdRunEffect(new RelicId(value)) },
+        _ => new IRunEffectRequest[] { new AddCardToDeckRunEffect(new CardDefinitionId(value)) },
+    };
+
+    // ── document plumbing ──────────────────────────────────────────────────────────
+    private void Save() => Doc.Save(_blueprint);
+
+    private void EditShops(Func<Dictionary<string, ShopDefinition>, Dictionary<string, ShopDefinition>> edit)
+    {
+        _blueprint = _blueprint with { Shops = edit(new Dictionary<string, ShopDefinition>(Shops)) };
+        Save();
+    }
+
+    private void EditShop(string id, Func<ShopDefinition, ShopDefinition> edit) =>
+        EditShops(shops =>
+        {
+            if (shops.TryGetValue(id, out var shop))
+                shops[id] = edit(shop);
+            return shops;
+        });
+
+    private void AddShop()
+    {
+        var id = _newShopId.Trim();
+        if (id.Length == 0 || Shops.ContainsKey(id))
+            return;
+        EditShops(shops =>
+        {
+            shops[id] = new ShopDefinition(Array.Empty<ShopEntry>(), OfferCount: 3);
+            return shops;
+        });
+        _newShopId = "";
+    }
+
+    private void RemoveShop(string id) => EditShops(shops => { shops.Remove(id); return shops; });
+
+    private void SetOfferCount(string id, int count) =>
+        EditShop(id, s => s with { OfferCount = Math.Max(0, count) });
+
+    // Re-stamp the whole shop's currency (items + reroll + service) — the UI authors one currency per shop.
+    private void SetCurrency(string id, string currency)
+    {
+        var c = new RunResourceId(string.IsNullOrWhiteSpace(currency) ? DefaultCurrency : currency.Trim());
+        EditShop(id, s => s with
+        {
+            Offers = s.Offers.Select(o => o with { Currency = c }).ToList(),
+            Reroll = s.Reroll is { } rr ? rr with { Currency = c } : null,
+            Services = s.Services?.Select(x => x with { Currency = c }).ToList(),
+        });
+    }
+
+    private void ToggleReroll(string id, bool on) =>
+        EditShop(id, s => s with
+        {
+            Reroll = on ? new ShopReroll(new RunResourceId(ShopCurrency(s)), 25) : null,
+        });
+
+    private void SetRerollPrice(string id, int price) =>
+        EditShop(id, s => s.Reroll is { } rr ? s with { Reroll = rr with { Price = Math.Max(0, price) } } : s);
+
+    private void ToggleRemoval(string id, bool on) =>
+        EditShop(id, s =>
+        {
+            var others = (s.Services ?? Array.Empty<ShopService>()).Where(x => x.Id != "remove-card").ToList();
+            if (on)
+                others.Add(ShopService.RemoveCard(new RunResourceId(ShopCurrency(s)), 75));
+            return s with { Services = others.Count == 0 ? null : others };
+        });
+
+    private void SetRemovalPrice(string id, int price) =>
+        EditShop(id, s => s with
+        {
+            Services = s.Services?
+                .Select(x => x.Id == "remove-card" ? x with { Price = Math.Max(0, price) } : x).ToList(),
+        });
+
+    // ── items ──────────────────────────────────────────────────────────────────────
+    private void EditItem(string shopId, int index, Func<ShopEntry, ShopEntry> edit) =>
+        EditShop(shopId, s =>
+        {
+            var offers = s.Offers.ToList();
+            if (index >= 0 && index < offers.Count)
+                offers[index] = edit(offers[index]);
+            return s with { Offers = offers };
+        });
+
+    private void AddItem(string shopId) =>
+        EditShop(shopId, s =>
+        {
+            var offers = s.Offers.ToList();
+            offers.Add(new ShopEntry(
+                $"item{offers.Count + 1}", new RunResourceId(ShopCurrency(s)), 50,
+                BuildPayload("card", "")));
+            return s with { Offers = offers };
+        });
+
+    private void RemoveItem(string shopId, int index) =>
+        EditShop(shopId, s =>
+        {
+            var offers = s.Offers.ToList();
+            if (index >= 0 && index < offers.Count)
+                offers.RemoveAt(index);
+            return s with { Offers = offers };
+        });
+
+    private void SetItemId(string shopId, int index, string id) =>
+        EditItem(shopId, index, item => string.IsNullOrWhiteSpace(id) ? item : item with { Id = id.Trim() });
+
+    private void SetItemPrice(string shopId, int index, int price) =>
+        EditItem(shopId, index, item => item with { Price = Math.Max(0, price) });
+
+    private void SetItemKind(string shopId, int index, string kind) =>
+        EditItem(shopId, index, item => item with { Payload = BuildPayload(kind, PayloadValue(item)) });
+
+    private void SetItemValue(string shopId, int index, string value) =>
+        EditItem(shopId, index, item => item with { Payload = BuildPayload(PayloadKind(item), value) });
+}
