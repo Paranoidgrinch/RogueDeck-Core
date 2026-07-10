@@ -32,12 +32,22 @@ public sealed class RunPlayback(Action onChanged) : IDisposable
             var content = BuildContent(blueprint);
             (CardCosts, CardNames, EnemyNames, HeroName) = DisplayNames(blueprint);
 
+            // A party run (party deckbuilding C2) uses the simultaneous team phase, which the hero-centric
+            // InteractiveCombatDriver can't drive; until a party-aware interactive driver exists, party fights
+            // auto-resolve headlessly (PartyAutoPlayCombatDriver) even in "interactive" mode, so the run still
+            // plays end-to-end and the per-member roster/inventory reconciles. Single-hero runs are unchanged.
+            var isParty = blueprint.Start.StartingParty.Count > 0;
+
             ICombatDriver driver;
-            if (interactive)
+            if (interactive && !isParty)
             {
                 CombatDriver = new InteractiveCombatDriver();
                 CombatDriver.Changed += onChanged;
                 driver = CombatDriver;
+            }
+            else if (isParty)
+            {
+                driver = new PartyAutoPlayCombatDriver();
             }
             else
             {

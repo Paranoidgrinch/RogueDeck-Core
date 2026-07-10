@@ -169,6 +169,39 @@
         }
     </section>
 
+    @* Party roster (party deckbuilding C2): a read-only per-member lens over the run's party — each member's HP,
+       wallet, deck size, relics, and consumables. Only shown for a real party (>1 member); the Inventory panel
+       above already covers the single hero. A downed member (0 HP) is flagged but kept — the run continues. *@
+    @if (session.Run.Party.Count > 1)
+    {
+        <section class="panel">
+            <h2>Party (@session.Run.Party.Count)</h2>
+            <p class="muted">Party fights currently auto-resolve (the simultaneous phase) — per-member HP is
+                reconciled here after each fight. Interactive per-member control is a follow-up.</p>
+            @for (var i = 0; i < session.Run.Party.Count; i++)
+            {
+                var member = session.Run.Party[i];
+                var downed = member.Health.Current <= 0;
+                <div class="row">
+                    <strong>@(i == 0 ? (HeroName ?? "Hero") : member.DisplayNameKey)</strong>
+                    <span class="muted">
+                        @member.Health.Current/@member.Health.Max HP@(downed ? " 💀 downed" : "")
+                        · 🪙 @member.GetResource(StandardRunIds.Gold)
+                        · deck @member.Deck.Count
+                        @if (member.Relics.Count > 0)
+                        {
+                            <text> · relics @string.Join(", ", member.Relics.Select(r => r.Definition.DisplayName))</text>
+                        }
+                        @if (member.Consumables.Count > 0)
+                        {
+                            <text> · consumables @string.Join(", ", member.Consumables.GroupBy(c => c.DefinitionId.Value).Select(Tally))</text>
+                        }
+                    </span>
+                </div>
+            }
+        </section>
+    }
+
     <section class="panel">
         <h2>Run log</h2>
         <ul class="log">
