@@ -32,8 +32,9 @@ public class ShopNodeTests
     private static void Resolve(RunState run, ShopDefinition shop, params string[] choices)
     {
         var registry = Registry();
-        var context = new NodeResolveContext(
-            run, new ScriptedChoiceProvider(choices), registry, new RunEffectProcessor());
+        var provider = new ScriptedChoiceProvider(choices);
+        run.SetEntityChooser(provider); // as RunRunner does — needed for a service's ChooseByPlayer selector
+        var context = new NodeResolveContext(run, provider, registry, new RunEffectProcessor());
         new ShopNodeResolver().Resolve(context, new Node(new NodeId("shop"), StandardRunIds.ShopNode, shop));
     }
 
@@ -89,6 +90,58 @@ public class ShopNodeTests
         Assert.Equal(80, run.GetResource(Gold));                         // 100 − 20 reroll
         Assert.Single(run.EventHistory.OfType<ShopRerolledRunEvent>());
         Assert.Empty(run.Deck);                                          // reroll buys nothing
+    }
+
+    [Fact]
+    public void The_card_removal_service_removes_a_chosen_card_for_its_price()
+    {
+        var run = NewRun(100);
+        run.AddDeckCard(new CardDefinitionId("a"));
+        run.AddDeckCard(new CardDefinitionId("b"));
+        var shop = new ShopDefinition(
+            Array.Empty<ShopEntry>(), OfferCount: 0,
+            Services: new[] { ShopService.RemoveCard(Gold, 25) });
+
+        // The scripted chooser removes the first candidate ("a").
+        Resolve(run, shop, "remove-card", "leave");
+
+        Assert.Equal(75, run.GetResource(Gold));                         // 100 − 25
+        Assert.Equal(new[] { "b" }, run.Deck.Select(c => c.DefinitionId.value));
+    }
+
+    [Fact]
+    public void A_non_repeatable_service_is_used_up_after_one_use()
+    {
+        var run = NewRun(100);
+        run.AddDeckCard(new CardDefinitionId("a"));
+        run.AddDeckCard(new CardDefinitionId("b"));
+        var shop = new ShopDefinition(
+            Array.Empty<ShopEntry>(), OfferCount: 0,
+            Services: new[] { ShopService.RemoveCard(Gold, 25) });
+
+        // Second "remove-card" finds the service used up → falls through to leave; charged once, one card removed.
+        Resolve(run, shop, "remove-card", "remove-card", "leave");
+
+        Assert.Equal(75, run.GetResource(Gold));
+        Assert.Single(run.Deck);
+    }
+
+    [Fact]
+    public void A_repeatable_service_can_be_used_again()
+    {
+        var run = NewRun(100);
+        run.AddDeckCard(new CardDefinitionId("a"));
+        run.AddDeckCard(new CardDefinitionId("b"));
+        var service = new ShopService(
+            "remove", Gold, 20,
+            new IRunEffectRequest[] { new RemoveCardsRunEffect(RunSelectors.DeckCards.ChooseByPlayer(1, "remove")) },
+            Repeatable: true);
+        var shop = new ShopDefinition(Array.Empty<ShopEntry>(), OfferCount: 0, Services: new[] { service });
+
+        Resolve(run, shop, "remove", "remove", "leave");
+
+        Assert.Equal(60, run.GetResource(Gold));   // 100 − 20 − 20
+        Assert.Empty(run.Deck);                     // both cards removed
     }
 
     [Fact]

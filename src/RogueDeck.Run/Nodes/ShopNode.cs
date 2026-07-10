@@ -19,13 +19,34 @@ public sealed record ShopEntry(
 // A paid reroll: spend Price of Currency to redraw the shop's display from its offer pool.
 public sealed record ShopReroll(RunResourceId Currency, int Price);
 
+// A shop service — a paid action that is NOT part of the item stock: e.g. "remove a card from your deck" (the
+// classic StS store service). Effects run when purchased (they may use a ChooseByPlayer selector to let the player
+// pick, so a service needs an entity chooser on the run — the runner sets one). Repeatable services can be used
+// any number of times; a non-repeatable one (the default) is used-up for the rest of the visit, like an item.
+public sealed record ShopService(
+    string Id,
+    RunResourceId Currency,
+    int Price,
+    IReadOnlyList<IRunEffectRequest> Effects,
+    bool Repeatable = false,
+    string? TextKey = null)
+{
+    // The classic card-removal service: pay to remove one deck card the player chooses.
+    public static ShopService RemoveCard(RunResourceId currency, int price, string id = "remove-card") =>
+        new(id, currency, price,
+            new IRunEffectRequest[] { new RemoveCardsRunEffect(RunSelectors.DeckCards.ChooseByPlayer(1, "remove a card")) },
+            TextKey: "event.shop.remove-card");
+}
+
 // A shop's authored definition (a serializable node payload). Offers is the pool; OfferCount how many are shown at
-// once (drawn deterministically from the run RNG); an optional Reroll refreshes the display for a price. Buying an
-// item removes it from the current display; reroll draws a fresh display (and clears sold-out state).
+// once (drawn deterministically from the run RNG); an optional Reroll refreshes the display for a price; Services
+// are paid actions outside the stock (e.g. card removal). Buying an item removes it from the current display;
+// reroll draws a fresh display and clears item sold-out state (used-up services stay used).
 public sealed record ShopDefinition(
     IReadOnlyList<ShopEntry> Offers,
     int OfferCount,
-    ShopReroll? Reroll = null) : IRunNodePayload;
+    ShopReroll? Reroll = null,
+    IReadOnlyList<ShopService>? Services = null) : IRunNodePayload;
 
 public sealed class ShopNodeResolver : INodeResolver
 {
@@ -51,12 +72,13 @@ public sealed class ShopNodeResolver : INodeResolver
 
         var run = context.Run;
         var display = Draw(run, shop);
-        var sold = new HashSet<string>(StringComparer.Ordinal);
+        var soldItems = new HashSet<string>(StringComparer.Ordinal);
+        var usedServices = new HashSet<string>(StringComparer.Ordinal);
         var purchases = 0;
 
         for (var round = 0; round < _maxRounds; round++)
         {
-            var choices = BuildChoices(shop, display, sold);
+            var choices = BuildChoices(shop, display, soldItems, usedServices);
             var available = choices.Where(choice => choice.IsAvailable(run)).ToList();
             var situation = new EventSituation("shop", "event.shop", available);
 
@@ -81,12 +103,17 @@ public sealed class ShopNodeResolver : INodeResolver
                 run.RaiseEvent(new ShopRerolledRunEvent(node.Id));
                 context.ResolvePendingEffects();
                 display = Draw(run, shop);
-                sold.Clear();
+                soldItems.Clear(); // a fresh display; used-up services stay used
                 continue;
             }
 
-            // Otherwise it is a purchase; the choice id is the bought item's id.
-            sold.Add(chosen.Id);
+            // Otherwise it is a purchase — an item or a service. Mark it used-up (unless a repeatable service).
+            var service = shop.Services?.FirstOrDefault(s => s.Id == chosen.Id);
+            if (service is null)
+                soldItems.Add(chosen.Id);
+            else if (!service.Repeatable)
+                usedServices.Add(chosen.Id);
+
             purchases++;
             run.AddLog(StandardRunLogTypes.ShopPurchase, $"Node '{node.Id}': bought '{chosen.Id}'.");
             run.RaiseEvent(new ShopItemPurchasedRunEvent(node.Id, chosen.Id));
@@ -96,16 +123,17 @@ public sealed class ShopNodeResolver : INodeResolver
         return new NodeOutcome($"shop resolved ({purchases} purchase(s)).");
     }
 
-    // The choices offered this round: every not-yet-sold display item (a buy), an optional reroll, and leave.
-    // Affordability is folded into IsAvailable (like an event), so an unaffordable item/reroll is simply not shown.
+    // The choices offered this round: every not-yet-sold display item, every still-available service, an optional
+    // reroll, and leave. Affordability is folded into IsAvailable (like an event), so an unaffordable choice is
+    // simply not shown.
     private static List<EventChoice> BuildChoices(
-        ShopDefinition shop, IReadOnlyList<ShopEntry> display, HashSet<string> sold)
+        ShopDefinition shop, IReadOnlyList<ShopEntry> display, HashSet<string> soldItems, HashSet<string> usedServices)
     {
         var choices = new List<EventChoice>();
 
         foreach (var item in display)
         {
-            if (sold.Contains(item.Id))
+            if (soldItems.Contains(item.Id))
                 continue;
             choices.Add(new EventChoice(
                 item.Id,
@@ -113,6 +141,18 @@ public sealed class ShopNodeResolver : INodeResolver
                 TextKey: item.TextKey,
                 Costs: new[] { PayCost(item.Currency, item.Price) }));
         }
+
+        if (shop.Services is { } services)
+            foreach (var service in services)
+            {
+                if (!service.Repeatable && usedServices.Contains(service.Id))
+                    continue;
+                choices.Add(new EventChoice(
+                    service.Id,
+                    service.Effects,
+                    TextKey: service.TextKey,
+                    Costs: new[] { PayCost(service.Currency, service.Price) }));
+            }
 
         if (shop.Reroll is { } reroll)
             choices.Add(new EventChoice(
