@@ -9,6 +9,15 @@ public enum CardZone
     BanishedPile
 }
 
+// The player-input collaborator for in-combat card selection — the combat analog of the run's IRunEntityChooser.
+// A ChosenCardInZone expression calls this to let a player pick cards during a fight (e.g. Armaments: choose a
+// card in hand to upgrade). Must be DETERMINISTIC for a given combat so replays reproduce. Set on CombatState by
+// the driver; when absent, a chosen-card selection falls back to the first candidate (headless play).
+public interface ICombatCardChooser
+{
+    IReadOnlyList<CardInstanceId> ChooseCards(IReadOnlyList<CardInstance> candidates, int count, string purpose);
+}
+
 public sealed class CardInstance
 {
     public CardInstanceId Id { get; }

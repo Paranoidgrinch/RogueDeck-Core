@@ -56,6 +56,14 @@ public sealed class CombatState
     // snapshot/hash — it is immutable shared content, not gameplay state.
     public CombatDefinitionRegistry? DefinitionRegistry { get; internal set; }
 
+    // The player-input collaborator for in-combat card selection (ChosenCardInZone expressions) — the combat
+    // analog of the run's IRunEntityChooser. Set once by the driver; absent ⇒ headless play, where a chosen-card
+    // selection falls back to a deterministic default (the first candidate). Not part of the snapshot/hash — it is
+    // an input collaborator, not gameplay state, and must be deterministic for a given combat so replays reproduce.
+    public ICombatCardChooser? CardChooser { get; private set; }
+
+    public void SetCardChooser(ICombatCardChooser? chooser) => CardChooser = chooser;
+
     public int NextStatusInstanceNumber { get; private set; } = 1;
 
     public int NextCardInstanceNumber { get; private set; } = 1;

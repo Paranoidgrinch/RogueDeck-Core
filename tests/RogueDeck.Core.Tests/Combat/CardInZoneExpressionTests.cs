@@ -74,6 +74,81 @@ public class CardInZoneExpressionTests
         Assert.Equal(2, combat.GetCardZones(HeroId).DrawPile.Count);
     }
 
+    // A deterministic test chooser that always picks the candidate with the given instance id.
+    private sealed class PicksCard : ICombatCardChooser
+    {
+        private readonly string _id;
+        public PicksCard(string id) => _id = id;
+        public IReadOnlyList<CardInstanceId> ChooseCards(
+            IReadOnlyList<CardInstance> candidates, int count, string purpose) =>
+            candidates.Where(c => c.Id.value == _id).Take(count).Select(c => c.Id).ToArray();
+    }
+
+    [Fact]
+    public void A_chosen_card_lets_the_player_pick_which_card_in_hand()
+    {
+        var registry = CombatTestFactory.CreateStandardRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        AddCard(combat, "h1", CardZone.Hand);
+        var picked = AddCard(combat, "h2", CardZone.Hand);
+        AddCard(combat, "h3", CardZone.Hand);
+        combat.SetCardChooser(new PicksCard("h2"));
+
+        var program = new EffectProgram<Ctx>(new MoveCardToZoneNode<Ctx>(
+            CombatantTargetSelectors.Source,
+            new ChosenCardInZoneExpression<Ctx>(CardZone.Hand, "upgrade a card"),
+            CardZone.ExhaustPile));
+
+        EffectProgramExecutor.Execute(program, MakeContext(combat), combat);
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+
+        Assert.Equal(new[] { picked }, combat.GetCardZones(HeroId).ExhaustPile.Select(c => c.Id)); // the player's pick
+        Assert.Equal(2, combat.GetCardZones(HeroId).Hand.Count);
+    }
+
+    [Fact]
+    public void A_chosen_card_falls_back_to_the_first_candidate_with_no_chooser()
+    {
+        var registry = CombatTestFactory.CreateStandardRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        var first = AddCard(combat, "h1", CardZone.Hand);
+        AddCard(combat, "h2", CardZone.Hand);
+        // no chooser set → headless default
+
+        var program = new EffectProgram<Ctx>(new MoveCardToZoneNode<Ctx>(
+            CombatantTargetSelectors.Source,
+            new ChosenCardInZoneExpression<Ctx>(CardZone.Hand),
+            CardZone.ExhaustPile));
+
+        EffectProgramExecutor.Execute(program, MakeContext(combat), combat);
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+
+        Assert.Equal(new[] { first }, combat.GetCardZones(HeroId).ExhaustPile.Select(c => c.Id));
+    }
+
+    [Fact]
+    public void A_random_card_pick_is_deterministic_by_seed()
+    {
+        static CardInstanceId? Exhausted()
+        {
+            var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin(); // fixed seed inside the factory
+            for (var i = 0; i < 5; i++)
+                combat.GetCardZones(HeroId).AddCard(
+                    new CardInstance(new CardInstanceId($"h{i}"), new CardDefinitionId("test.card"), HeroId, CardZone.Hand));
+
+            var program = new EffectProgram<Ctx>(new MoveCardToZoneNode<Ctx>(
+                CombatantTargetSelectors.Source,
+                new RandomCardInZoneExpression<Ctx>(CardZone.Hand),
+                CardZone.ExhaustPile));
+            EffectProgramExecutor.Execute(program, MakeContext(combat), combat);
+            new CombatQueueProcessor().ResolvePendingQueues(combat, CombatTestFactory.CreateStandardRegistry());
+            return combat.GetCardZones(HeroId).ExhaustPile.SingleOrDefault()?.Id;
+        }
+
+        Assert.NotNull(Exhausted());
+        Assert.Equal(Exhausted(), Exhausted());   // same seed ⇒ same pick, reproducibly
+    }
+
     [Fact]
     public void An_out_of_range_index_selects_no_card_and_moves_nothing()
     {

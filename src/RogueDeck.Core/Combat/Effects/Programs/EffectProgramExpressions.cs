@@ -1503,6 +1503,68 @@ public sealed class CardInZoneExpression<TContext>
     }
 }
 
+// Lets the PLAYER pick a card from a zone of the acting combatant (Armaments: choose a card in hand to upgrade).
+// Unlike the pure CardInZone reader, this is a RESOLUTION-TIME selector — the card-domain analog of an interactive
+// target selector: it consults the combat's card chooser and is deterministic only insofar as the chooser is (the
+// chooser must reproduce its picks for replay). With no chooser bound (headless / AI / tests) it falls back to the
+// first candidate, so a fight always resolves. Empty zone ⇒ null (nothing to pick).
+public sealed class ChosenCardInZoneExpression<TContext>
+    : ICardInstanceExpression<TContext>
+    where TContext : class
+{
+    public CardZone Zone { get; }
+    public string Purpose { get; }
+
+    public ChosenCardInZoneExpression(CardZone zone, string purpose = "choose a card")
+    {
+        Zone = zone;
+        Purpose = purpose;
+    }
+
+    public CardInstanceId? Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        if (context.BuildContext.Source.SourceCombatantId is not { } ownerId
+            || !combat.CardZonesByCombatant.ContainsKey(ownerId))
+            return null;
+
+        var cards = combat.GetCardZones(ownerId).GetCardsInZone(Zone);
+        if (cards.Count == 0)
+            return null;
+
+        if (combat.CardChooser is { } chooser)
+            return chooser.ChooseCards(cards, 1, Purpose).FirstOrDefault();
+
+        return cards[0].Id; // headless default: the first candidate
+    }
+}
+
+// Picks a card UNIFORMLY AT RANDOM from a zone of the acting combatant, via the combat RNG (deterministic by seed
+// so a replay reproduces the pick). Also a resolution-time selector: it advances the combat's random step, so it
+// reads AND cursors the RNG rather than being a pure read. Empty zone ⇒ null.
+public sealed class RandomCardInZoneExpression<TContext>
+    : ICardInstanceExpression<TContext>
+    where TContext : class
+{
+    public CardZone Zone { get; }
+
+    public RandomCardInZoneExpression(CardZone zone) => Zone = zone;
+
+    public CardInstanceId? Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        if (context.BuildContext.Source.SourceCombatantId is not { } ownerId
+            || !combat.CardZonesByCombatant.ContainsKey(ownerId))
+            return null;
+
+        var cards = combat.GetCardZones(ownerId).GetCardsInZone(Zone);
+        if (cards.Count == 0)
+            return null;
+
+        var index = CombatRandom.CreateShuffledIndexes(cards.Count, combat.RandomSeed, combat.RandomStep)[0];
+        combat.AdvanceRandomStep();
+        return cards[index].Id;
+    }
+}
+
 // The card instance carried by a CardPlayed trigger's event — the card whose play fired the trigger
 // (unlike PlayedCardInstance, which reads the in-flight card during a card's own on-play program).
 public sealed class TriggerEventCardInstanceExpression<TContext>
