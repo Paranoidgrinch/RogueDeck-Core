@@ -167,12 +167,15 @@ public sealed class AutoPlayCombatDriver : ICombatDriver
 public sealed class PartyAutoPlayCombatDriver : ICombatDriver
 {
     private readonly int _maxRounds;
+    private readonly PartyEnemyTargeting _targeting;
 
-    public PartyAutoPlayCombatDriver(int maxRounds = 200)
+    public PartyAutoPlayCombatDriver(
+        int maxRounds = 200, PartyEnemyTargeting targeting = PartyEnemyTargeting.FirstAlive)
     {
         if (maxRounds <= 0)
             throw new ArgumentOutOfRangeException(nameof(maxRounds));
         _maxRounds = maxRounds;
+        _targeting = targeting;
     }
 
     public CombatDriveResult Drive(Playthrough playthrough)
@@ -184,7 +187,7 @@ public sealed class PartyAutoPlayCombatDriver : ICombatDriver
             return new AutoPlayCombatDriver(_maxRounds).Drive(playthrough);
 
         var party = new PartyCombat(
-            compiled, CyclingEnemyIntent(compiled), playthrough.CombatId, playthrough.RandomSeed);
+            compiled, CyclingEnemyIntent(compiled), playthrough.CombatId, playthrough.RandomSeed, _targeting);
 
         var rounds = 0;
         while (!party.IsOver && rounds++ < _maxRounds)

@@ -3,6 +3,19 @@ using RogueDeck.Scenario.Authoring;
 
 namespace RogueDeck.Scenario.Scripting;
 
+// How an enemy chooses which player-team member to hit in a party fight (party deckbuilding B2d). All strategies
+// consider only LIVING players (a downed member is out for the fight) and break ties by roster order, so every
+// pick is deterministic and reproducible. Random draws from the combat RNG; Nearest needs board positions and
+// falls back to FirstAlive for an enemy that has none.
+public enum PartyEnemyTargeting
+{
+    FirstAlive,    // the first living player in roster order — the historical default
+    LowestHealth,  // the most wounded living player (focus-fire the weak)
+    HighestHealth, // the healthiest living player (a crude "biggest threat")
+    Random,        // a uniformly random living player, drawn from the combat RNG
+    Nearest,       // the living player at least Manhattan distance from the acting enemy (positional)
+}
+
 // A stepwise driver for the simultaneous team-phase combat (party deckbuilding A2c/A3), the party counterpart of
 // the hero-centric InteractiveCombat. Every player-team member is "in its turn" at once: the caller plays cards for
 // ANY active member from that member's own hand/energy, and each member ends independently. When all living members
@@ -17,6 +30,8 @@ public sealed class PartyCombat
     private readonly CombatState _combat;
     private readonly CombatDefinitionRegistry _registry;
     private readonly Func<CombatantId, int, EnemyActionDefinitionId?> _enemyIntent;
+    private readonly PartyEnemyTargeting _targeting;
+    private int _targetStep;
     private readonly SimultaneousTurnProcessor _phases = new();
     private readonly CombatQueueProcessor _queues = new();
 
@@ -24,7 +39,8 @@ public sealed class PartyCombat
         CompiledScenario compiled,
         Func<CombatantId, int, EnemyActionDefinitionId?> enemyIntent,
         string combatId = "party",
-        int randomSeed = 1)
+        int randomSeed = 1,
+        PartyEnemyTargeting targeting = PartyEnemyTargeting.FirstAlive)
     {
         ArgumentNullException.ThrowIfNull(compiled);
         ArgumentNullException.ThrowIfNull(enemyIntent);
@@ -34,6 +50,7 @@ public sealed class PartyCombat
 
         _registry = compiled.Registry;
         _enemyIntent = enemyIntent;
+        _targeting = targeting;
         _combat = ScenarioCombatFactory.Build(compiled, combatId, randomSeed);
 
         // Open the first player phase: every player-team member starts its turn and draws its own opening hand.
@@ -106,7 +123,7 @@ public sealed class PartyCombat
                 continue;
 
             var actionId = _enemyIntent(enemy.Id, _combat.CurrentRound);
-            if (actionId is { } id && _registry.TryGetEnemyAction(id, out _) && EnemyTarget() is { } targetId)
+            if (actionId is { } id && _registry.TryGetEnemyAction(id, out _) && EnemyTarget(enemy.Id) is { } targetId)
             {
                 _combat.EnqueueEffect(new ExecuteEnemyActionEffectRequest(enemy.Id, id, targetId));
                 _queues.ResolvePendingQueues(_combat, _registry);
@@ -121,7 +138,60 @@ public sealed class PartyCombat
             _phases.AdvanceToNextTeamPhase(_combat, _registry);
     }
 
-    // Which player an enemy hits: the first living player-team member for now (B2d refines target selection).
-    private CombatantId? EnemyTarget() =>
-        _combat.GetLivingCombatantsOnTeam(PlayerTeam).FirstOrDefault()?.Id;
+    // Which player the acting enemy hits, per the configured targeting strategy (party deckbuilding B2d). Only
+    // living players are candidates; ties break by roster order so the pick stays deterministic.
+    private CombatantId? EnemyTarget(CombatantId enemyId)
+    {
+        var players = _combat.GetLivingCombatantsOnTeam(PlayerTeam).ToArray();
+        if (players.Length == 0)
+            return null;
+
+        return _targeting switch
+        {
+            PartyEnemyTargeting.LowestHealth => Extreme(players, lowest: true).Id,
+            PartyEnemyTargeting.HighestHealth => Extreme(players, lowest: false).Id,
+            PartyEnemyTargeting.Random => players[
+                CombatRandom.CreateShuffledIndexes(players.Length, _combat.RandomSeed, _targetStep++)[0]].Id,
+            PartyEnemyTargeting.Nearest => Nearest(players, enemyId).Id,
+            _ => players[0].Id, // FirstAlive
+        };
+    }
+
+    // The living player with the min (or max) current HP, first in roster order on a tie.
+    private static CombatantState Extreme(IReadOnlyList<CombatantState> players, bool lowest)
+    {
+        var best = players[0];
+        foreach (var player in players.Skip(1))
+        {
+            var better = lowest
+                ? player.Health.Current < best.Health.Current
+                : player.Health.Current > best.Health.Current;
+            if (better)
+                best = player;
+        }
+        return best;
+    }
+
+    // The living player at least Manhattan distance from the acting enemy; falls back to roster order when the
+    // enemy (or every candidate) has no board position, and breaks ties by roster order.
+    private CombatantState Nearest(IReadOnlyList<CombatantState> players, CombatantId enemyId)
+    {
+        if (_combat.GetCombatant(enemyId).Position is not { } from)
+            return players[0];
+
+        var best = players[0];
+        var bestDistance = int.MaxValue;
+        foreach (var player in players)
+        {
+            if (player.Position is not { } at)
+                continue;
+            var distance = Math.Abs(at.X - from.X) + Math.Abs(at.Y - from.Y);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                best = player;
+            }
+        }
+        return best;
+    }
 }
