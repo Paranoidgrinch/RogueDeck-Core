@@ -182,7 +182,10 @@ public static class CombatJson
         r.Register("cardInstance.explicit", typeof(ExplicitCardInstanceExpression<>))
          .Register("cardInstance.createdOutcome", typeof(CreateCardOutcomeExpression<>))
          .Register("cardInstance.played", typeof(PlayedCardInstanceExpression<>))
-         .Register("cardInstance.triggerEvent", typeof(TriggerEventCardInstanceExpression<>));
+         .Register("cardInstance.triggerEvent", typeof(TriggerEventCardInstanceExpression<>))
+         .Register("cardInstance.inZone", typeof(CardInZoneExpression<>))
+         .Register("cardInstance.chosenInZone", typeof(ChosenCardInZoneExpression<>))
+         .Register("cardInstance.randomInZone", typeof(RandomCardInZoneExpression<>));
     }
 
     // Combatant target selectors (context-independent, non-generic). Registered as concrete types.
@@ -250,6 +253,7 @@ public static class CombatJson
          .Register("node.removeTemporaryRule", typeof(RemoveTemporaryRuleNode<>))
          // Card-instance nodes (act on a resolved card instance).
          .Register("node.moveCardToZone", typeof(MoveCardToZoneNode<>))
+         .Register("node.transformCard", typeof(TransformCardNode<>))
          .Register("node.createCardCopy", typeof(CreateCardCopyNode<>))
          .Register("node.replayCardProgram", typeof(ReplayCardProgramNode<>))
          .Register("node.playCard", typeof(PlayCardNode<>))

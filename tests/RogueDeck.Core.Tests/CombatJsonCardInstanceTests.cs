@@ -51,6 +51,40 @@ public class CombatJsonCardInstanceTests
         RoundTrips(new CreateCardCopyNode<CardPlayContext>(Source, card, CardZone.Hand));
         RoundTrips(new ReplayCardProgramNode<CardPlayContext>(card, Source));
         RoundTrips(new PlayCardNode<CardPlayContext>(Source, card));
+        RoundTrips(new TransformCardNode<CardPlayContext>(Source, card, new CardDefinitionId("strike.plus")));
+    }
+
+    [Fact]
+    public void Card_selection_expressions_round_trip()
+    {
+        // Positional read (Zone + Index). Typed as the interface so the polymorphic converter is used.
+        ICardInstanceExpression<CardPlayContext> inZone = new CardInZoneExpression<CardPlayContext>(CardZone.Hand, 2);
+        var backInZone = Assert.IsType<CardInZoneExpression<CardPlayContext>>(
+            CombatJson.FromJson<ICardInstanceExpression<CardPlayContext>>(
+                CombatJson.ToJson(inZone, Options), Options));
+        Assert.Equal(CardZone.Hand, backInZone.Zone);
+        Assert.Equal(2, backInZone.Index);
+
+        // Chosen (Zone + Purpose).
+        ICardInstanceExpression<CardPlayContext> chosen =
+            new ChosenCardInZoneExpression<CardPlayContext>(CardZone.DrawPile, "upgrade a card");
+        var backChosen = Assert.IsType<ChosenCardInZoneExpression<CardPlayContext>>(
+            CombatJson.FromJson<ICardInstanceExpression<CardPlayContext>>(
+                CombatJson.ToJson(chosen, Options), Options));
+        Assert.Equal(CardZone.DrawPile, backChosen.Zone);
+        Assert.Equal("upgrade a card", backChosen.Purpose);
+
+        foreach (ICardInstanceExpression<CardPlayContext> expr in new ICardInstanceExpression<CardPlayContext>[]
+        {
+            new CardInZoneExpression<CardPlayContext>(CardZone.ExhaustPile, 0),
+            new ChosenCardInZoneExpression<CardPlayContext>(CardZone.Hand),
+            new RandomCardInZoneExpression<CardPlayContext>(CardZone.DiscardPile),
+        })
+        {
+            var json = CombatJson.ToJson(expr, Options);
+            Assert.Equal(json, CombatJson.ToJson(
+                CombatJson.FromJson<ICardInstanceExpression<CardPlayContext>>(json, Options), Options));
+        }
     }
 
     [Fact]
