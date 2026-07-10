@@ -1472,6 +1472,37 @@ public sealed class PlayedCardInstanceExpression<TContext>
     }
 }
 
+// Selects a card by POSITION from a zone of the acting (source) combatant — e.g. the first card in your hand, or
+// the top of your draw pile. The first primitive of in-combat card TARGETING (Tier-2 card domain): a card
+// operation (move/exhaust/…) no longer has to name a contextually-known card (the played card, a created card) —
+// it can point at a card living in a zone. A deterministic, PURE read: index into the ordered zone, null when the
+// combatant has no zones or the index is out of range. Player-choice and random selection are later slices; this
+// one needs neither input nor RNG. "Exhaust the first card in your hand" = MoveCardToZone(this card → Exhaust).
+public sealed class CardInZoneExpression<TContext>
+    : ICardInstanceExpression<TContext>
+    where TContext : class
+{
+    public CardZone Zone { get; }
+    public int Index { get; }
+
+    public CardInZoneExpression(CardZone zone, int index = 0)
+    {
+        Zone = zone;
+        Index = Math.Max(0, index);
+    }
+
+    public CardInstanceId? Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        if (context.BuildContext.Source.SourceCombatantId is not { } ownerId)
+            return null;
+        if (!combat.CardZonesByCombatant.ContainsKey(ownerId))
+            return null;
+
+        var cards = combat.GetCardZones(ownerId).GetCardsInZone(Zone);
+        return Index < cards.Count ? cards[Index].Id : null;
+    }
+}
+
 // The card instance carried by a CardPlayed trigger's event — the card whose play fired the trigger
 // (unlike PlayedCardInstance, which reads the in-flight card during a card's own on-play program).
 public sealed class TriggerEventCardInstanceExpression<TContext>
