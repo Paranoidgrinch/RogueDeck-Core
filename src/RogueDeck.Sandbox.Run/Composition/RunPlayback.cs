@@ -14,6 +14,8 @@ public sealed class RunPlayback(Action onChanged) : IDisposable
 {
     public InteractiveRunSession? Session { get; private set; }
     public InteractiveCombatDriver? CombatDriver { get; private set; }
+    // The party interactive driver, present only for an interactive PARTY run (party deckbuilding C2 follow-up).
+    public PartyInteractiveCombatDriver? PartyCombatDriver { get; private set; }
     public string? Error { get; private set; }
 
     public IReadOnlyDictionary<string, int> CardCosts { get; private set; } = new Dictionary<string, int>();
@@ -32,14 +34,19 @@ public sealed class RunPlayback(Action onChanged) : IDisposable
             var content = BuildContent(blueprint);
             (CardCosts, CardNames, EnemyNames, HeroName) = DisplayNames(blueprint);
 
-            // A party run (party deckbuilding C2) uses the simultaneous team phase, which the hero-centric
-            // InteractiveCombatDriver can't drive; until a party-aware interactive driver exists, party fights
-            // auto-resolve headlessly (PartyAutoPlayCombatDriver) even in "interactive" mode, so the run still
-            // plays end-to-end and the per-member roster/inventory reconciles. Single-hero runs are unchanged.
+            // A party run (party deckbuilding C2) uses the simultaneous team phase. Interactive party fights are
+            // driven per member by the PartyInteractiveCombatDriver; a non-interactive party run auto-resolves them
+            // (PartyAutoPlayCombatDriver). Single-hero runs keep the hero-centric interactive / auto drivers.
             var isParty = blueprint.Start.StartingParty.Count > 0;
 
             ICombatDriver driver;
-            if (interactive && !isParty)
+            if (interactive && isParty)
+            {
+                PartyCombatDriver = new PartyInteractiveCombatDriver();
+                PartyCombatDriver.Changed += onChanged;
+                driver = PartyCombatDriver;
+            }
+            else if (interactive)
             {
                 CombatDriver = new InteractiveCombatDriver();
                 CombatDriver.Changed += onChanged;
@@ -98,6 +105,12 @@ public sealed class RunPlayback(Action onChanged) : IDisposable
             CombatDriver.Changed -= onChanged;
             CombatDriver.Dispose();
             CombatDriver = null;
+        }
+        if (PartyCombatDriver is not null)
+        {
+            PartyCombatDriver.Changed -= onChanged;
+            PartyCombatDriver.Dispose();
+            PartyCombatDriver = null;
         }
     }
 

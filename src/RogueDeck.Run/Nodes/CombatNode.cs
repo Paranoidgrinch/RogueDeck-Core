@@ -44,8 +44,9 @@ public interface ICombatDriver
 }
 
 // Reads the final state of each projected board unit (the blueprint's allies) off a finished CombatState, so a
-// driver can report them for run↔combat reconciliation. A missing combatant reads as dead.
-internal static class UnitDriveResults
+// driver can report them for run↔combat reconciliation. A missing combatant reads as dead. Public so an
+// out-of-assembly driver (e.g. the Studio interactive party driver) can report party members for reconcile.
+public static class UnitDriveResults
 {
     public static IReadOnlyList<UnitDriveResult> Read(CombatState state, IReadOnlyList<AllyBlueprint> allies)
     {

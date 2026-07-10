@@ -39,9 +39,9 @@
     }
 </section>
 
-<RunSessionView Session="_play.Session" CombatDriver="_play.CombatDriver" CardCosts="_play.CardCosts"
-                CardNames="_play.CardNames" EnemyNames="_play.EnemyNames" HeroName="_play.HeroName"
-                UseConsumableInCombat="@(id => _play.UseConsumableInCombat(id))" />
+<RunSessionView Session="_play.Session" CombatDriver="_play.CombatDriver" PartyCombatDriver="_play.PartyCombatDriver"
+                CardCosts="_play.CardCosts" CardNames="_play.CardNames" EnemyNames="_play.EnemyNames"
+                HeroName="_play.HeroName" UseConsumableInCombat="@(id => _play.UseConsumableInCombat(id))" />
 
 @code {
     private RunBlueprint _blueprint = default!;

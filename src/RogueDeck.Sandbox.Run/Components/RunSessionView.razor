@@ -114,6 +114,71 @@
                 <p class="muted">Resolving enemy actions…</p>
             }
         }
+        else if (PartyCombatDriver?.Current is { } party)
+        {
+            @* Interactive party combat (party deckbuilding C2 follow-up): all living members are "in their turn" at
+               once. Each member plays from its OWN hand/energy and ends independently; when the last one ends the
+               enemy phase resolves and a fresh player phase opens. *@
+            <h2>Party combat — round @party.Round</h2>
+            @foreach (var c in party.State.Combatants)
+            {
+                var isPlayer = c.TeamId == StandardCombatIds.PlayerTeam;
+                var ended = isPlayer && party.HasEnded(c.Id);
+                <div class="row">
+                    <strong>@PartyCombatantName(c)</strong>
+                    <span class="muted">
+                        @c.Health.Current/@c.Health.Max HP@(Block(c) > 0 ? $" · 🛡{Block(c)}" : "")@(c.IsAlive ? "" : " 💀")@(ended && c.IsAlive ? " · ended ✓" : "")
+                    </span>
+                    @if (c.Statuses.Count > 0)
+                    {
+                        <span class="muted">· @CombatStatusLine(c)</span>
+                    }
+                </div>
+            }
+
+            <div class="row">
+                <span class="muted">Target</span>
+                <select @bind="_combatTarget">
+                    @foreach (var enemy in party.State.Combatants.Where(x => x.TeamId == StandardCombatIds.EnemyTeam && x.IsAlive))
+                    {
+                        <option value="@enemy.Id.value">@EnemyName(enemy.Id)</option>
+                    }
+                </select>
+            </div>
+
+            @if (party.ActiveMembers().Count == 0)
+            {
+                <p class="muted">Resolving…</p>
+            }
+            else
+            {
+                @foreach (var memberId in party.ActiveMembers())
+                {
+                    var mid = memberId;
+                    <div class="panel" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:.5rem; margin:.5rem 0">
+                        <div class="row">
+                            <strong>@PartyMemberName(mid)</strong>
+                            <span class="muted">⚡ @party.EnergyOf(mid)</span>
+                        </div>
+                        <div class="choices">
+                            @foreach (var card in party.HandOf(mid))
+                            {
+                                var cost = CardEnergyCost(card.DefinitionId.value);
+                                <button class="play" disabled="@(cost > party.EnergyOf(mid))"
+                                        @onclick="() => PlayPartyCard(mid, card.Id)">
+                                    @CardName(card.DefinitionId.value) ⚡@cost
+                                </button>
+                            }
+                            @if (party.HandOf(mid).Count == 0)
+                            {
+                                <span class="muted">(empty hand)</span>
+                            }
+                        </div>
+                        <button class="play" @onclick="() => EndPartyTurn(mid)">End @PartyMemberName(mid)'s turn ▸</button>
+                    </div>
+                }
+            }
+        }
         else if (session.IsComplete)
         {
             <h2>Run complete</h2>
@@ -176,8 +241,8 @@
     {
         <section class="panel">
             <h2>Party (@session.Run.Party.Count)</h2>
-            <p class="muted">Party fights currently auto-resolve (the simultaneous phase) — per-member HP is
-                reconciled here after each fight. Interactive per-member control is a follow-up.</p>
+            <p class="muted">Per-member HP is reconciled here after each fight. Interactive runs let you drive each
+                member's turn in the fight above; non-interactive runs auto-resolve the simultaneous phase.</p>
             @for (var i = 0; i < session.Run.Party.Count; i++)
             {
                 var member = session.Run.Party[i];
@@ -219,6 +284,9 @@
 
     // The interactive combat driver, present only when the host chose interactive fights; null = fights auto-resolve.
     [Parameter] public InteractiveCombatDriver? CombatDriver { get; set; }
+
+    // The party interactive combat driver, present only for an interactive party run (party deckbuilding C2).
+    [Parameter] public PartyInteractiveCombatDriver? PartyCombatDriver { get; set; }
 
     // Invoked when the player uses a consumable during a live fight (the host routes it to RunPlayback, which runs
     // the consumable's combat-use program on the combat and removes it from the run inventory).
@@ -268,6 +336,29 @@
     }
 
     private void EndCombatTurn() => CombatDriver?.EndTurn();
+
+    // ── party combat (party deckbuilding C2 follow-up) ──────────────────────────────
+    private void PlayPartyCard(CombatantId member, CardInstanceId cardId)
+    {
+        var party = PartyCombatDriver?.Current;
+        if (party is null)
+            return;
+        var target = !string.IsNullOrEmpty(_combatTarget)
+            ? new CombatantId(_combatTarget)
+            : party.State.Combatants.FirstOrDefault(c => c.TeamId == StandardCombatIds.EnemyTeam && c.IsAlive)?.Id;
+        PartyCombatDriver!.PlayCardFor(member, cardId, target);
+    }
+
+    private void EndPartyTurn(CombatantId member) => PartyCombatDriver?.EndTurnFor(member);
+
+    // A player member's display name (from the run's party by matching combatant id), the hero name for the hero
+    // combatant, else the raw id. Enemy names go through EnemyName.
+    private string PartyMemberName(CombatantId id) =>
+        Session?.Run.Party.FirstOrDefault(m => m.Id.Value == id.value)?.DisplayNameKey
+        ?? (HeroName ?? id.value);
+
+    private string PartyCombatantName(CombatantState c) =>
+        c.TeamId == StandardCombatIds.EnemyTeam ? EnemyName(c.Id) : PartyMemberName(c.Id);
 
     private int CardEnergyCost(string definitionId) => CardCosts.TryGetValue(definitionId, out var cost) ? cost : 0;
 
