@@ -36,6 +36,8 @@ public static class RunSetup
                 run.AddDeckCardTo(member, new Core.Combat.CardDefinitionId(card));
             foreach (var (resource, amount) in data.Resources)
                 member.SetResource(new RunResourceId(resource), amount);
+            // Starting relics/consumables are granted per member by the runner once content is attached (B3b).
+            member.SetStartingContent(data.StartingRelics, data.StartingConsumables);
         }
 
         return run;

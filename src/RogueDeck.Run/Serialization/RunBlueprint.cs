@@ -79,4 +79,9 @@ public sealed record RunMemberData
     public int MaxHealth { get; init; } = 30;
     public IReadOnlyList<string> Deck { get; init; } = [];
     public IReadOnlyDictionary<string, int> Resources { get; init; } = new Dictionary<string, int>();
+
+    // Relic / consumable definition ids this member starts with (party deckbuilding B3b). Granted per member by
+    // the runner once content is attached (unknown ids skipped), exactly like the hero's RunStart.Starting* lists.
+    public IReadOnlyList<string> StartingRelics { get; init; } = [];
+    public IReadOnlyList<string> StartingConsumables { get; init; } = [];
 }

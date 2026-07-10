@@ -177,10 +177,20 @@ public sealed class RunRunner
     {
         if (run.Content is null)
             return;
-        foreach (var id in run.StartingRelicIds)
+        // Member 0 (the hero) grants from the run-level list; extra party members from their own (B3b). Each is
+        // granted inside a member scope so run.AddRelic lands on that member's inventory (party deckbuilding B3a).
+        GrantStartingRelicsTo(run, run.Primary, run.StartingRelicIds);
+        foreach (var member in run.Party.Skip(1))
+            GrantStartingRelicsTo(run, member, member.StartingRelicIds);
+    }
+
+    private static void GrantStartingRelicsTo(RunState run, PartyMember member, IReadOnlyList<string> relicIds)
+    {
+        using var _ = run.PushActiveMember(member);
+        foreach (var id in relicIds)
         {
             var relicId = new RelicId(id);
-            if (!run.Content.HasRelic(relicId))
+            if (!run.Content!.HasRelic(relicId))
                 continue;
             run.AddRelic(new RelicInstance(run.Content.GetRelic(relicId)));
             run.AddLog(StandardRunLogTypes.RelicAcquired, $"Starting relic '{id}'.");
@@ -191,10 +201,19 @@ public sealed class RunRunner
     {
         if (run.Content is null)
             return;
-        foreach (var id in run.StartingConsumableIds)
+        GrantStartingConsumablesTo(run, run.Primary, run.StartingConsumableIds);
+        foreach (var member in run.Party.Skip(1))
+            GrantStartingConsumablesTo(run, member, member.StartingConsumableIds);
+    }
+
+    private static void GrantStartingConsumablesTo(
+        RunState run, PartyMember member, IReadOnlyList<string> consumableIds)
+    {
+        using var _ = run.PushActiveMember(member);
+        foreach (var id in consumableIds)
         {
             var consumableId = new ConsumableId(id);
-            if (!run.Content.HasConsumable(consumableId))
+            if (!run.Content!.HasConsumable(consumableId))
                 continue;
             var definition = run.Content.GetConsumable(consumableId);
             var consumable = run.AddConsumable(definition.Id, definition.UseEffects, definition.CombatUse);

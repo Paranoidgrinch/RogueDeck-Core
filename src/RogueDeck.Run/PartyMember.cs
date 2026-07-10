@@ -27,6 +27,18 @@ public sealed class PartyMember
     public IReadOnlyList<RelicInstance> Relics => _relics;
     public IReadOnlyList<RunConsumable> Consumables => _consumables;
 
+    // Relic / consumable definition ids this member should start with (party deckbuilding B3b). Seeded from the
+    // member's authored data by RunSetup and granted by the runner once content is attached, mirroring the hero's
+    // RunState.Starting* lists. Member 0 (the hero) keeps using the run-level lists, so these stay empty for it.
+    public IReadOnlyList<string> StartingRelicIds { get; private set; } = [];
+    public IReadOnlyList<string> StartingConsumableIds { get; private set; } = [];
+
+    public void SetStartingContent(IReadOnlyList<string> relicIds, IReadOnlyList<string> consumableIds)
+    {
+        StartingRelicIds = relicIds ?? [];
+        StartingConsumableIds = consumableIds ?? [];
+    }
+
     public PartyMember(
         RunMemberId id, HealthState health, string? displayNameKey = null, CombatantDefinitionId? definitionId = null)
     {
