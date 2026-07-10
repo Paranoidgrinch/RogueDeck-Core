@@ -233,7 +233,8 @@ public static class RunJson
     private static void RegisterNodes(RunJsonRegistry r)
     {
         r.Register("node.event", typeof(EventRef))
-         .Register("node.encounter", typeof(EncounterRef));
+         .Register("node.encounter", typeof(EncounterRef))
+         .Register("node.shop", typeof(ShopDefinition));
     }
 }
 

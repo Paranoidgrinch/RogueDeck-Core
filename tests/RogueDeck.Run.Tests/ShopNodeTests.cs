@@ -39,6 +39,33 @@ public class ShopNodeTests
     }
 
     [Fact]
+    public void A_shop_node_round_trips_through_RunJson_and_still_works()
+    {
+        var options = RunJson.CreateOptions();
+        var shop = new ShopDefinition(
+            new[] { Item("sword", 30, "sword"), Item("shield", 50, "shield") },
+            OfferCount: 4,
+            Reroll: new ShopReroll(Gold, 20),
+            Services: new[] { ShopService.RemoveCard(Gold, 25) });
+        var node = new Node(new NodeId("shop"), StandardRunIds.ShopNode, shop);
+
+        var back = RunJson.FromJson<Node>(RunJson.ToJson(node, options), options);
+
+        var reloaded = Assert.IsType<ShopDefinition>(back.Payload);
+        Assert.Equal(new[] { "sword", "shield" }, reloaded.Offers.Select(o => o.Id));
+        Assert.Equal(30, reloaded.Offers[0].Price);
+        Assert.Equal(20, reloaded.Reroll!.Price);
+        Assert.Equal("remove-card", Assert.Single(reloaded.Services!).Id);
+
+        // The reloaded shop still drives end-to-end (buy the sword, then remove a card).
+        var run = NewRun(100);
+        run.AddDeckCard(new CardDefinitionId("junk"));
+        Resolve(run, reloaded, "sword", "remove-card", "leave");
+        Assert.Equal(45, run.GetResource(Gold));                 // 100 − 30 − 25
+        Assert.Equal(new[] { "sword" }, run.Deck.Select(c => c.DefinitionId.value)); // junk removed, sword added
+    }
+
+    [Fact]
     public void Buying_an_item_deducts_its_price_and_applies_its_payload()
     {
         var run = NewRun(100);
