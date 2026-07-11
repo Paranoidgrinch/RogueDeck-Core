@@ -62,9 +62,11 @@ public sealed record RunBlueprint(
     }
 }
 
-// One selectable starting character (character selection): a stable id (for the pick + a future meta unlock gate)
-// plus its full RunStart. A plain record so it round-trips through RunJson like the rest of the blueprint.
-public sealed record RunCharacter(string Id, RunStart Start);
+// One selectable starting character (character selection): a stable id (for the pick + the meta unlock gate) plus
+// its full RunStart, and an optional UnlockFlag. When set, the character is only offered once the meta profile has
+// that flag (MetaProgression.AvailableCharacters); null ⇒ always available. Which flag unlocks it — and how it is
+// earned — is content. A plain record so it round-trips through RunJson like the rest of the blueprint.
+public sealed record RunCharacter(string Id, RunStart Start, string? UnlockFlag = null);
 
 // The authored opening state of a run: the hero's display name, starting/maximum health, starting resources
 // (resource id → amount, e.g. gold), and the relics the hero begins with (ids resolved from the run's content when
