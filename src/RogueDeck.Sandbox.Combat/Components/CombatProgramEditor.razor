@@ -155,6 +155,12 @@ else
         {
             <span class="muted">to</span>
             @ZoneSelect(Node.ToZone, z => Set(Node with { ToZone = z }))
+            <select value="@Node.Placement" @onchange="e => Set(Node with { Placement = ParsePlacement(e.Value) })">
+                @foreach (var p in Enum.GetValues<ZonePlacement>())
+                {
+                    <option value="@p" selected="@(p == Node.Placement)">@(p == ZonePlacement.Top ? "on top" : "at bottom")</option>
+                }
+            </select>
         }
         @if (Node.Kind == "transformCard")
         {
@@ -180,6 +186,8 @@ else
         Enum.TryParse<StatusPolarity>(AsString(v), out var p) ? p : StatusPolarity.Debuff;
     private static CardZone ParseZone(object? v) =>
         Enum.TryParse<CardZone>(AsString(v), out var z) ? z : CardZone.Hand;
+    private static ZonePlacement ParsePlacement(object? v) =>
+        Enum.TryParse<ZonePlacement>(AsString(v), out var p) ? p : ZonePlacement.Bottom;
 
     private void Set(CombatNodeModel node) => _ = NodeChanged.InvokeAsync(node);
 

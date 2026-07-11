@@ -9,6 +9,15 @@ public enum CardZone
     BanishedPile
 }
 
+// Where a card lands in its destination zone. Draw takes from the front (index 0 = the "top"), so Top places a card
+// on top of the draw pile (a tutor / "put this card on top") and Bottom appends it (the historical default). Only
+// ordering matters for the draw pile, but the placement applies uniformly to any zone.
+public enum ZonePlacement
+{
+    Bottom,
+    Top
+}
+
 // The player-input collaborator for in-combat card selection — the combat analog of the run's IRunEntityChooser.
 // A ChosenCardInZone expression calls this to let a player pick cards during a fight (e.g. Armaments: choose a
 // card in hand to upgrade). Must be DETERMINISTIC for a given combat so replays reproduce. Set on CombatState by
@@ -103,13 +112,17 @@ public sealed class CombatantCardZones
         return GetMutableZone(zone).ToArray();
     }
 
-    public void MoveCardToZone(CardInstanceId id, CardZone zone)
+    public void MoveCardToZone(CardInstanceId id, CardZone zone, ZonePlacement placement = ZonePlacement.Bottom)
     {
         var card = GetCard(id);
 
         RemoveFromCurrentZone(card);
         card.SetZone(zone);
-        GetMutableZone(zone).Add(card);
+        var destination = GetMutableZone(zone);
+        if (placement == ZonePlacement.Top)
+            destination.Insert(0, card); // the front is the draw "top"
+        else
+            destination.Add(card);
     }
 
     public IReadOnlyList<CardInstance> MoveAllCardsFromZone(

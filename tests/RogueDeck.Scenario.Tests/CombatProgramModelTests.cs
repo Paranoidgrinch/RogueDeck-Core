@@ -487,6 +487,18 @@ public class CombatProgramModelTests
         Assert.Equal(model, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(model)));
     }
 
+    [Fact]
+    public void MoveCardToZone_round_trips_the_top_placement()
+    {
+        var model = new CombatNodeModel("moveCardToZone", "source",
+            Card: new CombatCardSpec("chosen", CardZone.Hand), ToZone: CardZone.DrawPile, Placement: ZonePlacement.Top);
+
+        var back = CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(model));
+
+        Assert.Equal(model, back);
+        Assert.Equal(ZonePlacement.Top, back!.Placement);
+    }
+
     [Theory]
     [MemberData(nameof(CardSpecs))]
     public void TransformCard_round_trips_each_card_selector_and_its_target_definition(CombatCardSpec card)

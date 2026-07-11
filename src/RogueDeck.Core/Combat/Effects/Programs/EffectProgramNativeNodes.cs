@@ -976,6 +976,7 @@ public interface IMoveCardToZoneNodeCore : INativeEffectOperationNode
 {
     ICombatantTargetSelector OwnerSelector { get; }
     CardZone ToZone { get; }
+    ZonePlacement Placement { get; }
     EffectResultKey<MoveCardToZoneOutcome>? ResultKey { get; }
 
     CardInstanceId? EvaluateCardInstanceId(IEffectExecutionContextCore ctx, CombatState combat);
@@ -990,6 +991,7 @@ public sealed class MoveCardToZoneNode<TContext> : IMoveCardToZoneNodeCore, IEff
     public IEnumerable<ICombatantTargetSelector> GetTargetSelectors() => [OwnerSelector];
     public ICardInstanceExpression<TContext> CardExpression { get; }
     public CardZone ToZone { get; }
+    public ZonePlacement Placement { get; }
     public EffectResultKey<MoveCardToZoneOutcome>? ResultKey { get; }
 
     public IReadOnlyList<IEffectNode<TContext>> Children => [];
@@ -998,7 +1000,8 @@ public sealed class MoveCardToZoneNode<TContext> : IMoveCardToZoneNodeCore, IEff
         ICombatantTargetSelector ownerSelector,
         ICardInstanceExpression<TContext> cardExpression,
         CardZone toZone,
-        EffectResultKey<MoveCardToZoneOutcome>? resultKey = null)
+        EffectResultKey<MoveCardToZoneOutcome>? resultKey = null,
+        ZonePlacement placement = ZonePlacement.Bottom)
     {
         ArgumentNullException.ThrowIfNull(ownerSelector);
         ArgumentNullException.ThrowIfNull(cardExpression);
@@ -1006,6 +1009,7 @@ public sealed class MoveCardToZoneNode<TContext> : IMoveCardToZoneNodeCore, IEff
         OwnerSelector = ownerSelector;
         CardExpression = cardExpression;
         ToZone = toZone;
+        Placement = placement;
         ResultKey = resultKey;
     }
 

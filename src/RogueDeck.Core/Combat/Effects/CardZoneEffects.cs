@@ -136,7 +136,10 @@ public sealed record MoveCardToZoneEffectRequest(
     CombatantId CombatantId,
     CardInstanceId CardInstanceId,
     CardZone ToZone,
-    MoveCardToZoneOutcomeSlot? OutcomeSlot = null
+    MoveCardToZoneOutcomeSlot? OutcomeSlot = null,
+    // Where the card lands in the destination zone — Top for a tutor ("put on top of the draw pile"), Bottom (the
+    // default) to append, preserving historical behaviour for every existing caller.
+    ZonePlacement Placement = ZonePlacement.Bottom
 ) : IEffectRequest;
 
 public sealed class MoveCardToZoneEffectHandler : EffectRequestHandler<MoveCardToZoneEffectRequest>
@@ -165,7 +168,7 @@ public sealed class MoveCardToZoneEffectHandler : EffectRequestHandler<MoveCardT
             return;
         }
 
-        zones.MoveCardToZone(request.CardInstanceId, request.ToZone);
+        zones.MoveCardToZone(request.CardInstanceId, request.ToZone, request.Placement);
 
         if (request.OutcomeSlot is { } slot)
             slot.Value = new MoveCardToZoneOutcome(

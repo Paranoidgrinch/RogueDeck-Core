@@ -84,7 +84,10 @@ public sealed record CombatNodeModel(
     // select a single card. transformCard's target definition + forEachCardInZone's (optional) definition filter
     // share ToDefinition; canonically "" for kinds that don't use it so build↔classify round-trips exactly.
     CombatCardSpec? Card = null,
-    string ToDefinition = "")
+    string ToDefinition = "",
+    // moveCardToZone: where the card lands in the destination zone (Top = a tutor / put-on-top; Bottom = default).
+    // Canonically Bottom for other kinds so build↔classify round-trips exactly.
+    ZonePlacement Placement = ZonePlacement.Bottom)
 {
     public CombatAmountSpec AmountOrDefault => Amount ?? CombatAmountSpec.FromConst(3);
     public CombatCardSpec CardOrDefault => Card ?? new CombatCardSpec();
@@ -268,6 +271,7 @@ public static class CombatProgramModel
                 ToZone = UsesZones(kind) || UsesMoveToZone(kind) ? node.ToZone : CardZone.DiscardPile,
                 Card = UsesCard(kind) ? (node.Card ?? new CombatCardSpec("chosen", CardZone.Hand)) : null,
                 ToDefinition = kind == "transformCard" ? (node.ToDefinition == "" ? "strike.plus" : node.ToDefinition) : "",
+                Placement = kind == "moveCardToZone" ? node.Placement : ZonePlacement.Bottom,
                 Amount = UsesAmount(kind) ? (node.Amount ?? CombatAmountSpec.FromConst(3)) : null,
             };
 
@@ -492,7 +496,7 @@ public static class CombatProgramModel
             "modifyStatusDuration" => new ModifyStatusDurationNode<TContext>(selector, new StatusDefinitionId(model.StatusId), amount),
             "modifyStatusCharges" => new ModifyStatusChargesNode<TContext>(selector, new StatusDefinitionId(model.StatusId), amount),
             "moveCards" => new MoveAllCardsFromZoneNode<TContext>(selector, model.FromZone, model.ToZone),
-            "moveCardToZone" => new MoveCardToZoneNode<TContext>(selector, BuildCard<TContext>(model.CardOrDefault), model.ToZone),
+            "moveCardToZone" => new MoveCardToZoneNode<TContext>(selector, BuildCard<TContext>(model.CardOrDefault), model.ToZone, placement: model.Placement),
             "transformCard" => new TransformCardNode<TContext>(selector, BuildCard<TContext>(model.CardOrDefault), new CardDefinitionId(model.ToDefinition)),
             _ => new GainBlockNode<TContext>(selector, amount),
         };
@@ -567,7 +571,7 @@ public static class CombatProgramModel
                     : null;
             case MoveCardToZoneNode<TContext> { ResultKey: null } n:
                 return KeyFor(n.OwnerSelector) is { } mtKey && ClassifyCard(n.CardExpression) is { } mtCard
-                    ? new CombatNodeModel("moveCardToZone", mtKey, Card: mtCard, ToZone: n.ToZone)
+                    ? new CombatNodeModel("moveCardToZone", mtKey, Card: mtCard, ToZone: n.ToZone, Placement: n.Placement)
                     : null;
             case TransformCardNode<TContext> { ResultKey: null } n:
                 return KeyFor(n.OwnerSelector) is { } tfKey && ClassifyCard(n.CardExpression) is { } tfCard

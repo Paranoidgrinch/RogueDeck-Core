@@ -1642,7 +1642,8 @@ internal sealed class MoveCardToZoneNodeExecutor : IEffectNodeExecutor
             CombatantId: owner,
             CardInstanceId: cardInstId.Value,
             ToZone: typed.ToZone,
-            OutcomeSlot: slot));
+            OutcomeSlot: slot,
+            Placement: typed.Placement));
 
         if (typed.ResultKey is { } key && slot is not null)
         {

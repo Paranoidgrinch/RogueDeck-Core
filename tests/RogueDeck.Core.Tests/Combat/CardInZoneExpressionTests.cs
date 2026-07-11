@@ -219,6 +219,49 @@ public class CardInZoneExpressionTests
         Assert.Empty(combat.GetCardZones(HeroId).ExhaustPile);
     }
 
+    // Deck ordering: a move can place the card on TOP of the destination zone (a tutor), so it is drawn first;
+    // the default appends it to the BOTTOM. Proven end-to-end through the node → executor → request → zones path.
+    [Fact]
+    public void Moving_a_card_onto_the_top_of_the_draw_pile_makes_it_drawn_first()
+    {
+        var registry = CombatTestFactory.CreateStandardRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        AddCard(combat, "d1", CardZone.DrawPile);
+        AddCard(combat, "d2", CardZone.DrawPile);
+        var tutored = AddCard(combat, "h1", CardZone.Hand);
+
+        var program = new EffectProgram<Ctx>(new MoveCardToZoneNode<Ctx>(
+            CombatantTargetSelectors.Source,
+            new ChosenCardInZoneExpression<Ctx>(CardZone.Hand), // no chooser ⇒ first hand card (h1)
+            CardZone.DrawPile,
+            placement: ZonePlacement.Top));
+
+        EffectProgramExecutor.Execute(program, MakeContext(combat), combat);
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+
+        Assert.Equal(tutored, combat.GetCardZones(HeroId).DrawPile[0].Id); // placed on top, ahead of d1/d2
+    }
+
+    [Fact]
+    public void The_default_placement_appends_to_the_bottom_of_the_zone()
+    {
+        var registry = CombatTestFactory.CreateStandardRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        AddCard(combat, "d1", CardZone.DrawPile);
+        var appended = AddCard(combat, "h1", CardZone.Hand);
+
+        var program = new EffectProgram<Ctx>(new MoveCardToZoneNode<Ctx>(
+            CombatantTargetSelectors.Source,
+            new ChosenCardInZoneExpression<Ctx>(CardZone.Hand),
+            CardZone.DrawPile)); // default Bottom
+
+        EffectProgramExecutor.Execute(program, MakeContext(combat), combat);
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+
+        var draw = combat.GetCardZones(HeroId).DrawPile;
+        Assert.Equal(appended, draw[^1].Id); // appended after d1
+    }
+
     // Multi-card selection: ForEachCardInZone runs its body once per card in a zone. With a definition filter it
     // touches only matching cards (Armaments+ "upgrade every Strike in hand"), leaving the rest alone; the body
     // targets the current card via IteratedCardExpression.
