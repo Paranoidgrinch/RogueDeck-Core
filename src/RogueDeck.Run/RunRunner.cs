@@ -57,12 +57,19 @@ public sealed class RunRunner
         if (_choices is IRunEntityChooser chooser)
             run.SetEntityChooser(chooser);
         run.SetContent(_content);
-        GrantStartingRelics(run);
-        GrantStartingConsumables(run);
 
-        run.AddLog(StandardRunLogTypes.RunStarted, $"Run '{run.Id}' started.");
-        run.RaiseEvent(new RunStartedRunEvent(run.Id));
-        _processor.ResolvePending(run, _registry);
+        // A RESUMED run (restored from a save) has already walked part of the map and been granted its opening, so
+        // it skips the starting grants + RunStarted; a fresh run has Position -1 and no current node. The walkers
+        // continue from the saved position (WalkLinear from Position+1, WalkGraph from the current node's successors).
+        var resuming = run.Position >= 0 || run.CurrentNodeId is not null;
+        if (!resuming)
+        {
+            GrantStartingRelics(run);
+            GrantStartingConsumables(run);
+            run.AddLog(StandardRunLogTypes.RunStarted, $"Run '{run.Id}' started.");
+            run.RaiseEvent(new RunStartedRunEvent(run.Id));
+            _processor.ResolvePending(run, _registry);
+        }
 
         // Two map shapes over one traversal contract: a linear map (no edges) walks its nodes in order exactly as
         // before; a graph map (edges present) walks by player-chosen path. Both sequence each node identically —
@@ -85,10 +92,11 @@ public sealed class RunRunner
             MetaProgression.ApplyRunEnd(meta, run, _metaRules);
     }
 
-    // Linear walk (no edges): the historical index loop, unchanged.
+    // Linear walk (no edges): resolve each node in order. Starts at Position+1 so a fresh run (Position -1) begins at
+    // node 0 and a resumed run (Position = the last resolved node) continues at the next one.
     private void WalkLinear(RunState run, NodeResolveContext context)
     {
-        for (var index = 0; index < run.Map.Nodes.Count; index++)
+        for (var index = run.Position + 1; index < run.Map.Nodes.Count; index++)
         {
             var node = run.Map.Nodes[index];
             run.AdvanceTo(index);
@@ -111,11 +119,22 @@ public sealed class RunRunner
     // successor). A node with no such successor is a leaf — the boss / finish — and ends the run.
     private void WalkGraph(RunState run, NodeResolveContext context)
     {
-        var entries = EntryNodes(run.Map);
-        if (entries.Count == 0)
-            return; // a map with edges but no reachable entry node has nothing to walk
+        Node? current;
+        if (run.CurrentNodeId is not null)
+        {
+            // Resume from a save: the current node was already resolved (the save was taken at its interlude), so
+            // continue from its reachable-and-unvisited successors. No successors ⇒ it was a leaf; the run is done.
+            var resumeSuccessors = run.CurrentReachableNodes();
+            current = resumeSuccessors.Count == 0 ? null : PickNode(resumeSuccessors, run);
+        }
+        else
+        {
+            var entries = EntryNodes(run.Map);
+            if (entries.Count == 0)
+                return; // a map with edges but no reachable entry node has nothing to walk
+            current = PickNode(entries, run);
+        }
 
-        var current = PickNode(entries, run);
         while (current is not null)
         {
             run.AddLog(StandardRunLogTypes.NodeChosen, $"Chose node '{current.Id}'.");

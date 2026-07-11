@@ -109,6 +109,35 @@ public class RunSaveTests
     }
 
     [Fact]
+    public void A_resumed_run_continues_from_the_saved_position_without_redoing_done_nodes()
+    {
+        var counter = new RunCounterId("nodesRun");
+        EventScript Bump() => new EventScriptBuilder("s")
+            .Situation("s", "t", s => s.Choice("go", c => c.IncrementCounter(counter, 1)))
+            .Build();
+        var map = new RunMap(new[]
+        {
+            new Node(new NodeId("n0"), StandardRunIds.EventNode, Bump()),
+            new Node(new NodeId("n1"), StandardRunIds.EventNode, Bump()),
+        });
+
+        var builder = new RunDefinitionRegistryBuilder();
+        new StandardRunPackage().RegisterDefinitions(builder);
+        var registry = builder.Build();
+
+        // A mid-run save: node 0 is resolved (Position 0, its counter effect applied), node 1 is not.
+        var run = new RunState(new RunId("r"), new HealthState(30, 30), map);
+        run.AdvanceTo(0);
+        run.SetCounter(counter, 1);
+
+        var restored = RunState.Restore(RunSaveJson.FromJson(RunSaveJson.ToJson(run.Snapshot())), map, content: null);
+        new RunRunner(registry, new ScriptedChoiceProvider("go")).Run(restored);
+
+        Assert.Equal(RunResult.Victory, restored.Result);
+        Assert.Equal(2, restored.GetCounter(counter)); // only node 1 ran (re-running node 0 would make it 3)
+    }
+
+    [Fact]
     public void Saving_with_uncaptured_scheduled_state_throws_rather_than_losing_it()
     {
         var run = new RunState(new RunId("r"), new HealthState(20, 30), new RunMap(Array.Empty<Node>()));
