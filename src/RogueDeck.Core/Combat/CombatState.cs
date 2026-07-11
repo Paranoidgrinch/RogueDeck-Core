@@ -584,6 +584,83 @@ public sealed class CombatState
     public CombatStateSnapshot CreateSnapshot() =>
         CombatStateSnapshotter.CreateSnapshot(this);
 
+    // Rebuild a live combat from a snapshot — the resume half of mid-combat save (the snapshot is the capture half).
+    // A save is taken at a QUIESCENT point (no in-flight effect queue / program frames — those are output, not input
+    // state, and aren't in the snapshot). Temporary triggered rules are by-REFERENCE content whose body the snapshot
+    // does not value-capture, so Restore refuses a snapshot that has any rather than resurrecting a rule with no body.
+    // Combatant/status tags+counters are never written in practice (always empty) and status source / applied round
+    // are not captured, so they come back at their defaults — faithful to the snapshot (which omits them), which is
+    // exactly what CombatStateHasher compares. The registry / chooser / trace listener are collaborators the driver
+    // rebinds after restore.
+    public static CombatState Restore(CombatStateSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        if (snapshot.TemporaryRules.Length > 0)
+            throw new InvalidOperationException(
+                "A combat can only be saved with no active temporary rules (their program bodies are not captured). "
+                + "Save at a quiescent point between actions.");
+
+        var combat = new CombatState(snapshot.Id, snapshot.RandomSeed)
+        {
+            RandomStep = snapshot.RandomStep,
+            Result = snapshot.Result,
+            CurrentRound = snapshot.CurrentRound,
+            CurrentTurn = snapshot.CurrentTurn,
+            TurnPhase = snapshot.TurnPhase,
+            ActiveCombatantId = snapshot.ActiveCombatantId,
+            NextStatusInstanceNumber = snapshot.NextStatusInstanceNumber,
+            NextCardInstanceNumber = snapshot.NextCardInstanceNumber,
+            NextSummonedCombatantNumber = snapshot.NextSummonedCombatantNumber,
+            _nextEffectChainNumber = snapshot.NextEffectChainNumber,
+            _nextProgramExecutionId = snapshot.NextProgramExecutionId,
+        };
+
+        // Combatants are snapshotted in TurnOrder, so adding them in order reproduces _turnOrder + the zones map.
+        foreach (var c in snapshot.Combatants)
+        {
+            var combatant = new CombatantState(
+                c.Id, c.DefinitionId, $"combatant.{c.DefinitionId.value}", c.TeamId,
+                new HealthState(c.HealthCurrent, c.HealthMax));
+            combatant.SetLifecycleState(c.LifecycleState);
+            foreach (var (id, pool) in c.Resources)
+                combatant.AddResource(id, new ValuePoolState(pool.Current, pool.Max, pool.CanExceedMax));
+            foreach (var (id, pool) in c.DefensivePools)
+                combatant.AddDefensivePool(id, new ValuePoolState(pool.Current, pool.Max, pool.CanExceedMax));
+            foreach (var status in c.Statuses)
+                combatant.AddStatus(RestoreStatus(status));
+            combat.AddCombatant(combatant);
+        }
+
+        foreach (var global in snapshot.GlobalStatuses)
+            combat._globalStatuses.Add(RestoreStatus(global));
+
+        // Card zones, pile by pile in order (the snapshot preserves draw order).
+        foreach (var (combatantId, zones) in snapshot.CardZones)
+        {
+            var target = combat.GetCardZones(combatantId);
+            RestorePile(target, combatantId, zones.DrawPile, CardZone.DrawPile);
+            RestorePile(target, combatantId, zones.Hand, CardZone.Hand);
+            RestorePile(target, combatantId, zones.DiscardPile, CardZone.DiscardPile);
+            RestorePile(target, combatantId, zones.ExhaustPile, CardZone.ExhaustPile);
+            RestorePile(target, combatantId, zones.BanishedPile, CardZone.BanishedPile);
+        }
+
+        return combat;
+    }
+
+    private static StatusInstance RestoreStatus(StatusInstanceSnapshot s) =>
+        new(s.Id, s.DefinitionId, s.OwnerCombatantId,
+            stacks: s.Stacks, durationTurns: s.DurationTurns, charges: s.Charges,
+            polarity: s.Polarity, initialTags: s.Tags);
+
+    private static void RestorePile(
+        CombatantCardZones zones, CombatantId owner,
+        System.Collections.Immutable.ImmutableArray<CardInstanceSnapshot> pile, CardZone zone)
+    {
+        foreach (var card in pile)
+            zones.AddCard(new CardInstance(card.Id, card.DefinitionId, owner, zone));
+    }
+
     public void AddLogEntry(string type, string message)
     {
         _combatLog.Add(new CombatLogEntry(CurrentRound, CurrentTurn, type, message));
