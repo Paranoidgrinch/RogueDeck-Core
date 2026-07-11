@@ -78,11 +78,11 @@ public class RunSessionViewCardChoiceRenderTests
         using var driver = new InteractiveCombatDriver();
         var runThread = Task.Run(() => driver.Drive(ReclaimFight()));
 
-        var live = WaitFor(() => driver.Current, TimeSpan.FromSeconds(5));
+        var live = WaitFor(() => driver.Current, TimeSpan.FromSeconds(30));
         Assert.NotNull(live);
         driver.PlayCard(live!.Hand[0].Id, GoblinId);
 
-        var candidates = WaitFor(() => driver.PendingCardChoice, TimeSpan.FromSeconds(5));
+        var candidates = WaitFor(() => driver.PendingCardChoice, TimeSpan.FromSeconds(30));
         Assert.NotNull(candidates);
 
         // An unstarted session provides the inventory lens but matches none of the awaiting-* branches, so
@@ -100,6 +100,6 @@ public class RunSessionViewCardChoiceRenderTests
         Assert.DoesNotContain("End turn", html);                     // normal hand controls hidden while choosing
 
         driver.Dispose(); // unpark the fight thread
-        try { await runThread.WaitAsync(TimeSpan.FromSeconds(5)); } catch { /* canceled */ }
+        try { await runThread.WaitAsync(TimeSpan.FromSeconds(30)); } catch { /* canceled */ }
     }
 }

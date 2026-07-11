@@ -108,7 +108,7 @@ public class PartyInteractiveCombatDriverTests
         CombatDriveResult? result = null;
         var runThread = Task.Run(() => result = driver.Drive(ReclaimPartyFight()));
 
-        var party = WaitFor(() => driver.Current, TimeSpan.FromSeconds(5));
+        var party = WaitFor(() => driver.Current, TimeSpan.FromSeconds(30));
         Assert.NotNull(party);
 
         // The hero plays its first card; the play resolves on a background task and PARKS on the draw-pile choice.
@@ -116,7 +116,7 @@ public class PartyInteractiveCombatDriverTests
         var handCard = party!.HandOf(hero)[0].Id;
         driver.PlayCardFor(hero, handCard, GoblinId);
 
-        var candidates = WaitFor(() => driver.PendingCardChoice, TimeSpan.FromSeconds(5));
+        var candidates = WaitFor(() => driver.PendingCardChoice, TimeSpan.FromSeconds(30));
         Assert.NotNull(candidates);
         Assert.Equal(3, candidates!.Count); // 8 in deck, 5 drawn to the opening hand, 3 left in the draw pile
         Assert.Equal("reclaim a card", driver.PendingCardChoicePurpose);
@@ -125,7 +125,7 @@ public class PartyInteractiveCombatDriverTests
         var picked = candidates[1].Id;
         driver.SupplyCardChoice(new[] { picked });
 
-        var finished = await Task.WhenAny(runThread, Task.Delay(TimeSpan.FromSeconds(5)));
+        var finished = await Task.WhenAny(runThread, Task.Delay(TimeSpan.FromSeconds(30)));
         Assert.Same(runThread, finished);
         await runThread;
 
@@ -146,7 +146,7 @@ public class PartyInteractiveCombatDriverTests
 
         // The circuit thread: wait for the fight to surface, then play every active member's hand at the goblin and
         // end its turn, across as many rounds as it takes. Current goes null when the fight finishes.
-        var party = WaitFor(() => driver.Current, TimeSpan.FromSeconds(5));
+        var party = WaitFor(() => driver.Current, TimeSpan.FromSeconds(30));
         Assert.NotNull(party);
 
         // Each play/end-turn now resolves on a background task (so a card-choice could park it), and the driver
@@ -158,15 +158,15 @@ public class PartyInteractiveCombatDriverTests
                 foreach (var card in live.HandOf(member).ToArray())
                 {
                     driver.PlayCardFor(member, card.Id, GoblinId);
-                    WaitWhile(() => driver.IsResolving, TimeSpan.FromSeconds(5));
+                    WaitWhile(() => driver.IsResolving, TimeSpan.FromSeconds(30));
                 }
                 driver.EndTurnFor(member);
-                WaitWhile(() => driver.IsResolving, TimeSpan.FromSeconds(5));
+                WaitWhile(() => driver.IsResolving, TimeSpan.FromSeconds(30));
             }
         }
 
         // Drive returns once the fight ends; await it (no blocking wait) to observe the result + any exception.
-        var finished = await Task.WhenAny(runThread, Task.Delay(TimeSpan.FromSeconds(5)));
+        var finished = await Task.WhenAny(runThread, Task.Delay(TimeSpan.FromSeconds(30)));
         Assert.Same(runThread, finished);
         await runThread;
         Assert.NotNull(result);

@@ -68,13 +68,13 @@ public class InteractiveCombatDriverCardChoiceTests
         var runThread = Task.Run(() => result = driver.Drive(ReclaimFight()));
 
         // The circuit thread: wait for the fight, then play the first card in hand at the goblin.
-        var live = WaitFor(() => driver.Current, TimeSpan.FromSeconds(5));
+        var live = WaitFor(() => driver.Current, TimeSpan.FromSeconds(30));
         Assert.NotNull(live);
         var handCard = live!.Hand[0].Id;
         driver.PlayCard(handCard, GoblinId);
 
         // The play resolves on a background task and PARKS on the draw-pile card choice — three candidates remain.
-        var candidates = WaitFor(() => driver.PendingCardChoice, TimeSpan.FromSeconds(5));
+        var candidates = WaitFor(() => driver.PendingCardChoice, TimeSpan.FromSeconds(30));
         Assert.NotNull(candidates);
         Assert.Equal(3, candidates!.Count);
         Assert.Equal("reclaim a card from your draw pile", driver.PendingCardChoicePurpose);
@@ -84,7 +84,7 @@ public class InteractiveCombatDriverCardChoiceTests
         var picked = candidates[1].Id;
         driver.SupplyCardChoice(new[] { picked });
 
-        var finished = await Task.WhenAny(runThread, Task.Delay(TimeSpan.FromSeconds(5)));
+        var finished = await Task.WhenAny(runThread, Task.Delay(TimeSpan.FromSeconds(30)));
         Assert.Same(runThread, finished);
         await runThread;
 

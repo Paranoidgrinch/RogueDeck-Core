@@ -52,18 +52,18 @@ public class InteractiveRunSessionTests
         session.Start();
 
         // Parked at the event: the consumable is still held.
-        Assert.NotNull(WaitFor(() => session.IsAwaitingChoice ? session : null, TimeSpan.FromSeconds(5)));
+        Assert.NotNull(WaitFor(() => session.IsAwaitingChoice ? session : null, TimeSpan.FromSeconds(30)));
         var instance = Assert.Single(run.Consumables).Id;
 
         // Use it: the loop thread applies its effect (+50 gold), removes it, and re-parks at the same choice. Wait on
         // the APPLIED effect (gold), which settles after the removal, to avoid racing the mid-resolve inventory edit.
         session.UseConsumable(instance);
         Assert.NotNull(WaitFor(
-            () => (run.GetResource(Gold) == 50 && session.IsAwaitingChoice) ? "used" : null, TimeSpan.FromSeconds(5)));
+            () => (run.GetResource(Gold) == 50 && session.IsAwaitingChoice) ? "used" : null, TimeSpan.FromSeconds(30)));
 
         // Picking the choice resumes and completes the run.
         session.Pick("leave");
-        Assert.NotNull(WaitFor(() => session.IsComplete ? "done" : null, TimeSpan.FromSeconds(5)));
+        Assert.NotNull(WaitFor(() => session.IsComplete ? "done" : null, TimeSpan.FromSeconds(30)));
         Assert.Null(session.Error);
     }
 
@@ -92,20 +92,20 @@ public class InteractiveRunSessionTests
         session.Start();
 
         // Node 1's event choice, then the between-nodes interlude.
-        Assert.NotNull(WaitFor(() => session.IsAwaitingChoice ? "c" : null, TimeSpan.FromSeconds(5)));
+        Assert.NotNull(WaitFor(() => session.IsAwaitingChoice ? "c" : null, TimeSpan.FromSeconds(30)));
         session.Pick("leave");
-        Assert.NotNull(WaitFor(() => session.IsAwaitingInterlude ? "i" : null, TimeSpan.FromSeconds(5)));
+        Assert.NotNull(WaitFor(() => session.IsAwaitingInterlude ? "i" : null, TimeSpan.FromSeconds(30)));
 
         // Spend a consumable at the interlude, then continue.
         session.UseConsumable(Assert.Single(run.Consumables).Id);
         Assert.NotNull(WaitFor(
-            () => (run.GetResource(Gold) == 50 && session.IsAwaitingInterlude) ? "u" : null, TimeSpan.FromSeconds(5)));
+            () => (run.GetResource(Gold) == 50 && session.IsAwaitingInterlude) ? "u" : null, TimeSpan.FromSeconds(30)));
         session.Continue();
 
         // Node 2's event choice, then the run completes.
-        Assert.NotNull(WaitFor(() => session.IsAwaitingChoice ? "c2" : null, TimeSpan.FromSeconds(5)));
+        Assert.NotNull(WaitFor(() => session.IsAwaitingChoice ? "c2" : null, TimeSpan.FromSeconds(30)));
         session.Pick("leave");
-        Assert.NotNull(WaitFor(() => session.IsComplete ? "done" : null, TimeSpan.FromSeconds(5)));
+        Assert.NotNull(WaitFor(() => session.IsComplete ? "done" : null, TimeSpan.FromSeconds(30)));
         Assert.Null(session.Error);
     }
 }

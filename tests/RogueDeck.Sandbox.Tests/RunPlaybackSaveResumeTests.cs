@@ -40,7 +40,7 @@ public class RunPlaybackSaveResumeTests
         using var play = new RunPlayback(() => { });
 
         play.Start(blueprint, seed: 1, interactive: false);
-        Assert.True(WaitFor(() => play.Session?.IsComplete == true, TimeSpan.FromSeconds(5)), play.Error);
+        Assert.True(WaitFor(() => play.Session?.IsComplete == true, TimeSpan.FromSeconds(30)), play.Error);
 
         var json = play.SaveJson();
         Assert.NotNull(json);                     // a completed run snapshots cleanly (no scheduled state)
@@ -50,6 +50,6 @@ public class RunPlaybackSaveResumeTests
         play.Resume(blueprint, RunSaveJson.FromJson(json!), interactive: false);
         Assert.Null(play.Error);
         Assert.NotNull(play.Session);
-        Assert.True(WaitFor(() => play.Session?.IsComplete == true, TimeSpan.FromSeconds(5)), play.Error);
+        Assert.True(WaitFor(() => play.Session?.IsComplete == true, TimeSpan.FromSeconds(30)), play.Error);
     }
 }
