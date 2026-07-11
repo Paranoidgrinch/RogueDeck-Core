@@ -52,6 +52,14 @@ public class CombatJsonCardInstanceTests
         RoundTrips(new ReplayCardProgramNode<CardPlayContext>(card, Source));
         RoundTrips(new PlayCardNode<CardPlayContext>(Source, card));
         RoundTrips(new TransformCardNode<CardPlayContext>(Source, card, new CardDefinitionId("strike.plus")));
+
+        // ForEachCardInZone (multi-card selection): owner + zone + filter + a body that targets the iterated card.
+        RoundTrips(new ForEachCardInZoneNode<CardPlayContext>(
+            Source,
+            CardZone.Hand,
+            new TransformCardNode<CardPlayContext>(
+                Source, new IteratedCardExpression<CardPlayContext>(), new CardDefinitionId("strike.plus")),
+            definitionFilter: new CardDefinitionId("strike")));
     }
 
     [Fact]
@@ -79,6 +87,7 @@ public class CombatJsonCardInstanceTests
             new CardInZoneExpression<CardPlayContext>(CardZone.ExhaustPile, 0),
             new ChosenCardInZoneExpression<CardPlayContext>(CardZone.Hand),
             new RandomCardInZoneExpression<CardPlayContext>(CardZone.DiscardPile),
+            new IteratedCardExpression<CardPlayContext>(),
         })
         {
             var json = CombatJson.ToJson(expr, Options);

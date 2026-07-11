@@ -270,3 +270,51 @@ public sealed class ForEachTargetEffectNode<TContext> : IForEachNodeCore, IEffec
 
     IEffectNode IForEachNodeCore.Body => Body;
 }
+
+// Runs its body once per card in a combatant's zone (optionally only cards whose definition matches the filter),
+// binding each card as the iteration card so a card op in the body (via IteratedCardExpression) targets it. The
+// card-domain counterpart of ForEachTargetEffectNode: "upgrade every Strike in hand", "exhaust all cards in hand".
+// The card list is snapshotted at loop start, so moving/transforming a card in the body doesn't disturb the walk.
+public sealed class ForEachCardInZoneNode<TContext> : IForEachCardInZoneNodeCore, IEffectNode<TContext>
+    where TContext : class
+{
+    public const int DefaultMaxIterations = 64;
+
+    public ICombatantTargetSelector OwnerSelector { get; }
+    public CardZone Zone { get; }
+    public CardDefinitionId? DefinitionFilter { get; }
+    public IEffectNode<TContext> Body { get; }
+    public int MaxIterations { get; }
+
+    public IReadOnlyList<IEffectNode<TContext>> Children => [Body];
+
+    public string GetChildPathSegment(int childIndex) => childIndex == 0
+        ? "forEachCard.body"
+        : throw new ArgumentOutOfRangeException(nameof(childIndex));
+
+    public IEnumerable<ICombatantTargetSelector> GetTargetSelectors() => [OwnerSelector];
+
+    public ForEachCardInZoneNode(
+        ICombatantTargetSelector ownerSelector,
+        CardZone zone,
+        IEffectNode<TContext> body,
+        CardDefinitionId? definitionFilter = null,
+        int maxIterations = DefaultMaxIterations)
+    {
+        ArgumentNullException.ThrowIfNull(ownerSelector);
+        ArgumentNullException.ThrowIfNull(body);
+
+        if (maxIterations <= 0)
+            throw new ArgumentOutOfRangeException(
+                nameof(maxIterations),
+                "Maximum iterations must be greater than zero.");
+
+        OwnerSelector = ownerSelector;
+        Zone = zone;
+        Body = body;
+        DefinitionFilter = definitionFilter;
+        MaxIterations = maxIterations;
+    }
+
+    IEffectNode IForEachCardInZoneNodeCore.Body => Body;
+}

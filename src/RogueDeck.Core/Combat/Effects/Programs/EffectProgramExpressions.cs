@@ -1565,6 +1565,17 @@ public sealed class RandomCardInZoneExpression<TContext>
     }
 }
 
+// The card the innermost open ForEachCardInZone loop is currently on. It reads the execution context's iteration
+// card (set by the ForEachCardInZone executor per card), so a card op in the loop body targets that card — the
+// card-domain analog of the iteration-target selector. Null outside a card loop, so a stray use is a clean no-op.
+public sealed class IteratedCardExpression<TContext>
+    : ICardInstanceExpression<TContext>
+    where TContext : class
+{
+    public CardInstanceId? Evaluate(EffectExecutionContext<TContext> context, CombatState combat) =>
+        context.CurrentIterationCard;
+}
+
 // The card instance carried by a CardPlayed trigger's event — the card whose play fired the trigger
 // (unlike PlayedCardInstance, which reads the in-flight card during a card's own on-play program).
 public sealed class TriggerEventCardInstanceExpression<TContext>

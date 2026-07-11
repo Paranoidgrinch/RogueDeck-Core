@@ -87,6 +87,7 @@ public sealed class EffectNodeExecutorRegistry
         r.RegisterOpenGeneric(typeof(RepeatEffectNode<>), new RepeatNodeExecutor());
         r.RegisterOpenGeneric(typeof(RepeatUntilEffectNode<>), new RepeatUntilNodeExecutor());
         r.RegisterOpenGeneric(typeof(ForEachTargetEffectNode<>), new ForEachNodeExecutor());
+        r.RegisterOpenGeneric(typeof(ForEachCardInZoneNode<>), new ForEachCardInZoneNodeExecutor());
         r.RegisterOpenGeneric(typeof(RandomTargetSelectionNode<>), new RandomTargetSelectionNodeExecutor());
         r.Seal();
         return r;
@@ -403,6 +404,71 @@ internal sealed class ForEachNodeExecutor : IEffectNodeExecutor
             ctx.PopIterationTarget();
             using (c.EnterEffectChain(ctx.EffectChain!))
                 ExecuteIteration(body, targets, nextIndex, ctx, c, onComplete, dispatch);
+        });
+    }
+}
+
+internal sealed class ForEachCardInZoneNodeExecutor : IEffectNodeExecutor
+{
+    public void Execute(IEffectNode node, IEffectExecutionContextCore ctx, CombatState combat,
+        Action<CombatState>? onComplete, Action<IEffectNode, CombatState, Action<CombatState>?> dispatch)
+    {
+        var typed = (IForEachCardInZoneNodeCore)node;
+
+        var owner = typed.OwnerSelector.ResolveTargetsTraced(ctx, combat).FirstOrDefault();
+        if (owner == default || !combat.CardZonesByCombatant.ContainsKey(owner))
+        {
+            if (onComplete is not null)
+                combat.EnqueueContinuation(onComplete);
+            return;
+        }
+
+        // Snapshot the (optionally filtered) card ids up front so the body moving/transforming a card mid-walk
+        // doesn't disturb the iteration — a moved card's id still resolves for that pass.
+        var cards = combat.GetCardZones(owner).GetCardsInZone(typed.Zone);
+        var ids = (typed.DefinitionFilter is { } filter
+                ? cards.Where(c => c.DefinitionId == filter)
+                : cards)
+            .Select(c => c.Id)
+            .ToArray();
+
+        if (ids.Length > typed.MaxIterations)
+            throw new InvalidOperationException(
+                $"ForEachCardInZoneNode resolved {ids.Length} cards which exceeds the configured " +
+                $"maximum of {typed.MaxIterations}.");
+
+        ExecuteIteration(typed.Body, ids, 0, ctx, combat, onComplete, dispatch);
+    }
+
+    private static void ExecuteIteration(
+        IEffectNode body,
+        CardInstanceId[] cards,
+        int index,
+        IEffectExecutionContextCore ctx,
+        CombatState combat,
+        Action<CombatState>? onComplete,
+        Action<IEffectNode, CombatState, Action<CombatState>?> dispatch)
+    {
+        // Each iteration opens a balanced scope (iteration card + result scope), closed in its continuation so the
+        // outer card is restored automatically. Combat ending mid-walk abandons the frame (mirrors ForEach).
+        if (combat.Result != CombatResult.Ongoing)
+            return;
+
+        if (index >= cards.Length)
+        {
+            onComplete?.Invoke(combat);
+            return;
+        }
+
+        ctx.PushIterationCard(cards[index]);
+        var nextIndex = index + 1;
+        ctx.OpenScope();
+        dispatch(body, combat, c =>
+        {
+            ctx.CloseScope();
+            ctx.PopIterationCard();
+            using (c.EnterEffectChain(ctx.EffectChain!))
+                ExecuteIteration(body, cards, nextIndex, ctx, c, onComplete, dispatch);
         });
     }
 }

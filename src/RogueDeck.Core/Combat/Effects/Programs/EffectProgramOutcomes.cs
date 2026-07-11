@@ -363,6 +363,13 @@ public interface IEffectExecutionContextCore
     void PushLoopIndex(int index);
     void PopLoopIndex();
 
+    // Iteration CARD is lexical like IterationTarget: the innermost open ForEachCardInZone scope's current card,
+    // or null when not iterating cards. An IteratedCard expression reads it so a card op in the loop body points
+    // at the card the loop is currently on ("upgrade each Strike in hand").
+    CardInstanceId? CurrentIterationCard { get; }
+    void PushIterationCard(CardInstanceId card);
+    void PopIterationCard();
+
     CombatEffectChainContext? EffectChain { get; set; }
     int ProgramStepCount { get; set; }
     int MaxProgramSteps { get; set; }
@@ -430,6 +437,14 @@ public sealed class EffectExecutionContext<TContext> : IEffectExecutionContextCo
     }
     public void PushLoopIndex(int index) => _iterationIndices.Push(index);
     public void PopLoopIndex() => _iterationIndices.Pop();
+
+    // Lexical iteration-card stack: the innermost open ForEachCardInZone scope is the top; closing a scope (pop)
+    // restores the parent card. Parallel to the iteration-target stack but for cards.
+    private readonly Stack<CardInstanceId> _iterationCards = new();
+    public CardInstanceId? CurrentIterationCard =>
+        _iterationCards.Count > 0 ? _iterationCards.Peek() : null;
+    public void PushIterationCard(CardInstanceId card) => _iterationCards.Push(card);
+    public void PopIterationCard() => _iterationCards.Pop();
 
     // Back-reference to the owning frame, set by EffectProgramExecutor.Execute. Lets the
     // node dispatcher reject stale continuations and fault the frame on a runtime exception.

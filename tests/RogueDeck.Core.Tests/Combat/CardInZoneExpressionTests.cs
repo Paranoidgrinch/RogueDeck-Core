@@ -22,11 +22,11 @@ public class CardInZoneExpressionTests
                     EventTargetId: GoblinId),
                 new TriggeredEffectActionSource(SourceCombatantId: HeroId)));
 
-    private static CardInstanceId AddCard(CombatState combat, string id, CardZone zone)
+    private static CardInstanceId AddCard(CombatState combat, string id, CardZone zone, string definition = "test.card")
     {
         var instanceId = new CardInstanceId(id);
         combat.GetCardZones(HeroId).AddCard(
-            new CardInstance(instanceId, new CardDefinitionId("test.card"), HeroId, zone));
+            new CardInstance(instanceId, new CardDefinitionId(definition), HeroId, zone));
         return instanceId;
     }
 
@@ -217,5 +217,60 @@ public class CardInZoneExpressionTests
 
         Assert.Single(combat.GetCardZones(HeroId).Hand);          // nothing moved
         Assert.Empty(combat.GetCardZones(HeroId).ExhaustPile);
+    }
+
+    // Multi-card selection: ForEachCardInZone runs its body once per card in a zone. With a definition filter it
+    // touches only matching cards (Armaments+ "upgrade every Strike in hand"), leaving the rest alone; the body
+    // targets the current card via IteratedCardExpression.
+    [Fact]
+    public void ForEachCardInZone_upgrades_every_matching_card_and_leaves_others_untouched()
+    {
+        var registry = CombatTestFactory.CreateStandardRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        var s1 = AddCard(combat, "s1", CardZone.Hand, "strike");
+        var defend = AddCard(combat, "d1", CardZone.Hand, "defend");
+        var s2 = AddCard(combat, "s2", CardZone.Hand, "strike");
+
+        var program = new EffectProgram<Ctx>(new ForEachCardInZoneNode<Ctx>(
+            CombatantTargetSelectors.Source,
+            CardZone.Hand,
+            new TransformCardNode<Ctx>(
+                CombatantTargetSelectors.Source,
+                new IteratedCardExpression<Ctx>(),
+                new CardDefinitionId("strike.plus")),
+            definitionFilter: new CardDefinitionId("strike")));
+
+        EffectProgramExecutor.Execute(program, MakeContext(combat), combat);
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+
+        var zones = combat.GetCardZones(HeroId);
+        Assert.Equal(new CardDefinitionId("strike.plus"), zones.GetCard(s1).DefinitionId); // every Strike upgraded
+        Assert.Equal(new CardDefinitionId("strike.plus"), zones.GetCard(s2).DefinitionId);
+        Assert.Equal(new CardDefinitionId("defend"), zones.GetCard(defend).DefinitionId);  // the non-Strike left alone
+    }
+
+    // With no filter the body runs for every card in the zone — "exhaust your whole hand".
+    [Fact]
+    public void ForEachCardInZone_applies_the_body_to_all_cards_when_unfiltered()
+    {
+        var registry = CombatTestFactory.CreateStandardRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        AddCard(combat, "h1", CardZone.Hand);
+        AddCard(combat, "h2", CardZone.Hand);
+        AddCard(combat, "h3", CardZone.Hand);
+
+        var program = new EffectProgram<Ctx>(new ForEachCardInZoneNode<Ctx>(
+            CombatantTargetSelectors.Source,
+            CardZone.Hand,
+            new MoveCardToZoneNode<Ctx>(
+                CombatantTargetSelectors.Source,
+                new IteratedCardExpression<Ctx>(),
+                CardZone.ExhaustPile)));
+
+        EffectProgramExecutor.Execute(program, MakeContext(combat), combat);
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+
+        Assert.Empty(combat.GetCardZones(HeroId).Hand);
+        Assert.Equal(3, combat.GetCardZones(HeroId).ExhaustPile.Count);
     }
 }

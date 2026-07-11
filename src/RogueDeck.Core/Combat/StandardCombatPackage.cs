@@ -197,6 +197,7 @@ public sealed class StandardCombatPackage : ICombatPackage
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(RepeatEffectNode<>), new RepeatNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(RepeatUntilEffectNode<>), new RepeatUntilNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(ForEachTargetEffectNode<>), new ForEachNodeExecutor());
+        registry.RegisterEffectNodeExecutorOpenGeneric(typeof(ForEachCardInZoneNode<>), new ForEachCardInZoneNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(RandomTargetSelectionNode<>), new RandomTargetSelectionNodeExecutor());
     }
 

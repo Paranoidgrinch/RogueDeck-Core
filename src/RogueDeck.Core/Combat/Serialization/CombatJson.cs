@@ -185,7 +185,8 @@ public static class CombatJson
          .Register("cardInstance.triggerEvent", typeof(TriggerEventCardInstanceExpression<>))
          .Register("cardInstance.inZone", typeof(CardInZoneExpression<>))
          .Register("cardInstance.chosenInZone", typeof(ChosenCardInZoneExpression<>))
-         .Register("cardInstance.randomInZone", typeof(RandomCardInZoneExpression<>));
+         .Register("cardInstance.randomInZone", typeof(RandomCardInZoneExpression<>))
+         .Register("cardInstance.iterated", typeof(IteratedCardExpression<>));
     }
 
     // Combatant target selectors (context-independent, non-generic). Registered as concrete types.
@@ -261,6 +262,7 @@ public static class CombatJson
          .Register("node.sequence", typeof(SequenceEffectNode<>))
          .Register("node.conditional", typeof(ConditionalEffectNode<>))
          .Register("node.forEachTarget", typeof(ForEachTargetEffectNode<>))
+         .Register("node.forEachCardInZone", typeof(ForEachCardInZoneNode<>))
          .Register("node.repeat", typeof(RepeatEffectNode<>))
          .Register("node.repeatUntil", typeof(RepeatUntilEffectNode<>))
          .Register("node.randomTargets", typeof(RandomTargetSelectionNode<>))

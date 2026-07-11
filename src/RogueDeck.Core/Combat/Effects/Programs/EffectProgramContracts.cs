@@ -132,6 +132,19 @@ public interface IForEachNodeCore : IEffectNode
     int MaxIterations { get; }
 }
 
+// Iterates the cards in one combatant's zone (optionally only those matching a definition), running the body once
+// per card with that card bound as the iteration card — so a card op in the body (move / transform) points at it.
+// Realises "upgrade every Strike in hand", "exhaust all cards in hand", etc. The single-card ops stay unchanged;
+// this just loops them. The owner selector names whose zone to iterate.
+public interface IForEachCardInZoneNodeCore : IEffectNode
+{
+    ICombatantTargetSelector OwnerSelector { get; }
+    CardZone Zone { get; }
+    CardDefinitionId? DefinitionFilter { get; }
+    IEffectNode Body { get; }
+    int MaxIterations { get; }
+}
+
 public interface ISideEffectNodeCore : IEffectNode
 {
     void Execute(IEffectExecutionContextCore ctx, CombatState combat);
