@@ -18,6 +18,25 @@ public static class StandardEvents
             .Build();
     }
 
+    // A campfire / rest site with the genre's two staple options: REST (heal a flat amount) or SMITH (upgrade one
+    // deck card the player chooses, up to upgradeMaxLevel). Picking either ends the node. Built entirely on the
+    // standard run effects (Heal + UpgradeCards over a player-chosen upgradable-card selector) — no engine privilege.
+    // Smith is offered even with nothing upgradable left; it then resolves to no upgrade (an availability gate is a
+    // follow-up). Content packs place this as an EventNode carrying the script, like any other event.
+    public static EventScript RestSite(int healAmount, int upgradeMaxLevel = 1)
+    {
+        return new EventScriptBuilder("restSite")
+            .Situation("restSite", "event.restSite", situation => situation
+                .Choice("rest", choice => choice
+                    .TextKey("event.restSite.rest")
+                    .Heal(healAmount))
+                .Choice("smith", choice => choice
+                    .TextKey("event.restSite.smith")
+                    .UpgradeCards(
+                        RunSelectors.DeckCards.Upgradable(upgradeMaxLevel).ChooseByPlayer(1, "smith: upgrade a card"))))
+            .Build();
+    }
+
     // A treasure: take a reward bundle (the contents are whatever the author passes).
     public static EventScript Treasure(RewardId reward, params IRunEffectRequest[] contents)
     {
