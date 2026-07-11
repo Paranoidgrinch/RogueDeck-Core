@@ -12,6 +12,7 @@ namespace RogueDeck.Sandbox.Tests;
 // mirrors that exact threading — Drive runs on a background task (the run thread), the test thread (the circuit)
 // plays a card, observes the fight PARK on a card choice, supplies the pick, and sees the fight resolve to victory —
 // proving the park-and-resume works end to end and never strands the run thread.
+[Xunit.Collection("Threaded")]
 public class InteractiveCombatDriverCardChoiceTests
 {
     private static readonly CombatantId GoblinId = new("goblin");

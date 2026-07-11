@@ -11,6 +11,7 @@ namespace RogueDeck.Sandbox.Tests;
 // reconcile. This test mirrors that exact threading — Drive runs on a background task (the run thread) while the
 // test thread (the circuit) plays cards and ends turns — proving a human-driven party fight completes and reports
 // per-member results, and that a fight with no living enemies never strands the parked run thread.
+[Xunit.Collection("Threaded")]
 public class PartyInteractiveCombatDriverTests
 {
     private static readonly CombatantId GoblinId = new("goblin");

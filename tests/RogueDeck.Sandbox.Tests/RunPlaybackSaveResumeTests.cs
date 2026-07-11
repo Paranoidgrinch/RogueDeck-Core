@@ -7,6 +7,7 @@ namespace RogueDeck.Sandbox.Tests;
 // Host wiring for save/resume (save/resume follow-up): RunPlayback can snapshot the live run to a save file and
 // resume a run from one, over the same InteractiveRunSession machinery the playtest UI drives. This exercises that
 // wiring headlessly (a non-interactive run that completes on its own), so the Save/Load buttons rest on tested code.
+[Xunit.Collection("Threaded")]
 public class RunPlaybackSaveResumeTests
 {
     private static bool WaitFor(Func<bool> condition, TimeSpan timeout)

@@ -7,6 +7,7 @@ namespace RogueDeck.Sandbox.Tests;
 // C3c: a held consumable can be spent while the run is parked at an event choice. The UI calls UseConsumable; the
 // run-loop thread (parked inside Choose) applies it and re-parks at the same choice, so all RunState mutation stays
 // on the loop thread. Verified end-to-end by driving a real InteractiveRunSession to an event and using a potion.
+[Xunit.Collection("Threaded")]
 public class InteractiveRunSessionTests
 {
     private static readonly RunResourceId Gold = StandardRunIds.Gold;

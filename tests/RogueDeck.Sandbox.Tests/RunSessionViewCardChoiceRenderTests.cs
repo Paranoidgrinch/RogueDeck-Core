@@ -16,6 +16,7 @@ namespace RogueDeck.Sandbox.Tests;
 // on-screen without a Blazor error — the one thing unit tests over the driver can't show. It drives a real fight to
 // a parked draw-pile choice, then renders RunSessionView (with an unstarted session, so it falls through to the
 // combat view) and asserts the prompt and its candidate cards are in the HTML. Uses the framework HtmlRenderer.
+[Xunit.Collection("Threaded")]
 public class RunSessionViewCardChoiceRenderTests
 {
     private static readonly CombatantId GoblinId = new("goblin");
