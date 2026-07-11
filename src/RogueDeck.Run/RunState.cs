@@ -308,6 +308,127 @@ public sealed class RunState
 
     public bool HasVisited(NodeId nodeId) => _visitedNodes.Contains(nodeId);
 
+    // ── Save & resume (engine gap #1) ──────────────────────────────────────────────
+    // Snapshot the run's PERSISTENT progress for a between-nodes save, and rebuild it. A save is taken at a clean
+    // interlude; state that isn't captured yet (board units, scheduled programs, pending combat / reward modifiers)
+    // must be empty, so Snapshot throws rather than silently drop it. Instance ids are regenerated on restore
+    // (nothing references them across a save), so the snapshot stores VALUES; relics/consumables restore by id from
+    // the content catalog.
+
+    public RunSaveData Snapshot()
+    {
+        if (_units.Count > 0 || _installedPrograms.Count > 0
+            || _pendingCombatModifiers.Count > 0 || _rewardModifiers.Count > 0)
+            throw new InvalidOperationException(
+                "A run can only be saved at a clean interlude (no board units, installed programs, or pending "
+                + "combat/reward modifiers). Save between nodes.");
+
+        return new RunSaveData(
+            RunId: Id.Value,
+            RandomSeed: RandomSeed,
+            RandomStep: _randomStep,
+            Result: Result,
+            Position: Position,
+            CurrentNodeId: CurrentNodeId?.Value,
+            Visited: _visitedNodes.Select(n => n.Value).ToArray(),
+            Flags: _flags.Select(f => f.Value).ToArray(),
+            Counters: _counters.ToDictionary(kv => kv.Key.Value, kv => kv.Value),
+            Party: _party.Select(SnapshotMember).ToArray());
+    }
+
+    private static RunMemberSaveData SnapshotMember(PartyMember member) => new(
+        DisplayNameKey: member.DisplayNameKey,
+        DefinitionId: member.DefinitionId.value,
+        MaxHealth: member.Health.Max,
+        CurrentHealth: member.Health.Current,
+        Resources: member.Resources.ToDictionary(kv => kv.Key.Value, kv => kv.Value),
+        Deck: member.Deck.Select(c => new RunCardSaveData(
+            c.DefinitionId.value,
+            c.UpgradeLevel,
+            c.Tags.Select(t => t.Value).ToArray(),
+            c.Memory.ToDictionary(m => m.Key, m => m.Value))).ToArray(),
+        Relics: member.Relics.Select(r => new RunRelicSaveData(r.Id.Value, r.Enabled)).ToArray(),
+        Consumables: member.Consumables.Select(c => c.DefinitionId.Value).ToArray());
+
+    // Rebuild a run from a save. The map is authored content (supplied by the caller, as in the constructor); the
+    // content catalog rehydrates relics/consumables by id. Requires at least the primary member.
+    public static RunState Restore(RunSaveData data, RunMap map, RunContentRegistry? content)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        ArgumentNullException.ThrowIfNull(map);
+        if (data.Party.Count == 0)
+            throw new InvalidOperationException("A run save must have at least one party member.");
+
+        var primary = data.Party[0];
+        var run = new RunState(
+            new RunId(data.RunId), new HealthState(primary.CurrentHealth, primary.MaxHealth), map, data.RandomSeed);
+        run.SetContent(content);
+        run._randomStep = data.RandomStep;
+        run.Result = data.Result;
+        run.Position = data.Position;
+        if (data.CurrentNodeId is { } current)
+            run.CurrentNodeId = new NodeId(current);
+        foreach (var visited in data.Visited)
+            run._visitedNodes.Add(new NodeId(visited));
+        foreach (var flag in data.Flags)
+            run._flags.Add(new RunFlagId(flag));
+        foreach (var (counter, value) in data.Counters)
+            run._counters[new RunCounterId(counter)] = value;
+
+        // Member 0 exists from the constructor; restore its inventory, then add + restore the rest.
+        RestoreMember(run, run.Primary, primary, content);
+        for (var i = 1; i < data.Party.Count; i++)
+        {
+            var saved = data.Party[i];
+            var member = run.AddPartyMember(
+                new HealthState(saved.CurrentHealth, saved.MaxHealth),
+                saved.DisplayNameKey, new CombatantDefinitionId(saved.DefinitionId));
+            RestoreMember(run, member, saved, content);
+        }
+        return run;
+    }
+
+    private static void RestoreMember(
+        RunState run, PartyMember member, RunMemberSaveData data, RunContentRegistry? content)
+    {
+        foreach (var (resource, amount) in data.Resources)
+            member.SetResource(new RunResourceId(resource), amount);
+
+        foreach (var card in data.Deck)
+        {
+            var instance = run.AddDeckCardTo(member, new CardDefinitionId(card.DefinitionId));
+            if (card.UpgradeLevel > 0)
+                instance.Upgrade(card.UpgradeLevel);
+            foreach (var tag in card.Tags)
+                instance.AddTag(new RunCardTagId(tag));
+            foreach (var (key, value) in card.Memory)
+                instance.SetMemory(key, value);
+        }
+
+        if (content is null)
+            return;
+
+        foreach (var relic in data.Relics)
+        {
+            var relicId = new RelicId(relic.Id);
+            if (!content.HasRelic(relicId))
+                continue;
+            var instance = new RelicInstance(content.GetRelic(relicId));
+            instance.SetEnabled(relic.Enabled);
+            member.AddRelic(instance);
+        }
+        foreach (var consumableId in data.Consumables)
+        {
+            var id = new ConsumableId(consumableId);
+            if (!content.HasConsumable(id))
+                continue;
+            var definition = content.GetConsumable(id);
+            member.AddConsumable(new RunConsumable(
+                new ConsumableInstanceId($"consumable#{++run._nextConsumableSeq}"),
+                definition.Id, definition.UseEffects, definition.CombatUse));
+        }
+    }
+
     // ── Branching-map mutation (B5): content can reshape the map mid-run (open a hidden path, collapse a bridge,
     // splice in a node). Each rebuilds the immutable RunMap preserving the rest; the graph walk reads Map fresh
     // each step, so a change takes effect on the next fork. Each returns whether it actually changed the map. ──

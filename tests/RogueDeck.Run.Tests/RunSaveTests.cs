@@ -1,0 +1,103 @@
+using RogueDeck.Core.Combat;
+using RogueDeck.Run;
+
+namespace RogueDeck.Run.Tests;
+
+// Save & resume mid-run (engine gap #1): a live RunState snapshots its persistent progress to a serializable
+// RunSaveData and rebuilds from it — so a run can be saved between nodes and resumed. Instance ids are regenerated
+// on restore (nothing references them across a save); the faithful-restore check is a JSON round-trip that is stable
+// through save → restore → save. A save is only valid at a clean interlude, so Snapshot guards against state it
+// can't yet capture rather than silently dropping it.
+public class RunSaveTests
+{
+    private static readonly RunResourceId Gold = StandardRunIds.Gold;
+
+    private static (RunState Run, RunContentRegistry Content) BuildMidRun()
+    {
+        var bloodstone = StandardRelics.Bloodstone(5);
+        var potion = new ConsumableDefinition(
+            new ConsumableId("potion"), "Potion", Array.Empty<IRunEffectRequest>(), null);
+        var content = new RunContentRegistryBuilder()
+            .RegisterRelic(bloodstone)
+            .RegisterConsumable(potion)
+            .Build();
+
+        var run = new RunState(new RunId("save-run"), new HealthState(18, 40), new RunMap(Array.Empty<Node>()), randomSeed: 7);
+        run.SetContent(content);
+
+        run.AddDeckCard(new CardDefinitionId("strike"));
+        run.AddDeckCard(new CardDefinitionId("strike"));
+        run.AddDeckCard(new CardDefinitionId("defend"));
+        run.Deck[0].Upgrade();                              // strike+
+        run.Deck[1].AddTag(new RunCardTagId("blessed"));
+        run.Deck[2].SetMemory("plays", 3);
+
+        run.SetResource(Gold, 55);
+        run.SetFlag(new RunFlagId("beat.elite"), true);
+        run.SetCounter(new RunCounterId("kills"), 4);
+
+        var relic = new RelicInstance(content.GetRelic(bloodstone.Id));
+        relic.SetEnabled(false);                            // a disabled relic must round-trip
+        run.AddRelic(relic);
+        run.AddConsumable(potion.Id, potion.UseEffects, potion.CombatUse);
+
+        run.AdvanceTo(1);
+        run.AdvanceToNode(new NodeId("n2"));
+        run.NextRandom(6);                                  // advance the RNG position
+        run.NextRandom(6);
+
+        return (run, content);
+    }
+
+    [Fact]
+    public void A_mid_run_state_round_trips_and_resumes_identically()
+    {
+        var (run, content) = BuildMidRun();
+
+        var json = RunSaveJson.ToJson(run.Snapshot());
+        var restored = RunState.Restore(RunSaveJson.FromJson(json), run.Map, content);
+
+        // Faithful: a save of the restored run is byte-identical to the original save.
+        Assert.Equal(json, RunSaveJson.ToJson(restored.Snapshot()));
+
+        // Spot checks across the surface.
+        Assert.Equal(18, restored.Health.Current);
+        Assert.Equal(40, restored.Health.Max);
+        Assert.Equal(55, restored.GetResource(Gold));
+        Assert.True(restored.HasFlag(new RunFlagId("beat.elite")));
+        Assert.Equal(4, restored.GetCounter(new RunCounterId("kills")));
+        Assert.Equal(1, restored.Position);
+        Assert.Equal(new NodeId("n2"), restored.CurrentNodeId);
+        Assert.True(restored.HasVisited(new NodeId("n2")));
+
+        Assert.Equal(1, restored.Deck[0].UpgradeLevel);
+        Assert.True(restored.Deck[1].HasTag(new RunCardTagId("blessed")));
+        Assert.Equal(3, restored.Deck[2].GetMemory("plays"));
+
+        var relic = Assert.Single(restored.Relics);
+        Assert.False(relic.Enabled);                        // the disabled relic came back disabled
+        Assert.Single(restored.Consumables);
+    }
+
+    [Fact]
+    public void Resuming_continues_the_rng_from_where_the_save_left_off()
+    {
+        var (run, content) = BuildMidRun();
+
+        // Snapshot first (captures the current RNG step), then compare the original's next draw against the
+        // restored run's next draw — they must match (same seed + step).
+        var save = RunSaveJson.ToJson(run.Snapshot());
+        var expectedNext = run.NextRandom(100);
+        var restored = RunState.Restore(RunSaveJson.FromJson(save), run.Map, content);
+        Assert.Equal(expectedNext, restored.NextRandom(100));
+    }
+
+    [Fact]
+    public void Saving_with_uncaptured_scheduled_state_throws_rather_than_losing_it()
+    {
+        var run = new RunState(new RunId("r"), new HealthState(20, 30), new RunMap(Array.Empty<Node>()));
+        run.AddRewardModifier(RewardModifiers.Custom((_, _) => { }), rewardCount: 1);
+
+        Assert.Throws<InvalidOperationException>(() => run.Snapshot());
+    }
+}
