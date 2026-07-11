@@ -19,13 +19,20 @@ public sealed class RunRunner
     private readonly RunEffectProcessor _processor;
     private readonly RunContentRegistry? _content;
     private readonly IRunInterlude? _interlude;
+    private readonly MetaState? _meta;
+    private readonly IReadOnlyList<MetaRule> _metaRules;
 
     public RunRunner(
         RunDefinitionRegistry registry,
         IRunChoiceProvider choices,
         RunEffectProcessor? processor = null,
         RunContentRegistry? content = null,
-        IRunInterlude? interlude = null)
+        IRunInterlude? interlude = null,
+        // The cross-run meta profile + the content's run-end progression rules. When both are supplied, the runner
+        // folds the finished run into the profile at run end (unlocks / meta-currency / wins). Null ⇒ no meta layer,
+        // exactly as before — meta persistence is a host concern, so the host owns the MetaState across runs.
+        MetaState? meta = null,
+        IReadOnlyList<MetaRule>? metaRules = null)
     {
         ArgumentNullException.ThrowIfNull(registry);
         ArgumentNullException.ThrowIfNull(choices);
@@ -35,6 +42,8 @@ public sealed class RunRunner
         _processor = processor ?? new RunEffectProcessor();
         _content = content;
         _interlude = interlude;
+        _meta = meta;
+        _metaRules = metaRules ?? Array.Empty<MetaRule>();
     }
 
     public void Run(RunState run)
@@ -69,6 +78,11 @@ public sealed class RunRunner
         run.AddLog(StandardRunLogTypes.RunEnded, $"Run '{run.Id}' ended: {run.Result}.");
         run.RaiseEvent(new RunEndedRunEvent(run.Result));
         _processor.ResolvePending(run, _registry);
+
+        // Meta layer: fold the finished run into the cross-run profile via the content's rules (unlocks /
+        // meta-currency / wins). Only when the host wired a profile; the rules themselves are content.
+        if (_meta is { } meta)
+            MetaProgression.ApplyRunEnd(meta, run, _metaRules);
     }
 
     // Linear walk (no edges): the historical index loop, unchanged.

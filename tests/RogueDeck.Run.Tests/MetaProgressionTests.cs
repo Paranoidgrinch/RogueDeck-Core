@@ -75,6 +75,34 @@ public class MetaProgressionTests
     }
 
     [Fact]
+    public void The_runner_folds_a_finished_run_into_the_profile_at_run_end()
+    {
+        var builder = new RunDefinitionRegistryBuilder();
+        new StandardRunPackage().RegisterDefinitions(builder);
+        var registry = builder.Build();
+
+        // An empty map completes immediately as a Victory; the run carries 25 gold to promote.
+        var run = new RunState(new RunId("run"), new HealthState(30, 30), new RunMap(Array.Empty<Node>()));
+        run.SetResource(Gold, 25);
+
+        var meta = new MetaState();
+        var rules = new[]
+        {
+            new MetaRule(new[] { RunResult.Victory }, new MetaEffect[]
+            {
+                new SetMetaFlag("beat.act1"),
+                new PromoteRunResource(Gold.Value, "meta.currency"),
+            }),
+        };
+
+        new RunRunner(registry, new ScriptedChoiceProvider(), meta: meta, metaRules: rules).Run(run);
+
+        Assert.Equal(RunResult.Victory, run.Result);
+        Assert.True(meta.HasFlag("beat.act1"));           // the run-end rule fired via the runner
+        Assert.Equal(25, meta.GetCounter("meta.currency"));
+    }
+
+    [Fact]
     public void Available_characters_are_gated_by_the_profiles_unlock_flags()
     {
         var blueprint = new RunBlueprint(
