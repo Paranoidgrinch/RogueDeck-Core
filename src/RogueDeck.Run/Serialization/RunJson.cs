@@ -107,6 +107,8 @@ public static class RunJson
         CombatJson.AddSelectorConverter(options, combatRegistry);
         CombatJson.AddContextConverters<CardPlayContext>(options, combatRegistry);
         CombatJson.AddContextConverters<EnemyActionContext>(options, combatRegistry);
+        CombatJson.AddContextConverters<CardLifecycleContext>(options, combatRegistry); // per-card lifecycle programs
+
         return options;
     }
 

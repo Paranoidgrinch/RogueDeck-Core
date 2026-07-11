@@ -21,6 +21,10 @@ public sealed class CardDefinition
 
     public EffectProgram<CardPlayContext>? Program { get; }
 
+    // Per-card LIFECYCLE programs (fire while the card sits in a zone, e.g. TurnEndInHand for Burn/Decay) — distinct
+    // from the on-play Program. Empty for an ordinary card.
+    public IReadOnlyDictionary<CardLifecycleTrigger, EffectProgram<CardLifecycleContext>> LifecyclePrograms { get; }
+
     public bool RetainInHandOnTurnEnd { get; }
 
     public CardZone TurnEndHandDestinationZone { get; }
@@ -38,7 +42,8 @@ public sealed class CardDefinition
         EffectProgram<CardPlayContext>? program,
         bool retainInHandOnTurnEnd,
         CardZone turnEndHandDestinationZone,
-        CardZone playedCardDestinationZone)
+        CardZone playedCardDestinationZone,
+        IReadOnlyDictionary<CardLifecycleTrigger, EffectProgram<CardLifecycleContext>>? lifecyclePrograms = null)
     {
         Id = id;
         PackageId = packageId;
@@ -48,6 +53,8 @@ public sealed class CardDefinition
         Effects = effects;
         Tags = tags;
         Program = program;
+        LifecyclePrograms = lifecyclePrograms
+            ?? ImmutableDictionary<CardLifecycleTrigger, EffectProgram<CardLifecycleContext>>.Empty;
         RetainInHandOnTurnEnd = retainInHandOnTurnEnd;
         TurnEndHandDestinationZone = turnEndHandDestinationZone;
         PlayedCardDestinationZone = playedCardDestinationZone;
@@ -71,6 +78,9 @@ public sealed class CardDefinitionBuilder
     public List<TagId> Tags { get; } = new();
 
     public EffectProgram<CardPlayContext>? Program { get; set; }
+
+    // Per-card lifecycle programs (e.g. TurnEndInHand). Populate before Build(); empty for an ordinary card.
+    public Dictionary<CardLifecycleTrigger, EffectProgram<CardLifecycleContext>> LifecyclePrograms { get; } = new();
 
     public bool RetainInHandOnTurnEnd { get; set; } = false;
 
@@ -120,7 +130,10 @@ public sealed class CardDefinitionBuilder
             program,
             RetainInHandOnTurnEnd,
             TurnEndHandDestinationZone,
-            PlayedCardDestinationZone);
+            PlayedCardDestinationZone,
+            LifecyclePrograms.Count == 0
+                ? null
+                : LifecyclePrograms.ToImmutableDictionary());
 
         return _built;
     }

@@ -107,6 +107,32 @@ public class RunBlueprintTests
     }
 
     [Fact]
+    public void A_card_lifecycle_program_round_trips_on_the_blueprint()
+    {
+        // A "burn" curse: unplayable clutter that damages its owner while held at turn end (a lifecycle program).
+        var burn = new RogueDeck.Scenario.Authoring.CardData
+        {
+            Id = "curse.burn",
+            Tags = new[] { StandardCombatIds.UnplayableTag },
+            LifecyclePrograms = new Dictionary<CardLifecycleTrigger, EffectProgram<CardLifecycleContext>>
+            {
+                [CardLifecycleTrigger.TurnEndInHand] = new EffectProgram<CardLifecycleContext>(
+                    new DealDamageNode<CardLifecycleContext>(
+                        CombatantTargetSelectors.Source, new ConstantExpression<CardLifecycleContext>(2))),
+            },
+        };
+        var blueprint = Demo() with { Cards = new[] { burn } };
+
+        var back = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(blueprint, Options), Options);
+
+        var card = Assert.Single(back.Cards);
+        Assert.True(card.LifecyclePrograms.ContainsKey(CardLifecycleTrigger.TurnEndInHand));
+        var deal = Assert.IsType<DealDamageNode<CardLifecycleContext>>(
+            card.LifecyclePrograms[CardLifecycleTrigger.TurnEndInHand].Root);
+        Assert.Equal(2, Assert.IsType<ConstantExpression<CardLifecycleContext>>(deal.Amount).Value);
+    }
+
+    [Fact]
     public void Meta_rules_on_the_blueprint_round_trip()
     {
         var blueprint = Demo() with

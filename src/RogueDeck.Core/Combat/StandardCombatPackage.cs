@@ -109,6 +109,7 @@ public sealed class StandardCombatPackage : ICombatPackage
 
         registry.RegisterCombatEventHandler(new DrawCardsOnTurnStartedHandler(_cardsDrawnPerTurn));
         registry.RegisterCombatEventHandler(new ClearBlockOnTurnStartedHandler());
+        registry.RegisterCombatEventHandler(new CardLifecycleTurnEndInHandHandler());
         registry.RegisterCombatEventHandler(new DiscardHandOnTurnEndedHandler());
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.TurnEnded.CreateHandler());
         registry.RegisterCombatEventHandler(new DecreaseTimedStatusDurationsOnTurnEndedHandler());

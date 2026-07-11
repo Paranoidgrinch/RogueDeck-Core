@@ -51,6 +51,9 @@ public sealed class CardBlueprint
     public List<TagId> Tags { get; } = new();
     public EffectProgram<CardPlayContext>? Program { get; set; }
 
+    // Per-card lifecycle programs (e.g. TurnEndInHand for a burn/curse). Empty for an ordinary card.
+    public Dictionary<CardLifecycleTrigger, EffectProgram<CardLifecycleContext>> LifecyclePrograms { get; init; } = new();
+
     // Card-lifecycle flags (default to the standard discard-on-everything behaviour).
     public bool RetainInHandOnTurnEnd { get; set; }
     public CardZone TurnEndHandDestinationZone { get; set; } = CardZone.DiscardPile;
@@ -84,6 +87,8 @@ public sealed class CardBlueprint
         };
         builder.Costs.AddRange(Costs);
         builder.Tags.AddRange(Tags);
+        foreach (var (trigger, program) in LifecyclePrograms)
+            builder.LifecyclePrograms[trigger] = program;
         return builder;
     }
 }
