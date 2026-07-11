@@ -49,6 +49,11 @@ public sealed record RunBlueprint(
     // layer can gate which of these are unlocked.
     public IReadOnlyList<RunCharacter> Characters { get; init; } = [];
 
+    // The content's run-end meta-progression rules (unlocks / meta-currency / wins). The host supplies these to the
+    // RunRunner alongside the persistent MetaState; they fold a finished run into the profile. Empty (the default) ⇒
+    // no meta progression. The rules are content — the engine only evaluates them. Round-trips via RunJson.
+    public IReadOnlyList<MetaRule> MetaRules { get; init; } = [];
+
     // The effective starting config for a run: the chosen roster character, else the first roster character (a
     // deterministic default / an unknown id falls back here), else the single Start when there is no roster.
     public RunStart ResolveStart(string? characterId = null)

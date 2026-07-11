@@ -79,6 +79,7 @@ public static class RunJson
         RegisterTemplates(registry);
         RegisterEffects(registry);
         RegisterRewards(registry);
+        RegisterMeta(registry);
         RegisterNodes(registry);
         return registry;
     }
@@ -94,6 +95,7 @@ public static class RunJson
         options.Converters.Add(new PolymorphicRunJsonConverter<IRunEffectTemplate>(registry));
         options.Converters.Add(new PolymorphicRunJsonConverter<IRunEffectRequest>(registry));
         options.Converters.Add(new PolymorphicRunJsonConverter<IRewardSource>(registry));
+        options.Converters.Add(new PolymorphicRunJsonConverter<MetaEffect>(registry));
         options.Converters.Add(new PolymorphicRunJsonConverter<IRunNodePayload>(registry));
         options.Converters.Add(new NodeJsonConverter());
         options.Converters.Add(new EventScriptJsonConverter());
@@ -227,6 +229,15 @@ public static class RunJson
     {
         r.Register("reward.fixed", typeof(FixedRewardSource))
          .Register("reward.pool", typeof(PoolRewardSource));
+    }
+
+    // Meta-progression effects (the run-end rule vocabulary). The rules + effects are content; the engine only
+    // serializes the closed effect set.
+    private static void RegisterMeta(RunJsonRegistry r)
+    {
+        r.Register("meta.setFlag", typeof(SetMetaFlag))
+         .Register("meta.addCounter", typeof(AddMetaCounter))
+         .Register("meta.promoteResource", typeof(PromoteRunResource));
     }
 
     // Data node payloads (references). Inline EventScript / Func combat payloads are escapes.

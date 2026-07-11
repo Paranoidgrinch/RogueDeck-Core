@@ -107,6 +107,28 @@ public class RunBlueprintTests
     }
 
     [Fact]
+    public void Meta_rules_on_the_blueprint_round_trip()
+    {
+        var blueprint = Demo() with
+        {
+            MetaRules = new[]
+            {
+                new MetaRule(new[] { RunResult.Victory }, new MetaEffect[]
+                {
+                    new SetMetaFlag("beat.act1"),
+                    new PromoteRunResource("gold", "meta.currency"),
+                }),
+            },
+        };
+
+        var back = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(blueprint, Options), Options);
+
+        var rule = Assert.Single(back.MetaRules);
+        Assert.Equal(RunResult.Victory, Assert.Single(rule.WhenResult));
+        Assert.Equal(2, rule.Effects.Count);
+    }
+
+    [Fact]
     public void Character_roster_round_trips_and_seeds_the_chosen_character()
     {
         var blueprint = Demo() with

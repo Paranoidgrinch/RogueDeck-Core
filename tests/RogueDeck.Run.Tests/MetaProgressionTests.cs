@@ -103,6 +103,32 @@ public class MetaProgressionTests
     }
 
     [Fact]
+    public void Meta_rules_round_trip_as_data_through_run_json()
+    {
+        var options = RunJson.CreateOptions();
+        var rules = new[]
+        {
+            new MetaRule(new[] { RunResult.Victory }, new MetaEffect[]
+            {
+                new SetMetaFlag("unlocked.character.mage"),
+                new AddMetaCounter("wins", 1),
+                new PromoteRunResource("gold", "meta.currency"),
+            }),
+        };
+
+        var json = RunJson.ToJson(rules, options);
+        var back = RunJson.FromJson<MetaRule[]>(json, options);
+
+        var rule = Assert.Single(back);
+        Assert.Equal(RunResult.Victory, Assert.Single(rule.WhenResult));
+        Assert.Collection(rule.Effects,
+            e => Assert.Equal("unlocked.character.mage", Assert.IsType<SetMetaFlag>(e).Flag),
+            e => Assert.Equal(1, Assert.IsType<AddMetaCounter>(e).Amount),
+            e => Assert.Equal("meta.currency", Assert.IsType<PromoteRunResource>(e).MetaCounter));
+        Assert.Equal(json, RunJson.ToJson(back, options)); // stable round-trip
+    }
+
+    [Fact]
     public void Available_characters_are_gated_by_the_profiles_unlock_flags()
     {
         var blueprint = new RunBlueprint(
