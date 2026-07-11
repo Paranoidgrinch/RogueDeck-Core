@@ -140,6 +140,46 @@ public class CombatProgramEditorRenderTests
     }
 
     [Fact]
+    public async Task Palette_lists_the_card_targeting_kinds()
+    {
+        var html = await RenderAsync(new CombatNodeModel("dealDamage", "source", CombatAmountSpec.FromConst(1)));
+
+        Assert.Contains("move a card (targeted)", html);
+        Assert.Contains("transform / upgrade a card", html);
+        Assert.Contains("for each card in zone…", html);
+    }
+
+    [Fact]
+    public async Task Renders_transform_card_with_its_selector_widget_and_target_definition()
+    {
+        // transformCard shows the card-selector widget (player chooses, in a zone) + the target definition field.
+        var html = await RenderAsync(new CombatNodeModel(
+            "transformCard", "source", Card: new CombatCardSpec("chosen", CardZone.Hand), ToDefinition: "strike.plus"));
+
+        Assert.Contains("transform / upgrade a card", html);
+        Assert.Contains("player chooses", html);   // the card-selector kind
+        Assert.Contains("strike.plus", html);       // the target definition input
+        Assert.DoesNotContain("event amount", html); // a card op carries no amount control
+    }
+
+    [Fact]
+    public async Task Renders_forEachCardInZone_with_zone_filter_and_body()
+    {
+        // "upgrade every Strike in hand": the composite shows its owner + zone + filter and recurses into the body.
+        var model = CombatNodeModel.ForEachCard(
+            "source", CardZone.Hand,
+            new CombatNodeModel("transformCard", "source",
+                Card: new CombatCardSpec("iterated"), ToDefinition: "strike.plus"),
+            filter: "strike");
+
+        var html = await RenderAsync(model);
+
+        Assert.Contains("for each card in zone…", html);
+        Assert.Contains("strike", html);              // the definition filter
+        Assert.Contains("current (loop card)", html); // the body's iterated card selector
+    }
+
+    [Fact]
     public async Task Renders_sequence_with_add_palette()
     {
         var model = CombatNodeModel.Sequence(new[]

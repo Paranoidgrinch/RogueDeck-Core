@@ -16,6 +16,16 @@
                 <span class="muted">of</span>
                 @SelectorSelect(CombatProgramModel.SelectorKeys, Node.SelectorKey, key => Set(Node with { SelectorKey = key }))
             }
+            else if (Node.Kind == "forEachCardInZone")
+            {
+                <span class="muted">of</span>
+                @SelectorSelect(CombatProgramModel.SelectorKeys, Node.SelectorKey, key => Set(Node with { SelectorKey = key }))
+                <span class="muted">in</span>
+                @ZoneSelect(Node.FromZone, z => Set(Node with { FromZone = z }))
+                <span class="muted">only</span>
+                <input value="@Node.ToDefinition" style="width:7rem" placeholder="any card"
+                       @onchange="e => Set(Node with { ToDefinition = AsString(e.Value) })" />
+            }
             else if (Node.Kind == "repeat")
             {
                 @AmountControls(Node.AmountOrDefault, spec => Set(Node with { Amount = spec }))
@@ -137,6 +147,21 @@ else
                 }
             </select>
         }
+        @if (CombatProgramModel.UsesCard(Node.Kind))
+        {
+            @CardControls(Node.CardOrDefault, spec => Set(Node with { Card = spec }))
+        }
+        @if (CombatProgramModel.UsesMoveToZone(Node.Kind))
+        {
+            <span class="muted">to</span>
+            @ZoneSelect(Node.ToZone, z => Set(Node with { ToZone = z }))
+        }
+        @if (Node.Kind == "transformCard")
+        {
+            <span class="muted">→</span>
+            <input value="@Node.ToDefinition" style="width:9rem" placeholder="target definition id"
+                   @onchange="e => Set(Node with { ToDefinition = AsString(e.Value) })" />
+        }
         @RemoveButton
     </span>
 }
@@ -201,6 +226,93 @@ else
             builder.CloseElement();
         }
         builder.CloseElement();
+    };
+
+    // A CardZone dropdown, reused by the targeted card ops and the card-selector widget.
+    private RenderFragment ZoneSelect(CardZone current, Action<CardZone> onChange) => builder =>
+    {
+        builder.OpenElement(0, "select");
+        builder.AddAttribute(1, "value", current.ToString());
+        builder.AddAttribute(2, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e => onChange(ParseZone(e.Value))));
+        var seq = 3;
+        foreach (var z in Enum.GetValues<CardZone>())
+        {
+            builder.OpenElement(seq++, "option");
+            builder.AddAttribute(seq++, "value", z.ToString());
+            builder.AddAttribute(seq++, "selected", z == current);
+            builder.AddContent(seq++, z.ToString());
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+    };
+
+    // The card-selector widget (which card a targeted card op points at): a kind dropdown (position / player-chooses /
+    // random / current-loop-card) plus its zone, and either a position index (inZone) or a prompt (chosen).
+    private static readonly (string Kind, string Label)[] CardKinds =
+    {
+        ("inZone", "at position"),
+        ("chosen", "player chooses"),
+        ("random", "random"),
+        ("iterated", "current (loop card)"),
+    };
+
+    private RenderFragment CardControls(CombatCardSpec spec, Action<CombatCardSpec> onChange) => builder =>
+    {
+        var seq = 0;
+        builder.OpenElement(seq++, "select");
+        builder.AddAttribute(seq++, "value", spec.Kind);
+        builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+            onChange(spec with { Kind = AsString(e.Value) })));
+        foreach (var (kind, label) in CardKinds)
+        {
+            builder.OpenElement(seq++, "option");
+            builder.AddAttribute(seq++, "value", kind);
+            builder.AddContent(seq++, label);
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+
+        if (spec.UsesZone)
+        {
+            builder.OpenElement(seq++, "select");
+            builder.AddAttribute(seq++, "value", spec.Zone.ToString());
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+                onChange(spec with { Zone = ParseZone(e.Value) })));
+            foreach (var z in Enum.GetValues<CardZone>())
+            {
+                builder.OpenElement(seq++, "option");
+                builder.AddAttribute(seq++, "value", z.ToString());
+                builder.AddAttribute(seq++, "selected", z == spec.Zone);
+                builder.AddContent(seq++, z.ToString());
+                builder.CloseElement();
+            }
+            builder.CloseElement();
+        }
+
+        if (spec.Kind == "inZone")
+        {
+            builder.OpenElement(seq++, "span");
+            builder.AddAttribute(seq++, "class", "muted");
+            builder.AddContent(seq++, "#");
+            builder.CloseElement();
+            builder.OpenElement(seq++, "input");
+            builder.AddAttribute(seq++, "type", "number");
+            builder.AddAttribute(seq++, "value", spec.Index);
+            builder.AddAttribute(seq++, "style", "width:3.5rem");
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+                onChange(spec with { Index = AsInt(e.Value, spec.Index) })));
+            builder.CloseElement();
+        }
+        else if (spec.Kind == "chosen")
+        {
+            builder.OpenElement(seq++, "input");
+            builder.AddAttribute(seq++, "value", spec.Purpose);
+            builder.AddAttribute(seq++, "style", "width:9rem");
+            builder.AddAttribute(seq++, "placeholder", "prompt");
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+                onChange(spec with { Purpose = AsString(e.Value) })));
+            builder.CloseElement();
+        }
     };
 
     // Amount: a kind dropdown (constant / event amount) plus, for a constant, an int input.

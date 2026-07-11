@@ -40,6 +40,20 @@ public sealed record CombatConditionSpec(
     public bool IsAdvanced => Kind == "advanced";
 }
 
+// Which card a card op points at, in the small curated shape the editor authors, plus mapping to/from the engine's
+// ICardInstanceExpression<TContext>. Modelled: a positional read (zone + index), a player choice (zone + purpose),
+// a random pick (zone), or the card the enclosing ForEachCardInZone loop is on (iterated). Anything richer (the
+// in-flight played card, an explicit id, …) classifies to null so the consumer keeps the JSON escape.
+public sealed record CombatCardSpec(
+    string Kind = "inZone",              // inZone | chosen | random | iterated
+    CardZone Zone = CardZone.Hand,
+    int Index = 0,                       // inZone only
+    string Purpose = "choose a card")    // chosen only
+{
+    // iterated reads the loop's current card and has no zone of its own; the others select from a zone.
+    public bool UsesZone => Kind is "inZone" or "chosen" or "random";
+}
+
 // One combat effect node in editor shape. Kind is the leaf/composite discriminator; SelectorKey names a catalog
 // target selector (leaves + forEachTarget); Amount is the curated amount for amount-bearing leaves + the repeat
 // count; ResourceId applies to gainResource. Children holds sub-nodes: empty for leaves, N for sequence, one body
@@ -62,11 +76,18 @@ public sealed record CombatNodeModel(
     int Charges = 0,
     StatusPolarity Polarity = StatusPolarity.Debuff,
     // moveCards leaf: move all cards from one zone to another (e.g. Hand → DiscardPile). Canonically Hand →
-    // DiscardPile for kinds that don't use them so build↔classify round-trips exactly.
+    // DiscardPile for kinds that don't use them so build↔classify round-trips exactly. moveCardToZone reuses ToZone
+    // as its single destination; forEachCardInZone reuses FromZone as the zone it walks.
     CardZone FromZone = CardZone.Hand,
-    CardZone ToZone = CardZone.DiscardPile)
+    CardZone ToZone = CardZone.DiscardPile,
+    // Card-targeting ops: which card the op points at (moveCardToZone / transformCard); null for kinds that don't
+    // select a single card. transformCard's target definition + forEachCardInZone's (optional) definition filter
+    // share ToDefinition; canonically "" for kinds that don't use it so build↔classify round-trips exactly.
+    CombatCardSpec? Card = null,
+    string ToDefinition = "")
 {
     public CombatAmountSpec AmountOrDefault => Amount ?? CombatAmountSpec.FromConst(3);
+    public CombatCardSpec CardOrDefault => Card ?? new CombatCardSpec();
     public IReadOnlyList<CombatNodeModel> ChildrenOrEmpty => Children ?? Array.Empty<CombatNodeModel>();
 
     public static CombatNodeModel Sequence(IReadOnlyList<CombatNodeModel> children) =>
@@ -74,6 +95,10 @@ public sealed record CombatNodeModel(
 
     public static CombatNodeModel ForEach(string selectorKey, CombatNodeModel body) =>
         new("forEachTarget", SelectorKey: selectorKey, Children: new[] { body });
+
+    // for each card in the owner's zone (optional definition filter in ToDefinition) → run the body once per card.
+    public static CombatNodeModel ForEachCard(string selectorKey, CardZone zone, CombatNodeModel body, string filter = "") =>
+        new("forEachCardInZone", SelectorKey: selectorKey, Children: new[] { body }, FromZone: zone, ToDefinition: filter);
 
     public static CombatNodeModel Repeat(CombatAmountSpec count, CombatNodeModel body) =>
         new("repeat", Amount: count, Children: new[] { body });
@@ -142,6 +167,8 @@ public static class CombatProgramModel
         ("modifyStatusDuration", "modify status duration"),
         ("modifyStatusCharges", "modify status charges"),
         ("moveCards", "move cards (zone → zone)"),
+        ("moveCardToZone", "move a card (targeted)"),
+        ("transformCard", "transform / upgrade a card"),
     ];
 
     // The leaf kinds that carry a resource id (their editor row shows a resource-id field; ChangeKind seeds a
@@ -153,12 +180,23 @@ public static class CombatProgramModel
         kind is "applyStatus" or "removeStatus"
             or "modifyStatusStacks" or "modifyStatusDuration" or "modifyStatusCharges";
 
-    // The leaf kinds that carry an amount (its stacks/value/count/delta). removeStatus, cleanse and moveCards take
+    // The leaf kinds that carry an amount (its stacks/value/count/delta). removeStatus, cleanse and the card ops take
     // none, so the editor hides the amount control for them (and their model keeps Amount at the canonical null).
-    public static bool UsesAmount(string kind) => kind is not ("removeStatus" or "cleanse" or "moveCards");
+    public static bool UsesAmount(string kind) =>
+        kind is not ("removeStatus" or "cleanse" or "moveCards" or "moveCardToZone" or "transformCard");
 
-    // The leaf kind that moves cards between zones (its editor shows from/to zone dropdowns).
+    // The leaf kind that moves ALL cards between zones (its editor shows from/to zone dropdowns).
     public static bool UsesZones(string kind) => kind is "moveCards";
+
+    // The card-targeting leaves that select a single card (their editor shows the card-selector widget).
+    public static bool UsesCard(string kind) => kind is "moveCardToZone" or "transformCard";
+
+    // The leaf that moves a targeted card to one destination zone (a single "to" dropdown, reusing ToZone).
+    public static bool UsesMoveToZone(string kind) => kind is "moveCardToZone";
+
+    // The kinds carrying a definition string in ToDefinition: transformCard's target definition, and
+    // forEachCardInZone's optional definition filter (blank = every card).
+    public static bool UsesToDefinition(string kind) => kind is "transformCard" or "forEachCardInZone";
 
     // The control-flow (composite) kinds the editor offers as their own titled blocks with sub-bodies. Conditional
     // is deferred (it needs a combat condition spec). Each holds a Children body: N for sequence, one for the rest.
@@ -166,6 +204,7 @@ public static class CombatProgramModel
     [
         ("sequence", "in sequence…"),
         ("forEachTarget", "for each target…"),
+        ("forEachCardInZone", "for each card in zone…"),
         ("repeat", "repeat…"),
         ("conditional", "if…"),
     ];
@@ -194,8 +233,11 @@ public static class CombatProgramModel
         "modifyStatusDuration" => new("modifyStatusDuration", "eventTarget", CombatAmountSpec.FromConst(1), StatusId: "poison"),
         "modifyStatusCharges" => new("modifyStatusCharges", "eventTarget", CombatAmountSpec.FromConst(1), StatusId: "poison"),
         "moveCards" => new("moveCards", "source", FromZone: CardZone.Hand, ToZone: CardZone.DiscardPile),
+        "moveCardToZone" => new("moveCardToZone", "source", Card: new CombatCardSpec("chosen", CardZone.Hand), ToZone: CardZone.ExhaustPile),
+        "transformCard" => new("transformCard", "source", Card: new CombatCardSpec("chosen", CardZone.Hand), ToDefinition: "strike.plus"),
         "sequence" => CombatNodeModel.Sequence(new[] { NewNode("dealDamage") }),
         "forEachTarget" => CombatNodeModel.ForEach("allEnemies", NewNode("dealDamage")),
+        "forEachCardInZone" => CombatNodeModel.ForEachCard("source", CardZone.Hand, NewNode("transformCard")),
         "repeat" => CombatNodeModel.Repeat(CombatAmountSpec.FromConst(2), NewNode("dealDamage")),
         "conditional" => CombatNodeModel.Conditional(new CombatConditionSpec(), NewNode("dealDamage")),
         _ => new("gainBlock", "source", CombatAmountSpec.FromConst(5)),
@@ -223,7 +265,9 @@ public static class CombatProgramModel
                 Charges = kind == "applyStatus" ? node.Charges : 0,
                 Polarity = kind == "cleanse" ? node.Polarity : StatusPolarity.Debuff,
                 FromZone = UsesZones(kind) ? node.FromZone : CardZone.Hand,
-                ToZone = UsesZones(kind) ? node.ToZone : CardZone.DiscardPile,
+                ToZone = UsesZones(kind) || UsesMoveToZone(kind) ? node.ToZone : CardZone.DiscardPile,
+                Card = UsesCard(kind) ? (node.Card ?? new CombatCardSpec("chosen", CardZone.Hand)) : null,
+                ToDefinition = kind == "transformCard" ? (node.ToDefinition == "" ? "strike.plus" : node.ToDefinition) : "",
                 Amount = UsesAmount(kind) ? (node.Amount ?? CombatAmountSpec.FromConst(3)) : null,
             };
 
@@ -235,6 +279,7 @@ public static class CombatProgramModel
             return kind switch
             {
                 "forEachTarget" => CombatNodeModel.ForEach("allEnemies", body),
+                "forEachCardInZone" => CombatNodeModel.ForEachCard("source", CardZone.Hand, body),
                 "repeat" => CombatNodeModel.Repeat(CombatAmountSpec.FromConst(2), body),
                 "conditional" => CombatNodeModel.Conditional(new CombatConditionSpec(), body),
                 _ => NewNode(kind),
@@ -400,6 +445,10 @@ public static class CombatProgramModel
                     model.ChildrenOrEmpty.Select(BuildNode<TContext>).ToArray());
             case "forEachTarget":
                 return new ForEachTargetEffectNode<TContext>(SelectorFor(model.SelectorKey), BuildBody<TContext>(model));
+            case "forEachCardInZone":
+                return new ForEachCardInZoneNode<TContext>(
+                    SelectorFor(model.SelectorKey), model.FromZone, BuildBody<TContext>(model),
+                    definitionFilter: string.IsNullOrEmpty(model.ToDefinition) ? null : new CardDefinitionId(model.ToDefinition));
             case "repeat":
                 return new RepeatEffectNode<TContext>(BuildAmount<TContext>(model.AmountOrDefault), BuildBody<TContext>(model));
             case "conditional":
@@ -443,9 +492,21 @@ public static class CombatProgramModel
             "modifyStatusDuration" => new ModifyStatusDurationNode<TContext>(selector, new StatusDefinitionId(model.StatusId), amount),
             "modifyStatusCharges" => new ModifyStatusChargesNode<TContext>(selector, new StatusDefinitionId(model.StatusId), amount),
             "moveCards" => new MoveAllCardsFromZoneNode<TContext>(selector, model.FromZone, model.ToZone),
+            "moveCardToZone" => new MoveCardToZoneNode<TContext>(selector, BuildCard<TContext>(model.CardOrDefault), model.ToZone),
+            "transformCard" => new TransformCardNode<TContext>(selector, BuildCard<TContext>(model.CardOrDefault), new CardDefinitionId(model.ToDefinition)),
             _ => new GainBlockNode<TContext>(selector, amount),
         };
     }
+
+    // The card-selector widget's spec → the engine card-instance expression it authors.
+    private static ICardInstanceExpression<TContext> BuildCard<TContext>(CombatCardSpec spec)
+        where TContext : class => spec.Kind switch
+        {
+            "chosen" => new ChosenCardInZoneExpression<TContext>(spec.Zone, spec.Purpose),
+            "random" => new RandomCardInZoneExpression<TContext>(spec.Zone),
+            "iterated" => new IteratedCardExpression<TContext>(),
+            _ => new CardInZoneExpression<TContext>(spec.Zone, spec.Index), // "inZone"
+        };
 
     // Classify the program's root node into the editor model, or null if it is outside the modelled subset.
     public static CombatNodeModel? Classify<TContext>(EffectProgram<TContext> program)
@@ -504,6 +565,14 @@ public static class CombatProgramModel
                 return KeyFor(n.TargetSelector) is { } moveKey
                     ? new CombatNodeModel("moveCards", moveKey, FromZone: n.FromZone, ToZone: n.ToZone)
                     : null;
+            case MoveCardToZoneNode<TContext> { ResultKey: null } n:
+                return KeyFor(n.OwnerSelector) is { } mtKey && ClassifyCard(n.CardExpression) is { } mtCard
+                    ? new CombatNodeModel("moveCardToZone", mtKey, Card: mtCard, ToZone: n.ToZone)
+                    : null;
+            case TransformCardNode<TContext> { ResultKey: null } n:
+                return KeyFor(n.OwnerSelector) is { } tfKey && ClassifyCard(n.CardExpression) is { } tfCard
+                    ? new CombatNodeModel("transformCard", tfKey, Card: tfCard, ToDefinition: n.ToDefinition.value)
+                    : null;
 
             case SequenceEffectNode<TContext> s:
                 return ClassifyChildren<TContext>(s.Children) is { } children
@@ -513,6 +582,11 @@ public static class CombatProgramModel
                 when f.MaxIterations == ForEachTargetEffectNode<TContext>.DefaultMaxIterations:
                 return KeyFor(f.CollectionSelector) is { } key && ClassifyNode<TContext>(f.Body) is { } body
                     ? CombatNodeModel.ForEach(key, body)
+                    : null;
+            case ForEachCardInZoneNode<TContext> fc
+                when fc.MaxIterations == ForEachCardInZoneNode<TContext>.DefaultMaxIterations:
+                return KeyFor(fc.OwnerSelector) is { } fcKey && ClassifyNode<TContext>(fc.Body) is { } fcBody
+                    ? CombatNodeModel.ForEachCard(fcKey, fc.Zone, fcBody, fc.DefinitionFilter?.value ?? "")
                     : null;
             case RepeatEffectNode<TContext> r
                 when r.MaxCount == RepeatEffectNode<TContext>.DefaultMaxCount:
@@ -579,4 +653,16 @@ public static class CombatProgramModel
         var spec = ClassifyAmount(amount);
         return spec.IsAdvanced ? null : new CombatNodeModel(kind, selectorKey, spec, StatusId: statusId.value);
     }
+
+    // Reverse of BuildCard: a card-instance expression → the editor's card-selector spec, or null when it is outside
+    // the modelled set (the in-flight played card, an explicit id, a created-card outcome, …) so the JSON escape stays.
+    private static CombatCardSpec? ClassifyCard<TContext>(ICardInstanceExpression<TContext> expr)
+        where TContext : class => expr switch
+        {
+            CardInZoneExpression<TContext> e => new CombatCardSpec("inZone", e.Zone, e.Index),
+            ChosenCardInZoneExpression<TContext> e => new CombatCardSpec("chosen", e.Zone, Purpose: e.Purpose),
+            RandomCardInZoneExpression<TContext> e => new CombatCardSpec("random", e.Zone),
+            IteratedCardExpression<TContext> => new CombatCardSpec("iterated"),
+            _ => null,
+        };
 }

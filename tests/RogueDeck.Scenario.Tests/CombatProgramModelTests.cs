@@ -457,4 +457,81 @@ public class CombatProgramModelTests
 
         Assert.Null(CombatProgramModel.Classify(program));
     }
+
+    // ── card targeting: the selector widget + targeted card ops in the visual editor ──
+
+    [Fact]
+    public void Card_ops_and_forEachCardInZone_are_in_the_palette()
+    {
+        var kinds = CombatProgramModel.AllKinds.Select(k => k.Kind).ToList();
+        Assert.Contains("moveCardToZone", kinds);
+        Assert.Contains("transformCard", kinds);
+        Assert.Contains("forEachCardInZone", kinds);
+        Assert.True(CombatProgramModel.IsComposite("forEachCardInZone"));
+    }
+
+    public static IEnumerable<object[]> CardSpecs() => new[]
+    {
+        new object[] { new CombatCardSpec("inZone", CardZone.DrawPile, 2) },
+        new object[] { new CombatCardSpec("chosen", CardZone.Hand, Purpose: "upgrade a card") },
+        new object[] { new CombatCardSpec("random", CardZone.DiscardPile) },
+        new object[] { new CombatCardSpec("iterated") },
+    };
+
+    [Theory]
+    [MemberData(nameof(CardSpecs))]
+    public void MoveCardToZone_round_trips_each_card_selector(CombatCardSpec card)
+    {
+        var model = new CombatNodeModel("moveCardToZone", "source", Card: card, ToZone: CardZone.ExhaustPile);
+
+        Assert.Equal(model, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(model)));
+    }
+
+    [Theory]
+    [MemberData(nameof(CardSpecs))]
+    public void TransformCard_round_trips_each_card_selector_and_its_target_definition(CombatCardSpec card)
+    {
+        var model = new CombatNodeModel("transformCard", "source", Card: card, ToDefinition: "strike.plus");
+
+        var back = CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(model));
+
+        Assert.Equal(model, back);
+        Assert.Equal("strike.plus", back!.ToDefinition);
+    }
+
+    [Fact]
+    public void ForEachCardInZone_round_trips_with_and_without_a_filter()
+    {
+        // "upgrade every Strike in hand": forEachCardInZone (filter strike) over a transformCard body on the loop card.
+        var filtered = CombatNodeModel.ForEachCard(
+            "source", CardZone.Hand,
+            new CombatNodeModel("transformCard", "source",
+                Card: new CombatCardSpec("iterated"), ToDefinition: "strike.plus"),
+            filter: "strike");
+        Assert.Equal(filtered, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(filtered)));
+
+        // Unfiltered ("exhaust your whole hand") — blank filter round-trips as no filter.
+        var unfiltered = CombatNodeModel.ForEachCard(
+            "source", CardZone.Hand,
+            new CombatNodeModel("moveCardToZone", "source",
+                Card: new CombatCardSpec("iterated"), ToZone: CardZone.ExhaustPile));
+        Assert.Equal(unfiltered, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(unfiltered)));
+    }
+
+    [Fact]
+    public void ChangeKind_into_a_card_op_seeds_a_card_selector()
+    {
+        var node = new CombatNodeModel("dealDamage", "source", CombatAmountSpec.FromConst(6));
+
+        var transform = CombatProgramModel.ChangeKind(node, "transformCard");
+        Assert.Equal("transformCard", transform.Kind);
+        Assert.NotNull(transform.Card);
+        Assert.Equal("strike.plus", transform.ToDefinition);
+        Assert.Null(transform.Amount); // a card op carries no amount
+
+        // Switching away clears the card + definition back to canonical defaults.
+        var back = CombatProgramModel.ChangeKind(transform, "gainBlock");
+        Assert.Null(back.Card);
+        Assert.Equal("", back.ToDefinition);
+    }
 }
