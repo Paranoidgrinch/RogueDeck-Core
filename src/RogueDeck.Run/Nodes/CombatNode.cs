@@ -11,10 +11,24 @@ public sealed class CombatNodePayload
 {
     public Func<RunState, Playthrough> BuildPlaythrough { get; }
 
-    public CombatNodePayload(Func<RunState, Playthrough> buildPlaythrough)
+    // Optional post-combat reward: on a VICTORY the resolver offers this reward (the player picks via the run's
+    // entity chooser, exactly like a shop/smith — headless runs take the first offers). Null ⇒ no reward, so
+    // single-combat runs and existing nodes are unchanged. The genre's win-a-fight-pick-a-card loop.
+    public IRewardSource? VictoryReward { get; }
+    public RewardId VictoryRewardId { get; }
+    public int VictoryRewardPickCount { get; }
+
+    public CombatNodePayload(
+        Func<RunState, Playthrough> buildPlaythrough,
+        IRewardSource? victoryReward = null,
+        RewardId victoryRewardId = default,
+        int victoryRewardPickCount = 1)
     {
         ArgumentNullException.ThrowIfNull(buildPlaythrough);
         BuildPlaythrough = buildPlaythrough;
+        VictoryReward = victoryReward;
+        VictoryRewardId = victoryRewardId.Value is null ? new RewardId("combat") : victoryRewardId;
+        VictoryRewardPickCount = victoryRewardPickCount;
     }
 }
 
@@ -277,6 +291,16 @@ public sealed class CombatNodeResolver : INodeResolver
             $"Node '{node.Id}': {result.Result}, hero {result.HeroHpRemaining} HP (took {damageTaken}).");
         run.RaiseEvent(new CombatResolvedRunEvent(
             node.Id, result.Result, result.HeroHpRemaining, damageTaken));
+
+        // Post-combat reward: on a victory, offer the node's reward (if any). Enqueued AFTER the resolved-event so a
+        // relic reacting to the win queues first; the player then picks via the run's entity chooser (headless takes
+        // the first offers), exactly like a shop/smith. Only CombatNodePayload carries a reward today; a data
+        // (EncounterRef) reward is a follow-up.
+        if (result.Result == CombatResult.Victory
+            && node.Payload is CombatNodePayload { VictoryReward: { } reward } payload)
+        {
+            run.EnqueueEffect(new OfferRewardRunEffect(payload.VictoryRewardId, reward, payload.VictoryRewardPickCount));
+        }
 
         return new NodeOutcome($"combat resolved ({result.Result}).");
     }
