@@ -41,7 +41,30 @@ public sealed record RunBlueprint(
     // sandbox hard-coded HP 30/40 and an empty inventory; carrying it here makes the run's opening data too. An init
     // property with a default that reproduces the old hard-coded start, so existing blueprints are unaffected.
     public RunStart Start { get; init; } = new();
+
+    // A roster of selectable starting characters (character selection). Each is a full RunStart (own name / HP /
+    // deck / relics / consumables / party). Empty (the default) ⇒ the single Start above is used, exactly as before.
+    // When non-empty, the run is seeded from the chosen character (CreateInitialRun's characterId); the actual
+    // CHARACTERS are content — the engine only models the roster + the pick (mechanism, not content). A later meta
+    // layer can gate which of these are unlocked.
+    public IReadOnlyList<RunCharacter> Characters { get; init; } = [];
+
+    // The effective starting config for a run: the chosen roster character, else the first roster character (a
+    // deterministic default / an unknown id falls back here), else the single Start when there is no roster.
+    public RunStart ResolveStart(string? characterId = null)
+    {
+        if (Characters.Count == 0)
+            return Start;
+        if (characterId is not null
+            && Characters.FirstOrDefault(c => c.Id == characterId) is { } match)
+            return match.Start;
+        return Characters[0].Start;
+    }
 }
+
+// One selectable starting character (character selection): a stable id (for the pick + a future meta unlock gate)
+// plus its full RunStart. A plain record so it round-trips through RunJson like the rest of the blueprint.
+public sealed record RunCharacter(string Id, RunStart Start);
 
 // The authored opening state of a run: the hero's display name, starting/maximum health, starting resources
 // (resource id → amount, e.g. gold), and the relics the hero begins with (ids resolved from the run's content when
@@ -54,6 +77,11 @@ public sealed record RunStart
     public int MaxHealth { get; init; } = 40;
     public int StartingHealth { get; init; } = 30;
     public IReadOnlyDictionary<string, int> Resources { get; init; } = new Dictionary<string, int>();
+
+    // The hero's starting deck (card ids) for THIS character. Empty (the default) ⇒ fall back to the blueprint's
+    // shared Deck, so existing single-character blueprints (deck on RunBlueprint.Deck) are unchanged. A character
+    // roster gives each character its own deck here; that is what makes character selection meaningful.
+    public IReadOnlyList<CardDefinitionId> Deck { get; init; } = [];
 
     // Relic ids the hero starts with. Granted at run start from the content catalog (unknown ids are skipped); a
     // relic listed here should be defined in the blueprint's Relics (or be a built-in sample).

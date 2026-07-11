@@ -107,6 +107,39 @@ public class RunBlueprintTests
     }
 
     [Fact]
+    public void Character_roster_round_trips_and_seeds_the_chosen_character()
+    {
+        var blueprint = Demo() with
+        {
+            Characters = new[]
+            {
+                new RunCharacter("knight", new RunStart
+                {
+                    HeroName = "Knight", MaxHealth = 40, StartingHealth = 30,
+                    Deck = new[] { new CardDefinitionId("strike") },
+                }),
+                new RunCharacter("mage", new RunStart
+                {
+                    HeroName = "Mage", MaxHealth = 25, StartingHealth = 20,
+                    Deck = new[] { new CardDefinitionId("zap"), new CardDefinitionId("zap") },
+                }),
+            },
+        };
+
+        var back = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(blueprint, Options), Options);
+
+        Assert.Equal(2, back.Characters.Count);
+        Assert.Equal("mage", back.Characters[1].Id);
+        Assert.Equal("Mage", back.Characters[1].Start.HeroName);
+
+        // Seeding from the chosen character uses ITS health + deck, not the blueprint's shared deck.
+        var run = back.CreateInitialRun(new RunId("t"), randomSeed: 1, characterId: "mage");
+        Assert.Equal(20, run.Health.Current);
+        Assert.Equal(25, run.Health.Max);
+        Assert.Equal(2, run.Deck.Count);
+    }
+
+    [Fact]
     public void StartingParty_round_trips_and_seeds_additional_members(/* party deckbuilding B1c */)
     {
         var blueprint = Demo() with

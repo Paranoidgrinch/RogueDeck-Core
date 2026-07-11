@@ -5,14 +5,20 @@ namespace RogueDeck.Run;
 // balancing) with a hard-coded HealthState(30, 40) and an empty inventory — the opening is now data (RunStart).
 public static class RunSetup
 {
-    public static RunState CreateInitialRun(this RunBlueprint blueprint, RunId id, int randomSeed = 1)
+    // characterId selects a starting character from the blueprint's roster (character selection); null / an unknown
+    // id / no roster falls back to the first roster character or the single Start, so existing single-character
+    // callers are unchanged. The caller resolves the pick (a UI presents blueprint.Characters and passes the id).
+    public static RunState CreateInitialRun(
+        this RunBlueprint blueprint, RunId id, int randomSeed = 1, string? characterId = null)
     {
         ArgumentNullException.ThrowIfNull(blueprint);
-        var start = blueprint.Start;
+        var start = blueprint.ResolveStart(characterId);
         var run = new RunState(
             id, new Core.Combat.HealthState(start.StartingHealth, start.MaxHealth), blueprint.Map, randomSeed);
 
-        foreach (var card in blueprint.Deck)
+        // The chosen character's own deck, or the blueprint's shared deck when the character declares none.
+        var deck = start.Deck.Count > 0 ? start.Deck : blueprint.Deck;
+        foreach (var card in deck)
             run.AddDeckCard(card);
 
         foreach (var (resource, amount) in start.Resources)
