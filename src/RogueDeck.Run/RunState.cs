@@ -317,11 +317,10 @@ public sealed class RunState
 
     public RunSaveData Snapshot()
     {
-        if (_units.Count > 0 || _installedPrograms.Count > 0
-            || _pendingCombatModifiers.Count > 0 || _rewardModifiers.Count > 0)
+        if (_installedPrograms.Count > 0 || _pendingCombatModifiers.Count > 0 || _rewardModifiers.Count > 0)
             throw new InvalidOperationException(
-                "A run can only be saved at a clean interlude (no board units, installed programs, or pending "
-                + "combat/reward modifiers). Save between nodes.");
+                "A run can only be saved at a clean interlude (no installed programs or pending combat/reward "
+                + "modifiers — their bodies are not value-captured). Save between nodes.");
 
         return new RunSaveData(
             RunId: Id.Value,
@@ -333,7 +332,10 @@ public sealed class RunState
             Visited: _visitedNodes.Select(n => n.Value).ToArray(),
             Flags: _flags.Select(f => f.Value).ToArray(),
             Counters: _counters.ToDictionary(kv => kv.Key.Value, kv => kv.Value),
-            Party: _party.Select(SnapshotMember).ToArray());
+            Party: _party.Select(SnapshotMember).ToArray(),
+            Units: _units.Select(u => new RunUnitSaveData(
+                u.DefinitionId.value, u.DisplayNameKey, u.Health.Max, u.Health.Current,
+                u.Position, u.Statuses.ToArray(), u.PersistStatuses)).ToArray());
     }
 
     private static RunMemberSaveData SnapshotMember(PartyMember member) => new(
@@ -385,6 +387,18 @@ public sealed class RunState
                 saved.DisplayNameKey, new CombatantDefinitionId(saved.DefinitionId));
             RestoreMember(run, member, saved, content);
         }
+
+        // Persistent board units, with their LIVE HP/position/statuses (ids regenerated like cards/members).
+        foreach (var unit in data.Units)
+            run._units.Add(new RunUnit(
+                new RunUnitInstanceId($"unit#{++run._nextUnitSeq}"),
+                new CombatantDefinitionId(unit.DefinitionId),
+                unit.DisplayNameKey,
+                new HealthState(unit.CurrentHealth, unit.MaxHealth),
+                unit.Position,
+                unit.Statuses,
+                unit.PersistStatuses));
+
         return run;
     }
 

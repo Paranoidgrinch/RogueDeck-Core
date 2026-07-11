@@ -99,7 +99,12 @@ public static class CombatStateSnapshotter
             Counters: s.Counters
                 .Select(kv => (kv.Key, kv.Value))
                 .OrderBy(p => p.Key.value, StringComparer.Ordinal)
-                .ToImmutableArray());
+                .ToImmutableArray(),
+            SourceCombatantId: s.SourceCombatantId,
+            SourceCardId: s.SourceCardId,
+            AppliedRound: s.AppliedRound,
+            AppliedTurn: s.AppliedTurn,
+            Visibility: s.Visibility);
 
     private static CombatantCardZonesSnapshot SnapshotCardZones(CombatantCardZones zones) =>
         new(

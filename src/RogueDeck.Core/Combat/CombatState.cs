@@ -650,8 +650,10 @@ public sealed class CombatState
 
     private static StatusInstance RestoreStatus(StatusInstanceSnapshot s) =>
         new(s.Id, s.DefinitionId, s.OwnerCombatantId,
+            sourceCombatantId: s.SourceCombatantId, sourceCardId: s.SourceCardId,
             stacks: s.Stacks, durationTurns: s.DurationTurns, charges: s.Charges,
-            polarity: s.Polarity, initialTags: s.Tags);
+            appliedRound: s.AppliedRound, appliedTurn: s.AppliedTurn,
+            visibility: s.Visibility, polarity: s.Polarity, initialTags: s.Tags);
 
     private static void RestorePile(
         CombatantCardZones zones, CombatantId owner,

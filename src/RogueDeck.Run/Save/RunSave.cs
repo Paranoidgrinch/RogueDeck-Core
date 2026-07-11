@@ -28,6 +28,17 @@ public sealed record RunMemberSaveData(
     IReadOnlyList<RunRelicSaveData> Relics,
     IReadOnlyList<string> Consumables);
 
+// One persistent board unit (P5c) with its LIVE state (current HP, position, statuses) — RunUnitData is authoring
+// data (full HP), so a save needs this to carry wounds forward. StatusGrant/CombatPosition are plain values.
+public sealed record RunUnitSaveData(
+    string DefinitionId,
+    string DisplayNameKey,
+    int MaxHealth,
+    int CurrentHealth,
+    Core.Combat.CombatPosition? Position,
+    IReadOnlyList<Core.Combat.StatusGrant> Statuses,
+    bool PersistStatuses);
+
 public sealed record RunSaveData(
     string RunId,
     int RandomSeed,
@@ -38,7 +49,8 @@ public sealed record RunSaveData(
     IReadOnlyList<string> Visited,
     IReadOnlyList<string> Flags,
     IReadOnlyDictionary<string, int> Counters,
-    IReadOnlyList<RunMemberSaveData> Party);
+    IReadOnlyList<RunMemberSaveData> Party,
+    IReadOnlyList<RunUnitSaveData> Units);
 
 // Serialize a run save to/from JSON — the save file. Plain values only (ids / ints / strings / an enum), so no
 // RunJson polymorphic converters are needed.

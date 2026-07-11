@@ -93,6 +93,22 @@ public class RunSaveTests
     }
 
     [Fact]
+    public void Board_units_round_trip_with_their_live_hp()
+    {
+        var run = new RunState(new RunId("r"), new HealthState(30, 30), new RunMap(Array.Empty<Node>()));
+        var unit = run.AddUnit(new RunUnitData("skeleton", "unit.skeleton", MaxHealth: 12));
+        unit.Health.SetCurrent(7); // wounded
+
+        var restored = RunState.Restore(
+            RunSaveJson.FromJson(RunSaveJson.ToJson(run.Snapshot())), run.Map, content: null);
+
+        var back = Assert.Single(restored.Units);
+        Assert.Equal(new CombatantDefinitionId("skeleton"), back.DefinitionId);
+        Assert.Equal(7, back.Health.Current);   // the wound carried across the save
+        Assert.Equal(12, back.Health.Max);
+    }
+
+    [Fact]
     public void Saving_with_uncaptured_scheduled_state_throws_rather_than_losing_it()
     {
         var run = new RunState(new RunId("r"), new HealthState(20, 30), new RunMap(Array.Empty<Node>()));

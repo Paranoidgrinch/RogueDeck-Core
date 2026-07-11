@@ -5,7 +5,9 @@ namespace RogueDeck.Core.Combat;
 // Read-only pool capture used inside snapshots.
 public readonly record struct PoolSnapshot(int Current, int? Max, bool CanExceedMax);
 
-// Immutable capture of one status instance at a point in time.
+// Immutable capture of one status instance at a point in time. The Source* / Applied* / Visibility fields are not
+// part of the determinism hash (the hasher ignores them), but ARE captured so a save can restore a status faithfully
+// (e.g. a poison that remembers who applied it). Default so existing constructions / the hash are unaffected.
 public sealed record StatusInstanceSnapshot(
     StatusInstanceId Id,
     StatusDefinitionId DefinitionId,
@@ -15,7 +17,12 @@ public sealed record StatusInstanceSnapshot(
     int Charges,
     StatusPolarity Polarity,
     ImmutableArray<TagId> Tags,                          // sorted by value
-    ImmutableArray<(CounterId Key, int Value)> Counters  // sorted by key.value
+    ImmutableArray<(CounterId Key, int Value)> Counters, // sorted by key.value
+    CombatantId? SourceCombatantId = null,
+    CardDefinitionId? SourceCardId = null,
+    int AppliedRound = 1,
+    int AppliedTurn = 1,
+    StatusVisibility Visibility = StatusVisibility.Visible
 );
 
 // Immutable capture of one card instance.

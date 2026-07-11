@@ -69,6 +69,22 @@ public class CombatStateRestoreTests
     }
 
     [Fact]
+    public void A_statuss_source_survives_restore()
+    {
+        var registry = CombatTestFactory.CreateStandardRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        combat.EnqueueEffect(new ApplyStatusEffectRequest(
+            GoblinId, StandardCombatIds.StunStatus, SourceCombatantId: HeroId, DurationTurns: 2));
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+
+        var restored = CombatState.Restore(combat.CreateSnapshot());
+
+        var status = Assert.Single(
+            restored.GetCombatant(GoblinId).Statuses, s => s.DefinitionId == StandardCombatIds.StunStatus);
+        Assert.Equal(HeroId, status.SourceCombatantId); // the applier is remembered across the save
+    }
+
+    [Fact]
     public void Restoring_a_snapshot_with_temporary_rules_is_refused()
     {
         var snapshot = MidFight().CreateSnapshot() with
