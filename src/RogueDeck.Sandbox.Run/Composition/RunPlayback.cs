@@ -25,7 +25,33 @@ public sealed class RunPlayback(Action onChanged) : IDisposable
 
     // Start (or restart) a run from the blueprint. interactive=true hands each fight to the player via an
     // InteractiveCombatDriver (surfaced through CombatDriver); false auto-resolves fights headlessly.
-    public void Start(RunBlueprint blueprint, int seed, bool interactive)
+    public void Start(RunBlueprint blueprint, int seed, bool interactive) =>
+        StartSession(blueprint, interactive, _ => blueprint.CreateInitialRun(new RunId("play"), seed));
+
+    // Resume a SAVED run against its blueprint (the map + content are content, supplied here; the live progress comes
+    // from the save). The runner continues from the saved position (RunRunner resume support) instead of re-walking.
+    public void Resume(RunBlueprint blueprint, RunSaveData save, bool interactive) =>
+        StartSession(blueprint, interactive, content => RunState.Restore(save, blueprint.Map, content));
+
+    // Serialize the live run to a save file. Only valid at a quiescent point (an interlude / event choice / the run's
+    // end), where the run thread is parked — RunState.Snapshot throws otherwise; the caller surfaces that. Null when
+    // no run is active.
+    public string? SaveJson()
+    {
+        if (Session is not { } session)
+            return null;
+        try
+        {
+            return RunSaveJson.ToJson(session.Run.Snapshot());
+        }
+        catch (Exception ex)
+        {
+            Error = $"Cannot save now: {ex.Message}";
+            return null;
+        }
+    }
+
+    private void StartSession(RunBlueprint blueprint, bool interactive, Func<RunContentRegistry, RunState> makeRun)
     {
         Error = null;
         Dispose();
@@ -65,7 +91,7 @@ public sealed class RunPlayback(Action onChanged) : IDisposable
             new StandardRunPackage(driver, content).RegisterDefinitions(defs);
             var registry = defs.Build();
 
-            var run = blueprint.CreateInitialRun(new RunId("play"), seed);
+            var run = makeRun(content);
             var session = new InteractiveRunSession(run, registry, content);
             session.Changed += onChanged;
             Session = session;

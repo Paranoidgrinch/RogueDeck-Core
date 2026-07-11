@@ -22,6 +22,8 @@
             <button class="play" @onclick="Start">Load &amp; drive</button>
             <button class="play" @onclick="Download">Download</button>
             <label class="play">Upload<InputFile OnChange="Upload" style="display:none" /></label>
+            <button class="play" @onclick="SaveRun" title="save the live run's progress (at an interlude between nodes)">Save run</button>
+            <label class="play" title="resume a saved run against this blueprint">Load run<InputFile OnChange="LoadRun" style="display:none" /></label>
         </div>
         <div class="run-bar">
             <label title="on: play each fight yourself (cards + end turn); off: fights auto-resolve headlessly">
@@ -380,6 +382,40 @@
         }
         _play.Start(blueprint, _seed, _interactiveCombat);
         _error = _play.Error;
+    }
+
+    // Save the LIVE run's progress to a file — only valid at a quiescent point (an interlude between nodes, an event
+    // choice, or the run's end); RunPlayback surfaces "cannot save now" via its Error otherwise.
+    private async Task SaveRun()
+    {
+        var json = _play.SaveJson();
+        _error = _play.Error;
+        if (json is null)
+            return;
+        _jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./runSandbox.js");
+        await _jsModule.InvokeVoidAsync("download", "run-save.json", json);
+    }
+
+    // Load a run save and RESUME it against the current blueprint (the map + content come from the blueprint; the
+    // live progress from the save). The runner continues from the saved position.
+    private async Task LoadRun(InputFileChangeEventArgs e)
+    {
+        if (!TryBlueprint(out var blueprint))
+        {
+            _error = "Fix the run JSON before loading a save.";
+            return;
+        }
+        using var reader = new StreamReader(e.File.OpenReadStream(5 * 1024 * 1024));
+        var json = await reader.ReadToEndAsync();
+        try
+        {
+            _play.Resume(blueprint, RunSaveJson.FromJson(json), _interactiveCombat);
+            _error = _play.Error;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Bad run save: {ex.Message}";
+        }
     }
 
     // Headless balancing: auto-play the blueprint over many seeds and summarise outcomes.
