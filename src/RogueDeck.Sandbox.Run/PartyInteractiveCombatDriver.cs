@@ -19,7 +19,9 @@ namespace RogueDeck.Sandbox.Run;
 public sealed class PartyInteractiveCombatDriver : ICombatDriver, IDisposable
 {
     private readonly object _gate = new();
+    private readonly UiCombatCardChooser _cardChooser = new();
     private TaskCompletionSource<CombatDriveResult>? _pending;
+    private bool _resolving;
     private IReadOnlyList<AllyBlueprint> _allies = [];
     private CombatantId _heroId;
     private volatile bool _disposed;
@@ -27,8 +29,28 @@ public sealed class PartyInteractiveCombatDriver : ICombatDriver, IDisposable
     // The party fight currently awaiting the players, or null when no party combat is in progress.
     public PartyCombat? Current { get; private set; }
 
+    // A pending in-combat card choice (e.g. Armaments) raised by whichever member is mid-play: the candidate cards,
+    // how many, and what for — null when no card choice is awaiting a pick. The UI renders these and supplies a pick.
+    public IReadOnlyList<CardInstance>? PendingCardChoice => _cardChooser.PendingCandidates;
+    public int PendingCardChoiceCount => _cardChooser.PendingCount;
+    public string PendingCardChoicePurpose => _cardChooser.PendingPurpose;
+
+    // True while a member's action is resolving on the background task, including while parked on a card choice. New
+    // actions are ignored until it clears; the UI disables its controls and callers pace against it.
+    public bool IsResolving
+    {
+        get { lock (_gate) return _resolving; }
+    }
+
     // Raised (possibly off the UI thread) when a combat starts, needs a re-render, or finishes. The UI marshals it.
     public event Action? Changed;
+
+    public PartyInteractiveCombatDriver()
+    {
+        // A card choice parking mid-resolution is a valid render point (blocked on input), so forward the chooser's
+        // park signal as our own Changed — the only Changed fired mid-action.
+        _cardChooser.Changed += () => Changed?.Invoke();
+    }
 
     public CombatDriveResult Drive(Playthrough playthrough)
     {
@@ -41,6 +63,7 @@ public sealed class PartyInteractiveCombatDriver : ICombatDriver, IDisposable
 
         var combat = new PartyCombat(
             compiled, CyclingEnemyIntent(compiled), playthrough.CombatId, playthrough.RandomSeed);
+        combat.State.SetCardChooser(_cardChooser);
 
         TaskCompletionSource<CombatDriveResult> tcs;
         lock (_gate)
@@ -63,31 +86,52 @@ public sealed class PartyInteractiveCombatDriver : ICombatDriver, IDisposable
     }
 
     // ── UI actions (called on the circuit thread while the run thread is parked in Drive) ──
+    // A member's play may PARK on a ChosenCardInZone choice, blocking the resolving thread until the player picks; so
+    // each action runs on a background task (not the circuit) and only one resolves at a time (_resolving guards
+    // re-entry, including while parked). Changed fires only at a park (the chooser) or on completion (AfterAction).
 
-    public void PlayCardFor(CombatantId member, CardInstanceId cardId, CombatantId? target)
-    {
-        PartyCombat? combat;
-        lock (_gate)
-            combat = Current;
-        if (combat is null)
-            return;
-        combat.PlayCard(member, cardId, target);
-        AfterAction(combat);
-    }
+    public void PlayCardFor(CombatantId member, CardInstanceId cardId, CombatantId? target) =>
+        RunAction(combat => combat.PlayCard(member, cardId, target));
 
-    public void EndTurnFor(CombatantId member)
+    // Ending the last living member runs the enemy phase + opens the next player phase, inside PartyCombat.EndTurn.
+    public void EndTurnFor(CombatantId member) => RunAction(combat => combat.EndTurn(member));
+
+    // The UI's answer to a pending in-combat card choice; unparks the resolving task so the action completes.
+    public void SupplyCardChoice(IReadOnlyList<CardInstanceId> picks) => _cardChooser.Supply(picks);
+
+    private void RunAction(Action<PartyCombat> action)
     {
-        PartyCombat? combat;
+        PartyCombat combat;
         lock (_gate)
+        {
+            if (_disposed || _resolving || Current is null)
+                return;
             combat = Current;
-        if (combat is null)
-            return;
-        combat.EndTurn(member); // ending the last living member runs the enemy phase + opens the next player phase
-        AfterAction(combat);
+            _resolving = true;
+        }
+        Task.Run(() =>
+        {
+            try
+            {
+                action(combat);
+            }
+            catch (OperationCanceledException)
+            {
+                // Disposed mid-choice; the session is tearing down.
+            }
+            finally
+            {
+                lock (_gate)
+                    _resolving = false;
+            }
+            AfterAction(combat);
+        });
     }
 
     private void AfterAction(PartyCombat combat)
     {
+        if (_disposed)
+            return;
         if (combat.IsOver)
             Finish(combat);
         else
@@ -133,6 +177,7 @@ public sealed class PartyInteractiveCombatDriver : ICombatDriver, IDisposable
             _pending = null;
             Current = null;
         }
+        _cardChooser.Dispose(); // cancel any card-choice park so the resolving task unblocks
         tcs?.TrySetCanceled();
     }
 }

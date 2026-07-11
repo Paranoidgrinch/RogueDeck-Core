@@ -215,9 +215,13 @@ public class RunAuthoringWorkflowTests
             var bless = combat!.Hand.First(c => c.DefinitionId.value == "bless");
             driver.PlayCard(bless.Id, combat.HeroId);
 
+            // The play resolves on the driver's background task; wait for the blessing to land before asserting.
+            var hero = WaitFor(
+                () => combat.State.Combatants.FirstOrDefault(
+                    c => c.Id == combat.HeroId && c.Statuses.Any(s => s.DefinitionId.value == "blessing")),
+                TimeSpan.FromSeconds(5));
+            Assert.NotNull(hero);
             Assert.DoesNotContain(combat.Steps, s => s.HasProblems);
-            var hero = combat.State.Combatants.First(c => c.Id == combat.HeroId);
-            Assert.Contains(hero.Statuses, s => s.DefinitionId.value == "blessing");
         }
         finally
         {
@@ -870,22 +874,31 @@ public class RunAuthoringWorkflowTests
         var combat = WaitFor(() => driver.Current, TimeSpan.FromSeconds(5));
         Assert.NotNull(combat);
 
+        // Each play/end-turn resolves on the driver's background task (so a card-choice could park it), and the driver
+        // ignores a new action until the current one clears — so pace every action against IsResolving.
         var guard = 0;
         while (driver.Current is { } fight && guard++ < 200)
         {
             if (!fight.IsHeroTurn)
+            {
+                Thread.Sleep(5);
                 continue;
+            }
             foreach (var card in fight.Hand.ToArray())
             {
                 var target = fight.State.Combatants.FirstOrDefault(x => x.Id != fight.HeroId && x.IsAlive)?.Id;
                 if (target is null)
                     break;
                 driver.PlayCard(card.Id, target);
+                WaitWhile(() => driver.IsResolving, TimeSpan.FromSeconds(5));
                 if (driver.Current is null)
                     break;
             }
             if (driver.Current is not null)
+            {
                 driver.EndTurn();
+                WaitWhile(() => driver.IsResolving, TimeSpan.FromSeconds(5));
+            }
         }
 
         await runTask.WaitAsync(TimeSpan.FromSeconds(5)); // throws if the fight never resumed the run
@@ -904,6 +917,15 @@ public class RunAuthoringWorkflowTests
             Thread.Sleep(10);
         }
         return null;
+    }
+
+    // Block until a condition clears (or the timeout elapses) — used to pace against the driver's IsResolving so the
+    // next action isn't dropped while the previous one is still resolving on its background task.
+    private static void WaitWhile(Func<bool> condition, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (condition() && DateTime.UtcNow < deadline)
+            Thread.Sleep(5);
     }
 
     // Headless drive of a whole run, exactly as the Run tab's Load & drive / Simulate does (via RunPlayback +

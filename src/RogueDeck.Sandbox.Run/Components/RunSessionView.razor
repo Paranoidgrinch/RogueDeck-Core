@@ -72,7 +72,11 @@
                     }
                 </div>
             }
-            @if (combat.IsHeroTurn)
+            @if (ActiveCardChoice is { } cardChoice)
+            {
+                @CardChoicePrompt(cardChoice)
+            }
+            else if (combat.IsHeroTurn)
             {
                 <div class="row">
                     <span class="muted">Target</span>
@@ -146,7 +150,12 @@
                 </select>
             </div>
 
-            @if (party.ActiveMembers().Count == 0)
+            @if (ActiveCardChoice is { } partyCardChoice)
+            {
+                @* A member's play parked mid-resolution on a card choice; show it and hide the member panels. *@
+                @CardChoicePrompt(partyCardChoice)
+            }
+            else if (party.ActiveMembers().Count == 0)
             {
                 <p class="muted">Resolving…</p>
             }
@@ -299,8 +308,10 @@
     [Parameter] public IReadOnlyDictionary<string, string> EnemyNames { get; set; } = new Dictionary<string, string>();
     [Parameter] public string? HeroName { get; set; }
 
-    // Transient pick state, owned here: which entity-request options are selected, and the current attack target.
+    // Transient pick state, owned here: which entity-request options are selected, the current attack target, and
+    // which candidate cards are selected for a pending in-combat card choice (keyed by card instance id).
     private readonly HashSet<int> _selected = new();
+    private readonly HashSet<string> _cardPicks = new();
     private string _combatTarget = "";
 
     private void ToggleEntity(int index)
@@ -336,6 +347,76 @@
     }
 
     private void EndCombatTurn() => CombatDriver?.EndTurn();
+
+    // ── in-combat card choice (in-combat card targeting, e.g. Armaments) ────────────
+    // Whichever interactive driver is live surfaces the pending choice; the same prompt/helpers serve both.
+    private IReadOnlyList<CardInstance>? ActiveCardChoice =>
+        CombatDriver?.PendingCardChoice ?? PartyCombatDriver?.PendingCardChoice;
+
+    private int ActiveCardChoiceCount =>
+        CombatDriver?.PendingCardChoice is not null ? CombatDriver.PendingCardChoiceCount
+        : PartyCombatDriver?.PendingCardChoiceCount ?? 0;
+
+    private string ActiveCardChoicePurpose =>
+        CombatDriver?.PendingCardChoice is not null ? CombatDriver.PendingCardChoicePurpose
+        : PartyCombatDriver?.PendingCardChoicePurpose ?? "";
+
+    private void SupplyActiveCardChoice(IReadOnlyList<CardInstanceId> picks)
+    {
+        if (CombatDriver?.PendingCardChoice is not null)
+            CombatDriver.SupplyCardChoice(picks);
+        else
+            PartyCombatDriver?.SupplyCardChoice(picks);
+    }
+
+    // A pending in-combat card choice: for a single pick, clicking a candidate supplies it immediately; for a
+    // multi-pick, toggle candidates into the set and Confirm supplies them together.
+    private void ToggleCardPick(CardInstanceId cardId)
+    {
+        if (ActiveCardChoiceCount <= 1)
+        {
+            _cardPicks.Clear();
+            SupplyActiveCardChoice(new[] { cardId });
+            return;
+        }
+        if (!_cardPicks.Remove(cardId.value) && _cardPicks.Count < ActiveCardChoiceCount)
+            _cardPicks.Add(cardId.value);
+    }
+
+    private void ConfirmCardPicks()
+    {
+        var choice = ActiveCardChoice;
+        if (choice is null)
+            return;
+        var picks = choice.Where(c => _cardPicks.Contains(c.Id.value)).Select(c => c.Id).ToArray();
+        _cardPicks.Clear();
+        SupplyActiveCardChoice(picks);
+    }
+
+    // The shared card-choice prompt (used by both the single-hero and party combat views): candidate cards as
+    // buttons (single pick supplies immediately; multi-pick toggles then Confirm), hiding the normal hand controls.
+    private RenderFragment CardChoicePrompt(IReadOnlyList<CardInstance> choice) =>
+        @<text>
+            <h2>@ActiveCardChoicePurpose</h2>
+            <p class="muted">Pick @ActiveCardChoiceCount.</p>
+            <div class="choices">
+                @foreach (var card in choice)
+                {
+                    var cid = card.Id;
+                    <button class="play @(_cardPicks.Contains(cid.value) ? "active" : "")"
+                            @onclick="() => ToggleCardPick(cid)">
+                        @CardName(card.DefinitionId.value)
+                    </button>
+                }
+            </div>
+            @if (ActiveCardChoiceCount > 1)
+            {
+                <button class="play" disabled="@(_cardPicks.Count != ActiveCardChoiceCount)"
+                        @onclick="ConfirmCardPicks">
+                    Confirm (@_cardPicks.Count/@ActiveCardChoiceCount)
+                </button>
+            }
+        </text>;
 
     // ── party combat (party deckbuilding C2 follow-up) ──────────────────────────────
     private void PlayPartyCard(CombatantId member, CardInstanceId cardId)
