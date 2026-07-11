@@ -32,6 +32,12 @@ internal static class ScenarioCombatFactory
         foreach (var ally in compiled.Allies)
             DealDeck(combat, ally);
 
+        // Innate cards start in the opening hand: pull them to the top of each player deck's draw pile (the opening
+        // draw is shuffle-free and takes from the top), preserving their relative order.
+        MoveInnateCardsToTop(combat, compiled.Registry, compiled.Hero.CombatantId);
+        foreach (var ally in compiled.Allies)
+            MoveInnateCardsToTop(combat, compiled.Registry, ally.CombatantId);
+
         // Apply starting statuses through the real pipeline so merge/stacking semantics are honoured.
         var queues = new CombatQueueProcessor();
         ApplyStartingStatuses(combat, compiled.Registry, queues, compiled.Hero);
@@ -57,6 +63,21 @@ internal static class ScenarioCombatFactory
             for (var copy = 0; copy < entry.Count; copy++)
                 zones.AddCard(new CardInstance(
                     combat.CreateNextCardInstanceId(), entry.Card, blueprint.CombatantId, CardZone.DrawPile));
+    }
+
+    // Reorder a combatant's draw pile so its innate-tagged cards sit on top, in their original relative order, so the
+    // opening draw always includes them. Moving from last to first lands the first innate card at index 0.
+    private static void MoveInnateCardsToTop(CombatState combat, CombatDefinitionRegistry registry, CombatantId combatantId)
+    {
+        var zones = combat.GetCardZones(combatantId);
+        var innate = zones.DrawPile
+            .Where(card => registry.TryGetCard(card.DefinitionId, out var definition)
+                && definition!.Tags.Contains(StandardCombatIds.InnateTag))
+            .Select(card => card.Id)
+            .ToList();
+
+        for (var i = innate.Count - 1; i >= 0; i--)
+            zones.MoveCardToZone(innate[i], CardZone.DrawPile, ZonePlacement.Top);
     }
 
     private static void AddCombatant(CombatState combat, CombatantBlueprint blueprint, TeamId team)

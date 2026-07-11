@@ -67,6 +67,11 @@ public static class StandardCombatIds
     // the direct processor path throws via UnplayableCardPlayValidator). A curse = an unplayable card, optionally
     // with a downside; adding one to a deck uses the existing add-card machinery.
     public static readonly TagId UnplayableTag = new("unplayable");
+
+    // An INNATE card starts in the opening hand: combat setup moves it to the top of the draw pile (before the
+    // shuffle-free opening draw), so the first turn's draw always includes it. Purely a setup ordering, so it needs
+    // no runtime hook. Authored like any tag (CardData.Tags).
+    public static readonly TagId InnateTag = new("innate");
 }
 
 
