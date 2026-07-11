@@ -55,6 +55,7 @@ public sealed class StandardCombatPackage : ICombatPackage
 
         registry.RegisterCardCostModifier(new DeclarativePassiveCostModifier());
 
+        registry.RegisterCardPlayValidator(new UnplayableCardPlayValidator());
         registry.RegisterCardPlayValidator(new StunCardPlayValidator());
         registry.RegisterCardPlayValidator(new OneAttackPerTurnCardPlayValidator());
 

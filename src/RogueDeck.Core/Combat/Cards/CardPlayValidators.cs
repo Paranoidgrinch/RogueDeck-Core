@@ -17,6 +17,23 @@ public interface ICardPlayValidator
     void Validate(CardPlayValidationContext context);
 }
 
+// Rejects any card carrying the Unplayable tag — the base mechanic behind curses. This guards the direct
+// card-play processor path (CombatCardPlayProcessor.PlayCard); the effect-request path no-ops such a card instead
+// (PlayCardEffectHandler), so both surfaces refuse it. Highest priority so it short-circuits before other checks.
+public sealed class UnplayableCardPlayValidator : ICardPlayValidator
+{
+    public string ModifierId => "standard.unplayable_validator";
+    public int Priority => 200;
+
+    public void Validate(CardPlayValidationContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        if (context.Card.Tags.Contains(StandardCombatIds.UnplayableTag))
+            throw new InvalidOperationException($"Card '{context.Card.Id}' is unplayable.");
+    }
+}
+
 public sealed class StunCardPlayValidator : ICardPlayValidator
 {
     public string ModifierId => "standard.stun_validator";

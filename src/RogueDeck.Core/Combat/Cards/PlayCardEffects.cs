@@ -48,6 +48,15 @@ public sealed class PlayCardEffectHandler : EffectRequestHandler<PlayCardEffectR
         }
 
         var card = registry.GetCard(cardInstance.DefinitionId);
+
+        // An unplayable card (a curse) is never played — no-op it like an unaffordable card rather than throwing, so
+        // the run/playtest/auto paths that funnel through here just leave it in hand.
+        if (card.Tags.Contains(StandardCombatIds.UnplayableTag))
+        {
+            NoOp(request);
+            return;
+        }
+
         var costs = CombatCardPlayProcessor.CalculateCostsInternal(
             combat, registry, card, player, request.TargetCombatantId, request.CardInstanceId);
 

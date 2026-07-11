@@ -61,6 +61,12 @@ public static class StandardCombatIds
     public static readonly TagId SkillCardTag = new("skill");
     public static readonly TagId ComboTag = new("combo");
     public static readonly TagId CardPlayedTriggerTag = new("card_played_trigger");
+
+    // A card carrying this tag can never be played — the base mechanic behind CURSES and other unplayable clutter.
+    // The card-play pipeline rejects it on every path (the effect-request path no-ops it like an unaffordable card;
+    // the direct processor path throws via UnplayableCardPlayValidator). A curse = an unplayable card, optionally
+    // with a downside; adding one to a deck uses the existing add-card machinery.
+    public static readonly TagId UnplayableTag = new("unplayable");
 }
 
 
