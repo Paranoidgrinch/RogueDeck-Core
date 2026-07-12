@@ -52,6 +52,8 @@ public class CombatJsonBroadNodeTests
         RoundTrips(new SetCombatantCounterNode<CardPlayContext>(Source, new CounterId("combo"), Const(5), relative: false));
         RoundTrips(new CombatantCounterExpression<CardPlayContext>(Source, new CounterId("combo")));
         RoundTrips(new DealDamageNode<CardPlayContext>(Enemy, Const(8), element: new ElementId("fire")));
+        RoundTrips(new ModifySelectedStatusStacksNode<CardPlayContext>(Enemy,
+            new StatusSelectionSpec(StatusPolarityFilter.Debuff), Const(-1)));
         RoundTrips(new ModifyStatusStacksNode<CardPlayContext>(Enemy, burn, Const(2)));
         RoundTrips(new ModifyStatusDurationNode<CardPlayContext>(Enemy, burn, Const(1)));
         RoundTrips(new ModifyStatusChargesNode<CardPlayContext>(Enemy, burn, Const(1)));

@@ -98,6 +98,54 @@ public class SelectedStatusTargetingTests
             registry.GetEffectRequestHandler(typeof(RemoveStatusInstanceEffectRequest)));
     }
 
+    [Fact]
+    public void Reducing_a_selected_debuff_lowers_its_stacks_and_leaves_it_present()
+    {
+        var registry = CreateRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        ApplyStatus(combat, registry, GoblinId, PoisonId, 5);
+
+        RunModifySelected(combat, registry, new StatusSelectionSpec(StatusPolarityFilter.Debuff), delta: -2);
+
+        var poison = Assert.Single(combat.GetCombatant(GoblinId).Statuses);
+        Assert.Equal(3, poison.Stacks); // 5 − 2
+    }
+
+    [Fact]
+    public void Reducing_a_selected_debuff_to_zero_removes_it()
+    {
+        var registry = CreateRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        ApplyStatus(combat, registry, GoblinId, PoisonId, 2);
+
+        RunModifySelected(combat, registry, new StatusSelectionSpec(StatusPolarityFilter.Debuff), delta: -5);
+
+        Assert.Empty(combat.GetCombatant(GoblinId).Statuses); // clamped to 0 → removed
+    }
+
+    [Fact]
+    public void Boosting_a_selected_buff_raises_its_stacks()
+    {
+        var registry = CreateRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        ApplyStatus(combat, registry, GoblinId, StrengthId, 1);
+
+        RunModifySelected(combat, registry, new StatusSelectionSpec(StatusPolarityFilter.Buff), delta: 2);
+
+        var strength = Assert.Single(combat.GetCombatant(GoblinId).Statuses);
+        Assert.Equal(3, strength.Stacks); // 1 + 2
+    }
+
+    private static void RunModifySelected(
+        CombatState combat, CombatDefinitionRegistry registry, StatusSelectionSpec spec, int delta)
+    {
+        var ctx = MakeContext(combat);
+        var program = new EffectProgram<Ctx>(new ModifySelectedStatusStacksNode<Ctx>(
+            CombatantTargetSelectors.EventTarget, spec, new ConstantExpression<Ctx>(delta)));
+        EffectProgramExecutor.Execute(program, ctx, combat);
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+    }
+
     private static void RunRemoveSelected(
         CombatState combat, CombatDefinitionRegistry registry, StatusSelectionSpec spec)
     {

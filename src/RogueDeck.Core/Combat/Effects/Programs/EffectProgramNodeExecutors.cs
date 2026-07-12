@@ -64,6 +64,7 @@ public sealed class EffectNodeExecutorRegistry
         r.RegisterOpenGeneric(typeof(ApplyStatusNode<>), new ApplyStatusNodeExecutor());
         r.RegisterOpenGeneric(typeof(RemoveStatusNode<>), new RemoveStatusNodeExecutor());
         r.RegisterOpenGeneric(typeof(RemoveSelectedStatusNode<>), new RemoveSelectedStatusNodeExecutor());
+        r.RegisterOpenGeneric(typeof(ModifySelectedStatusStacksNode<>), new ModifySelectedStatusStacksNodeExecutor());
         r.RegisterOpenGeneric(typeof(SetCombatantCounterNode<>), new SetCombatantCounterNodeExecutor());
         r.RegisterOpenGeneric(typeof(RemoveStatusesByPolarityNode<>), new RemoveStatusesByPolarityNodeExecutor());
         r.RegisterOpenGeneric(typeof(ModifyStatusStacksNode<>), new ModifyStatusStacksNodeExecutor());
@@ -920,6 +921,26 @@ internal sealed class SetCombatantCounterNodeExecutor : IEffectNodeExecutor
         foreach (var target in typed.TargetSelector.ResolveTargetsTraced(ctx, combat))
             combat.EnqueueEffect(new SetCombatantCounterEffectRequest(
                 target, typed.CounterId, amount, typed.Relative));
+
+        if (onComplete is not null)
+            combat.EnqueueContinuation(onComplete);
+    }
+}
+
+internal sealed class ModifySelectedStatusStacksNodeExecutor : IEffectNodeExecutor
+{
+    public void Execute(IEffectNode node, IEffectExecutionContextCore ctx, CombatState combat,
+        Action<CombatState>? onComplete, Action<IEffectNode, CombatState, Action<CombatState>?> dispatch)
+    {
+        var typed = (IModifySelectedStatusStacksNodeCore)node;
+        var delta = typed.EvaluateDelta(ctx, combat);
+
+        foreach (var target in typed.TargetSelector.ResolveTargetsTraced(ctx, combat))
+        {
+            var statusId = StatusSelection.Resolve(combat, target, typed.Selection);
+            if (statusId is { } id)
+                combat.EnqueueEffect(new ModifyStatusInstanceStacksEffectRequest(target, id, delta));
+        }
 
         if (onComplete is not null)
             combat.EnqueueContinuation(onComplete);

@@ -500,6 +500,52 @@ public sealed class RemoveStatusInstanceEffectHandler : EffectRequestHandler<Rem
     }
 }
 
+// Modifies the stacks of ONE specific status instance (addressed by StatusInstanceId), unlike
+// ModifyStatusStacksEffectRequest which acts on the first instance of a definition. Clamps to 0 and removes the
+// instance if its stacks deplete. Backs the "reduce/boost a SELECTED status" ops (#3 status-instance targeting).
+public sealed record ModifyStatusInstanceStacksEffectRequest(
+    CombatantId TargetCombatantId,
+    StatusInstanceId StatusInstanceId,
+    int Delta
+) : IEffectRequest;
+
+public sealed class ModifyStatusInstanceStacksEffectHandler
+    : EffectRequestHandler<ModifyStatusInstanceStacksEffectRequest>
+{
+    protected override void Resolve(
+        CombatState combat,
+        CombatDefinitionRegistry registry,
+        ModifyStatusInstanceStacksEffectRequest request)
+    {
+        var target = combat.GetCombatant(request.TargetCombatantId);
+        var status = target.Statuses.FirstOrDefault(s => s.Id == request.StatusInstanceId);
+        if (status is null)
+            return;
+
+        var oldStacks = status.Stacks;
+        var newStacks = (int)Math.Max(0, Math.Min(int.MaxValue, (long)oldStacks + request.Delta));
+        if (newStacks == oldStacks)
+            return;
+
+        status.SetStacks(newStacks);
+
+        if (newStacks == 0 && oldStacks > 0)
+        {
+            target.RemoveStatus(status);
+            combat.AddLogEntry(StandardCombatLogTypes.StatusExpired,
+                $"Status '{status.DefinitionId}' expired on '{target.Id}' (stacks depleted).");
+            combat.EnqueueEvent(new StatusExpiredCombatEvent(target.Id, status.Id, status.DefinitionId));
+        }
+        else
+        {
+            combat.AddLogEntry(StandardCombatLogTypes.StatusStacksChanged,
+                $"Status '{status.DefinitionId}' stacks on '{target.Id}' changed from {oldStacks} to {newStacks}.");
+            combat.EnqueueEvent(new StatusStacksChangedCombatEvent(
+                target.Id, status.Id, status.DefinitionId, oldStacks, newStacks));
+        }
+    }
+}
+
 public sealed record DecreaseStatusChargesEffectRequest(
     CombatantId TargetCombatantId,
     StatusInstanceId StatusInstanceId,

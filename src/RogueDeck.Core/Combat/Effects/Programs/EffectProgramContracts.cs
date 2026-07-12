@@ -278,6 +278,17 @@ public interface IRemoveSelectedStatusNodeCore : INativeEffectOperationNode
     Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(RemoveStatusInstanceEffectRequest);
 }
 
+// Modifies the stacks of ONE selected status instance per target (#3): the target selector picks the
+// combatant(s); the StatusSelectionSpec picks which status; the delta (may be negative) changes its stacks
+// ("reduce the enemy's chosen debuff by 1", "boost your random buff"). Removes the instance if it depletes.
+public interface IModifySelectedStatusStacksNodeCore : INativeEffectOperationNode
+{
+    ICombatantTargetSelector TargetSelector { get; }
+    StatusSelectionSpec Selection { get; }
+    int EvaluateDelta(IEffectExecutionContextCore ctx, CombatState combat);
+    Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(ModifyStatusInstanceStacksEffectRequest);
+}
+
 // Writes a target combatant's persistent per-fight counter (#persistent-combat-stats). Relative adds the
 // evaluated amount; otherwise sets it absolutely.
 public interface ISetCombatantCounterNodeCore : INativeEffectOperationNode

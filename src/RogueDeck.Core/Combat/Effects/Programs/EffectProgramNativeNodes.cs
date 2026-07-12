@@ -421,6 +421,38 @@ public sealed class RemoveSelectedStatusNode<TContext> : IRemoveSelectedStatusNo
     }
 }
 
+// Modifies the stacks of a single SELECTED status instance per target (#3): "reduce the enemy's chosen debuff
+// by 1". The instance is chosen at execution time by StatusSelection; the delta may be negative.
+public sealed class ModifySelectedStatusStacksNode<TContext> : IModifySelectedStatusStacksNodeCore, IEffectNode<TContext>
+    where TContext : class
+{
+    public ICombatantTargetSelector TargetSelector { get; }
+    public IEnumerable<ICombatantTargetSelector> GetTargetSelectors() => [TargetSelector];
+    public StatusSelectionSpec Selection { get; }
+    public ICombatExpression<TContext, int> Delta { get; }
+
+    public IReadOnlyList<IEffectNode<TContext>> Children => [];
+
+    public ModifySelectedStatusStacksNode(
+        ICombatantTargetSelector targetSelector,
+        StatusSelectionSpec selection,
+        ICombatExpression<TContext, int> delta)
+    {
+        ArgumentNullException.ThrowIfNull(targetSelector);
+        ArgumentNullException.ThrowIfNull(selection);
+        ArgumentNullException.ThrowIfNull(delta);
+
+        TargetSelector = targetSelector;
+        Selection = selection;
+        Delta = delta;
+    }
+
+    public IEnumerable<IResultKeyConsumer> GetExpressionConsumers() => Delta.GetAllConsumers();
+
+    int IModifySelectedStatusStacksNodeCore.EvaluateDelta(IEffectExecutionContextCore ctx, CombatState combat) =>
+        Delta.Evaluate((EffectExecutionContext<TContext>)ctx, combat);
+}
+
 // Writes a target combatant's persistent per-fight counter (#persistent-combat-stats): "add 1 to your combo
 // counter each time this card is played". Read it back with CombatantCounterExpression.
 public sealed class SetCombatantCounterNode<TContext> : ISetCombatantCounterNodeCore, IEffectNode<TContext>
