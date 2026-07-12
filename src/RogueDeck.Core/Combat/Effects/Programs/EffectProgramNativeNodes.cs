@@ -397,6 +397,27 @@ public sealed class RemoveStatusNode<TContext> : IRemoveStatusNodeCore, IEffectN
             : null;
 }
 
+// Removes a single SELECTED status instance from each target (#3): "remove a random buff", "remove the enemy's
+// first debuff". The instance is chosen at execution time by StatusSelection against the live state.
+public sealed class RemoveSelectedStatusNode<TContext> : IRemoveSelectedStatusNodeCore, IEffectNode<TContext>
+    where TContext : class
+{
+    public ICombatantTargetSelector TargetSelector { get; }
+    public IEnumerable<ICombatantTargetSelector> GetTargetSelectors() => [TargetSelector];
+    public StatusSelectionSpec Selection { get; }
+
+    public IReadOnlyList<IEffectNode<TContext>> Children => [];
+
+    public RemoveSelectedStatusNode(ICombatantTargetSelector targetSelector, StatusSelectionSpec selection)
+    {
+        ArgumentNullException.ThrowIfNull(targetSelector);
+        ArgumentNullException.ThrowIfNull(selection);
+
+        TargetSelector = targetSelector;
+        Selection = selection;
+    }
+}
+
 public sealed class RemoveStatusesByPolarityNode<TContext> : IRemoveStatusesByPolarityNodeCore, IEffectNode<TContext>
     where TContext : class
 {

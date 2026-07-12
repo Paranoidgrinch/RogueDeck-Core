@@ -63,6 +63,7 @@ public sealed class EffectNodeExecutorRegistry
         r.RegisterOpenGeneric(typeof(RefillResourceNode<>), new RefillResourceNodeExecutor());
         r.RegisterOpenGeneric(typeof(ApplyStatusNode<>), new ApplyStatusNodeExecutor());
         r.RegisterOpenGeneric(typeof(RemoveStatusNode<>), new RemoveStatusNodeExecutor());
+        r.RegisterOpenGeneric(typeof(RemoveSelectedStatusNode<>), new RemoveSelectedStatusNodeExecutor());
         r.RegisterOpenGeneric(typeof(RemoveStatusesByPolarityNode<>), new RemoveStatusesByPolarityNodeExecutor());
         r.RegisterOpenGeneric(typeof(ModifyStatusStacksNode<>), new ModifyStatusStacksNodeExecutor());
         r.RegisterOpenGeneric(typeof(ModifyStatusDurationNode<>), new ModifyStatusDurationNodeExecutor());
@@ -903,6 +904,25 @@ internal sealed class ApplyStatusNodeExecutor : IEffectNodeExecutor
         {
             combat.EnqueueContinuation(onComplete);
         }
+    }
+}
+
+internal sealed class RemoveSelectedStatusNodeExecutor : IEffectNodeExecutor
+{
+    public void Execute(IEffectNode node, IEffectExecutionContextCore ctx, CombatState combat,
+        Action<CombatState>? onComplete, Action<IEffectNode, CombatState, Action<CombatState>?> dispatch)
+    {
+        var typed = (IRemoveSelectedStatusNodeCore)node;
+
+        foreach (var target in typed.TargetSelector.ResolveTargetsTraced(ctx, combat))
+        {
+            var statusId = StatusSelection.Resolve(combat, target, typed.Selection);
+            if (statusId is { } id)
+                combat.EnqueueEffect(new RemoveStatusInstanceEffectRequest(target, id));
+        }
+
+        if (onComplete is not null)
+            combat.EnqueueContinuation(onComplete);
     }
 }
 

@@ -268,6 +268,15 @@ public interface IRemoveStatusesByPolarityNodeCore : INativeEffectOperationNode
     Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(RemoveStatusesByPolarityEffectRequest);
 }
 
+// Removes ONE selected status instance per target (#3): the target selector picks the combatant(s); the
+// StatusSelectionSpec picks which of that combatant's statuses (a random buff, the first debuff, …).
+public interface IRemoveSelectedStatusNodeCore : INativeEffectOperationNode
+{
+    ICombatantTargetSelector TargetSelector { get; }
+    StatusSelectionSpec Selection { get; }
+    Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(RemoveStatusInstanceEffectRequest);
+}
+
 public interface IModifyStatusStacksNodeCore : INativeEffectOperationNode
 {
     ICombatantTargetSelector TargetSelector { get; }

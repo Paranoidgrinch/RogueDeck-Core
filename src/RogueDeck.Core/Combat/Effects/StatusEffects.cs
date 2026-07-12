@@ -458,6 +458,48 @@ public sealed class RemoveStatusEffectHandler : EffectRequestHandler<RemoveStatu
     }
 }
 
+// Removes ONE specific status instance (addressed by its StatusInstanceId), unlike RemoveStatusEffectRequest
+// which removes every instance of a definition. Backs the status-instance selection ops (#3): "remove a random
+// buff" resolves an instance id, then this removes exactly it. A no-op (empty outcome) if the instance is gone.
+public sealed record RemoveStatusInstanceEffectRequest(
+    CombatantId TargetCombatantId,
+    StatusInstanceId StatusInstanceId,
+    RemoveStatusOutcomeSlot? OutcomeSlot = null
+) : IEffectRequest;
+
+public sealed class RemoveStatusInstanceEffectHandler : EffectRequestHandler<RemoveStatusInstanceEffectRequest>
+{
+    protected override void Resolve(
+        CombatState combat,
+        CombatDefinitionRegistry registry,
+        RemoveStatusInstanceEffectRequest request)
+    {
+        var target = combat.GetCombatant(request.TargetCombatantId);
+        var status = target.Statuses.FirstOrDefault(s => s.Id == request.StatusInstanceId);
+
+        if (status is null)
+        {
+            if (request.OutcomeSlot is { } emptySlot)
+                emptySlot.Value = new RemoveStatusOutcome(0, []);
+            return;
+        }
+
+        target.RemoveStatus(status);
+
+        if (request.OutcomeSlot is { } slot)
+            slot.Value = new RemoveStatusOutcome(1, [status.Id]);
+
+        combat.AddLogEntry(
+            StandardCombatLogTypes.StatusRemoved,
+            $"Removed status instance '{status.DefinitionId}' from '{request.TargetCombatantId}'.");
+
+        combat.EnqueueEvent(new StatusRemovedCombatEvent(
+            request.TargetCombatantId,
+            [status.Id],
+            status.DefinitionId));
+    }
+}
+
 public sealed record DecreaseStatusChargesEffectRequest(
     CombatantId TargetCombatantId,
     StatusInstanceId StatusInstanceId,
