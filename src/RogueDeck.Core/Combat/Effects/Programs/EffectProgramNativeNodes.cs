@@ -453,6 +453,33 @@ public sealed class ModifySelectedStatusStacksNode<TContext> : IModifySelectedSt
         Delta.Evaluate((EffectExecutionContext<TContext>)ctx, combat);
 }
 
+// Steals a single SELECTED status instance from each From target to the To target (#3): "steal the enemy's
+// Strength". The instance is chosen at execution time by StatusSelection; the thief is the To selector.
+public sealed class StealSelectedStatusNode<TContext> : IStealSelectedStatusNodeCore, IEffectNode<TContext>
+    where TContext : class
+{
+    public ICombatantTargetSelector FromSelector { get; }
+    public StatusSelectionSpec Selection { get; }
+    public ICombatantTargetSelector ToSelector { get; }
+    public IEnumerable<ICombatantTargetSelector> GetTargetSelectors() => [FromSelector, ToSelector];
+
+    public IReadOnlyList<IEffectNode<TContext>> Children => [];
+
+    public StealSelectedStatusNode(
+        ICombatantTargetSelector fromSelector,
+        StatusSelectionSpec selection,
+        ICombatantTargetSelector toSelector)
+    {
+        ArgumentNullException.ThrowIfNull(fromSelector);
+        ArgumentNullException.ThrowIfNull(selection);
+        ArgumentNullException.ThrowIfNull(toSelector);
+
+        FromSelector = fromSelector;
+        Selection = selection;
+        ToSelector = toSelector;
+    }
+}
+
 // Writes a target combatant's persistent per-fight counter (#persistent-combat-stats): "add 1 to your combo
 // counter each time this card is played". Read it back with CombatantCounterExpression.
 public sealed class SetCombatantCounterNode<TContext> : ISetCombatantCounterNodeCore, IEffectNode<TContext>

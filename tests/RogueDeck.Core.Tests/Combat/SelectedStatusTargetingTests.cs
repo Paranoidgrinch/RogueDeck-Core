@@ -136,6 +136,30 @@ public class SelectedStatusTargetingTests
         Assert.Equal(3, strength.Stacks); // 1 + 2
     }
 
+    [Fact]
+    public void Stealing_a_selected_buff_moves_it_from_the_enemy_to_the_hero_with_stacks_intact()
+    {
+        var registry = CreateRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        ApplyStatus(combat, registry, GoblinId, StrengthId, 3); // the enemy's Strength
+        ApplyStatus(combat, registry, GoblinId, PoisonId, 2);   // a debuff that must stay put
+
+        var ctx = MakeContext(combat);
+        var program = new EffectProgram<Ctx>(new StealSelectedStatusNode<Ctx>(
+            CombatantTargetSelectors.EventTarget, new StatusSelectionSpec(StatusPolarityFilter.Buff),
+            CombatantTargetSelectors.Source));
+        EffectProgramExecutor.Execute(program, ctx, combat);
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+
+        // The goblin keeps only its debuff; the hero now carries the stolen Strength at full stacks.
+        var goblinStatus = Assert.Single(combat.GetCombatant(GoblinId).Statuses);
+        Assert.Equal(PoisonId, goblinStatus.DefinitionId);
+        var stolen = Assert.Single(combat.GetCombatant(HeroId).Statuses);
+        Assert.Equal(StrengthId, stolen.DefinitionId);
+        Assert.Equal(3, stolen.Stacks);
+        Assert.Equal(HeroId, stolen.OwnerCombatantId);
+    }
+
     private static void RunModifySelected(
         CombatState combat, CombatDefinitionRegistry registry, StatusSelectionSpec spec, int delta)
     {

@@ -546,6 +546,59 @@ public sealed class ModifyStatusInstanceStacksEffectHandler
     }
 }
 
+// Moves ONE specific status instance from one combatant to another (#3 "steal a status"): the instance is
+// removed from FromCombatantId and re-created on ToCombatantId with the same definition/stacks/duration/charges/
+// source/applied-time/polarity/tags (a fresh instance id). "Steal the enemy's Strength."
+public sealed record StealStatusInstanceEffectRequest(
+    CombatantId FromCombatantId,
+    CombatantId ToCombatantId,
+    StatusInstanceId StatusInstanceId
+) : IEffectRequest;
+
+public sealed class StealStatusInstanceEffectHandler : EffectRequestHandler<StealStatusInstanceEffectRequest>
+{
+    protected override void Resolve(
+        CombatState combat,
+        CombatDefinitionRegistry registry,
+        StealStatusInstanceEffectRequest request)
+    {
+        if (request.FromCombatantId == request.ToCombatantId)
+            return;
+
+        var from = combat.GetCombatant(request.FromCombatantId);
+        var status = from.Statuses.FirstOrDefault(s => s.Id == request.StatusInstanceId);
+        if (status is null)
+            return;
+
+        from.RemoveStatus(status);
+        combat.EnqueueEvent(new StatusRemovedCombatEvent(from.Id, [status.Id], status.DefinitionId));
+
+        var to = combat.GetCombatant(request.ToCombatantId);
+        var moved = new StatusInstance(
+            combat.CreateNextStatusInstanceId(),
+            status.DefinitionId,
+            to.Id,
+            status.SourceCombatantId,
+            status.SourceCardId,
+            status.Stacks,
+            status.DurationTurns,
+            status.Charges,
+            status.AppliedRound,
+            status.AppliedTurn,
+            status.Visibility,
+            status.Polarity,
+            initialTags: status.Tags);
+        to.AddStatus(moved);
+
+        combat.AddLogEntry(
+            StandardCombatLogTypes.StatusApplied,
+            $"Status '{status.DefinitionId}' stolen from '{from.Id.value}' to '{to.Id.value}'.");
+        combat.EnqueueEvent(new StatusAppliedCombatEvent(
+            to.Id, moved.Id, moved.DefinitionId, moved.Stacks, moved.DurationTurns, moved.Charges,
+            moved.SourceCombatantId));
+    }
+}
+
 public sealed record DecreaseStatusChargesEffectRequest(
     CombatantId TargetCombatantId,
     StatusInstanceId StatusInstanceId,

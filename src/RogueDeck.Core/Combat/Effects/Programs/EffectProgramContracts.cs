@@ -289,6 +289,16 @@ public interface IModifySelectedStatusStacksNodeCore : INativeEffectOperationNod
     Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(ModifyStatusInstanceStacksEffectRequest);
 }
 
+// Steals ONE selected status instance from each From target to the single To target (#3 "steal a status"):
+// FromSelector picks whose status; Selection picks which; ToSelector picks the thief.
+public interface IStealSelectedStatusNodeCore : INativeEffectOperationNode
+{
+    ICombatantTargetSelector FromSelector { get; }
+    StatusSelectionSpec Selection { get; }
+    ICombatantTargetSelector ToSelector { get; }
+    Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(StealStatusInstanceEffectRequest);
+}
+
 // Writes a target combatant's persistent per-fight counter (#persistent-combat-stats). Relative adds the
 // evaluated amount; otherwise sets it absolutely.
 public interface ISetCombatantCounterNodeCore : INativeEffectOperationNode
