@@ -44,6 +44,31 @@ public sealed class InteractiveCombat
             _turns.StartCurrentTurn(_combat, _registry);
     }
 
+    // Resume an in-progress fight from a RESTORED CombatState (mid-combat save/resume). The combat state is
+    // rebuilt by the caller via CombatState.Restore(snapshot, registry) using the SAME content as `compiled`.
+    // We resume exactly at the saved phase: only a between-turns save (WaitingToStartTurn) draws a fresh hand,
+    // so a save taken mid-turn resumes with its captured hand intact (no double draw).
+    public InteractiveCombat(
+        CompiledScenario compiled,
+        CombatState restoredState,
+        Func<CombatState, CombatantId, int, EnemyActionDefinitionId?> enemyIntent)
+    {
+        ArgumentNullException.ThrowIfNull(compiled);
+        ArgumentNullException.ThrowIfNull(restoredState);
+        ArgumentNullException.ThrowIfNull(enemyIntent);
+
+        _compiled = compiled;
+        _registry = compiled.Registry;
+        _enemyIntent = enemyIntent;
+        _heroId = compiled.Hero.CombatantId;
+
+        _combat = restoredState;
+        _combat.TraceListener = _collector;
+
+        if (_combat.TurnPhase == CombatTurnPhase.WaitingToStartTurn)
+            _turns.StartCurrentTurn(_combat, _registry);
+    }
+
     // ── State views for the UI ───────────────────────────────────────────────────
 
     public CombatState State => _combat;
