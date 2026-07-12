@@ -29,7 +29,7 @@ public sealed class PartyCombat
 
     private readonly CombatState _combat;
     private readonly CombatDefinitionRegistry _registry;
-    private readonly Func<CombatantId, int, EnemyActionDefinitionId?> _enemyIntent;
+    private readonly Func<CombatState, CombatantId, int, EnemyActionDefinitionId?> _enemyIntent;
     private readonly PartyEnemyTargeting _targeting;
     private int _targetStep;
     private readonly SimultaneousTurnProcessor _phases = new();
@@ -37,7 +37,7 @@ public sealed class PartyCombat
 
     public PartyCombat(
         CompiledScenario compiled,
-        Func<CombatantId, int, EnemyActionDefinitionId?> enemyIntent,
+        Func<CombatState, CombatantId, int, EnemyActionDefinitionId?> enemyIntent,
         string combatId = "party",
         int randomSeed = 1,
         PartyEnemyTargeting targeting = PartyEnemyTargeting.FirstAlive)
@@ -122,7 +122,7 @@ public sealed class PartyCombat
             if (!enemy.IsAlive)
                 continue;
 
-            var actionId = _enemyIntent(enemy.Id, _combat.CurrentRound);
+            var actionId = _enemyIntent(_combat, enemy.Id, _combat.CurrentRound);
             if (actionId is { } id && _registry.TryGetEnemyAction(id, out _) && EnemyTarget(enemy.Id) is { } targetId)
             {
                 _combat.EnqueueEffect(new ExecuteEnemyActionEffectRequest(enemy.Id, id, targetId));

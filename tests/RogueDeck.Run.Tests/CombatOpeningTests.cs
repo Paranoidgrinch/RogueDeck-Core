@@ -41,7 +41,7 @@ public class CombatOpeningTests
 
     private static int HeroBlock(ScenarioBlueprint blueprint)
     {
-        var combat = new InteractiveCombat(blueprint.Compile(), (_, _) => null);
+        var combat = new InteractiveCombat(blueprint.Compile(), (_, _, _) => null);
         return combat.State.GetCombatant(combat.HeroId).DefensivePools
             .TryGetValue(StandardCombatIds.BlockDefensivePool, out var pool) ? pool.Current : 0;
     }

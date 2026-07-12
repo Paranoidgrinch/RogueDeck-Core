@@ -26,7 +26,7 @@ public class InnateCardTests
         blueprint.Hero.Deck.Add(new DeckEntry(new CardDefinitionId("special")));
 
         blueprint.Enemies.Add(new EnemyBlueprint("goblin") { MaxHealth = 20 });
-        return new InteractiveCombat(blueprint.Compile(), (_, _) => null, "fight", randomSeed: 1);
+        return new InteractiveCombat(blueprint.Compile(), (_, _, _) => null, "fight", randomSeed: 1);
     }
 
     [Fact]

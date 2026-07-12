@@ -15,7 +15,7 @@ public class CombatPositionTests
         blueprint.Hero.Resources.Add(new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3));
         blueprint.Enemies.Add(new EnemyBlueprint("goblin") { MaxHealth = 20, Position = new CombatPosition(1, 0) });
 
-        var combat = new InteractiveCombat(blueprint.Compile(), (_, _) => null);
+        var combat = new InteractiveCombat(blueprint.Compile(), (_, _, _) => null);
 
         // The hero is unplaced → today's flat behavior; the enemy is placed at its blueprint cell.
         Assert.Null(combat.State.GetCombatant(combat.HeroId).Position);

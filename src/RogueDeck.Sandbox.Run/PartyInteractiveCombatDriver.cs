@@ -158,10 +158,10 @@ public sealed class PartyInteractiveCombatDriver : ICombatDriver, IDisposable
     }
 
     // Each enemy acts the next action in its list, cycling by round (1-based) — same rule as the auto drivers.
-    private static Func<CombatantId, int, EnemyActionDefinitionId?> CyclingEnemyIntent(CompiledScenario compiled)
+    private static Func<CombatState, CombatantId, int, EnemyActionDefinitionId?> CyclingEnemyIntent(CompiledScenario compiled)
     {
         var byId = compiled.Enemies.ToDictionary(enemy => enemy.CombatantId);
-        return (enemyId, round) =>
+        return (_, enemyId, round) =>
             byId.TryGetValue(enemyId, out var enemy) && enemy.Actions.Count > 0
                 ? enemy.Actions[(round - 1) % enemy.Actions.Count]
                 : (EnemyActionDefinitionId?)null;

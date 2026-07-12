@@ -53,7 +53,7 @@ public class PartyCombatTests
     }
 
     private static PartyCombat Party() =>
-        new(PartyScenario().Compile(), (_, _) => new EnemyActionDefinitionId("slam"));
+        new(PartyScenario().Compile(), (_, _, _) => new EnemyActionDefinitionId("slam"));
 
     [Fact]
     public void Both_members_are_active_at_once_and_draw_their_own_hands()

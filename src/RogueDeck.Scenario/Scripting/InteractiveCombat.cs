@@ -16,7 +16,7 @@ public sealed class InteractiveCombat
     private readonly CombatDefinitionRegistry _registry;
     private readonly CompiledScenario _compiled;
     private readonly CombatantId _heroId;
-    private readonly Func<CombatantId, int, EnemyActionDefinitionId?> _enemyIntent;
+    private readonly Func<CombatState, CombatantId, int, EnemyActionDefinitionId?> _enemyIntent;
     private readonly CollectingTraceListener _collector = new();
     private readonly CombatTurnProcessor _turns = new();
     private readonly CombatQueueProcessor _queues = new();
@@ -24,7 +24,7 @@ public sealed class InteractiveCombat
 
     public InteractiveCombat(
         CompiledScenario compiled,
-        Func<CombatantId, int, EnemyActionDefinitionId?> enemyIntent,
+        Func<CombatState, CombatantId, int, EnemyActionDefinitionId?> enemyIntent,
         string combatId = "sandbox",
         int randomSeed = 1)
     {
@@ -159,7 +159,7 @@ public sealed class InteractiveCombat
         while (_combat.Result == CombatResult.Ongoing && _combat.ActiveCombatantId != _heroId)
         {
             var enemyId = _combat.ActiveCombatantId!.Value;
-            var actionId = _enemyIntent(enemyId, _combat.CurrentRound);
+            var actionId = _enemyIntent(_combat, enemyId, _combat.CurrentRound);
 
             if (actionId is { } id && _registry.TryGetEnemyAction(id, out _))
             {

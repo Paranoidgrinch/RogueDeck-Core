@@ -156,10 +156,10 @@ public sealed class AutoPlayCombatDriver : ICombatDriver
     }
 
     // Each enemy acts the next action in its list, cycling by round (round is 1-based).
-    private static Func<CombatantId, int, EnemyActionDefinitionId?> CyclingEnemyIntent(CompiledScenario compiled)
+    private static Func<CombatState, CombatantId, int, EnemyActionDefinitionId?> CyclingEnemyIntent(CompiledScenario compiled)
     {
         var byId = compiled.Enemies.ToDictionary(enemy => enemy.CombatantId);
-        return (enemyId, round) =>
+        return (_, enemyId, round) =>
             byId.TryGetValue(enemyId, out var enemy) && enemy.Actions.Count > 0
                 ? enemy.Actions[(round - 1) % enemy.Actions.Count]
                 : (EnemyActionDefinitionId?)null;
@@ -231,10 +231,10 @@ public sealed class PartyAutoPlayCombatDriver : ICombatDriver
             party.Result, heroHp, UnitDriveResults.Read(party.State, playthrough.Blueprint.Allies));
     }
 
-    private static Func<CombatantId, int, EnemyActionDefinitionId?> CyclingEnemyIntent(CompiledScenario compiled)
+    private static Func<CombatState, CombatantId, int, EnemyActionDefinitionId?> CyclingEnemyIntent(CompiledScenario compiled)
     {
         var actionsByEnemy = compiled.Enemies.ToDictionary(e => e.CombatantId, e => e.Actions);
-        return (enemyId, round) =>
+        return (_, enemyId, round) =>
             actionsByEnemy.TryGetValue(enemyId, out var actions) && actions.Count > 0
                 ? actions[(round - 1) % actions.Count]
                 : null;

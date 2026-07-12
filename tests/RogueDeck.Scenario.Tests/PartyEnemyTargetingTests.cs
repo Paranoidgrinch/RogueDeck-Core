@@ -53,7 +53,7 @@ public class PartyEnemyTargetingTests
     }
 
     private static PartyCombat Party(PartyEnemyTargeting targeting, bool positioned = false) =>
-        new(Scenario(positioned).Compile(), (_, _) => new EnemyActionDefinitionId("slam"),
+        new(Scenario(positioned).Compile(), (_, _, _) => new EnemyActionDefinitionId("slam"),
             targeting: targeting);
 
     // End both turns with no cards played, so the only HP change is the goblin's single slam. Returns the combat.

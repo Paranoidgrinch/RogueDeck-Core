@@ -39,7 +39,7 @@ public class PartyMultiDeckTests
     [Fact]
     public void Each_player_team_combatant_is_dealt_its_own_deck()
     {
-        var combat = new InteractiveCombat(TwoDeckScenario().Compile(), (_, _) => null);
+        var combat = new InteractiveCombat(TwoDeckScenario().Compile(), (_, _, _) => null);
 
         // The hero's turn started at construction, so its opening hand is its own cards.
         Assert.All(combat.State.GetCardZones(HeroId).Hand, c => Assert.Equal(HeroCard, c.DefinitionId));
@@ -55,7 +55,7 @@ public class PartyMultiDeckTests
     [Fact]
     public void An_ally_draws_from_its_own_deck_on_its_own_turn()
     {
-        var combat = new InteractiveCombat(TwoDeckScenario().Compile(), (_, _) => null);
+        var combat = new InteractiveCombat(TwoDeckScenario().Compile(), (_, _, _) => null);
 
         // Before its turn: everything still in the draw pile.
         Assert.Empty(combat.State.GetCardZones(AllyId).Hand);
@@ -79,7 +79,7 @@ public class PartyMultiDeckTests
             blueprint.Hero.Deck.Add(new DeckEntry(HeroCard));
         blueprint.Enemies.Add(new EnemyBlueprint("goblin") { MaxHealth = 20 });
 
-        var combat = new InteractiveCombat(blueprint.Compile(), (_, _) => null);
+        var combat = new InteractiveCombat(blueprint.Compile(), (_, _, _) => null);
 
         // Unchanged single-hero behavior: the hero has its opening hand + remaining draw, no other decks exist.
         var hero = combat.State.GetCardZones(HeroId);

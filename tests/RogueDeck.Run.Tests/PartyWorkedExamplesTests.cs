@@ -160,7 +160,7 @@ public class PartyWorkedExamplesTests
             var goblin = new EnemyBlueprint("goblin") { MaxHealth = 40 };
             goblin.Actions.Add(new EnemyActionDefinitionId("slam"));
             blueprint.Enemies.Add(goblin);
-            return new PartyCombat(blueprint.Compile(), (_, _) => new EnemyActionDefinitionId("slam"),
+            return new PartyCombat(blueprint.Compile(), (_, _, _) => new EnemyActionDefinitionId("slam"),
                 targeting: PartyEnemyTargeting.Random);
         }
 

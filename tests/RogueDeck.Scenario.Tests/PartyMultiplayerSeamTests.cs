@@ -45,7 +45,7 @@ public class PartyMultiplayerSeamTests
     }
 
     private static PartyCombat Combat() =>
-        new(Scenario().Compile(), (_, _) => new EnemyActionDefinitionId("slam"),
+        new(Scenario().Compile(), (_, _, _) => new EnemyActionDefinitionId("slam"),
             targeting: PartyEnemyTargeting.Random);
 
     // A player that owns exactly one member: each poll it plays that member's next card at the goblin, and once the

@@ -42,7 +42,7 @@ public class ScenarioAllyTests
     [Fact]
     public void A_fielded_ally_joins_the_player_team_placed_on_the_grid()
     {
-        var combat = new InteractiveCombat(FieldedAllyScenario().Compile(), (_, _) => null);
+        var combat = new InteractiveCombat(FieldedAllyScenario().Compile(), (_, _, _) => null);
 
         var knight = combat.State.GetCombatant(KnightId);
         Assert.Equal(StandardCombatIds.PlayerTeam, knight.TeamId);
@@ -55,7 +55,7 @@ public class ScenarioAllyTests
     public void A_fielded_ally_auto_attacks_the_enemy_on_its_own_turn()
     {
         // No enemy acts (null intent), so the only damage is the knight's strike on its turn.
-        var combat = new InteractiveCombat(FieldedAllyScenario().Compile(), (_, _) => null);
+        var combat = new InteractiveCombat(FieldedAllyScenario().Compile(), (_, _, _) => null);
         Assert.Equal(20, combat.State.GetCombatant(GoblinId).Health.Current);
 
         combat.EndTurn(); // hero → knight (strikes 5) → goblin (passes) → back to hero

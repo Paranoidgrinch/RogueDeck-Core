@@ -22,7 +22,7 @@ public class CombatOpeningTests
     }
 
     private static InteractiveCombat Start(ScenarioBlueprint blueprint) =>
-        new(blueprint.Compile(), (_, _) => null);
+        new(blueprint.Compile(), (_, _, _) => null);
 
     [Fact]
     public void UseHeroCombatProgram_applies_immediately_to_the_live_fight()
@@ -31,7 +31,7 @@ public class CombatOpeningTests
         var blueprint = new ScenarioBlueprint { Hero = new HeroBlueprint("hero") { MaxHealth = 40 } };
         blueprint.Hero.Resources.Add(new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3));
         blueprint.Enemies.Add(new EnemyBlueprint("dummy") { MaxHealth = 20 });
-        var combat = new InteractiveCombat(blueprint.Compile(), (_, _) => null);
+        var combat = new InteractiveCombat(blueprint.Compile(), (_, _, _) => null);
 
         var applied = combat.UseHeroCombatProgram(new EffectProgram<TurnStartedTriggeredEffectContext>(
             new GainBlockNode<TurnStartedTriggeredEffectContext>(
