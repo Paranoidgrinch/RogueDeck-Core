@@ -179,6 +179,12 @@ public sealed class EnemyBlueprint : CombatantBlueprint
 {
     // Ordered action script — the runner cycles these; intents are surfaced into the narrative log.
     public List<EnemyActionDefinitionId> Actions { get; } = new();
+
+    // State-conditional intent rules (#1). Evaluated highest-Priority first each turn; the first rule whose
+    // condition matches the live combat state overrides the Actions cycle. Empty (the default) ⇒ pure cycling,
+    // identical to before. See EnemyIntentRules.cs.
+    public List<EnemyIntentRule> IntentRules { get; } = new();
+
     public EnemyBlueprint(string id) : base(id, "enemy") { }
 }
 

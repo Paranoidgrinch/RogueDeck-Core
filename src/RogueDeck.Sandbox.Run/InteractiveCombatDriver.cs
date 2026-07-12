@@ -53,7 +53,7 @@ public sealed class InteractiveCombatDriver : ICombatDriver, IDisposable
         ArgumentNullException.ThrowIfNull(playthrough);
         var compiled = playthrough.Blueprint.Compile();
         var combat = new InteractiveCombat(
-            compiled, CyclingEnemyIntent(compiled), playthrough.CombatId, playthrough.RandomSeed);
+            compiled, EnemyIntentSelectors.Build(compiled), playthrough.CombatId, playthrough.RandomSeed);
         combat.State.SetCardChooser(_cardChooser);
 
         TaskCompletionSource<CombatDriveResult> tcs;
@@ -152,15 +152,6 @@ public sealed class InteractiveCombatDriver : ICombatDriver, IDisposable
     }
 
     // Each enemy acts the next action in its list, cycling by round (1-based) — same rule as AutoPlayCombatDriver.
-    private static Func<CombatState, CombatantId, int, EnemyActionDefinitionId?> CyclingEnemyIntent(CompiledScenario compiled)
-    {
-        var byId = compiled.Enemies.ToDictionary(enemy => enemy.CombatantId);
-        return (_, enemyId, round) =>
-            byId.TryGetValue(enemyId, out var enemy) && enemy.Actions.Count > 0
-                ? enemy.Actions[(round - 1) % enemy.Actions.Count]
-                : (EnemyActionDefinitionId?)null;
-    }
-
     public void Dispose()
     {
         TaskCompletionSource<CombatDriveResult>? tcs;

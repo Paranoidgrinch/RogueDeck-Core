@@ -130,7 +130,7 @@ public sealed class AutoPlayCombatDriver : ICombatDriver
 
         var compiled = playthrough.Blueprint.Compile();
         var combat = new InteractiveCombat(
-            compiled, CyclingEnemyIntent(compiled), playthrough.CombatId, playthrough.RandomSeed);
+            compiled, EnemyIntentSelectors.Build(compiled), playthrough.CombatId, playthrough.RandomSeed);
 
         var rounds = 0;
         while (!combat.IsOver && combat.IsHeroTurn && rounds++ < _maxRounds)
@@ -153,16 +153,6 @@ public sealed class AutoPlayCombatDriver : ICombatDriver
             : 0;
         return new CombatDriveResult(
             combat.Result, remaining, UnitDriveResults.Read(combat.State, playthrough.Blueprint.Allies));
-    }
-
-    // Each enemy acts the next action in its list, cycling by round (round is 1-based).
-    private static Func<CombatState, CombatantId, int, EnemyActionDefinitionId?> CyclingEnemyIntent(CompiledScenario compiled)
-    {
-        var byId = compiled.Enemies.ToDictionary(enemy => enemy.CombatantId);
-        return (_, enemyId, round) =>
-            byId.TryGetValue(enemyId, out var enemy) && enemy.Actions.Count > 0
-                ? enemy.Actions[(round - 1) % enemy.Actions.Count]
-                : (EnemyActionDefinitionId?)null;
     }
 
     private static CombatantId? FirstAliveEnemy(InteractiveCombat combat, CompiledScenario compiled)
@@ -202,7 +192,7 @@ public sealed class PartyAutoPlayCombatDriver : ICombatDriver
             return new AutoPlayCombatDriver(_maxRounds).Drive(playthrough);
 
         var party = new PartyCombat(
-            compiled, CyclingEnemyIntent(compiled), playthrough.CombatId, playthrough.RandomSeed, _targeting);
+            compiled, EnemyIntentSelectors.Build(compiled), playthrough.CombatId, playthrough.RandomSeed, _targeting);
 
         var rounds = 0;
         while (!party.IsOver && rounds++ < _maxRounds)
@@ -229,15 +219,6 @@ public sealed class PartyAutoPlayCombatDriver : ICombatDriver
         var heroHp = party.State.TryGetCombatant(heroId, out var hero) && hero is not null ? hero.Health.Current : 0;
         return new CombatDriveResult(
             party.Result, heroHp, UnitDriveResults.Read(party.State, playthrough.Blueprint.Allies));
-    }
-
-    private static Func<CombatState, CombatantId, int, EnemyActionDefinitionId?> CyclingEnemyIntent(CompiledScenario compiled)
-    {
-        var actionsByEnemy = compiled.Enemies.ToDictionary(e => e.CombatantId, e => e.Actions);
-        return (_, enemyId, round) =>
-            actionsByEnemy.TryGetValue(enemyId, out var actions) && actions.Count > 0
-                ? actions[(round - 1) % actions.Count]
-                : null;
     }
 
     private static CombatantId? FirstAliveEnemy(CombatState state, CompiledScenario compiled)

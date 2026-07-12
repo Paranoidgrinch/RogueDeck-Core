@@ -100,10 +100,17 @@ public sealed class ScenarioBlueprint
                     $"Hero deck references unknown card '{entry.Card}'. Add a CardBlueprint for it.");
 
         foreach (var enemy in Enemies)
+        {
             foreach (var actionId in enemy.Actions)
                 if (!intentsContain(actionId))
                     throw new InvalidOperationException(
                         $"Enemy '{enemy.Id}' references unknown action '{actionId}'. Add an EnemyActionBlueprint for it.");
+
+            foreach (var rule in enemy.IntentRules)
+                if (!intentsContain(rule.Action))
+                    throw new InvalidOperationException(
+                        $"Enemy '{enemy.Id}' intent rule references unknown action '{rule.Action}'. Add an EnemyActionBlueprint for it.");
+        }
 
         bool intentsContain(EnemyActionDefinitionId id) =>
             EnemyActions.Exists(a => a.DefinitionId == id);
