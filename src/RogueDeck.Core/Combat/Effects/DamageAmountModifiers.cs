@@ -18,7 +18,10 @@ public sealed record DamageAmountModificationContext(
     CombatantState? SourceCombatant,
     CardDefinitionId? SourceCardId,
     DamageKind Kind,
-    int RequestedAmount);
+    int RequestedAmount,
+    // Optional damage element, threaded from the request so element-restricted passive specs (resistance/
+    // weakness) can gate on it. Null = untyped.
+    ElementId? Element = null);
 
 public interface IDamageAmountModifier
 {

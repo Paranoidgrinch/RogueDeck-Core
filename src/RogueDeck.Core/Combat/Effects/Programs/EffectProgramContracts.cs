@@ -177,6 +177,7 @@ public interface IDealDamageNodeCore : INativeEffectOperationNode
     int EvaluateAmount(IEffectExecutionContextCore ctx, CombatState combat);
     EffectResultKey<OrderedTargetOutcomes<DamageOutcome>>? ResultKey { get; }
     bool IgnoresBlock => false;
+    ElementId? Element => null;
     Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(DealDamageEffectRequest);
 }
 

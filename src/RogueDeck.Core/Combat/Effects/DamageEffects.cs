@@ -29,7 +29,10 @@ public sealed record DealDamageEffectRequest(
     // True when this hit is one share of a redistributed (split) hit. A share carries its final amount,
     // so it skips the amount-modifier pipeline and is not split again — which stops symmetric links
     // (e.g. Symbiosis) from cascading. Block, HP and damage events still apply per share.
-    bool IsRedistributedShare = false
+    bool IsRedistributedShare = false,
+    // Optional damage element (fire/ice/…). Null = untyped, unchanged. When set, a target status whose
+    // PassiveModifierSpec restricts to this element scales the hit (resistance/weakness).
+    ElementId? Element = null
 ) : IEffectRequest;
 
 public sealed class DealDamageEffectHandler : EffectRequestHandler<DealDamageEffectRequest>
@@ -275,7 +278,8 @@ public sealed class DealDamageEffectHandler : EffectRequestHandler<DealDamageEff
             SourceCombatant: source,
             SourceCardId: dealDamage.SourceCardId,
             Kind: dealDamage.Kind,
-            RequestedAmount: dealDamage.Amount);
+            RequestedAmount: dealDamage.Amount,
+            Element: dealDamage.Element);
 
         var currentAmount = dealDamage.Amount;
         var modifiers = registry.GetDamageAmountModifiers();

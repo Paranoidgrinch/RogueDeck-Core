@@ -8,6 +8,7 @@ public sealed class DealDamageNode<TContext> : IDealDamageNodeCore, IEffectNode<
     public ICombatExpression<TContext, int> Amount { get; }
     public EffectResultKey<OrderedTargetOutcomes<DamageOutcome>>? ResultKey { get; }
     public bool IgnoresBlock { get; }
+    public ElementId? Element { get; }
 
     public IReadOnlyList<IEffectNode<TContext>> Children => [];
 
@@ -15,7 +16,8 @@ public sealed class DealDamageNode<TContext> : IDealDamageNodeCore, IEffectNode<
         ICombatantTargetSelector targetSelector,
         ICombatExpression<TContext, int> amount,
         EffectResultKey<OrderedTargetOutcomes<DamageOutcome>>? resultKey = null,
-        bool ignoresBlock = false)
+        bool ignoresBlock = false,
+        ElementId? element = null)
     {
         ArgumentNullException.ThrowIfNull(targetSelector);
         ArgumentNullException.ThrowIfNull(amount);
@@ -24,6 +26,7 @@ public sealed class DealDamageNode<TContext> : IDealDamageNodeCore, IEffectNode<
         Amount = amount;
         ResultKey = resultKey;
         IgnoresBlock = ignoresBlock;
+        Element = element;
     }
 
     public ProducedResult? GetProducedResult() =>

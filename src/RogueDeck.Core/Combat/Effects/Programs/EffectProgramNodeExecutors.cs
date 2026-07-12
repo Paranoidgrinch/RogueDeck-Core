@@ -588,6 +588,7 @@ internal sealed class DealDamageNodeExecutor : IEffectNodeExecutor
                 SourceCombatantId: ctx.BuildContext.Source.SourceCombatantId,
                 SourceCardId: ctx.BuildContext.Source.SourceCardId,
                 IgnoresBlock: typed.IgnoresBlock,
+                Element: typed.Element,
                 OutcomeSlot: slots?[i]));
 
         if (typed.ResultKey is { } key)

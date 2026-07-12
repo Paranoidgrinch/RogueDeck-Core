@@ -80,7 +80,11 @@ public sealed record PassiveModifierSpec(
     StatusDefinitionId? AppliesToStatusId = null,
     // When set, the effective magnitude is computed from live state instead of the constant Magnitude
     // (e.g. Bloodlust scaling by missing HP). Evaluated against the combatant the spec is read from.
-    IPassiveModifierMagnitude? MagnitudeExpression = null);
+    IPassiveModifierMagnitude? MagnitudeExpression = null,
+    // Damage pipelines only: when set, the spec applies only to damage of this element (fire/ice/…). This
+    // is how a status expresses elemental resistance (ScalePercent 50 for Fire) or weakness (ScalePercent
+    // 200). Null (default) = element-agnostic, so existing specs apply to all damage incl. untyped.
+    ElementId? RestrictElement = null);
 
 // Shared fold used by every generic declarative modifier.
 internal static class DeclarativePassiveModifierEngine
@@ -92,7 +96,8 @@ internal static class DeclarativePassiveModifierEngine
         PassiveModifierPipeline pipeline,
         DamageKind? damageKind,
         int amount,
-        StatusDefinitionId? appliesToStatusId = null)
+        StatusDefinitionId? appliesToStatusId = null,
+        ElementId? damageElement = null)
     {
         // Legacy bespoke modifiers all no-op at non-positive amounts; preserve that.
         if (amount <= 0)
@@ -117,6 +122,10 @@ internal static class DeclarativePassiveModifierEngine
                     continue;
                 // Status-application gate: a spec scoped to a specific status only augments that one.
                 if (appliesToStatusId is { } applied && spec.AppliesToStatusId is { } specStatus && specStatus != applied)
+                    continue;
+                // Element gate: an element-restricted spec applies only to damage of that element (so untyped
+                // damage, or another element, is never scaled by a resistance/weakness meant for this one).
+                if (spec.RestrictElement is { } specElement && specElement != damageElement)
                     continue;
                 applicable.Add((spec.Priority, group.Key.value, i, spec, totalStacks));
             }
@@ -184,7 +193,8 @@ public sealed class DeclarativePassiveDamageModifier : IDamageAmountModifier
             return currentAmount;
 
         return DeclarativePassiveModifierEngine.Apply(
-            context.Combat, context.Registry, combatant, _pipeline, context.Kind, currentAmount);
+            context.Combat, context.Registry, combatant, _pipeline, context.Kind, currentAmount,
+            damageElement: context.Element);
     }
 }
 

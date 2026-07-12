@@ -60,6 +60,13 @@ public readonly record struct CounterId(string value)
     public override string ToString() => value;
 }
 
+// Optional damage element (fire, ice, lightning, …). Untyped damage carries none. A combatant resists or is
+// weak to an element via a status whose PassiveModifierSpec restricts to it (RestrictElement).
+public readonly record struct ElementId(string value)
+{
+    public override string ToString() => value;
+}
+
 public readonly record struct PackageId(string value)
 {
     public override string ToString() => value;
