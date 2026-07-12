@@ -26,6 +26,7 @@ public sealed class CombatDefinitionRegistryBuilder
     private readonly List<IBlockAmountModifier> _blockAmountModifiers = new();
     private readonly Dictionary<DefensivePoolId, DefensivePoolDefinition> _defensivePoolDefinitions = new();
     private readonly Dictionary<TriggeredEffectDefinitionId, ITriggeredEffectDefinition> _triggeredEffectDefinitions = new();
+    private readonly Dictionary<TriggeredEffectDefinitionId, ITriggeredEffectDefinition> _temporaryRuleDefinitions = new();
     private readonly Dictionary<EnemyActionDefinitionId, EnemyActionDefinition> _enemyActionDefinitions = new();
 
     private readonly EffectNodeExecutorRegistry _nodeExecutorRegistry = new();
@@ -263,6 +264,26 @@ public sealed class CombatDefinitionRegistryBuilder
         _triggeredEffectDefinitions.Add(definition.Id, definition);
     }
 
+    // Registers a temporary-rule body for save/restore RE-LINK only. It does NOT become an active permanent
+    // rule (it never fires on its own) — it just lets CombatState.Restore rebuild a temporary rule installed
+    // with this id, whose program body the snapshot cannot value-capture. Content that installs temporary rules
+    // registers their definitions here so a saved combat carrying them can be resumed.
+    public void RegisterTemporaryRuleDefinition(ITriggeredEffectDefinition definition)
+    {
+        EnsureNotBuilt();
+        ArgumentNullException.ThrowIfNull(definition);
+
+        if (string.IsNullOrWhiteSpace(definition.Id.value))
+            throw new ArgumentException(
+                "Temporary rule definition ID cannot be empty or whitespace.", nameof(definition));
+
+        if (_temporaryRuleDefinitions.ContainsKey(definition.Id))
+            throw new InvalidOperationException(
+                $"Temporary rule definition '{definition.Id}' is already registered.");
+
+        _temporaryRuleDefinitions.Add(definition.Id, definition);
+    }
+
     public void RegisterCombatEventHandler(ICombatEventHandler handler)
     {
         EnsureNotBuilt();
@@ -327,6 +348,7 @@ public sealed class CombatDefinitionRegistryBuilder
             _effectRequestHandlers.ToImmutableDictionary(),
             _enemyActionDefinitions.ToImmutableDictionary(),
             _triggeredEffectDefinitions.ToImmutableDictionary(),
+            _temporaryRuleDefinitions.ToImmutableDictionary(),
             _damageAmountModifiers.ToImmutableArray(),
             _cardPlayValidators.ToImmutableArray(),
             _cardCostModifiers.ToImmutableArray(),

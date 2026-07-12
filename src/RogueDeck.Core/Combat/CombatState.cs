@@ -498,6 +498,22 @@ public sealed class CombatState
         return instance;
     }
 
+    // Restore path (CombatState.Restore): re-installs a temporary rule with its CAPTURED install round/turn and
+    // lifecycle, rather than stamping the current round/turn as AddTemporaryTriggeredProgram does. The definition
+    // (program body) is re-linked from the registry by id; expiry effects are not restored (guarded by the caller).
+    internal TemporaryTriggeredProgram RestoreTemporaryTriggeredProgram(
+        ITriggeredEffectDefinition definition,
+        TemporaryRuleLifetime lifetime,
+        int installedRound,
+        int installedTurn,
+        CombatantId? ownerCombatantId)
+    {
+        var instance = new TemporaryTriggeredProgram(
+            definition, lifetime, installedRound, installedTurn, ownerCombatantId);
+        _temporaryTriggeredPrograms.Add(instance);
+        return instance;
+    }
+
     // Expires any owner-bound temporary programs whose owner is the given combatant (e.g. on down).
     internal void ExpireTemporaryTriggeredProgramsOwnedBy(CombatantId ownerCombatantId)
     {
@@ -592,14 +608,56 @@ public sealed class CombatState
     // are not captured, so they come back at their defaults — faithful to the snapshot (which omits them), which is
     // exactly what CombatStateHasher compares. The registry / chooser / trace listener are collaborators the driver
     // rebinds after restore.
+    // Restore WITHOUT a registry: refuses any active temporary rule, since their program bodies are not
+    // value-captured. Pass the combat definition registry (the overload below) to re-link registered rules by id.
     public static CombatState Restore(CombatStateSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         if (snapshot.TemporaryRules.Length > 0)
             throw new InvalidOperationException(
-                "A combat can only be saved with no active temporary rules (their program bodies are not captured). "
-                + "Save at a quiescent point between actions.");
+                "This combat has active temporary rules; restore it with Restore(snapshot, registry) so their "
+                + "program bodies can be re-linked by id, or save at a point with no temporary rules.");
 
+        return RestoreCore(snapshot);
+    }
+
+    // Restore that re-links each active temporary triggered rule's program BODY by looking its definition up in
+    // the registry by id (bodies aren't value-captured; only the rule's identity + lifecycle are). Refuses a rule
+    // whose definition is not registered, or which carried ad-hoc expiry effects (those are not captured).
+    public static CombatState Restore(CombatStateSnapshot snapshot, CombatDefinitionRegistry registry)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(registry);
+
+        var combat = RestoreCore(snapshot);
+        foreach (var rule in snapshot.TemporaryRules)
+            RestoreTemporaryRule(combat, registry, rule);
+        return combat;
+    }
+
+    private static void RestoreTemporaryRule(
+        CombatState combat, CombatDefinitionRegistry registry, TemporaryTriggeredProgramSnapshot rule)
+    {
+        if (rule.IsExpired)
+            throw new InvalidOperationException(
+                $"Temporary rule '{rule.Id}' is marked expired; a clean save prunes dead rules before snapshotting.");
+        if (rule.HasExpiryEffects)
+            throw new InvalidOperationException(
+                $"Temporary rule '{rule.Id}' carries expiry effects the snapshot does not capture; cannot restore it faithfully.");
+        if (!registry.TryGetTemporaryRuleDefinition(new TriggeredEffectDefinitionId(rule.Id), out var definition)
+            || definition is null)
+            throw new InvalidOperationException(
+                $"Temporary rule '{rule.Id}' has no registered definition to re-link its program body on restore. "
+                + "Register it with RegisterTemporaryRuleDefinition so saved combats carrying it can resume.");
+
+        var lifetime = new TemporaryRuleLifetime(
+            rule.RemainingActivations, rule.ExpiresAfterRound, rule.ExpiresAfterTurn, rule.ExpiresWhenOwnerRemoved);
+        var owner = rule.OwnerCombatantId is { } o ? new CombatantId(o) : (CombatantId?)null;
+        combat.RestoreTemporaryTriggeredProgram(definition, lifetime, rule.InstalledRound, rule.InstalledTurn, owner);
+    }
+
+    private static CombatState RestoreCore(CombatStateSnapshot snapshot)
+    {
         var combat = new CombatState(snapshot.Id, snapshot.RandomSeed)
         {
             RandomStep = snapshot.RandomStep,

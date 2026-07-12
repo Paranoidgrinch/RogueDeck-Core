@@ -14,6 +14,10 @@ public sealed class CombatDefinitionRegistry
     private readonly ImmutableDictionary<Type, IEffectRequestHandler> _effectRequestHandlers;
     private readonly ImmutableDictionary<EnemyActionDefinitionId, EnemyActionDefinition> _enemyActionDefinitions;
     private readonly ImmutableDictionary<TriggeredEffectDefinitionId, ITriggeredEffectDefinition> _triggeredEffectDefinitions;
+    // Lookup-ONLY bodies for temporary triggered rules (save/restore re-link). Unlike _triggeredEffectDefinitions
+    // these are NOT active permanent rules — they never fire on their own; they only let CombatState.Restore
+    // rebuild a temporary rule's program body by id.
+    private readonly ImmutableDictionary<TriggeredEffectDefinitionId, ITriggeredEffectDefinition> _temporaryRuleDefinitions;
     private readonly ImmutableArray<IDamageAmountModifier> _damageAmountModifiers;
     private readonly ImmutableArray<ICardPlayValidator> _cardPlayValidators;
     private readonly ImmutableArray<ICardCostModifier> _cardCostModifiers;
@@ -33,6 +37,7 @@ public sealed class CombatDefinitionRegistry
         ImmutableDictionary<Type, IEffectRequestHandler> effectRequestHandlers,
         ImmutableDictionary<EnemyActionDefinitionId, EnemyActionDefinition> enemyActionDefinitions,
         ImmutableDictionary<TriggeredEffectDefinitionId, ITriggeredEffectDefinition> triggeredEffectDefinitions,
+        ImmutableDictionary<TriggeredEffectDefinitionId, ITriggeredEffectDefinition> temporaryRuleDefinitions,
         ImmutableArray<IDamageAmountModifier> damageAmountModifiers,
         ImmutableArray<ICardPlayValidator> cardPlayValidators,
         ImmutableArray<ICardCostModifier> cardCostModifiers,
@@ -51,6 +56,7 @@ public sealed class CombatDefinitionRegistry
         _effectRequestHandlers = effectRequestHandlers;
         _enemyActionDefinitions = enemyActionDefinitions;
         _triggeredEffectDefinitions = triggeredEffectDefinitions;
+        _temporaryRuleDefinitions = temporaryRuleDefinitions;
         _damageAmountModifiers = damageAmountModifiers;
         _cardPlayValidators = cardPlayValidators;
         _cardCostModifiers = cardCostModifiers;
@@ -171,6 +177,14 @@ public sealed class CombatDefinitionRegistry
         TriggeredEffectDefinitionId id,
         out ITriggeredEffectDefinition? definition) =>
         _triggeredEffectDefinitions.TryGetValue(id, out definition);
+
+    // Lookup for a temporary-rule body by id (save/restore re-link only). Falls back to the active triggered
+    // definitions so a rule whose body happens to also be a registered permanent rule still resolves.
+    public bool TryGetTemporaryRuleDefinition(
+        TriggeredEffectDefinitionId id,
+        out ITriggeredEffectDefinition? definition) =>
+        _temporaryRuleDefinitions.TryGetValue(id, out definition)
+        || _triggeredEffectDefinitions.TryGetValue(id, out definition);
 
     public IReadOnlyCollection<ITriggeredEffectDefinition> GetTriggeredEffectDefinitions(Type eventType)
     {

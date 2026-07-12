@@ -34,7 +34,8 @@ public static class CombatStateSnapshotter
                 OwnerCombatantId: t.OwnerCombatantId?.value,
                 InstalledRound: t.InstalledRound,
                 InstalledTurn: t.InstalledTurn,
-                IsExpired: t.IsExpired))
+                IsExpired: t.IsExpired,
+                HasExpiryEffects: t.ExpiryEffects.Count > 0))
             .OrderBy(t => t.Id, StringComparer.Ordinal)
             .ToImmutableArray();
 

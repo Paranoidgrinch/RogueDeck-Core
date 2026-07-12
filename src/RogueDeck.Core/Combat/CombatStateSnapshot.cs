@@ -72,7 +72,10 @@ public sealed record TemporaryTriggeredProgramSnapshot(
     string? OwnerCombatantId,
     int InstalledRound,
     int InstalledTurn,
-    bool IsExpired);
+    bool IsExpired,
+    // Whether the live rule carried ad-hoc expiry effects. These are IEffectRequest bodies the snapshot does
+    // NOT capture, so a registry-relinked restore refuses a rule that has them (not hashed — a guard signal only).
+    bool HasExpiryEffects = false);
 
 // Combatants and CardZones are ordered by TurnOrder for deterministic hashing.
 public sealed record CombatStateSnapshot(
