@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using RogueDeck.Core.Combat;
+using RogueDeck.Scenario.Authoring;
 
 namespace RogueDeck.Run;
 
@@ -81,6 +82,7 @@ public static class RunJson
         RegisterRewards(registry);
         RegisterMeta(registry);
         RegisterNodes(registry);
+        RegisterIntentConditions(registry);
         return registry;
     }
 
@@ -96,6 +98,7 @@ public static class RunJson
         options.Converters.Add(new PolymorphicRunJsonConverter<IRunEffectRequest>(registry));
         options.Converters.Add(new PolymorphicRunJsonConverter<IRewardSource>(registry));
         options.Converters.Add(new PolymorphicRunJsonConverter<MetaEffect>(registry));
+        options.Converters.Add(new PolymorphicRunJsonConverter<EnemyIntentCondition>(registry));
         options.Converters.Add(new PolymorphicRunJsonConverter<IRunNodePayload>(registry));
         options.Converters.Add(new NodeJsonConverter());
         options.Converters.Add(new EventScriptJsonConverter());
@@ -118,6 +121,17 @@ public static class RunJson
     public static T FromJson<T>(string json, JsonSerializerOptions options) =>
         JsonSerializer.Deserialize<T>(json, options)
         ?? throw new JsonException($"Deserialized null for '{typeof(T).Name}'.");
+
+    // State-conditional enemy-AI intent conditions (#1). Data predicates over the live CombatState, carried by
+    // an encounter's EnemyIntentRules and evaluated at intent-selection time.
+    private static void RegisterIntentConditions(RunJsonRegistry r) =>
+        r.Register("intent.healthPercent", typeof(EnemyHealthPercentCondition))
+         .Register("intent.round", typeof(RoundCondition))
+         .Register("intent.selfHasStatus", typeof(SelfHasStatusCondition))
+         .Register("intent.opponentHasStatus", typeof(OpponentHasStatusCondition))
+         .Register("intent.allOf", typeof(AllOfCondition))
+         .Register("intent.anyOf", typeof(AnyOfCondition))
+         .Register("intent.not", typeof(NotCondition));
 
     private static void RegisterExpressions(RunJsonRegistry r)
     {

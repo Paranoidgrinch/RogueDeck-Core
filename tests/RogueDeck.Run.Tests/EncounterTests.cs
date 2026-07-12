@@ -146,6 +146,32 @@ public class EncounterTests
         Assert.Throws<InvalidOperationException>(() => resolver.Resolve(context, node));
     }
 
+    [Fact]
+    public void Intent_rules_project_from_the_encounter_into_the_enemy_blueprint()
+    {
+        var encounter = new EncounterDefinition(
+            GoblinFight,
+            enemies: new[]
+            {
+                new EncounterEnemy("goblin", 12, new[] { new EnemyActionDefinitionId("slam") },
+                    IntentRules: new[]
+                    {
+                        new EnemyIntentRule(
+                            new EnemyHealthPercentCondition(ComparisonOperator.LessOrEqual, 50),
+                            new EnemyActionDefinitionId("slam"), Priority: 2),
+                    }),
+            },
+            heroResources: new[] { new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3) });
+
+        var playthrough = new EncounterCatalog(Library(), new[] { encounter })
+            .Build(GoblinFight, NewRun(deck: new[] { "smite" }), randomSeed: 1);
+
+        var goblin = playthrough.Blueprint.Enemies.Single(e => e.Id == "goblin");
+        var rule = Assert.Single(goblin.IntentRules);
+        Assert.Equal(2, rule.Priority);
+        Assert.IsType<EnemyHealthPercentCondition>(rule.Condition);
+    }
+
     private sealed class CapturingDriver : ICombatDriver
     {
         public ScenarioBlueprint? Captured { get; private set; }

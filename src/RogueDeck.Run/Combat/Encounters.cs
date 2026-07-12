@@ -63,7 +63,9 @@ public sealed record EncounterEnemy(
     IReadOnlyList<StartingStatusSpec>? StartingStatuses = null,
     string? DisplayName = null,
     // Optional starting cell on the 2D combat grid; null = unplaced (flat arena). Round-trips via RunJson.
-    CombatPosition? Position = null);
+    CombatPosition? Position = null,
+    // State-conditional intent rules (#1). Empty/null ⇒ the enemy cycles Actions by round, as before.
+    IReadOnlyList<EnemyIntentRule>? IntentRules = null);
 
 // A combat as data: the enemy roster plus the hero's combat resources / starting statuses. The hero's HP and
 // deck come from the run (projected by the bridge), so an encounter is reusable across runs.
@@ -152,6 +154,8 @@ public sealed class EncounterCatalog
             foreach (var action in spec.Actions) enemy.Actions.Add(action);
             if (spec.StartingStatuses is { } statuses)
                 foreach (var status in statuses) enemy.StartingStatuses.Add(status);
+            if (spec.IntentRules is { } rules)
+                foreach (var rule in rules) enemy.IntentRules.Add(rule);
             blueprint.Enemies.Add(enemy);
         }
 

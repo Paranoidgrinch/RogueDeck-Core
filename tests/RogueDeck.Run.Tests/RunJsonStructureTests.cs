@@ -64,8 +64,21 @@ public class RunJsonStructureTests
             enemies: new[]
             {
                 new EncounterEnemy("goblin", 12, new[] { new EnemyActionDefinitionId("slam") }),
-                new EncounterEnemy("brute", 20, new[] { new EnemyActionDefinitionId("smash") },
-                    new[] { new StartingStatusSpec(new StatusDefinitionId("enraged"), Stacks: 1) }),
+                new EncounterEnemy("brute", 20, new[] { new EnemyActionDefinitionId("smash"), new EnemyActionDefinitionId("guard") },
+                    new[] { new StartingStatusSpec(new StatusDefinitionId("enraged"), Stacks: 1) },
+                    IntentRules: new[]
+                    {
+                        // A composite condition tree exercises the polymorphic converter end to end.
+                        new EnemyIntentRule(
+                            new AllOfCondition(new EnemyIntentCondition[]
+                            {
+                                new EnemyHealthPercentCondition(ComparisonOperator.LessOrEqual, 50),
+                                new NotCondition(new OpponentHasStatusCondition(new StatusDefinitionId("block"), 5)),
+                            }),
+                            new EnemyActionDefinitionId("guard"), Priority: 10),
+                        new EnemyIntentRule(new RoundCondition(ComparisonOperator.GreaterOrEqual, 3),
+                            new EnemyActionDefinitionId("smash")),
+                    }),
             },
             heroResources: new[] { new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3) });
 
