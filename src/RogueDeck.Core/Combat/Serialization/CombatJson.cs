@@ -238,6 +238,7 @@ public static class CombatJson
          .Register("node.applyStatus", typeof(ApplyStatusNode<>))
          .Register("node.removeStatus", typeof(RemoveStatusNode<>))
          .Register("node.removeStatusesByPolarity", typeof(RemoveStatusesByPolarityNode<>))
+         .Register("node.removeSelectedStatus", typeof(RemoveSelectedStatusNode<>))
          .Register("node.modifyStatusStacks", typeof(ModifyStatusStacksNode<>))
          .Register("node.modifyStatusDuration", typeof(ModifyStatusDurationNode<>))
          .Register("node.modifyStatusCharges", typeof(ModifyStatusChargesNode<>))
