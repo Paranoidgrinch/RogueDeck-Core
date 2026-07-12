@@ -64,6 +64,7 @@ public sealed class EffectNodeExecutorRegistry
         r.RegisterOpenGeneric(typeof(ApplyStatusNode<>), new ApplyStatusNodeExecutor());
         r.RegisterOpenGeneric(typeof(RemoveStatusNode<>), new RemoveStatusNodeExecutor());
         r.RegisterOpenGeneric(typeof(RemoveSelectedStatusNode<>), new RemoveSelectedStatusNodeExecutor());
+        r.RegisterOpenGeneric(typeof(SetCombatantCounterNode<>), new SetCombatantCounterNodeExecutor());
         r.RegisterOpenGeneric(typeof(RemoveStatusesByPolarityNode<>), new RemoveStatusesByPolarityNodeExecutor());
         r.RegisterOpenGeneric(typeof(ModifyStatusStacksNode<>), new ModifyStatusStacksNodeExecutor());
         r.RegisterOpenGeneric(typeof(ModifyStatusDurationNode<>), new ModifyStatusDurationNodeExecutor());
@@ -904,6 +905,23 @@ internal sealed class ApplyStatusNodeExecutor : IEffectNodeExecutor
         {
             combat.EnqueueContinuation(onComplete);
         }
+    }
+}
+
+internal sealed class SetCombatantCounterNodeExecutor : IEffectNodeExecutor
+{
+    public void Execute(IEffectNode node, IEffectExecutionContextCore ctx, CombatState combat,
+        Action<CombatState>? onComplete, Action<IEffectNode, CombatState, Action<CombatState>?> dispatch)
+    {
+        var typed = (ISetCombatantCounterNodeCore)node;
+        var amount = typed.EvaluateAmount(ctx, combat);
+
+        foreach (var target in typed.TargetSelector.ResolveTargetsTraced(ctx, combat))
+            combat.EnqueueEffect(new SetCombatantCounterEffectRequest(
+                target, typed.CounterId, amount, typed.Relative));
+
+        if (onComplete is not null)
+            combat.EnqueueContinuation(onComplete);
     }
 }
 

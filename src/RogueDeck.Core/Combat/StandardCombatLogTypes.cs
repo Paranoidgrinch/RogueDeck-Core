@@ -11,6 +11,7 @@ public static class StandardCombatLogTypes
     public const string ResourceGained = "ResourceGained";
     public const string ResourceLost = "ResourceLost";
     public const string ResourceModified = "ResourceModified";
+    public const string CombatantCounterModified = "CombatantCounterModified";
     public const string TemporaryRuleActivated = "TemporaryRuleActivated";
     public const string CardCostPaid = "CardCostPaid";
     public const string CardPlayed = "CardPlayed";

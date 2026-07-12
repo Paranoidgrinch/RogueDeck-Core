@@ -34,6 +34,19 @@ public sealed class CombatantState
     internal void AddStatus(StatusInstance status) => _statuses.Add(status);
     internal bool RemoveStatus(StatusInstance status) => _statuses.Remove(status);
 
+    // Persistent per-combatant scalar counters (#persistent-combat-stats): named integers that live for the
+    // whole fight (e.g. a combo/attacks-this-combat tally), survive save/restore, and are read/written by the
+    // effect vocabulary. Absent counter reads as 0. SetCounter is for setup/restore; ModifyCounter (returning
+    // the new value) is the handler path.
+    public int GetCounter(CounterId id) => _counters.TryGetValue(id, out var value) ? value : 0;
+    public void SetCounter(CounterId id, int value) => _counters[id] = value;
+    internal int ModifyCounter(CounterId id, int delta)
+    {
+        var next = GetCounter(id) + delta;
+        _counters[id] = next;
+        return next;
+    }
+
     // The combatant's cell on the optional 2D combat grid, or null when unplaced (the default — flat arena, today's
     // behavior). Set at placement (ScenarioCombatFactory) or by movement effects; read only by the opt-in positional
     // selectors/effects. Nothing in the core turn/effect loop reads it, so an unplaced combatant behaves as always.

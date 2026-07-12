@@ -628,6 +628,8 @@ public sealed class CombatState
                 combatant.AddDefensivePool(id, new ValuePoolState(pool.Current, pool.Max, pool.CanExceedMax));
             foreach (var status in c.Statuses)
                 combatant.AddStatus(RestoreStatus(status));
+            foreach (var (id, value) in c.Counters)
+                combatant.SetCounter(id, value);
             combat.AddCombatant(combatant);
         }
 

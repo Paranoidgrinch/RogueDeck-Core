@@ -856,6 +856,31 @@ public sealed class CombatantCurrentResourceExpression<TContext> : ICombatExpres
     }
 }
 
+// Reads a target combatant's persistent per-fight counter (#persistent-combat-stats). Absent counter ⇒ 0.
+// Composes "deal damage equal to your combo counter" with a ModifyCombatantCounter that grows it each play.
+public sealed class CombatantCounterExpression<TContext> : ICombatExpression<TContext, int>
+    where TContext : class
+{
+    public ICombatantTargetSelector Selector { get; }
+    public CounterId CounterId { get; }
+
+    public CombatantCounterExpression(ICombatantTargetSelector selector, CounterId counterId)
+    {
+        ArgumentNullException.ThrowIfNull(selector);
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
+        CounterId = counterId;
+    }
+
+    public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        var targets = Selector.ResolveTargets(context.GetTargetSelectionContext());
+        if (targets.Count == 0) return 0;
+        return combat.TryGetCombatant(ScalarTargetExpression.RequireSingle(targets), out var c) && c is not null
+            ? c.GetCounter(CounterId)
+            : 0;
+    }
+}
+
 public sealed class RoundNumberExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {

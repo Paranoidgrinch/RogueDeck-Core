@@ -418,6 +418,40 @@ public sealed class RemoveSelectedStatusNode<TContext> : IRemoveSelectedStatusNo
     }
 }
 
+// Writes a target combatant's persistent per-fight counter (#persistent-combat-stats): "add 1 to your combo
+// counter each time this card is played". Read it back with CombatantCounterExpression.
+public sealed class SetCombatantCounterNode<TContext> : ISetCombatantCounterNodeCore, IEffectNode<TContext>
+    where TContext : class
+{
+    public ICombatantTargetSelector TargetSelector { get; }
+    public IEnumerable<ICombatantTargetSelector> GetTargetSelectors() => [TargetSelector];
+    public CounterId CounterId { get; }
+    public ICombatExpression<TContext, int> Amount { get; }
+    public bool Relative { get; }
+
+    public IReadOnlyList<IEffectNode<TContext>> Children => [];
+
+    public SetCombatantCounterNode(
+        ICombatantTargetSelector targetSelector,
+        CounterId counterId,
+        ICombatExpression<TContext, int> amount,
+        bool relative = true)
+    {
+        ArgumentNullException.ThrowIfNull(targetSelector);
+        ArgumentNullException.ThrowIfNull(amount);
+
+        TargetSelector = targetSelector;
+        CounterId = counterId;
+        Amount = amount;
+        Relative = relative;
+    }
+
+    public IEnumerable<IResultKeyConsumer> GetExpressionConsumers() => Amount.GetAllConsumers();
+
+    int ISetCombatantCounterNodeCore.EvaluateAmount(IEffectExecutionContextCore ctx, CombatState combat) =>
+        Amount.Evaluate((EffectExecutionContext<TContext>)ctx, combat);
+}
+
 public sealed class RemoveStatusesByPolarityNode<TContext> : IRemoveStatusesByPolarityNodeCore, IEffectNode<TContext>
     where TContext : class
 {

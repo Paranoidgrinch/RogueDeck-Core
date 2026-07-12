@@ -72,6 +72,7 @@ public sealed class StandardCombatPackage : ICombatPackage
         registry.RegisterEffectRequestHandler(new RemoveStatusEffectHandler());
         registry.RegisterEffectRequestHandler(new RemoveStatusesByPolarityEffectHandler());
         registry.RegisterEffectRequestHandler(new RemoveStatusInstanceEffectHandler());
+        registry.RegisterEffectRequestHandler(new SetCombatantCounterEffectHandler());
         registry.RegisterEffectRequestHandler(new ModifyStatusStacksEffectHandler());
         registry.RegisterEffectRequestHandler(new ModifyStatusDurationEffectHandler());
         registry.RegisterEffectRequestHandler(new ModifyStatusChargesEffectHandler());
