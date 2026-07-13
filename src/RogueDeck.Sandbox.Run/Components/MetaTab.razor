@@ -1,0 +1,112 @@
+@rendermode InteractiveServer
+@inject RunDocument Doc
+
+@* The Meta tab (meta-progression): authors RunBlueprint.MetaRules — the run-end rules the host folds into the
+   persistent profile (MetaState) when a run ends. Each rule fires on a chosen set of outcomes (empty ⇒ any) and
+   applies a list of MetaEffects (set an unlock flag, add to a meta counter, promote a run resource). The rules are
+   CONTENT; the engine only evaluates them (MetaProgression.ApplyRunEnd). Unlock flags gate the Characters roster. *@
+<section style="padding:1rem; max-width:60rem">
+    <h1>Meta-progression (run-end rules)</h1>
+    <p class="muted">Rules applied to the saved profile when a run ends — unlock flags, meta-currency counters, or
+        carrying a run's resource total into a counter. Flags set here can gate characters (Characters tab, Unlock
+        flag). Empty ⇒ no meta progression.</p>
+
+    @if (Rules.Count == 0)
+    {
+        <p class="muted">No rules yet — add one below.</p>
+    }
+
+    @for (var i = 0; i < Rules.Count; i++)
+    {
+        var index = i;
+        var rule = Rules[index];
+        <div class="editor-card" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:1rem; margin:.75rem 0">
+            <div class="run-bar" style="justify-content:space-between">
+                <div class="run-bar">
+                    <span class="muted">When the run ends as:</span>
+                    @foreach (var result in Outcomes)
+                    {
+                        <label class="chk" style="margin-right:.5rem">
+                            <input type="checkbox" checked="@rule.WhenResult.Contains(result)"
+                                   @onchange="e => ToggleResult(index, result, AsBool(e.Value))" /> @result
+                        </label>
+                    }
+                    @if (rule.WhenResult.Count == 0)
+                    {
+                        <span class="muted">(any outcome)</span>
+                    }
+                </div>
+                <button class="mini" @onclick="() => RemoveRule(index)">✕ remove rule</button>
+            </div>
+
+            <div class="fx-body">
+                <span class="muted">apply:</span>
+                @for (var j = 0; j < rule.Effects.Count; j++)
+                {
+                    var effectIndex = j;
+                    <div class="run-bar">
+                        <MetaEffectEditor Value="rule.Effects[effectIndex]"
+                                          ValueChanged="ef => SetEffect(index, effectIndex, ef)" />
+                        <button class="mini" @onclick="() => RemoveEffect(index, effectIndex)">✕</button>
+                    </div>
+                }
+                <button class="mini" @onclick="() => AddEffect(index)">+ effect</button>
+            </div>
+        </div>
+    }
+
+    <button class="play" @onclick="AddRule">Add rule</button>
+</section>
+
+@code {
+    private RunBlueprint _blueprint = default!;
+
+    protected override void OnInitialized() => _blueprint = Doc.Load();
+
+    private IReadOnlyList<MetaRule> Rules => _blueprint.MetaRules;
+
+    // The outcomes a rule can fire on. Ongoing is excluded — a rule folds a FINISHED run into the profile.
+    private static readonly RunResult[] Outcomes = { RunResult.Victory, RunResult.Defeat, RunResult.Aborted };
+
+    private static bool AsBool(object? v) => v is bool b ? b : bool.TryParse(v?.ToString(), out var r) && r;
+
+    private void Save(IReadOnlyList<MetaRule> rules)
+    {
+        _blueprint = _blueprint with { MetaRules = rules };
+        Doc.Save(_blueprint);
+    }
+
+    private void EditRule(int index, Func<MetaRule, MetaRule> edit)
+    {
+        var list = Rules.ToList();
+        if (index >= 0 && index < list.Count)
+            list[index] = edit(list[index]);
+        Save(list);
+    }
+
+    private void AddRule() =>
+        Save(Rules.Append(new MetaRule(Array.Empty<RunResult>(), new MetaEffect[] { new SetMetaFlag("") })).ToList());
+
+    private void RemoveRule(int index) =>
+        Save(Rules.Where((_, i) => i != index).ToList());
+
+    private void ToggleResult(int index, RunResult result, bool on) =>
+        EditRule(index, r =>
+        {
+            var results = r.WhenResult.Where(x => x != result).ToList();
+            if (on) results.Add(result);
+            return r with { WhenResult = results };
+        });
+
+    private void AddEffect(int index) =>
+        EditRule(index, r => r with { Effects = r.Effects.Append(new SetMetaFlag("")).ToList() });
+
+    private void RemoveEffect(int index, int effectIndex) =>
+        EditRule(index, r => r with { Effects = r.Effects.Where((_, i) => i != effectIndex).ToList() });
+
+    private void SetEffect(int index, int effectIndex, MetaEffect effect) =>
+        EditRule(index, r => r with
+        {
+            Effects = r.Effects.Select((e, i) => i == effectIndex ? effect : e).ToList(),
+        });
+}

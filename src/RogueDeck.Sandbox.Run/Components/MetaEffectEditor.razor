@@ -1,0 +1,75 @@
+@* Presentational editor for one MetaEffect (a run-end meta-progression effect). Edits the immutable record and
+   hands the new one back via ValueChanged. A small closed vocabulary: set a flag, add to a counter, or promote a
+   finished run's resource total into a meta counter. Not recursive — unlike the intent conditions. *@
+
+<span class="meta-effect">
+    <select value="@KindOf(Value)" @onchange="e => ChangeKind(AsString(e.Value))">
+        @foreach (var (kind, label) in Kinds)
+        {
+            <option value="@kind">@label</option>
+        }
+    </select>
+
+    @switch (Value)
+    {
+        case SetMetaFlag f:
+            <span class="muted">flag</span>
+            <input value="@f.Flag" placeholder="unlock.character.mage" style="width:14rem"
+                   @onchange="e => Emit(f with { Flag = AsString(e.Value) })" />
+            break;
+
+        case AddMetaCounter c:
+            <span class="muted">counter</span>
+            <input value="@c.Counter" placeholder="meta-currency" style="width:11rem"
+                   @onchange="e => Emit(c with { Counter = AsString(e.Value) })" />
+            <span class="muted">+=</span>
+            <input type="number" value="@c.Amount" style="width:5rem"
+                   @onchange="e => Emit(c with { Amount = AsInt(e.Value, c.Amount) })" />
+            break;
+
+        case PromoteRunResource p:
+            <span class="muted">run resource</span>
+            <input value="@p.RunResource" placeholder="gold" style="width:8rem"
+                   @onchange="e => Emit(p with { RunResource = AsString(e.Value) })" />
+            <span class="muted">→ counter</span>
+            <input value="@p.MetaCounter" placeholder="meta-currency" style="width:11rem"
+                   @onchange="e => Emit(p with { MetaCounter = AsString(e.Value) })" />
+            break;
+    }
+</span>
+
+@code {
+    [Parameter, EditorRequired] public MetaEffect Value { get; set; } = default!;
+    [Parameter] public EventCallback<MetaEffect> ValueChanged { get; set; }
+
+    private static readonly (string kind, string label)[] Kinds =
+    {
+        ("setFlag", "set flag"),
+        ("addCounter", "add to counter"),
+        ("promoteResource", "promote run resource"),
+    };
+
+    private Task Emit(MetaEffect next) => ValueChanged.InvokeAsync(next);
+
+    private static string AsString(object? v) => v?.ToString() ?? "";
+    private static int AsInt(object? v, int fallback) => int.TryParse(v?.ToString(), out var n) ? n : fallback;
+
+    private static string KindOf(MetaEffect e) => e switch
+    {
+        SetMetaFlag => "setFlag",
+        AddMetaCounter => "addCounter",
+        PromoteRunResource => "promoteResource",
+        _ => "setFlag",
+    };
+
+    private Task ChangeKind(string kind) =>
+        kind == KindOf(Value) ? Task.CompletedTask : Emit(DefaultOf(kind));
+
+    private static MetaEffect DefaultOf(string kind) => kind switch
+    {
+        "setFlag" => new SetMetaFlag(""),
+        "addCounter" => new AddMetaCounter("", 1),
+        "promoteResource" => new PromoteRunResource("", ""),
+        _ => new SetMetaFlag(""),
+    };
+}
