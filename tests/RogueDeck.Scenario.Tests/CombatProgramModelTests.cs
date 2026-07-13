@@ -187,6 +187,24 @@ public class CombatProgramModelTests
         Assert.Equal(model, CombatProgramModel.Classify(back));
     }
 
+    [Fact]
+    public void Combat_control_ops_build_their_nodes_and_round_trip()
+    {
+        // Phase 1f: lifecycle state / team change (targeted) + set-result / remove-temporary-rule (combat-global).
+        var lifecycle = new CombatNodeModel("setCombatantLifecycleState", "eventTarget", LifecycleState: CombatantLifecycleState.Downed);
+        var team = new CombatNodeModel("changeCombatantTeam", "eventTarget", TeamId: "players");
+        var result = new CombatNodeModel("setCombatResult", "source", CombatResult: CombatResult.Victory);
+        var rule = new CombatNodeModel("removeTemporaryRule", "source", RuleId: "rule.enrage");
+
+        Assert.Equal(CombatantLifecycleState.Downed, Assert.IsType<SetCombatantLifecycleStateNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(lifecycle).Root).LifecycleState);
+        Assert.Equal("players", Assert.IsType<ChangeCombatantTeamNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(team).Root).TeamId.value);
+        Assert.Equal(CombatResult.Victory, Assert.IsType<SetCombatResultNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(result).Root).Result);
+        Assert.Equal("rule.enrage", Assert.IsType<RemoveTemporaryRuleNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(rule).Root).RuleId.value);
+
+        foreach (var model in new[] { lifecycle, team, result, rule })
+            Assert.Equal(model, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(model)));
+    }
+
     [Theory]
     [InlineData(MovementMode.TowardEnemies)]
     [InlineData(MovementMode.AwayFromEnemies)]

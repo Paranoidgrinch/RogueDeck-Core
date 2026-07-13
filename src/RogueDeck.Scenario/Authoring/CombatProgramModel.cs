@@ -125,7 +125,14 @@ public sealed record CombatNodeModel(
     MovementMode MovementMode = MovementMode.ToAbsolute,
     CombatAmountSpec? MoveX = null,
     CombatAmountSpec? MoveY = null,
-    CombatAmountSpec? MoveStep = null)
+    CombatAmountSpec? MoveStep = null,
+    // Combat-control leaves. Canonical defaults for kinds that don't use them so build↔classify round-trips exactly:
+    // setCombatantLifecycleState's target state, changeCombatantTeam's team id, setCombatResult's result, and
+    // removeTemporaryRule's rule id.
+    CombatantLifecycleState LifecycleState = CombatantLifecycleState.Alive,
+    string TeamId = "",
+    CombatResult CombatResult = CombatResult.Ongoing,
+    string RuleId = "")
 {
     public CombatAmountSpec AmountOrDefault => Amount ?? CombatAmountSpec.FromConst(3);
     public CombatCardSpec CardOrDefault => Card ?? new CombatCardSpec();
@@ -181,6 +188,10 @@ public sealed record CombatNodeModel(
         && MoveX == other.MoveX
         && MoveY == other.MoveY
         && MoveStep == other.MoveStep
+        && LifecycleState == other.LifecycleState
+        && TeamId == other.TeamId
+        && CombatResult == other.CombatResult
+        && RuleId == other.RuleId
         && ChildrenOrEmpty.SequenceEqual(other.ChildrenOrEmpty);
 
     public override int GetHashCode()
@@ -212,6 +223,10 @@ public sealed record CombatNodeModel(
         hash.Add(MoveX);
         hash.Add(MoveY);
         hash.Add(MoveStep);
+        hash.Add(LifecycleState);
+        hash.Add(TeamId);
+        hash.Add(CombatResult);
+        hash.Add(RuleId);
         foreach (var child in ChildrenOrEmpty)
             hash.Add(child);
         return hash.ToHashCode();
@@ -251,6 +266,10 @@ public static class CombatProgramModel
         ("transformCard", "transform / upgrade a card"),
         ("moveCombatant", "move combatant"),
         ("swapPositions", "swap positions"),
+        ("setCombatantLifecycleState", "set lifecycle state"),
+        ("changeCombatantTeam", "change team"),
+        ("setCombatResult", "set combat result"),
+        ("removeTemporaryRule", "remove temporary rule"),
     ];
 
     // The leaf kinds that carry a resource id (their editor row shows a resource-id field; ChangeKind seeds a
@@ -286,11 +305,22 @@ public static class CombatProgramModel
     public static bool UsesAmount(string kind) =>
         kind is not ("removeStatus" or "cleanse" or "moveCards" or "moveCardToZone" or "transformCard"
             or "removeSelectedStatus" or "stealSelectedStatus" or "refillResource"
-            or "moveCombatant" or "swapPositions");
+            or "moveCombatant" or "swapPositions"
+            or "setCombatantLifecycleState" or "changeCombatantTeam" or "setCombatResult" or "removeTemporaryRule");
 
     // moveCombatant (2D-grid positioning): a movement mode plus its coordinate amounts (X/Y for ToAbsolute, else a
     // single Step). swapPositions exchanges two combatants' cells (its second selector reuses ToSelectorKey).
     public static bool UsesMovement(string kind) => kind is "moveCombatant";
+
+    // Combat-control leaves. Two act on a target combatant (lifecycle state / team), so they show a selector; two are
+    // combat-global (set the combat result, remove a temporary rule by id) and hide the selector.
+    public static bool UsesLifecycleState(string kind) => kind is "setCombatantLifecycleState";
+    public static bool UsesTeamId(string kind) => kind is "changeCombatantTeam";
+    public static bool UsesCombatResult(string kind) => kind is "setCombatResult";
+    public static bool UsesRuleId(string kind) => kind is "removeTemporaryRule";
+
+    // Whether a leaf acts on a target combatant (shows the selector dropdown). The combat-global controls do not.
+    public static bool UsesSelector(string kind) => kind is not ("setCombatResult" or "removeTemporaryRule");
 
     // The leaf kinds that pick ONE status instance on the target by a StatusSelectionSpec (polarity filter × pick),
     // rather than naming a status id. Their editor row shows the status-selection widget.
@@ -382,6 +412,10 @@ public static class CombatProgramModel
         "moveCombatant" => new("moveCombatant", "eventTarget",
             MovementMode: MovementMode.ToAbsolute, MoveX: CombatAmountSpec.FromConst(0), MoveY: CombatAmountSpec.FromConst(0)),
         "swapPositions" => new("swapPositions", "source", ToSelectorKey: "eventTarget"),
+        "setCombatantLifecycleState" => new("setCombatantLifecycleState", "eventTarget", LifecycleState: CombatantLifecycleState.Downed),
+        "changeCombatantTeam" => new("changeCombatantTeam", "eventTarget", TeamId: "players"),
+        "setCombatResult" => new("setCombatResult", "source", CombatResult: CombatResult.Victory),
+        "removeTemporaryRule" => new("removeTemporaryRule", "source", RuleId: "rule.id"),
         "sequence" => CombatNodeModel.Sequence(new[] { NewNode("dealDamage") }),
         "forEachTarget" => CombatNodeModel.ForEach("allEnemies", NewNode("dealDamage")),
         "forEachCardInZone" => CombatNodeModel.ForEachCard("source", CardZone.Hand, NewNode("transformCard")),
@@ -431,6 +465,10 @@ public static class CombatProgramModel
                 MoveX = kind == "moveCombatant" ? (node.MoveX ?? CombatAmountSpec.FromConst(0)) : null,
                 MoveY = kind == "moveCombatant" ? (node.MoveY ?? CombatAmountSpec.FromConst(0)) : null,
                 MoveStep = kind == "moveCombatant" ? node.MoveStep : null,
+                LifecycleState = UsesLifecycleState(kind) ? (node.LifecycleState == CombatantLifecycleState.Alive ? CombatantLifecycleState.Downed : node.LifecycleState) : CombatantLifecycleState.Alive,
+                TeamId = UsesTeamId(kind) ? (node.TeamId == "" ? "players" : node.TeamId) : "",
+                CombatResult = UsesCombatResult(kind) ? (node.CombatResult == CombatResult.Ongoing ? CombatResult.Victory : node.CombatResult) : CombatResult.Ongoing,
+                RuleId = UsesRuleId(kind) ? (node.RuleId == "" ? "rule.id" : node.RuleId) : "",
                 Amount = UsesAmount(kind) ? (node.Amount ?? CombatAmountSpec.FromConst(3)) : null,
             };
 
@@ -676,6 +714,10 @@ public static class CombatProgramModel
                 : new MoveCombatantNode<TContext>(selector, model.MovementMode,
                     step: BuildAmount<TContext>(model.MoveStep ?? CombatAmountSpec.FromConst(1))),
             "swapPositions" => new SwapPositionsNode<TContext>(selector, SelectorFor(model.ToSelectorKey)),
+            "setCombatantLifecycleState" => new SetCombatantLifecycleStateNode<TContext>(selector, model.LifecycleState),
+            "changeCombatantTeam" => new ChangeCombatantTeamNode<TContext>(selector, new TeamId(model.TeamId)),
+            "setCombatResult" => new SetCombatResultNode<TContext>(model.CombatResult),
+            "removeTemporaryRule" => new RemoveTemporaryRuleNode<TContext>(new TriggeredEffectDefinitionId(model.RuleId)),
             _ => new GainBlockNode<TContext>(selector, amount),
         };
     }
@@ -822,6 +864,19 @@ public static class CombatProgramModel
                 return KeyFor(n.FirstSelector) is { } swFirst && KeyFor(n.SecondSelector) is { } swSecond
                     ? new CombatNodeModel("swapPositions", swFirst, ToSelectorKey: swSecond)
                     : null;
+            case SetCombatantLifecycleStateNode<TContext> { ResultKey: null } n:
+                return KeyFor(n.TargetSelector) is { } lsKey
+                    ? new CombatNodeModel("setCombatantLifecycleState", lsKey, LifecycleState: n.LifecycleState)
+                    : null;
+            case ChangeCombatantTeamNode<TContext> { ResultKey: null } n:
+                return KeyFor(n.TargetSelector) is { } ctKey
+                    ? new CombatNodeModel("changeCombatantTeam", ctKey, TeamId: n.TeamId.value)
+                    : null;
+            case SetCombatResultNode<TContext> { ResultKey: null } n:
+                // Combat-global: no target selector, so the model keeps the canonical "source".
+                return new CombatNodeModel("setCombatResult", "source", CombatResult: n.Result);
+            case RemoveTemporaryRuleNode<TContext> { ResultKey: null } n:
+                return new CombatNodeModel("removeTemporaryRule", "source", RuleId: n.RuleId.value);
             case MoveCardToZoneNode<TContext> { ResultKey: null } n:
                 return KeyFor(n.OwnerSelector) is { } mtKey && ClassifyCard(n.CardExpression) is { } mtCard
                     ? new CombatNodeModel("moveCardToZone", mtKey, Card: mtCard, ToZone: n.ToZone, Placement: n.Placement)

@@ -96,7 +96,38 @@ else
 {
     <span class="fx">
         @KindSelect
-        @SelectorSelect(CombatProgramModel.SelectorKeys, Node.SelectorKey, key => Set(Node with { SelectorKey = key }))
+        @if (CombatProgramModel.UsesSelector(Node.Kind))
+        {
+            @SelectorSelect(CombatProgramModel.SelectorKeys, Node.SelectorKey, key => Set(Node with { SelectorKey = key }))
+        }
+        @if (CombatProgramModel.UsesLifecycleState(Node.Kind))
+        {
+            <select value="@Node.LifecycleState" @onchange="e => Set(Node with { LifecycleState = ParseLifecycleState(e.Value) })">
+                @foreach (var s in Enum.GetValues<CombatantLifecycleState>())
+                {
+                    <option value="@s" selected="@(s == Node.LifecycleState)">@s</option>
+                }
+            </select>
+        }
+        @if (CombatProgramModel.UsesTeamId(Node.Kind))
+        {
+            <input value="@Node.TeamId" style="width:7rem" placeholder="team id"
+                   @onchange="e => Set(Node with { TeamId = AsString(e.Value) })" />
+        }
+        @if (CombatProgramModel.UsesCombatResult(Node.Kind))
+        {
+            <select value="@Node.CombatResult" @onchange="e => Set(Node with { CombatResult = ParseCombatResult(e.Value) })">
+                @foreach (var r in Enum.GetValues<CombatResult>())
+                {
+                    <option value="@r" selected="@(r == Node.CombatResult)">@r</option>
+                }
+            </select>
+        }
+        @if (CombatProgramModel.UsesRuleId(Node.Kind))
+        {
+            <input value="@Node.RuleId" style="width:9rem" placeholder="temporary rule id"
+                   @onchange="e => Set(Node with { RuleId = AsString(e.Value) })" />
+        }
         @if (CombatProgramModel.UsesAmount(Node.Kind))
         {
             @AmountControls(Node.AmountOrDefault, spec => Set(Node with { Amount = spec }))
@@ -257,6 +288,10 @@ else
     private static bool AsBool(object? v) => v is bool b ? b : bool.TryParse(v?.ToString(), out var p) && p;
     private static MovementMode ParseMovementMode(object? v) =>
         Enum.TryParse<MovementMode>(AsString(v), out var m) ? m : MovementMode.ToAbsolute;
+    private static CombatantLifecycleState ParseLifecycleState(object? v) =>
+        Enum.TryParse<CombatantLifecycleState>(AsString(v), out var s) ? s : CombatantLifecycleState.Alive;
+    private static CombatResult ParseCombatResult(object? v) =>
+        Enum.TryParse<CombatResult>(AsString(v), out var r) ? r : CombatResult.Ongoing;
     private static StatusPolarity ParsePolarity(object? v) =>
         Enum.TryParse<StatusPolarity>(AsString(v), out var p) ? p : StatusPolarity.Debuff;
     private static CardZone ParseZone(object? v) =>

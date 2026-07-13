@@ -106,6 +106,29 @@ public class CombatProgramEditorRenderTests
     }
 
     [Fact]
+    public async Task Renders_combat_control_leaves()
+    {
+        // Phase 1f: lifecycle dropdown, team-id field, combat-result dropdown, rule-id field. The combat-global
+        // controls (set result / remove rule) hide the target selector.
+        var lifecycle = await RenderAsync(new CombatNodeModel("setCombatantLifecycleState", "eventTarget", LifecycleState: CombatantLifecycleState.Downed));
+        Assert.Contains("set lifecycle state", lifecycle);
+        Assert.Contains("Downed", lifecycle);
+
+        var team = await RenderAsync(new CombatNodeModel("changeCombatantTeam", "eventTarget", TeamId: "players"));
+        Assert.Contains("change team", team);
+        Assert.Contains("players", team);
+
+        var result = await RenderAsync(new CombatNodeModel("setCombatResult", "source", CombatResult: CombatResult.Victory));
+        Assert.Contains("set combat result", result);
+        Assert.Contains("Victory", result);
+        Assert.DoesNotContain("eventTarget", result); // combat-global: no target selector
+
+        var rule = await RenderAsync(new CombatNodeModel("removeTemporaryRule", "source", RuleId: "rule.enrage"));
+        Assert.Contains("remove temporary rule", rule);
+        Assert.Contains("rule.enrage", rule);
+    }
+
+    [Fact]
     public async Task Renders_move_combatant_absolute_with_x_and_y_and_swap_with_two_selectors()
     {
         // Phase 1e: absolute move shows a mode dropdown + x/y amount controls.
