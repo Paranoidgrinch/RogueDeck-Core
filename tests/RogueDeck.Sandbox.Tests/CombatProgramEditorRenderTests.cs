@@ -106,6 +106,19 @@ public class CombatProgramEditorRenderTests
     }
 
     [Fact]
+    public async Task Renders_play_card_with_optional_target_and_replay()
+    {
+        // Phase 1g part 2: playCard shows the card widget + a target toggle; replay shows the card widget.
+        var play = await RenderAsync(new CombatNodeModel("playCard", "source", Card: new CombatCardSpec("chosen", CardZone.Hand), HasCardTarget: true, ToSelectorKey: "eventTarget"));
+        Assert.Contains("play a card", play);
+        Assert.Contains("player chooses", play);
+        Assert.Contains("eventTarget", play); // the card target selector shows when the toggle is on
+
+        var replay = await RenderAsync(new CombatNodeModel("replayCardProgram", "eventTarget", Card: new CombatCardSpec("chosen", CardZone.Hand)));
+        Assert.Contains("replay a card's program", replay);
+    }
+
+    [Fact]
     public async Task Renders_create_card_and_copy_card_with_zone()
     {
         // Phase 1g: createCardInstance shows a card-definition input + "into" zone; createCardCopy shows the card widget.

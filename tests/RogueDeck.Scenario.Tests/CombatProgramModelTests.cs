@@ -191,6 +191,23 @@ public class CombatProgramModelTests
     }
 
     [Fact]
+    public void Play_and_replay_card_ops_round_trip_with_and_without_a_target()
+    {
+        // Phase 1g part 2: playCard (optional card target) + replayCardProgram (a card's program at a target).
+        var playTargeted = new CombatNodeModel("playCard", "source", Card: new CombatCardSpec("chosen", CardZone.Hand), HasCardTarget: true, ToSelectorKey: "eventTarget");
+        var playUntargeted = new CombatNodeModel("playCard", "source", Card: new CombatCardSpec("random", CardZone.Hand), HasCardTarget: false);
+        var replay = new CombatNodeModel("replayCardProgram", "eventTarget", Card: new CombatCardSpec("chosen", CardZone.Hand));
+
+        var targeted = Assert.IsType<PlayCardNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(playTargeted).Root);
+        Assert.NotNull(targeted.CardTargetSelector);
+        Assert.Null(Assert.IsType<PlayCardNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(playUntargeted).Root).CardTargetSelector);
+        Assert.IsType<ReplayCardProgramNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(replay).Root);
+
+        foreach (var model in new[] { playTargeted, playUntargeted, replay })
+            Assert.Equal(model, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(model)));
+    }
+
+    [Fact]
     public void Create_card_ops_build_their_nodes_and_round_trip()
     {
         // Phase 1g: create card(s) by definition into a zone, and copy a selected card into a zone (count via Amount).

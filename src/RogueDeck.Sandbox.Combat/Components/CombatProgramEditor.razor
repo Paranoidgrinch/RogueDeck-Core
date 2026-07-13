@@ -276,6 +276,15 @@ else
         {
             @CardControls(Node.CardOrDefault, spec => Set(Node with { Card = spec }))
         }
+        @if (CombatProgramModel.UsesCardTarget(Node.Kind))
+        {
+            <label class="muted"><input type="checkbox" checked="@Node.HasCardTarget"
+                   @onchange="e => Set(Node with { HasCardTarget = AsBool(e.Value) })" /> at</label>
+            @if (Node.HasCardTarget)
+            {
+                @SelectorSelect(CombatProgramModel.SelectorKeys, Node.ToSelectorKey, key => Set(Node with { ToSelectorKey = key }))
+            }
+        }
         @if (CombatProgramModel.UsesMoveToZone(Node.Kind))
         {
             <span class="muted">to</span>

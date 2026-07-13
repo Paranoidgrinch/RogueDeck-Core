@@ -140,7 +140,10 @@ public sealed record CombatNodeModel(
     string SummonDisplayName = "",
     int? PositionX = null,
     int? PositionY = null,
-    IReadOnlyList<StatusGrant>? StartingStatuses = null)
+    IReadOnlyList<StatusGrant>? StartingStatuses = null,
+    // playCard's optional card-target: when true the played card is aimed at ToSelectorKey; when false it has no
+    // target. false canonically for other kinds so build↔classify round-trips exactly.
+    bool HasCardTarget = false)
 {
     public CombatAmountSpec AmountOrDefault => Amount ?? CombatAmountSpec.FromConst(3);
     public CombatCardSpec CardOrDefault => Card ?? new CombatCardSpec();
@@ -206,6 +209,7 @@ public sealed record CombatNodeModel(
         && PositionX == other.PositionX
         && PositionY == other.PositionY
         && StartingStatusesOrEmpty.SequenceEqual(other.StartingStatusesOrEmpty)
+        && HasCardTarget == other.HasCardTarget
         && ChildrenOrEmpty.SequenceEqual(other.ChildrenOrEmpty);
 
     public override int GetHashCode()
@@ -247,6 +251,7 @@ public sealed record CombatNodeModel(
         hash.Add(PositionY);
         foreach (var grant in StartingStatusesOrEmpty)
             hash.Add(grant);
+        hash.Add(HasCardTarget);
         foreach (var child in ChildrenOrEmpty)
             hash.Add(child);
         return hash.ToHashCode();
@@ -286,6 +291,8 @@ public static class CombatProgramModel
         ("transformCard", "transform / upgrade a card"),
         ("createCardInstance", "create card(s)"),
         ("createCardCopy", "copy a card"),
+        ("playCard", "play a card"),
+        ("replayCardProgram", "replay a card's program"),
         ("moveCombatant", "move combatant"),
         ("swapPositions", "swap positions"),
         ("setCombatantLifecycleState", "set lifecycle state"),
@@ -330,7 +337,10 @@ public static class CombatProgramModel
             or "removeSelectedStatus" or "stealSelectedStatus" or "refillResource"
             or "moveCombatant" or "swapPositions"
             or "setCombatantLifecycleState" or "changeCombatantTeam" or "setCombatResult" or "removeTemporaryRule"
-            or "summonCombatant");
+            or "summonCombatant" or "playCard" or "replayCardProgram");
+
+    // playCard aims the played card at an optional target — its row shows a "target" toggle + a selector.
+    public static bool UsesCardTarget(string kind) => kind is "playCard";
 
     // moveCombatant (2D-grid positioning): a movement mode plus its coordinate amounts (X/Y for ToAbsolute, else a
     // single Step). swapPositions exchanges two combatants' cells (its second selector reuses ToSelectorKey).
@@ -448,6 +458,8 @@ public static class CombatProgramModel
         "transformCard" => new("transformCard", "source", Card: new CombatCardSpec("chosen", CardZone.Hand), ToDefinition: "strike.plus"),
         "createCardInstance" => new("createCardInstance", "source", CombatAmountSpec.FromConst(1), ToDefinition: "wound", ToZone: CardZone.DiscardPile),
         "createCardCopy" => new("createCardCopy", "source", CombatAmountSpec.FromConst(1), Card: new CombatCardSpec("chosen", CardZone.Hand), ToZone: CardZone.Hand),
+        "playCard" => new("playCard", "source", Card: new CombatCardSpec("chosen", CardZone.Hand), HasCardTarget: true, ToSelectorKey: "eventTarget"),
+        "replayCardProgram" => new("replayCardProgram", "eventTarget", Card: new CombatCardSpec("chosen", CardZone.Hand)),
         "moveCombatant" => new("moveCombatant", "eventTarget",
             MovementMode: MovementMode.ToAbsolute, MoveX: CombatAmountSpec.FromConst(0), MoveY: CombatAmountSpec.FromConst(0)),
         "swapPositions" => new("swapPositions", "source", ToSelectorKey: "eventTarget"),
@@ -493,7 +505,8 @@ public static class CombatProgramModel
                     : kind == "createCardInstance" ? (node.ToDefinition == "" ? "wound" : node.ToDefinition) : "",
                 Placement = kind == "moveCardToZone" ? node.Placement : ZonePlacement.Bottom,
                 Selection = UsesStatusSelection(kind) ? (node.Selection ?? new StatusSelectionSpec()) : null,
-                ToSelectorKey = UsesToSelector(kind) ? node.ToSelectorKey : "source",
+                ToSelectorKey = UsesToSelector(kind) || UsesCardTarget(kind) ? node.ToSelectorKey : "source",
+                HasCardTarget = UsesCardTarget(kind) && (node.Kind == "playCard" ? node.HasCardTarget : true),
                 PoolId = UsesPoolId(kind) ? (node.PoolId == "" ? "block" : node.PoolId) : "",
                 ResourceSelection = UsesResourceSelection(kind) ? (node.ResourceSelection ?? new ResourceSelectionSpec()) : null,
                 DefaultMax = UsesDefaultMax(kind) ? (kind == "refillResource" ? (node.DefaultMax ?? 3) : node.DefaultMax) : null,
@@ -759,6 +772,9 @@ public static class CombatProgramModel
             "transformCard" => new TransformCardNode<TContext>(selector, BuildCard<TContext>(model.CardOrDefault), new CardDefinitionId(model.ToDefinition)),
             "createCardInstance" => new CreateCardInstanceNode<TContext>(selector, new CardDefinitionId(model.ToDefinition), model.ToZone, amount),
             "createCardCopy" => new CreateCardCopyNode<TContext>(selector, BuildCard<TContext>(model.CardOrDefault), model.ToZone, amount),
+            "playCard" => new PlayCardNode<TContext>(selector, BuildCard<TContext>(model.CardOrDefault),
+                model.HasCardTarget ? SelectorFor(model.ToSelectorKey) : null),
+            "replayCardProgram" => new ReplayCardProgramNode<TContext>(BuildCard<TContext>(model.CardOrDefault), selector),
             "moveCombatant" => model.MovementMode == MovementMode.ToAbsolute
                 ? new MoveCombatantNode<TContext>(selector, MovementMode.ToAbsolute,
                     x: BuildAmount<TContext>(model.MoveX ?? CombatAmountSpec.FromConst(0)),
@@ -963,6 +979,18 @@ public static class CombatProgramModel
                 return cccCount.IsAdvanced
                     ? null
                     : new CombatNodeModel("createCardCopy", cccKey, cccCount, Card: cccCard, ToZone: n.ToZone);
+            case PlayCardNode<TContext> { ResultKey: null } n:
+                if (KeyFor(n.PlayerSelector) is not { } pcKey || ClassifyCard(n.CardExpression) is not { } pcCard)
+                    return null;
+                if (n.CardTargetSelector is null)
+                    return new CombatNodeModel("playCard", pcKey, Card: pcCard, HasCardTarget: false);
+                return KeyFor(n.CardTargetSelector) is { } pcTarget
+                    ? new CombatNodeModel("playCard", pcKey, Card: pcCard, HasCardTarget: true, ToSelectorKey: pcTarget)
+                    : null;
+            case ReplayCardProgramNode<TContext> n:
+                return KeyFor(n.TargetSelector) is { } rcKey && ClassifyCard(n.Card) is { } rcCard
+                    ? new CombatNodeModel("replayCardProgram", rcKey, Card: rcCard)
+                    : null;
 
             case SequenceEffectNode<TContext> s:
                 return ClassifyChildren<TContext>(s.Children) is { } children
