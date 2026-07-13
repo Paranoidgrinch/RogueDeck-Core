@@ -21,6 +21,10 @@ public class CombatProgramModelTests
             // the amount-only template here would build them without a selection and mismatch.
             if (CombatProgramModel.UsesStatusSelection(kind))
                 continue;
+            // Likewise the resource-selection op (ResourceSelectionSpec) and the defensive-pool op (pool id) have
+            // their own round-trip tests below; the amount-only template does not fit them.
+            if (CombatProgramModel.UsesResourceSelection(kind) || CombatProgramModel.UsesPoolId(kind))
+                continue;
             // ResourceId is part of a resource leaf's identity (gain/lose/modify); StatusId of a status leaf's.
             var resourceId = CombatProgramModel.UsesResourceId(kind) ? "standard.energy" : "";
             var statusId = CombatProgramModel.UsesStatusId(kind) ? "poison" : "";
@@ -180,6 +184,41 @@ public class CombatProgramModelTests
         var back = JsonSerializer.Deserialize<EffectProgram<CardPlayContext>>(json, options)!;
 
         Assert.Equal(model, CombatProgramModel.Classify(back));
+    }
+
+    [Fact]
+    public void Resource_completeness_ops_build_their_nodes_and_round_trip()
+    {
+        // Phase 1b: refill / modifyDefensivePool / modifySelectedResource + gainResource.DefaultMax + modifyResource.Min/Max.
+        var refill = new CombatNodeModel("refillResource", "source", ResourceId: "standard.energy", DefaultMax: 3);
+        var pool = new CombatNodeModel("modifyDefensivePool", "source", CombatAmountSpec.FromConst(5), PoolId: "block");
+        var selected = new CombatNodeModel(
+            "modifySelectedResource", "eventTarget", CombatAmountSpec.FromConst(-2),
+            ResourceSelection: new ResourceSelectionSpec(ResourcePoolFilter.NonEmpty, ResourcePick.Highest));
+        var cappedGain = new CombatNodeModel("gainResource", "source", CombatAmountSpec.FromConst(2), "standard.energy", DefaultMax: 9);
+        var clampedModify = new CombatNodeModel("modifyResource", "source", CombatAmountSpec.FromConst(1), "faith", Min: 0, Max: 5);
+
+        Assert.Equal(3, Assert.IsType<RefillResourceNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(refill).Root).DefaultMax);
+        Assert.Equal("block", Assert.IsType<ModifyDefensivePoolNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(pool).Root).PoolId.value);
+        Assert.Equal(ResourcePick.Highest, Assert.IsType<ModifySelectedResourceNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(selected).Root).Selection.Pick);
+        Assert.Equal(9, Assert.IsType<GainResourceNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(cappedGain).Root).DefaultMax);
+        var mr = Assert.IsType<ModifyResourceNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(clampedModify).Root);
+        Assert.Equal((0, 5), (mr.Min, mr.Max));
+
+        foreach (var model in new[] { refill, pool, selected, cappedGain, clampedModify })
+            Assert.Equal(model, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(model)));
+    }
+
+    [Fact]
+    public void Uncapped_gain_and_unclamped_modify_still_round_trip_with_null_bounds()
+    {
+        // The optional bounds default to null (uncapped / unclamped) — the pre-1b behaviour must round-trip unchanged.
+        var gain = new CombatNodeModel("gainResource", "source", CombatAmountSpec.FromConst(2), "standard.energy");
+        var modify = new CombatNodeModel("modifyResource", "source", CombatAmountSpec.FromConst(1), "faith");
+
+        Assert.Null(Assert.IsType<GainResourceNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(gain).Root).DefaultMax);
+        Assert.Equal(gain, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(gain)));
+        Assert.Equal(modify, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(modify)));
     }
 
     [Fact]

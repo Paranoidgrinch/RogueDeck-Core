@@ -94,11 +94,22 @@ public sealed record CombatNodeModel(
     StatusSelectionSpec? Selection = null,
     // stealSelectedStatus's SECOND selector — the thief the stolen status moves to (SelectorKey is the victim). "source"
     // (steal to self) canonically for every other kind so build↔classify round-trips exactly.
-    string ToSelectorKey = "source")
+    string ToSelectorKey = "source",
+    // modifyDefensivePool: the defensive pool id (e.g. "block"). "" canonically for other kinds.
+    string PoolId = "",
+    // modifySelectedResource: which ONE resource pool on the target to change (filter × pick). Null for other kinds.
+    ResourceSelectionSpec? ResourceSelection = null,
+    // gainResource caps a newly-created pool at this max (optional → null = uncapped); refillResource refills TO this
+    // max (its target value). Null canonically for kinds that don't use it so build↔classify round-trips exactly.
+    int? DefaultMax = null,
+    // modifyResource clamps its result to this optional [Min, Max]; null canonically for other kinds.
+    int? Min = null,
+    int? Max = null)
 {
     public CombatAmountSpec AmountOrDefault => Amount ?? CombatAmountSpec.FromConst(3);
     public CombatCardSpec CardOrDefault => Card ?? new CombatCardSpec();
     public StatusSelectionSpec SelectionOrDefault => Selection ?? new StatusSelectionSpec();
+    public ResourceSelectionSpec ResourceSelectionOrDefault => ResourceSelection ?? new ResourceSelectionSpec();
     public IReadOnlyList<CombatNodeModel> ChildrenOrEmpty => Children ?? Array.Empty<CombatNodeModel>();
 
     public static CombatNodeModel Sequence(IReadOnlyList<CombatNodeModel> children) =>
@@ -136,6 +147,11 @@ public sealed record CombatNodeModel(
         && ToZone == other.ToZone
         && Selection == other.Selection
         && ToSelectorKey == other.ToSelectorKey
+        && PoolId == other.PoolId
+        && ResourceSelection == other.ResourceSelection
+        && DefaultMax == other.DefaultMax
+        && Min == other.Min
+        && Max == other.Max
         && ChildrenOrEmpty.SequenceEqual(other.ChildrenOrEmpty);
 
     public override int GetHashCode()
@@ -154,6 +170,11 @@ public sealed record CombatNodeModel(
         hash.Add(ToZone);
         hash.Add(Selection);
         hash.Add(ToSelectorKey);
+        hash.Add(PoolId);
+        hash.Add(ResourceSelection);
+        hash.Add(DefaultMax);
+        hash.Add(Min);
+        hash.Add(Max);
         foreach (var child in ChildrenOrEmpty)
             hash.Add(child);
         return hash.ToHashCode();
@@ -172,6 +193,9 @@ public static class CombatProgramModel
         ("gainResource", "gain resource"),
         ("loseResource", "lose resource"),
         ("modifyResource", "modify resource"),
+        ("refillResource", "refill resource"),
+        ("modifySelectedResource", "modify a selected resource"),
+        ("modifyDefensivePool", "modify defensive pool"),
         ("modifyMaxHealth", "modify max health"),
         ("setHealth", "set health"),
         ("drawCards", "draw cards"),
@@ -191,7 +215,21 @@ public static class CombatProgramModel
 
     // The leaf kinds that carry a resource id (their editor row shows a resource-id field; ChangeKind seeds a
     // default when switching INTO one of these). Kept here so the razor editor and ChangeKind agree.
-    public static bool UsesResourceId(string kind) => kind is "gainResource" or "loseResource" or "modifyResource";
+    public static bool UsesResourceId(string kind) =>
+        kind is "gainResource" or "loseResource" or "modifyResource" or "refillResource";
+
+    // The leaf that names a DEFENSIVE POOL (e.g. "block") rather than a resource; its row shows a pool-id field.
+    public static bool UsesPoolId(string kind) => kind is "modifyDefensivePool";
+
+    // The leaf that picks ONE resource pool by a ResourceSelectionSpec (filter × pick) rather than naming an id.
+    public static bool UsesResourceSelection(string kind) => kind is "modifySelectedResource";
+
+    // The leaf kinds that carry a "max" value: gainResource caps a newly-created pool (optional), refillResource
+    // refills to this max (its target). Their row shows a max field.
+    public static bool UsesDefaultMax(string kind) => kind is "gainResource" or "refillResource";
+
+    // modifyResource can clamp its result to an optional [min, max]; its row shows min/max fields.
+    public static bool UsesMinMax(string kind) => kind is "modifyResource";
 
     // The leaf kinds that name a specific status (apply / remove / modify-* show a status-id field).
     public static bool UsesStatusId(string kind) =>
@@ -203,7 +241,7 @@ public static class CombatProgramModel
     // Amount at the canonical null). modifySelectedStatusStacks DOES carry an amount (its delta).
     public static bool UsesAmount(string kind) =>
         kind is not ("removeStatus" or "cleanse" or "moveCards" or "moveCardToZone" or "transformCard"
-            or "removeSelectedStatus" or "stealSelectedStatus");
+            or "removeSelectedStatus" or "stealSelectedStatus" or "refillResource");
 
     // The leaf kinds that pick ONE status instance on the target by a StatusSelectionSpec (polarity filter × pick),
     // rather than naming a status id. Their editor row shows the status-selection widget.
@@ -252,6 +290,10 @@ public static class CombatProgramModel
         "gainResource" => new("gainResource", "source", CombatAmountSpec.FromConst(1), "standard.energy"),
         "loseResource" => new("loseResource", "source", CombatAmountSpec.FromConst(1), "standard.energy"),
         "modifyResource" => new("modifyResource", "source", CombatAmountSpec.FromConst(1), "standard.energy"),
+        "refillResource" => new("refillResource", "source", ResourceId: "standard.energy", DefaultMax: 3),
+        "modifySelectedResource" => new("modifySelectedResource", "eventTarget", CombatAmountSpec.FromConst(-1),
+            ResourceSelection: new ResourceSelectionSpec(ResourcePoolFilter.NonEmpty, ResourcePick.Highest)),
+        "modifyDefensivePool" => new("modifyDefensivePool", "source", CombatAmountSpec.FromConst(5), PoolId: "block"),
         "modifyMaxHealth" => new("modifyMaxHealth", "source", CombatAmountSpec.FromConst(5)),
         "setHealth" => new("setHealth", "source", CombatAmountSpec.FromConst(10)),
         "drawCards" => new("drawCards", "source", CombatAmountSpec.FromConst(1)),
@@ -303,6 +345,11 @@ public static class CombatProgramModel
                 Placement = kind == "moveCardToZone" ? node.Placement : ZonePlacement.Bottom,
                 Selection = UsesStatusSelection(kind) ? (node.Selection ?? new StatusSelectionSpec()) : null,
                 ToSelectorKey = UsesToSelector(kind) ? node.ToSelectorKey : "source",
+                PoolId = UsesPoolId(kind) ? (node.PoolId == "" ? "block" : node.PoolId) : "",
+                ResourceSelection = UsesResourceSelection(kind) ? (node.ResourceSelection ?? new ResourceSelectionSpec()) : null,
+                DefaultMax = UsesDefaultMax(kind) ? (kind == "refillResource" ? (node.DefaultMax ?? 3) : node.DefaultMax) : null,
+                Min = UsesMinMax(kind) ? node.Min : null,
+                Max = UsesMinMax(kind) ? node.Max : null,
                 Amount = UsesAmount(kind) ? (node.Amount ?? CombatAmountSpec.FromConst(3)) : null,
             };
 
@@ -513,9 +560,12 @@ public static class CombatProgramModel
         {
             "dealDamage" => new DealDamageNode<TContext>(selector, amount),
             "heal" => new HealNode<TContext>(selector, amount),
-            "gainResource" => new GainResourceNode<TContext>(selector, new ResourceId(model.ResourceId), amount),
+            "gainResource" => new GainResourceNode<TContext>(selector, new ResourceId(model.ResourceId), amount, model.DefaultMax),
             "loseResource" => new LoseResourceNode<TContext>(selector, new ResourceId(model.ResourceId), amount),
-            "modifyResource" => new ModifyResourceNode<TContext>(selector, new ResourceId(model.ResourceId), amount),
+            "modifyResource" => new ModifyResourceNode<TContext>(selector, new ResourceId(model.ResourceId), amount, model.Min, model.Max),
+            "refillResource" => new RefillResourceNode<TContext>(selector, new ResourceId(model.ResourceId), model.DefaultMax ?? 0),
+            "modifySelectedResource" => new ModifySelectedResourceNode<TContext>(selector, model.ResourceSelectionOrDefault, amount),
+            "modifyDefensivePool" => new ModifyDefensivePoolNode<TContext>(selector, new DefensivePoolId(model.PoolId), amount),
             "modifyMaxHealth" => new ModifyMaxHealthNode<TContext>(selector, amount),
             "setHealth" => new SetHealthNode<TContext>(selector, amount),
             "drawCards" => new DrawCardsNode<TContext>(selector, amount),
@@ -565,12 +615,40 @@ public static class CombatProgramModel
                 return Leaf("heal", n.TargetSelector, n.Amount);
             case GainBlockNode<TContext> { ResultKey: null } n:
                 return Leaf("gainBlock", n.TargetSelector, n.Amount);
-            case GainResourceNode<TContext> { ResultKey: null, DefaultMax: null } n:
-                return Leaf("gainResource", n.TargetSelector, n.Amount, n.ResourceId.value);
+            case GainResourceNode<TContext> { ResultKey: null } n:
+                if (KeyFor(n.TargetSelector) is not { } grKey)
+                    return null;
+                var grAmount = ClassifyAmount(n.Amount);
+                return grAmount.IsAdvanced
+                    ? null
+                    : new CombatNodeModel("gainResource", grKey, grAmount, n.ResourceId.value, DefaultMax: n.DefaultMax);
             case LoseResourceNode<TContext> { ResultKey: null } n:
                 return Leaf("loseResource", n.TargetSelector, n.Amount, n.ResourceId.value);
-            case ModifyResourceNode<TContext> { ResultKey: null, Min: null, Max: null } n:
-                return Leaf("modifyResource", n.TargetSelector, n.Delta, n.ResourceId.value);
+            case ModifyResourceNode<TContext> { ResultKey: null } n:
+                if (KeyFor(n.TargetSelector) is not { } mrKey)
+                    return null;
+                var mrDelta = ClassifyAmount(n.Delta);
+                return mrDelta.IsAdvanced
+                    ? null
+                    : new CombatNodeModel("modifyResource", mrKey, mrDelta, n.ResourceId.value, Min: n.Min, Max: n.Max);
+            case RefillResourceNode<TContext> { ResultKey: null } n:
+                return KeyFor(n.TargetSelector) is { } rfKey
+                    ? new CombatNodeModel("refillResource", rfKey, ResourceId: n.ResourceId.value, DefaultMax: n.DefaultMax)
+                    : null;
+            case ModifySelectedResourceNode<TContext> n:
+                if (KeyFor(n.TargetSelector) is not { } msrKey)
+                    return null;
+                var msrDelta = ClassifyAmount(n.Delta);
+                return msrDelta.IsAdvanced
+                    ? null
+                    : new CombatNodeModel("modifySelectedResource", msrKey, msrDelta, ResourceSelection: n.Selection);
+            case ModifyDefensivePoolNode<TContext> { ResultKey: null } n:
+                if (KeyFor(n.TargetSelector) is not { } dpKey)
+                    return null;
+                var dpDelta = ClassifyAmount(n.Delta);
+                return dpDelta.IsAdvanced
+                    ? null
+                    : new CombatNodeModel("modifyDefensivePool", dpKey, dpDelta, PoolId: n.PoolId.value);
             case ModifyMaxHealthNode<TContext> { ResultKey: null } n:
                 return Leaf("modifyMaxHealth", n.TargetSelector, n.Delta);
             case SetHealthNode<TContext> { ResultKey: null } n:

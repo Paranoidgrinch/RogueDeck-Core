@@ -106,6 +106,31 @@ else
             <input value="@Node.ResourceId" style="width:8rem" placeholder="resource id"
                    @onchange="e => Set(Node with { ResourceId = AsString(e.Value) })" />
         }
+        @if (CombatProgramModel.UsesPoolId(Node.Kind))
+        {
+            <input value="@Node.PoolId" style="width:8rem" placeholder="pool id"
+                   @onchange="e => Set(Node with { PoolId = AsString(e.Value) })" />
+        }
+        @if (CombatProgramModel.UsesResourceSelection(Node.Kind))
+        {
+            @ResourceSelectionControls(Node.ResourceSelectionOrDefault, spec => Set(Node with { ResourceSelection = spec }))
+        }
+        @if (CombatProgramModel.UsesDefaultMax(Node.Kind))
+        {
+            <span class="muted">max</span>
+            <input type="number" value="@Node.DefaultMax" style="width:4rem"
+                   placeholder="@(Node.Kind == "gainResource" ? "uncapped" : "")"
+                   @onchange="e => Set(Node with { DefaultMax = AsNullableInt(e.Value) })" />
+        }
+        @if (CombatProgramModel.UsesMinMax(Node.Kind))
+        {
+            <span class="muted">min</span>
+            <input type="number" value="@Node.Min" style="width:4rem" placeholder="none"
+                   @onchange="e => Set(Node with { Min = AsNullableInt(e.Value) })" />
+            <span class="muted">max</span>
+            <input type="number" value="@Node.Max" style="width:4rem" placeholder="none"
+                   @onchange="e => Set(Node with { Max = AsNullableInt(e.Value) })" />
+        }
         @if (CombatProgramModel.UsesStatusId(Node.Kind))
         {
             <input value="@Node.StatusId" style="width:8rem" placeholder="status id"
@@ -191,6 +216,8 @@ else
 
     private static string AsString(object? v) => v?.ToString() ?? "";
     private static int AsInt(object? v, int fallback) => int.TryParse(v?.ToString(), out var n) ? n : fallback;
+    // Blank input ⇒ null (an uncapped max / no clamp); otherwise the parsed int.
+    private static int? AsNullableInt(object? v) => int.TryParse(v?.ToString(), out var n) ? n : (int?)null;
     private static StatusPolarity ParsePolarity(object? v) =>
         Enum.TryParse<StatusPolarity>(AsString(v), out var p) ? p : StatusPolarity.Debuff;
     private static CardZone ParseZone(object? v) =>
@@ -417,6 +444,63 @@ else
         Enum.TryParse<StatusPolarityFilter>(AsString(v), out var f) ? f : StatusPolarityFilter.Any;
     private static StatusPick ParseStatusPick(object? v) =>
         Enum.TryParse<StatusPick>(AsString(v), out var p) ? p : StatusPick.First;
+
+    // Resource-pool selection (modifySelectedResource): which ONE resource pool on the target — an eligibility
+    // filter (any / non-empty) and a pick mode (first / random / highest / lowest), plus an index for the first-pick.
+    private RenderFragment ResourceSelectionControls(ResourceSelectionSpec spec, Action<ResourceSelectionSpec> onChange) => builder =>
+    {
+        var seq = 0;
+        // filter
+        builder.OpenElement(seq++, "select");
+        builder.AddAttribute(seq++, "value", spec.Filter.ToString());
+        builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+            onChange(spec with { Filter = ParseResourceFilter(e.Value) })));
+        foreach (var f in Enum.GetValues<ResourcePoolFilter>())
+        {
+            builder.OpenElement(seq++, "option");
+            builder.AddAttribute(seq++, "value", f.ToString());
+            builder.AddAttribute(seq++, "selected", f == spec.Filter);
+            builder.AddContent(seq++, f.ToString().ToLowerInvariant());
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+
+        // pick mode
+        builder.OpenElement(seq++, "select");
+        builder.AddAttribute(seq++, "value", spec.Pick.ToString());
+        builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+            onChange(spec with { Pick = ParseResourcePick(e.Value) })));
+        foreach (var p in Enum.GetValues<ResourcePick>())
+        {
+            builder.OpenElement(seq++, "option");
+            builder.AddAttribute(seq++, "value", p.ToString());
+            builder.AddAttribute(seq++, "selected", p == spec.Pick);
+            builder.AddContent(seq++, p.ToString().ToLowerInvariant());
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+
+        // index (only meaningful for the deterministic first-pick)
+        if (spec.Pick == ResourcePick.First)
+        {
+            builder.OpenElement(seq++, "span");
+            builder.AddAttribute(seq++, "class", "muted");
+            builder.AddContent(seq++, "#");
+            builder.CloseElement();
+            builder.OpenElement(seq++, "input");
+            builder.AddAttribute(seq++, "type", "number");
+            builder.AddAttribute(seq++, "value", spec.Index);
+            builder.AddAttribute(seq++, "style", "width:3.5rem");
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+                onChange(spec with { Index = AsInt(e.Value, spec.Index) })));
+            builder.CloseElement();
+        }
+    };
+
+    private static ResourcePoolFilter ParseResourceFilter(object? v) =>
+        Enum.TryParse<ResourcePoolFilter>(AsString(v), out var f) ? f : ResourcePoolFilter.Any;
+    private static ResourcePick ParseResourcePick(object? v) =>
+        Enum.TryParse<ResourcePick>(AsString(v), out var p) ? p : ResourcePick.First;
 
     // ── condition widget (for the conditional node) ──────────────────────────────
     private static readonly (string Kind, string Label)[] ConditionKinds =

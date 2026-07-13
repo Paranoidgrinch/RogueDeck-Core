@@ -106,6 +106,51 @@ public class CombatProgramEditorRenderTests
     }
 
     [Fact]
+    public async Task Renders_refill_resource_with_id_and_max_and_no_amount()
+    {
+        // Phase 1b: refillResource shows a resource-id + max field and NO amount control (it refills to max).
+        var html = await RenderAsync(new CombatNodeModel("refillResource", "source", ResourceId: "standard.energy", DefaultMax: 3));
+
+        Assert.Contains("refill resource", html);
+        Assert.Contains("standard.energy", html);
+        Assert.Contains("max", html);
+        Assert.DoesNotContain("event amount", html);
+    }
+
+    [Fact]
+    public async Task Renders_modify_defensive_pool_with_a_pool_id()
+    {
+        var html = await RenderAsync(new CombatNodeModel("modifyDefensivePool", "source", CombatAmountSpec.FromConst(5), PoolId: "block"));
+
+        Assert.Contains("modify defensive pool", html);
+        Assert.Contains("pool id", html); // placeholder
+        Assert.Contains("block", html);
+    }
+
+    [Fact]
+    public async Task Renders_modify_selected_resource_with_the_resource_selection_widget()
+    {
+        var html = await RenderAsync(new CombatNodeModel(
+            "modifySelectedResource", "eventTarget", CombatAmountSpec.FromConst(-2),
+            ResourceSelection: new ResourceSelectionSpec(ResourcePoolFilter.NonEmpty, ResourcePick.Highest)));
+
+        Assert.Contains("modify a selected resource", html);
+        Assert.Contains("nonempty", html); // filter option (lower-cased)
+        Assert.Contains("highest", html);  // pick option
+    }
+
+    [Fact]
+    public async Task Renders_gain_resource_cap_and_modify_resource_bounds()
+    {
+        var capped = await RenderAsync(new CombatNodeModel("gainResource", "source", CombatAmountSpec.FromConst(2), "standard.energy", DefaultMax: 9));
+        Assert.Contains("max", capped);
+
+        var clamped = await RenderAsync(new CombatNodeModel("modifyResource", "source", CombatAmountSpec.FromConst(1), "faith", Min: 0, Max: 5));
+        Assert.Contains("min", clamped);
+        Assert.Contains("max", clamped);
+    }
+
+    [Fact]
     public async Task Renders_remove_selected_status_with_the_selection_widget_and_no_amount()
     {
         // Phase 1a: removeSelectedStatus shows the status-selection widget (polarity filter + pick) and no amount.
