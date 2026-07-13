@@ -106,6 +106,22 @@ public class CombatProgramEditorRenderTests
     }
 
     [Fact]
+    public async Task Renders_a_parameterized_selector_with_status_id_and_union_members()
+    {
+        // Phase 1h part 2: a status-filtered selector shows a status-id field; union shows its member selectors + add.
+        var withStatus = await RenderAsync(new CombatNodeModel("dealDamage", "enemiesWithStatus", CombatAmountSpec.FromConst(6), SelectorStatusId: "poison"));
+        Assert.Contains("enemiesWithStatus", withStatus);
+        Assert.Contains("status id", withStatus); // the status-id field placeholder
+        Assert.Contains("poison", withStatus);
+
+        var union = await RenderAsync(new CombatNodeModel("dealDamage", "union", CombatAmountSpec.FromConst(2),
+            SelectorMembers: new[] { new CombatSelectorSpec("allEnemies"), new CombatSelectorSpec("source") }));
+        Assert.Contains("union", union);
+        Assert.Contains("+ member", union);
+        Assert.Contains("allEnemies", union);
+    }
+
+    [Fact]
     public async Task Renders_repeat_until_and_random_targets_composites()
     {
         // Phase 1h: repeat-until shows its stop condition; random-targets shows count + candidate selector.

@@ -191,6 +191,53 @@ public class CombatProgramModelTests
     }
 
     [Fact]
+    public void Parameterized_selectors_build_their_nodes_and_round_trip()
+    {
+        // Phase 1h part 2: the status-filtered + union selectors (recursive) are now authorable, not JSON escapes.
+        var alliesWith = new CombatNodeModel("heal", "alliesWithStatus", CombatAmountSpec.FromConst(4), SelectorStatusId: "regen");
+        var enemiesWith = new CombatNodeModel("dealDamage", "enemiesWithStatus", CombatAmountSpec.FromConst(6), SelectorStatusId: "poison");
+        var withStatus = new CombatNodeModel("dealDamage", "withStatus", CombatAmountSpec.FromConst(3),
+            SelectorStatusId: "weak", SelectorMembers: new[] { new CombatSelectorSpec("allCombatants") });
+        var union = new CombatNodeModel("applyStatus", "union", CombatAmountSpec.FromConst(1), StatusId: "vulnerable",
+            SelectorMembers: new[] { new CombatSelectorSpec("allEnemies"), new CombatSelectorSpec("lowestHealthAlly") });
+
+        Assert.IsType<HealNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(alliesWith).Root);
+        Assert.IsType<DealDamageNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(withStatus).Root);
+        Assert.IsType<ApplyStatusNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(union).Root);
+
+        foreach (var model in new[] { alliesWith, enemiesWith, withStatus, union })
+            Assert.Equal(model, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(model)));
+    }
+
+    [Fact]
+    public void A_parameterized_selector_classifies_after_a_CombatJson_round_trip()
+    {
+        // "damage every enemy that has Poison" must survive being saved into a blueprint.
+        var model = new CombatNodeModel("dealDamage", "enemiesWithStatus", CombatAmountSpec.FromConst(6), SelectorStatusId: "poison");
+        var options = CombatJson.CreateOptions<CardPlayContext>();
+
+        var program = CombatProgramModel.Build<CardPlayContext>(model);
+        var json = JsonSerializer.Serialize(program, options);
+        var back = JsonSerializer.Deserialize<EffectProgram<CardPlayContext>>(json, options)!;
+
+        Assert.Equal(model, CombatProgramModel.Classify(back));
+    }
+
+    [Fact]
+    public void A_nested_union_of_a_status_filter_round_trips()
+    {
+        // union { enemiesWithStatus(poison), withStatus(poison) of allAllies } — recursion through both parameterized forms.
+        var model = new CombatNodeModel("dealDamage", "union", CombatAmountSpec.FromConst(2),
+            SelectorMembers: new[]
+            {
+                new CombatSelectorSpec("enemiesWithStatus", "poison"),
+                new CombatSelectorSpec("withStatus", "poison", new[] { new CombatSelectorSpec("allAllies") }),
+            });
+
+        Assert.Equal(model, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(model)));
+    }
+
+    [Fact]
     public void RepeatUntil_and_randomTargets_composites_round_trip()
     {
         // Phase 1h: repeat-until (stop condition + body) and random-targets (candidate selector + count + body).

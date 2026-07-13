@@ -14,12 +14,12 @@
             @if (Node.Kind == "forEachTarget")
             {
                 <span class="muted">of</span>
-                @SelectorSelect(CombatProgramModel.SelectorKeys, Node.SelectorKey, key => Set(Node with { SelectorKey = key }))
+                @SelectorControls(Node.PrimarySelector, spec => Set(CombatProgramModel.ApplyPrimarySelector(Node, spec)))
             }
             else if (Node.Kind == "forEachCardInZone")
             {
                 <span class="muted">of</span>
-                @SelectorSelect(CombatProgramModel.SelectorKeys, Node.SelectorKey, key => Set(Node with { SelectorKey = key }))
+                @SelectorControls(Node.PrimarySelector, spec => Set(CombatProgramModel.ApplyPrimarySelector(Node, spec)))
                 <span class="muted">in</span>
                 @ZoneSelect(Node.FromZone, z => Set(Node with { FromZone = z }))
                 <span class="muted">only</span>
@@ -40,7 +40,7 @@
             {
                 @AmountControls(Node.AmountOrDefault, spec => Set(Node with { Amount = spec }))
                 <span class="muted">of</span>
-                @SelectorSelect(CombatProgramModel.SelectorKeys, Node.SelectorKey, key => Set(Node with { SelectorKey = key }))
+                @SelectorControls(Node.PrimarySelector, spec => Set(CombatProgramModel.ApplyPrimarySelector(Node, spec)))
             }
             else if (Node.Kind == "conditional")
             {
@@ -109,7 +109,7 @@ else
         @KindSelect
         @if (CombatProgramModel.UsesSelector(Node.Kind))
         {
-            @SelectorSelect(CombatProgramModel.SelectorKeys, Node.SelectorKey, key => Set(Node with { SelectorKey = key }))
+            @SelectorControls(Node.PrimarySelector, spec => Set(CombatProgramModel.ApplyPrimarySelector(Node, spec)))
         }
         @if (CombatProgramModel.UsesLifecycleState(Node.Kind))
         {
@@ -264,7 +264,7 @@ else
         @if (CombatProgramModel.UsesToSelector(Node.Kind))
         {
             <span class="muted">to</span>
-            @SelectorSelect(CombatProgramModel.SelectorKeys, Node.ToSelectorKey, key => Set(Node with { ToSelectorKey = key }))
+            @SelectorControls(Node.SecondarySelector, spec => Set(CombatProgramModel.ApplySecondarySelector(Node, spec)))
         }
         @if (CombatProgramModel.UsesZones(Node.Kind))
         {
@@ -293,7 +293,7 @@ else
                    @onchange="e => Set(Node with { HasCardTarget = AsBool(e.Value) })" /> at</label>
             @if (Node.HasCardTarget)
             {
-                @SelectorSelect(CombatProgramModel.SelectorKeys, Node.ToSelectorKey, key => Set(Node with { ToSelectorKey = key }))
+                @SelectorControls(Node.SecondarySelector, spec => Set(CombatProgramModel.ApplySecondarySelector(Node, spec)))
             }
         }
         @if (CombatProgramModel.UsesMoveToZone(Node.Kind))
@@ -445,6 +445,91 @@ else
             builder.CloseElement();
         }
         builder.CloseElement();
+    };
+
+    // Recursive combatant-selector widget: a key dropdown plus, for the parameterized keys, a status id (with-status)
+    // and nested sub-selectors (withStatus's inner, union's members) that recurse into this same fragment.
+    private RenderFragment SelectorControls(CombatSelectorSpec spec, Action<CombatSelectorSpec> onChange) => builder =>
+    {
+        var seq = 0;
+        builder.OpenElement(seq++, "select");
+        builder.AddAttribute(seq++, "value", spec.Key);
+        builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+            onChange(SelectorForKey(AsString(e.Value), spec))));
+        foreach (var key in CombatProgramModel.AllSelectorKeys)
+        {
+            builder.OpenElement(seq++, "option");
+            builder.AddAttribute(seq++, "value", key);
+            builder.AddAttribute(seq++, "selected", key == spec.Key);
+            builder.AddContent(seq++, key);
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+
+        if (spec.Key is "alliesWithStatus" or "enemiesWithStatus" or "withStatus")
+        {
+            builder.OpenElement(seq++, "input");
+            builder.AddAttribute(seq++, "value", spec.StatusId);
+            builder.AddAttribute(seq++, "style", "width:7rem");
+            builder.AddAttribute(seq++, "placeholder", "status id");
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+                onChange(spec with { StatusId = AsString(e.Value) })));
+            builder.CloseElement();
+        }
+
+        if (spec.Key == "withStatus")
+        {
+            var inner = spec.MembersOrEmpty.Count > 0 ? spec.MembersOrEmpty[0] : new CombatSelectorSpec("allCombatants");
+            builder.OpenElement(seq++, "span");
+            builder.AddAttribute(seq++, "class", "muted");
+            builder.AddContent(seq++, "of");
+            builder.CloseElement();
+            builder.AddContent(seq++, SelectorControls(inner, s => onChange(spec with { Members = new[] { s } })));
+        }
+        else if (spec.Key == "union")
+        {
+            builder.OpenElement(seq++, "span");
+            builder.AddAttribute(seq++, "class", "fx-body");
+            var members = spec.MembersOrEmpty;
+            for (var i = 0; i < members.Count; i++)
+            {
+                var ix = i;
+                builder.AddContent(seq++, SelectorControls(members[ix], s =>
+                {
+                    var list = members.ToList();
+                    list[ix] = s;
+                    onChange(spec with { Members = list });
+                }));
+                builder.OpenElement(seq++, "button");
+                builder.AddAttribute(seq++, "class", "mini");
+                builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create(this, () =>
+                {
+                    var list = members.ToList();
+                    list.RemoveAt(ix);
+                    onChange(spec with { Members = list.Count > 0 ? list : null });
+                }));
+                builder.AddContent(seq++, "✕");
+                builder.CloseElement();
+            }
+            builder.OpenElement(seq++, "button");
+            builder.AddAttribute(seq++, "class", "mini");
+            builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create(this, () =>
+                onChange(spec with { Members = members.Append(new CombatSelectorSpec("allEnemies")).ToList() })));
+            builder.AddContent(seq++, "+ member");
+            builder.CloseElement();
+            builder.CloseElement();
+        }
+    };
+
+    // Seed a fresh selector spec when the KEY changes: parameterized keys get sensible defaults, others clear params.
+    private static CombatSelectorSpec SelectorForKey(string key, CombatSelectorSpec prev) => key switch
+    {
+        "alliesWithStatus" or "enemiesWithStatus" => new CombatSelectorSpec(key, prev.StatusId == "" ? "poison" : prev.StatusId),
+        "withStatus" => new CombatSelectorSpec(key, prev.StatusId == "" ? "poison" : prev.StatusId,
+            prev.MembersOrEmpty.Count > 0 ? prev.Members : new[] { new CombatSelectorSpec("allCombatants") }),
+        "union" => new CombatSelectorSpec(key, Members: prev.MembersOrEmpty.Count > 0 ? prev.Members
+            : new[] { new CombatSelectorSpec("allEnemies"), new CombatSelectorSpec("source") }),
+        _ => new CombatSelectorSpec(key),
     };
 
     // A CardZone dropdown, reused by the targeted card ops and the card-selector widget.

@@ -29,6 +29,32 @@ public sealed record CombatAmountSpec(
     public bool IsAdvanced => Kind == "advanced";
 }
 
+// A combatant target selector in editor shape. Most selectors are parameterless (Key names a catalog singleton), but
+// three are parameterized and RECURSIVE: alliesWithStatus / enemiesWithStatus carry a StatusId; withStatus filters a
+// single inner selector (Members[0]) by StatusId; union combines N member selectors (Members). Members is null for the
+// parameterless keys so build↔classify round-trips exactly. This is the recursive substrate that lets the editor
+// author every engine selector instead of only the parameterless ones.
+public sealed record CombatSelectorSpec(
+    string Key = "source", string StatusId = "", IReadOnlyList<CombatSelectorSpec>? Members = null)
+{
+    public IReadOnlyList<CombatSelectorSpec> MembersOrEmpty => Members ?? Array.Empty<CombatSelectorSpec>();
+
+    // Structural equality over the recursive Members list (records compare lists by reference otherwise).
+    public bool Equals(CombatSelectorSpec? other) =>
+        other is not null && Key == other.Key && StatusId == other.StatusId
+        && MembersOrEmpty.SequenceEqual(other.MembersOrEmpty);
+
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(Key);
+        hash.Add(StatusId);
+        foreach (var m in MembersOrEmpty)
+            hash.Add(m);
+        return hash.ToHashCode();
+    }
+}
+
 // A conditional node's condition, in the small curated shape the editor authors, plus mapping to/from the engine's
 // ICombatExpression<TContext,bool>. Mirrors RelicConditionSpec on the run side. Modelled: a value comparison over a
 // target (health / resource / status stacks vs a constant), or a target-state predicate (has status / alive /
@@ -143,9 +169,19 @@ public sealed record CombatNodeModel(
     IReadOnlyList<StatusGrant>? StartingStatuses = null,
     // playCard's optional card-target: when true the played card is aimed at ToSelectorKey; when false it has no
     // target. false canonically for other kinds so build↔classify round-trips exactly.
-    bool HasCardTarget = false)
+    bool HasCardTarget = false,
+    // Parameterization of the primary selector (SelectorKey) and the secondary selector (ToSelectorKey) for the
+    // status-filtered / union selector keys: a status id and/or recursive member selectors. Empty / null canonically
+    // for the parameterless keys so build↔classify round-trips exactly.
+    string SelectorStatusId = "",
+    IReadOnlyList<CombatSelectorSpec>? SelectorMembers = null,
+    string ToSelectorStatusId = "",
+    IReadOnlyList<CombatSelectorSpec>? ToSelectorMembers = null)
 {
     public CombatAmountSpec AmountOrDefault => Amount ?? CombatAmountSpec.FromConst(3);
+    // The primary / secondary target selectors assembled from their key + parameterization.
+    public CombatSelectorSpec PrimarySelector => new(SelectorKey, SelectorStatusId, SelectorMembers);
+    public CombatSelectorSpec SecondarySelector => new(ToSelectorKey, ToSelectorStatusId, ToSelectorMembers);
     public CombatCardSpec CardOrDefault => Card ?? new CombatCardSpec();
     public StatusSelectionSpec SelectionOrDefault => Selection ?? new StatusSelectionSpec();
     public ResourceSelectionSpec ResourceSelectionOrDefault => ResourceSelection ?? new ResourceSelectionSpec();
@@ -218,6 +254,8 @@ public sealed record CombatNodeModel(
         && PositionY == other.PositionY
         && StartingStatusesOrEmpty.SequenceEqual(other.StartingStatusesOrEmpty)
         && HasCardTarget == other.HasCardTarget
+        && PrimarySelector == other.PrimarySelector
+        && SecondarySelector == other.SecondarySelector
         && ChildrenOrEmpty.SequenceEqual(other.ChildrenOrEmpty);
 
     public override int GetHashCode()
@@ -260,6 +298,12 @@ public sealed record CombatNodeModel(
         foreach (var grant in StartingStatusesOrEmpty)
             hash.Add(grant);
         hash.Add(HasCardTarget);
+        hash.Add(SelectorStatusId);
+        foreach (var m in SelectorMembers ?? Array.Empty<CombatSelectorSpec>())
+            hash.Add(m);
+        hash.Add(ToSelectorStatusId);
+        foreach (var m in ToSelectorMembers ?? Array.Empty<CombatSelectorSpec>())
+            hash.Add(m);
         foreach (var child in ChildrenOrEmpty)
             hash.Add(child);
         return hash.ToHashCode();
@@ -418,6 +462,13 @@ public static class CombatProgramModel
     // A composite is rendered as its own block (with sub-body editors); a leaf as a one-line node. The UI split.
     public static bool IsComposite(string kind) => CompositeKinds.Any(k => k.Kind == kind);
 
+    // Apply an authored selector spec to a node's primary / secondary selector fields (used by the editor widget).
+    public static CombatNodeModel ApplyPrimarySelector(CombatNodeModel node, CombatSelectorSpec spec) =>
+        node with { SelectorKey = spec.Key, SelectorStatusId = spec.StatusId, SelectorMembers = spec.Members };
+
+    public static CombatNodeModel ApplySecondarySelector(CombatNodeModel node, CombatSelectorSpec spec) =>
+        node with { ToSelectorKey = spec.Key, ToSelectorStatusId = spec.StatusId, ToSelectorMembers = spec.Members };
+
     // Reshape a moveCombatant node when its movement mode changes, so the coordinate amounts match the mode
     // canonically (ToAbsolute carries X/Y and no Step; a relative mode carries Step and no X/Y) — matching what
     // Classify produces, so an authored move round-trips.
@@ -519,6 +570,11 @@ public static class CombatProgramModel
                 Selection = UsesStatusSelection(kind) ? (node.Selection ?? new StatusSelectionSpec()) : null,
                 ToSelectorKey = UsesToSelector(kind) || UsesCardTarget(kind) ? node.ToSelectorKey : "source",
                 HasCardTarget = UsesCardTarget(kind) && (node.Kind == "playCard" ? node.HasCardTarget : true),
+                // Selector parameterization stays with the selector if the new kind uses one; else reset to canonical.
+                SelectorStatusId = UsesSelector(kind) ? node.SelectorStatusId : "",
+                SelectorMembers = UsesSelector(kind) ? node.SelectorMembers : null,
+                ToSelectorStatusId = UsesToSelector(kind) || UsesCardTarget(kind) ? node.ToSelectorStatusId : "",
+                ToSelectorMembers = UsesToSelector(kind) || UsesCardTarget(kind) ? node.ToSelectorMembers : null,
                 PoolId = UsesPoolId(kind) ? (node.PoolId == "" ? "block" : node.PoolId) : "",
                 ResourceSelection = UsesResourceSelection(kind) ? (node.ResourceSelection ?? new ResourceSelectionSpec()) : null,
                 DefaultMax = UsesDefaultMax(kind) ? (kind == "refillResource" ? (node.DefaultMax ?? 3) : node.DefaultMax) : null,
@@ -611,16 +667,64 @@ public static class CombatProgramModel
         "frontmostEnemy", "backmostEnemy", "nearestEnemy",
     ];
 
+    // The parameterized (recursive) selector keys the widget offers beyond the parameterless catalog: two status-
+    // filtered convenience selectors, a status filter over an inner selector, and a union of members.
+    public static readonly IReadOnlyList<string> ParameterizedSelectorKeys =
+        ["alliesWithStatus", "enemiesWithStatus", "withStatus", "union"];
+
+    // Every selector key the widget offers (parameterless catalog + the parameterized keys).
+    public static IEnumerable<string> AllSelectorKeys => SelectorKeys.Concat(ParameterizedSelectorKeys);
+
     private static ICombatantTargetSelector SelectorFor(string key) =>
         Selectors.FirstOrDefault(s => s.Key == key).Selector
         ?? throw new KeyNotFoundException(
             $"Unknown combat selector '{key}'. Known: {string.Join(", ", SelectorKeys)}.");
+
+    // Build a selector from its editor spec — parameterless keys resolve a catalog singleton; the parameterized keys
+    // construct their engine selector (recursively for withStatus's inner selector and union's members).
+    public static ICombatantTargetSelector SelectorFor(CombatSelectorSpec spec) => spec.Key switch
+    {
+        "alliesWithStatus" => new AllAlliesOfSourceWithStatusCombatantTargetSelector(new StatusDefinitionId(spec.StatusId)),
+        "enemiesWithStatus" => new AllEnemiesOfSourceWithStatusCombatantTargetSelector(new StatusDefinitionId(spec.StatusId)),
+        "withStatus" => new CombatantsWithStatusTargetSelector(
+            SelectorFor(spec.MembersOrEmpty.Count > 0 ? spec.MembersOrEmpty[0] : new CombatSelectorSpec("allCombatants")),
+            new StatusDefinitionId(spec.StatusId)),
+        "union" => new UnionCombatantTargetSelector(spec.MembersOrEmpty.Select(SelectorFor).ToArray()),
+        _ => SelectorFor(spec.Key),
+    };
 
     // Reverse-map by concrete TYPE, not reference: a program deserialized from JSON holds fresh selector instances
     // (not the process-wide singletons), and every catalog selector is a distinct parameterless type, so the type
     // identifies it robustly whether the program was built in memory or round-tripped through CombatJson.
     private static string? KeyFor(ICombatantTargetSelector selector) =>
         Selectors.FirstOrDefault(s => s.Selector.GetType() == selector.GetType()).Key;
+
+    // Classify a selector to its editor spec (the recursive counterpart of SelectorFor(spec)). Returns null if the
+    // selector — or, recursively, a withStatus inner / a union member — is outside the authorable catalog.
+    public static CombatSelectorSpec? SelectorSpecFor(ICombatantTargetSelector selector) => selector switch
+    {
+        AllAlliesOfSourceWithStatusCombatantTargetSelector a => new CombatSelectorSpec("alliesWithStatus", a.StatusDefinitionId.value),
+        AllEnemiesOfSourceWithStatusCombatantTargetSelector e => new CombatSelectorSpec("enemiesWithStatus", e.StatusDefinitionId.value),
+        CombatantsWithStatusTargetSelector w => SelectorSpecFor(w.Inner) is { } inner
+            ? new CombatSelectorSpec("withStatus", w.StatusDefinitionId.value, new[] { inner })
+            : null,
+        UnionCombatantTargetSelector u => ClassifyUnionMembers(u.Selectors) is { } members
+            ? new CombatSelectorSpec("union", Members: members)
+            : null,
+        _ => KeyFor(selector) is { } key ? new CombatSelectorSpec(key) : null,
+    };
+
+    private static IReadOnlyList<CombatSelectorSpec>? ClassifyUnionMembers(IReadOnlyList<ICombatantTargetSelector> members)
+    {
+        var specs = new List<CombatSelectorSpec>(members.Count);
+        foreach (var m in members)
+        {
+            if (SelectorSpecFor(m) is not { } spec)
+                return null;
+            specs.Add(spec);
+        }
+        return specs;
+    }
 
     // ── amounts ──────────────────────────────────────────────────────────────────
     public static ICombatExpression<TContext, int> BuildAmount<TContext>(CombatAmountSpec spec)
@@ -728,10 +832,10 @@ public static class CombatProgramModel
                 return new SequenceEffectNode<TContext>(
                     model.ChildrenOrEmpty.Select(BuildNode<TContext>).ToArray());
             case "forEachTarget":
-                return new ForEachTargetEffectNode<TContext>(SelectorFor(model.SelectorKey), BuildBody<TContext>(model));
+                return new ForEachTargetEffectNode<TContext>(SelectorFor(model.PrimarySelector), BuildBody<TContext>(model));
             case "forEachCardInZone":
                 return new ForEachCardInZoneNode<TContext>(
-                    SelectorFor(model.SelectorKey), model.FromZone, BuildBody<TContext>(model),
+                    SelectorFor(model.PrimarySelector), model.FromZone, BuildBody<TContext>(model),
                     definitionFilter: string.IsNullOrEmpty(model.ToDefinition) ? null : new CardDefinitionId(model.ToDefinition));
             case "repeat":
                 return new RepeatEffectNode<TContext>(BuildAmount<TContext>(model.AmountOrDefault), BuildBody<TContext>(model));
@@ -740,7 +844,7 @@ public static class CombatProgramModel
                     BuildCondition<TContext>(model.Condition ?? new CombatConditionSpec()), BuildBody<TContext>(model));
             case "randomTargets":
                 return new RandomTargetSelectionNode<TContext>(
-                    SelectorFor(model.SelectorKey), BuildAmount<TContext>(model.AmountOrDefault), BuildBody<TContext>(model));
+                    SelectorFor(model.PrimarySelector), BuildAmount<TContext>(model.AmountOrDefault), BuildBody<TContext>(model));
             case "conditional":
                 var children = model.ChildrenOrEmpty;
                 return new ConditionalEffectNode<TContext>(
@@ -762,7 +866,7 @@ public static class CombatProgramModel
     private static IEffectNode<TContext> BuildLeaf<TContext>(CombatNodeModel model)
         where TContext : class
     {
-        var selector = SelectorFor(model.SelectorKey);
+        var selector = SelectorFor(model.PrimarySelector);
         var amount = BuildAmount<TContext>(model.AmountOrDefault);
         return model.Kind switch
         {
@@ -789,14 +893,14 @@ public static class CombatProgramModel
             "setCombatantCounter" => new SetCombatantCounterNode<TContext>(selector, new CounterId(model.CounterId), amount, model.Relative),
             "removeSelectedStatus" => new RemoveSelectedStatusNode<TContext>(selector, model.SelectionOrDefault),
             "modifySelectedStatusStacks" => new ModifySelectedStatusStacksNode<TContext>(selector, model.SelectionOrDefault, amount),
-            "stealSelectedStatus" => new StealSelectedStatusNode<TContext>(selector, model.SelectionOrDefault, SelectorFor(model.ToSelectorKey)),
+            "stealSelectedStatus" => new StealSelectedStatusNode<TContext>(selector, model.SelectionOrDefault, SelectorFor(model.SecondarySelector)),
             "moveCards" => new MoveAllCardsFromZoneNode<TContext>(selector, model.FromZone, model.ToZone),
             "moveCardToZone" => new MoveCardToZoneNode<TContext>(selector, BuildCard<TContext>(model.CardOrDefault), model.ToZone, placement: model.Placement),
             "transformCard" => new TransformCardNode<TContext>(selector, BuildCard<TContext>(model.CardOrDefault), new CardDefinitionId(model.ToDefinition)),
             "createCardInstance" => new CreateCardInstanceNode<TContext>(selector, new CardDefinitionId(model.ToDefinition), model.ToZone, amount),
             "createCardCopy" => new CreateCardCopyNode<TContext>(selector, BuildCard<TContext>(model.CardOrDefault), model.ToZone, amount),
             "playCard" => new PlayCardNode<TContext>(selector, BuildCard<TContext>(model.CardOrDefault),
-                model.HasCardTarget ? SelectorFor(model.ToSelectorKey) : null),
+                model.HasCardTarget ? SelectorFor(model.SecondarySelector) : null),
             "replayCardProgram" => new ReplayCardProgramNode<TContext>(BuildCard<TContext>(model.CardOrDefault), selector),
             "moveCombatant" => model.MovementMode == MovementMode.ToAbsolute
                 ? new MoveCombatantNode<TContext>(selector, MovementMode.ToAbsolute,
@@ -804,7 +908,7 @@ public static class CombatProgramModel
                     y: BuildAmount<TContext>(model.MoveY ?? CombatAmountSpec.FromConst(0)))
                 : new MoveCombatantNode<TContext>(selector, model.MovementMode,
                     step: BuildAmount<TContext>(model.MoveStep ?? CombatAmountSpec.FromConst(1))),
-            "swapPositions" => new SwapPositionsNode<TContext>(selector, SelectorFor(model.ToSelectorKey)),
+            "swapPositions" => new SwapPositionsNode<TContext>(selector, SelectorFor(model.SecondarySelector)),
             "setCombatantLifecycleState" => new SetCombatantLifecycleStateNode<TContext>(selector, model.LifecycleState),
             "changeCombatantTeam" => new ChangeCombatantTeamNode<TContext>(selector, new TeamId(model.TeamId)),
             "setCombatResult" => new SetCombatResultNode<TContext>(model.CombatResult),
@@ -841,51 +945,39 @@ public static class CombatProgramModel
         switch (node)
         {
             case DealDamageNode<TContext> { ResultKey: null } n:
-                if (KeyFor(n.TargetSelector) is not { } ddKey)
-                    return null;
                 var ddAmount = ClassifyAmount(n.Amount);
                 return ddAmount.IsAdvanced
                     ? null
-                    : new CombatNodeModel("dealDamage", ddKey, ddAmount,
-                        Element: n.Element?.value ?? "", IgnoresBlock: n.IgnoresBlock);
+                    : WithSelector(n.TargetSelector, new CombatNodeModel("dealDamage", "source", ddAmount,
+                        Element: n.Element?.value ?? "", IgnoresBlock: n.IgnoresBlock));
             case HealNode<TContext> { ResultKey: null } n:
                 return Leaf("heal", n.TargetSelector, n.Amount);
             case GainBlockNode<TContext> { ResultKey: null } n:
                 return Leaf("gainBlock", n.TargetSelector, n.Amount);
             case GainResourceNode<TContext> { ResultKey: null } n:
-                if (KeyFor(n.TargetSelector) is not { } grKey)
-                    return null;
                 var grAmount = ClassifyAmount(n.Amount);
                 return grAmount.IsAdvanced
                     ? null
-                    : new CombatNodeModel("gainResource", grKey, grAmount, n.ResourceId.value, DefaultMax: n.DefaultMax);
+                    : WithSelector(n.TargetSelector, new CombatNodeModel("gainResource", "source", grAmount, n.ResourceId.value, DefaultMax: n.DefaultMax));
             case LoseResourceNode<TContext> { ResultKey: null } n:
                 return Leaf("loseResource", n.TargetSelector, n.Amount, n.ResourceId.value);
             case ModifyResourceNode<TContext> { ResultKey: null } n:
-                if (KeyFor(n.TargetSelector) is not { } mrKey)
-                    return null;
                 var mrDelta = ClassifyAmount(n.Delta);
                 return mrDelta.IsAdvanced
                     ? null
-                    : new CombatNodeModel("modifyResource", mrKey, mrDelta, n.ResourceId.value, Min: n.Min, Max: n.Max);
+                    : WithSelector(n.TargetSelector, new CombatNodeModel("modifyResource", "source", mrDelta, n.ResourceId.value, Min: n.Min, Max: n.Max));
             case RefillResourceNode<TContext> { ResultKey: null } n:
-                return KeyFor(n.TargetSelector) is { } rfKey
-                    ? new CombatNodeModel("refillResource", rfKey, ResourceId: n.ResourceId.value, DefaultMax: n.DefaultMax)
-                    : null;
+                return WithSelector(n.TargetSelector, new CombatNodeModel("refillResource", "source", ResourceId: n.ResourceId.value, DefaultMax: n.DefaultMax));
             case ModifySelectedResourceNode<TContext> n:
-                if (KeyFor(n.TargetSelector) is not { } msrKey)
-                    return null;
                 var msrDelta = ClassifyAmount(n.Delta);
                 return msrDelta.IsAdvanced
                     ? null
-                    : new CombatNodeModel("modifySelectedResource", msrKey, msrDelta, ResourceSelection: n.Selection);
+                    : WithSelector(n.TargetSelector, new CombatNodeModel("modifySelectedResource", "source", msrDelta, ResourceSelection: n.Selection));
             case ModifyDefensivePoolNode<TContext> { ResultKey: null } n:
-                if (KeyFor(n.TargetSelector) is not { } dpKey)
-                    return null;
                 var dpDelta = ClassifyAmount(n.Delta);
                 return dpDelta.IsAdvanced
                     ? null
-                    : new CombatNodeModel("modifyDefensivePool", dpKey, dpDelta, PoolId: n.PoolId.value);
+                    : WithSelector(n.TargetSelector, new CombatNodeModel("modifyDefensivePool", "source", dpDelta, PoolId: n.PoolId.value));
             case ModifyMaxHealthNode<TContext> { ResultKey: null } n:
                 return Leaf("modifyMaxHealth", n.TargetSelector, n.Delta);
             case SetHealthNode<TContext> { ResultKey: null } n:
@@ -893,21 +985,15 @@ public static class CombatProgramModel
             case DrawCardsNode<TContext> { ResultKey: null } n:
                 return Leaf("drawCards", n.TargetSelector, n.Count);
             case ApplyStatusNode<TContext> { ResultKey: null } n:
-                if (KeyFor(n.TargetSelector) is not { } applyKey)
-                    return null;
                 var stacks = ClassifyAmount(n.Stacks);
                 return stacks.IsAdvanced
                     ? null
-                    : new CombatNodeModel("applyStatus", applyKey, stacks,
-                        StatusId: n.StatusDefinitionId.value, DurationTurns: n.DurationTurns, Charges: n.Charges);
+                    : WithSelector(n.TargetSelector, new CombatNodeModel("applyStatus", "source", stacks,
+                        StatusId: n.StatusDefinitionId.value, DurationTurns: n.DurationTurns, Charges: n.Charges));
             case RemoveStatusNode<TContext> { ResultKey: null } n:
-                return KeyFor(n.TargetSelector) is { } removeKey
-                    ? new CombatNodeModel("removeStatus", removeKey, StatusId: n.StatusDefinitionId.value)
-                    : null;
+                return WithSelector(n.TargetSelector, new CombatNodeModel("removeStatus", "source", StatusId: n.StatusDefinitionId.value));
             case RemoveStatusesByPolarityNode<TContext> { ResultKey: null } n:
-                return KeyFor(n.TargetSelector) is { } cleanseKey
-                    ? new CombatNodeModel("cleanse", cleanseKey, Polarity: n.Polarity)
-                    : null;
+                return WithSelector(n.TargetSelector, new CombatNodeModel("cleanse", "source", Polarity: n.Polarity));
             case ModifyStatusStacksNode<TContext> { ResultKey: null } n:
                 return StatusDeltaLeaf("modifyStatusStacks", n.TargetSelector, n.StatusDefinitionId, n.Delta);
             case ModifyStatusDurationNode<TContext> { ResultKey: null } n:
@@ -915,58 +1001,42 @@ public static class CombatProgramModel
             case ModifyStatusChargesNode<TContext> { ResultKey: null } n:
                 return StatusDeltaLeaf("modifyStatusCharges", n.TargetSelector, n.StatusDefinitionId, n.Delta);
             case SetCombatantCounterNode<TContext> n:
-                if (KeyFor(n.TargetSelector) is not { } scKey)
-                    return null;
                 var scAmount = ClassifyAmount(n.Amount);
                 return scAmount.IsAdvanced
                     ? null
-                    : new CombatNodeModel("setCombatantCounter", scKey, scAmount, CounterId: n.CounterId.value, Relative: n.Relative);
+                    : WithSelector(n.TargetSelector, new CombatNodeModel("setCombatantCounter", "source", scAmount, CounterId: n.CounterId.value, Relative: n.Relative));
             case RemoveSelectedStatusNode<TContext> n:
-                return KeyFor(n.TargetSelector) is { } rsKey
-                    ? new CombatNodeModel("removeSelectedStatus", rsKey, Selection: n.Selection)
-                    : null;
+                return WithSelector(n.TargetSelector, new CombatNodeModel("removeSelectedStatus", "source", Selection: n.Selection));
             case ModifySelectedStatusStacksNode<TContext> n:
-                if (KeyFor(n.TargetSelector) is not { } mssKey)
-                    return null;
                 var mssDelta = ClassifyAmount(n.Delta);
                 return mssDelta.IsAdvanced
                     ? null
-                    : new CombatNodeModel("modifySelectedStatusStacks", mssKey, mssDelta, Selection: n.Selection);
+                    : WithSelector(n.TargetSelector, new CombatNodeModel("modifySelectedStatusStacks", "source", mssDelta, Selection: n.Selection));
             case StealSelectedStatusNode<TContext> n:
-                return KeyFor(n.FromSelector) is { } ssFrom && KeyFor(n.ToSelector) is { } ssTo
-                    ? new CombatNodeModel("stealSelectedStatus", ssFrom, Selection: n.Selection, ToSelectorKey: ssTo)
-                    : null;
+                return WithSecondarySelector(n.ToSelector,
+                    WithSelector(n.FromSelector, new CombatNodeModel("stealSelectedStatus", "source", Selection: n.Selection)));
             case MoveAllCardsFromZoneNode<TContext> { ResultKey: null } n:
-                return KeyFor(n.TargetSelector) is { } moveKey
-                    ? new CombatNodeModel("moveCards", moveKey, FromZone: n.FromZone, ToZone: n.ToZone)
-                    : null;
+                return WithSelector(n.TargetSelector, new CombatNodeModel("moveCards", "source", FromZone: n.FromZone, ToZone: n.ToZone));
             case MoveCombatantNode<TContext> n:
-                if (KeyFor(n.TargetSelector) is not { } mcKey)
-                    return null;
                 if (n.Mode == MovementMode.ToAbsolute)
                 {
                     var mx = n.X is null ? CombatAmountSpec.FromConst(0) : ClassifyAmount(n.X);
                     var my = n.Y is null ? CombatAmountSpec.FromConst(0) : ClassifyAmount(n.Y);
                     return mx.IsAdvanced || my.IsAdvanced
                         ? null
-                        : new CombatNodeModel("moveCombatant", mcKey, MovementMode: MovementMode.ToAbsolute, MoveX: mx, MoveY: my);
+                        : WithSelector(n.TargetSelector, new CombatNodeModel("moveCombatant", "source", MovementMode: MovementMode.ToAbsolute, MoveX: mx, MoveY: my));
                 }
                 var ms = n.Step is null ? CombatAmountSpec.FromConst(1) : ClassifyAmount(n.Step);
                 return ms.IsAdvanced
                     ? null
-                    : new CombatNodeModel("moveCombatant", mcKey, MovementMode: n.Mode, MoveStep: ms);
+                    : WithSelector(n.TargetSelector, new CombatNodeModel("moveCombatant", "source", MovementMode: n.Mode, MoveStep: ms));
             case SwapPositionsNode<TContext> n:
-                return KeyFor(n.FirstSelector) is { } swFirst && KeyFor(n.SecondSelector) is { } swSecond
-                    ? new CombatNodeModel("swapPositions", swFirst, ToSelectorKey: swSecond)
-                    : null;
+                return WithSecondarySelector(n.SecondSelector,
+                    WithSelector(n.FirstSelector, new CombatNodeModel("swapPositions", "source")));
             case SetCombatantLifecycleStateNode<TContext> { ResultKey: null } n:
-                return KeyFor(n.TargetSelector) is { } lsKey
-                    ? new CombatNodeModel("setCombatantLifecycleState", lsKey, LifecycleState: n.LifecycleState)
-                    : null;
+                return WithSelector(n.TargetSelector, new CombatNodeModel("setCombatantLifecycleState", "source", LifecycleState: n.LifecycleState));
             case ChangeCombatantTeamNode<TContext> { ResultKey: null } n:
-                return KeyFor(n.TargetSelector) is { } ctKey
-                    ? new CombatNodeModel("changeCombatantTeam", ctKey, TeamId: n.TeamId.value)
-                    : null;
+                return WithSelector(n.TargetSelector, new CombatNodeModel("changeCombatantTeam", "source", TeamId: n.TeamId.value));
             case SetCombatResultNode<TContext> { ResultKey: null } n:
                 // Combat-global: no target selector, so the model keeps the canonical "source".
                 return new CombatNodeModel("setCombatResult", "source", CombatResult: n.Result);
@@ -981,38 +1051,35 @@ public static class CombatProgramModel
                         PositionX: n.Position?.X, PositionY: n.Position?.Y,
                         StartingStatuses: n.StartingStatuses.Count > 0 ? n.StartingStatuses.ToArray() : null);
             case MoveCardToZoneNode<TContext> { ResultKey: null } n:
-                return KeyFor(n.OwnerSelector) is { } mtKey && ClassifyCard(n.CardExpression) is { } mtCard
-                    ? new CombatNodeModel("moveCardToZone", mtKey, Card: mtCard, ToZone: n.ToZone, Placement: n.Placement)
+                return ClassifyCard(n.CardExpression) is { } mtCard
+                    ? WithSelector(n.OwnerSelector, new CombatNodeModel("moveCardToZone", "source", Card: mtCard, ToZone: n.ToZone, Placement: n.Placement))
                     : null;
             case TransformCardNode<TContext> { ResultKey: null } n:
-                return KeyFor(n.OwnerSelector) is { } tfKey && ClassifyCard(n.CardExpression) is { } tfCard
-                    ? new CombatNodeModel("transformCard", tfKey, Card: tfCard, ToDefinition: n.ToDefinition.value)
+                return ClassifyCard(n.CardExpression) is { } tfCard
+                    ? WithSelector(n.OwnerSelector, new CombatNodeModel("transformCard", "source", Card: tfCard, ToDefinition: n.ToDefinition.value))
                     : null;
             case CreateCardInstanceNode<TContext> { ResultKey: null } n:
-                if (KeyFor(n.TargetSelector) is not { } cciKey)
-                    return null;
                 var cciCount = ClassifyAmount(n.Count);
                 return cciCount.IsAdvanced
                     ? null
-                    : new CombatNodeModel("createCardInstance", cciKey, cciCount, ToDefinition: n.CardDefinitionId.value, ToZone: n.ToZone);
+                    : WithSelector(n.TargetSelector, new CombatNodeModel("createCardInstance", "source", cciCount, ToDefinition: n.CardDefinitionId.value, ToZone: n.ToZone));
             case CreateCardCopyNode<TContext> { ResultKey: null } n:
-                if (KeyFor(n.TargetSelector) is not { } cccKey || ClassifyCard(n.SourceCard) is not { } cccCard)
+                if (ClassifyCard(n.SourceCard) is not { } cccCard)
                     return null;
                 var cccCount = ClassifyAmount(n.Count);
                 return cccCount.IsAdvanced
                     ? null
-                    : new CombatNodeModel("createCardCopy", cccKey, cccCount, Card: cccCard, ToZone: n.ToZone);
+                    : WithSelector(n.TargetSelector, new CombatNodeModel("createCardCopy", "source", cccCount, Card: cccCard, ToZone: n.ToZone));
             case PlayCardNode<TContext> { ResultKey: null } n:
-                if (KeyFor(n.PlayerSelector) is not { } pcKey || ClassifyCard(n.CardExpression) is not { } pcCard)
+                if (ClassifyCard(n.CardExpression) is not { } pcCard)
                     return null;
                 if (n.CardTargetSelector is null)
-                    return new CombatNodeModel("playCard", pcKey, Card: pcCard, HasCardTarget: false);
-                return KeyFor(n.CardTargetSelector) is { } pcTarget
-                    ? new CombatNodeModel("playCard", pcKey, Card: pcCard, HasCardTarget: true, ToSelectorKey: pcTarget)
-                    : null;
+                    return WithSelector(n.PlayerSelector, new CombatNodeModel("playCard", "source", Card: pcCard, HasCardTarget: false));
+                return WithSecondarySelector(n.CardTargetSelector,
+                    WithSelector(n.PlayerSelector, new CombatNodeModel("playCard", "source", Card: pcCard, HasCardTarget: true)));
             case ReplayCardProgramNode<TContext> n:
-                return KeyFor(n.TargetSelector) is { } rcKey && ClassifyCard(n.Card) is { } rcCard
-                    ? new CombatNodeModel("replayCardProgram", rcKey, Card: rcCard)
+                return ClassifyCard(n.Card) is { } rcCard
+                    ? WithSelector(n.TargetSelector, new CombatNodeModel("replayCardProgram", "source", Card: rcCard))
                     : null;
 
             case SequenceEffectNode<TContext> s:
@@ -1021,13 +1088,13 @@ public static class CombatProgramModel
                     : null;
             case ForEachTargetEffectNode<TContext> f
                 when f.MaxIterations == ForEachTargetEffectNode<TContext>.DefaultMaxIterations:
-                return KeyFor(f.CollectionSelector) is { } key && ClassifyNode<TContext>(f.Body) is { } body
-                    ? CombatNodeModel.ForEach(key, body)
+                return ClassifyNode<TContext>(f.Body) is { } body
+                    ? WithSelector(f.CollectionSelector, CombatNodeModel.ForEach("source", body))
                     : null;
             case ForEachCardInZoneNode<TContext> fc
                 when fc.MaxIterations == ForEachCardInZoneNode<TContext>.DefaultMaxIterations:
-                return KeyFor(fc.OwnerSelector) is { } fcKey && ClassifyNode<TContext>(fc.Body) is { } fcBody
-                    ? CombatNodeModel.ForEachCard(fcKey, fc.Zone, fcBody, fc.DefinitionFilter?.value ?? "")
+                return ClassifyNode<TContext>(fc.Body) is { } fcBody
+                    ? WithSelector(fc.OwnerSelector, CombatNodeModel.ForEachCard("source", fc.Zone, fcBody, fc.DefinitionFilter?.value ?? ""))
                     : null;
             case RepeatEffectNode<TContext> r
                 when r.MaxCount == RepeatEffectNode<TContext>.DefaultMaxCount:
@@ -1043,11 +1110,9 @@ public static class CombatProgramModel
                     : null;
             case RandomTargetSelectionNode<TContext> rt
                 when rt.MaxIterations == RandomTargetSelectionNode<TContext>.DefaultMaxIterations:
-                if (KeyFor(rt.CandidateSelector) is not { } rtKey)
-                    return null;
                 var rtCount = ClassifyAmount(rt.Count);
                 return !rtCount.IsAdvanced && ClassifyNode<TContext>(rt.Body) is { } rtBody
-                    ? CombatNodeModel.RandomTargets(rtKey, rtCount, rtBody)
+                    ? WithSelector(rt.CandidateSelector, CombatNodeModel.RandomTargets("source", rtCount, rtBody))
                     : null;
             case ConditionalEffectNode<TContext> cond:
                 return ClassifyConditional<TContext>(cond);
@@ -1086,16 +1151,26 @@ public static class CombatProgramModel
         return models;
     }
 
+    // Set a model's PRIMARY selector (key + status/members) from a classified selector, or null if it is outside the
+    // authorable catalog (recursively, for a withStatus inner / a union member). The model is built with a placeholder
+    // selector that this overrides — so every primary-selector site routes its selector through here for full parity.
+    private static CombatNodeModel? WithSelector(ICombatantTargetSelector selector, CombatNodeModel? model) =>
+        model is { } m && SelectorSpecFor(selector) is { } s
+            ? m with { SelectorKey = s.Key, SelectorStatusId = s.StatusId, SelectorMembers = s.Members }
+            : null;
+
+    // Set a model's SECONDARY selector (ToSelectorKey + status/members) from a classified selector, or null if unlisted.
+    private static CombatNodeModel? WithSecondarySelector(ICombatantTargetSelector selector, CombatNodeModel? model) =>
+        model is { } m && SelectorSpecFor(selector) is { } s
+            ? m with { ToSelectorKey = s.Key, ToSelectorStatusId = s.StatusId, ToSelectorMembers = s.Members }
+            : null;
+
     private static CombatNodeModel? Leaf<TContext>(
         string kind, ICombatantTargetSelector selector, ICombatExpression<TContext, int> amount, string resourceId = "")
         where TContext : class
     {
-        if (KeyFor(selector) is not { } selectorKey)
-            return null;
         var spec = ClassifyAmount(amount);
-        if (spec.IsAdvanced)
-            return null;
-        return new CombatNodeModel(kind, selectorKey, spec, resourceId);
+        return spec.IsAdvanced ? null : WithSelector(selector, new CombatNodeModel(kind, "source", spec, resourceId));
     }
 
     // A status-delta leaf (modify status stacks/duration/charges): a status id + an amount delta, no resource id.
@@ -1103,10 +1178,8 @@ public static class CombatProgramModel
         string kind, ICombatantTargetSelector selector, StatusDefinitionId statusId, ICombatExpression<TContext, int> amount)
         where TContext : class
     {
-        if (KeyFor(selector) is not { } selectorKey)
-            return null;
         var spec = ClassifyAmount(amount);
-        return spec.IsAdvanced ? null : new CombatNodeModel(kind, selectorKey, spec, StatusId: statusId.value);
+        return spec.IsAdvanced ? null : WithSelector(selector, new CombatNodeModel(kind, "source", spec, StatusId: statusId.value));
     }
 
     // Reverse of BuildCard: a card-instance expression → the editor's card-selector spec, or null when it is outside
