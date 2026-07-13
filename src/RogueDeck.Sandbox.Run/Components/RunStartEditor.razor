@@ -1,0 +1,351 @@
+@* Presentational editor for one RunStart — the hero's opening state (HeroTab) OR one roster character
+   (CharactersTab). Emits a new RunStart via ValueChanged on every edit; the parent owns persistence and the
+   surrounding context. The available relic / consumable / card ids live on the blueprint, not on RunStart, so
+   they are passed in. Deck editing is opt-in (ShowDeck): the hero's deck is the shared RunBlueprint.Deck, but a
+   roster character carries its own deck here. *@
+
+<div class="run-bar">
+    <label>Name
+        <input value="@Value.HeroName" style="width:12rem" @onchange="e => SetName(AsString(e.Value))" />
+    </label>
+    <label>Max HP
+        <input type="number" value="@Value.MaxHealth" style="width:5rem"
+               @onchange="e => SetMaxHealth(AsInt(e.Value, Value.MaxHealth))" />
+    </label>
+    <label>Starting HP
+        <input type="number" value="@Value.StartingHealth" style="width:5rem"
+               @onchange="e => SetStartingHealth(AsInt(e.Value, Value.StartingHealth))" />
+    </label>
+</div>
+
+<h3>Starting resources</h3>
+<p class="muted">Run-level resources this character begins with — gold or any custom resource id.</p>
+@foreach (var (id, amount) in Resources)
+{
+    <div class="run-bar">
+        <label>@id
+            <input type="number" value="@amount" style="width:5rem"
+                   @onchange="e => SetResource(id, AsInt(e.Value, amount))" />
+        </label>
+        <button class="mini" @onclick="() => RemoveResource(id)">✕</button>
+    </div>
+}
+<div class="run-bar">
+    <input value="@_newResourceId" placeholder="new resource id" style="width:10rem"
+           @onchange="e => _newResourceId = AsString(e.Value)" />
+    <input type="number" value="@_newResourceAmount" style="width:5rem"
+           @onchange="e => _newResourceAmount = AsInt(e.Value, _newResourceAmount)" />
+    <button class="mini" @onclick="AddResource" disabled="@string.IsNullOrWhiteSpace(_newResourceId)">+ add resource</button>
+</div>
+
+@if (ShowDeck)
+{
+    <h3>Starting deck</h3>
+    <p class="muted">This character's own deck (card ids). Character selection uses this deck when the character is
+        picked; leave empty to fall back to the run's shared deck.</p>
+    <div class="run-bar">
+        @if (Value.Deck.Count == 0)
+        {
+            <span class="muted">(empty — falls back to the shared deck)</span>
+        }
+        @for (var c = 0; c < Value.Deck.Count; c++)
+        {
+            var cardIndex = c;
+            <span class="chip" style="margin-right:.25rem">@Value.Deck[cardIndex].value
+                <button class="mini" @onclick="() => RemoveDeckCard(cardIndex)">✕</button>
+            </span>
+        }
+    </div>
+    <div class="run-bar">
+        <select value="" @onchange="e => AddDeckCard(AsString(e.Value))">
+            <option value="">+ add card…</option>
+            @foreach (var id in AvailableCards)
+            {
+                <option value="@id">@id</option>
+            }
+        </select>
+        @if (AvailableCards.Count == 0)
+        {
+            <span class="muted">Author cards in the Cards tab first.</span>
+        }
+    </div>
+}
+
+<h3>Starting relics</h3>
+<p class="muted">Relics granted when the run starts. Author relics in the Relics tab; the built-in samples are always
+    available.</p>
+@foreach (var id in AvailableRelics)
+{
+    <div class="run-bar">
+        <label>
+            <input type="checkbox" checked="@Value.StartingRelics.Contains(id)"
+                   @onchange="e => ToggleRelic(id, AsBool(e.Value))" /> @id
+        </label>
+    </div>
+}
+
+<h3>Starting consumables</h3>
+<p class="muted">Consumables granted at run start (one instance each). Author them in the Consumables tab first.</p>
+@if (AvailableConsumables.Count == 0)
+{
+    <p class="muted">No consumables defined yet.</p>
+}
+@foreach (var id in AvailableConsumables)
+{
+    <div class="run-bar">
+        <label>
+            <input type="checkbox" checked="@Value.StartingConsumables.Contains(id)"
+                   @onchange="e => ToggleConsumable(id, AsBool(e.Value))" /> @id
+        </label>
+    </div>
+}
+
+<h3>Party (multiplayer)</h3>
+<p class="muted">Extra player characters BESIDES this one (member 0), for a party of 1–4. Each is a full player: its
+    own HP, deck, wallet (gold), relics, and consumables. Empty ⇒ a single-hero start.</p>
+@for (var i = 0; i < Party.Count; i++)
+{
+    var index = i;
+    var member = Party[index];
+    <div class="member-card" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:.75rem; margin:.5rem 0">
+        <div class="run-bar" style="justify-content:space-between">
+            <strong>Member @(index + 2)</strong>
+            <button class="mini" @onclick="() => RemoveMember(index)">✕ remove member</button>
+        </div>
+        <div class="run-bar">
+            <label>Name
+                <input value="@member.DisplayNameKey" style="width:10rem"
+                       @onchange="e => SetMemberName(index, AsString(e.Value))" />
+            </label>
+            <label>Max HP
+                <input type="number" value="@member.MaxHealth" style="width:5rem"
+                       @onchange="e => SetMemberMaxHp(index, AsInt(e.Value, member.MaxHealth))" />
+            </label>
+            <label>Gold
+                <input type="number" value="@MemberGold(member)" style="width:5rem"
+                       @onchange="e => SetMemberGold(index, AsInt(e.Value, MemberGold(member)))" />
+            </label>
+        </div>
+        <div class="run-bar">
+            <span class="muted">Deck:</span>
+            @if (member.Deck.Count == 0)
+            {
+                <span class="muted">(empty)</span>
+            }
+            @for (var c = 0; c < member.Deck.Count; c++)
+            {
+                var cardIndex = c;
+                <span class="chip" style="margin-right:.25rem">@member.Deck[cardIndex]
+                    <button class="mini" @onclick="() => RemoveMemberCard(index, cardIndex)">✕</button>
+                </span>
+            }
+        </div>
+        <div class="run-bar">
+            <select value="" @onchange="e => AddMemberCard(index, AsString(e.Value))">
+                <option value="">+ add card…</option>
+                @foreach (var id in AvailableCards)
+                {
+                    <option value="@id">@id</option>
+                }
+            </select>
+            @if (AvailableCards.Count == 0)
+            {
+                <span class="muted">Author cards in the Cards tab first.</span>
+            }
+        </div>
+        <div class="run-bar">
+            <span class="muted">Relics:</span>
+            @foreach (var id in AvailableRelics)
+            {
+                <label style="margin-right:.5rem">
+                    <input type="checkbox" checked="@member.StartingRelics.Contains(id)"
+                           @onchange="e => ToggleMemberRelic(index, id, AsBool(e.Value))" /> @id
+                </label>
+            }
+        </div>
+        <div class="run-bar">
+            <span class="muted">Consumables:</span>
+            @if (AvailableConsumables.Count == 0)
+            {
+                <span class="muted">(none defined)</span>
+            }
+            @foreach (var id in AvailableConsumables)
+            {
+                <label style="margin-right:.5rem">
+                    <input type="checkbox" checked="@member.StartingConsumables.Contains(id)"
+                           @onchange="e => ToggleMemberConsumable(index, id, AsBool(e.Value))" /> @id
+                </label>
+            }
+        </div>
+    </div>
+}
+@if (Party.Count < 3)
+{
+    <button class="mini" @onclick="AddMember">+ add party member</button>
+}
+else
+{
+    <p class="muted">Party is full (4 members: the hero + 3).</p>
+}
+
+@code {
+    [Parameter, EditorRequired] public RunStart Value { get; set; } = default!;
+    [Parameter] public EventCallback<RunStart> ValueChanged { get; set; }
+    [Parameter] public IReadOnlyList<string> AvailableRelics { get; set; } = Array.Empty<string>();
+    [Parameter] public IReadOnlyList<string> AvailableConsumables { get; set; } = Array.Empty<string>();
+    [Parameter] public IReadOnlyList<string> AvailableCards { get; set; } = Array.Empty<string>();
+    [Parameter] public bool ShowDeck { get; set; }
+
+    private const string GoldResource = "gold";
+    private string _newResourceId = "";
+    private int _newResourceAmount = 10;
+
+    private IEnumerable<KeyValuePair<string, int>> Resources =>
+        Value.Resources.OrderBy(r => r.Key, StringComparer.Ordinal);
+    private IReadOnlyList<RunMemberData> Party => Value.StartingParty;
+
+    private static string AsString(object? v) => v?.ToString() ?? "";
+    private static int AsInt(object? v, int fallback) => int.TryParse(v?.ToString(), out var n) ? n : fallback;
+    private static bool AsBool(object? v) => v is bool b ? b : bool.TryParse(v?.ToString(), out var r) && r;
+
+    private Task Emit(RunStart next) => ValueChanged.InvokeAsync(next);
+
+    private Task SetName(string name) =>
+        Emit(Value with { HeroName = string.IsNullOrWhiteSpace(name) ? "Hero" : name.Trim() });
+
+    private Task SetMaxHealth(int value)
+    {
+        var max = Math.Max(1, value);
+        return Emit(Value with { MaxHealth = max, StartingHealth = Math.Clamp(Value.StartingHealth, 1, max) });
+    }
+
+    private Task SetStartingHealth(int value) =>
+        Emit(Value with { StartingHealth = Math.Clamp(value, 1, Value.MaxHealth) });
+
+    private Task SetResource(string id, int value)
+    {
+        var resources = new Dictionary<string, int>(Value.Resources) { [id] = Math.Max(0, value) };
+        return Emit(Value with { Resources = resources });
+    }
+
+    private Task RemoveResource(string id)
+    {
+        var resources = new Dictionary<string, int>(Value.Resources);
+        resources.Remove(id);
+        return Emit(Value with { Resources = resources });
+    }
+
+    private Task AddResource()
+    {
+        var id = _newResourceId.Trim();
+        if (id.Length == 0)
+            return Task.CompletedTask;
+        _newResourceId = "";
+        return SetResource(id, Math.Max(0, _newResourceAmount));
+    }
+
+    private Task ToggleRelic(string id, bool on)
+    {
+        var relics = Value.StartingRelics.Where(r => r != id).ToList();
+        if (on) relics.Add(id);
+        return Emit(Value with { StartingRelics = relics });
+    }
+
+    private Task ToggleConsumable(string id, bool on)
+    {
+        var consumables = Value.StartingConsumables.Where(c => c != id).ToList();
+        if (on) consumables.Add(id);
+        return Emit(Value with { StartingConsumables = consumables });
+    }
+
+    // ── this character's own deck (ShowDeck) ──────────────────────────────────────
+    private Task AddDeckCard(string cardId)
+    {
+        if (string.IsNullOrWhiteSpace(cardId))
+            return Task.CompletedTask;
+        return Emit(Value with { Deck = Value.Deck.Append(new CardDefinitionId(cardId)).ToList() });
+    }
+
+    private Task RemoveDeckCard(int cardIndex)
+    {
+        var deck = Value.Deck.ToList();
+        if (cardIndex >= 0 && cardIndex < deck.Count)
+            deck.RemoveAt(cardIndex);
+        return Emit(Value with { Deck = deck });
+    }
+
+    // ── party members (party deckbuilding: 1–4 members besides this character) ─────
+    private static int MemberGold(RunMemberData member) =>
+        member.Resources.TryGetValue(GoldResource, out var g) ? g : 0;
+
+    private Task EditParty(Func<List<RunMemberData>, List<RunMemberData>> edit) =>
+        Emit(Value with { StartingParty = edit(Party.ToList()) });
+
+    private Task EditMember(int index, Func<RunMemberData, RunMemberData> edit) =>
+        EditParty(list =>
+        {
+            if (index >= 0 && index < list.Count)
+                list[index] = edit(list[index]);
+            return list;
+        });
+
+    private Task AddMember() =>
+        EditParty(list =>
+        {
+            if (list.Count < 3)
+                list.Add(new RunMemberData { DisplayNameKey = $"Member {list.Count + 2}", MaxHealth = 30 });
+            return list;
+        });
+
+    private Task RemoveMember(int index) =>
+        EditParty(list =>
+        {
+            if (index >= 0 && index < list.Count)
+                list.RemoveAt(index);
+            return list;
+        });
+
+    private Task SetMemberName(int index, string name) =>
+        EditMember(index, m => m with { DisplayNameKey = string.IsNullOrWhiteSpace(name) ? m.DisplayNameKey : name.Trim() });
+
+    private Task SetMemberMaxHp(int index, int value) =>
+        EditMember(index, m => m with { MaxHealth = Math.Max(1, value) });
+
+    private Task SetMemberGold(int index, int value) =>
+        EditMember(index, m => m with
+        {
+            Resources = new Dictionary<string, int>(m.Resources) { [GoldResource] = Math.Max(0, value) },
+        });
+
+    private Task AddMemberCard(int index, string cardId)
+    {
+        if (string.IsNullOrWhiteSpace(cardId))
+            return Task.CompletedTask;
+        return EditMember(index, m => m with { Deck = m.Deck.Append(cardId).ToList() });
+    }
+
+    private Task RemoveMemberCard(int index, int cardIndex) =>
+        EditMember(index, m =>
+        {
+            var deck = m.Deck.ToList();
+            if (cardIndex >= 0 && cardIndex < deck.Count)
+                deck.RemoveAt(cardIndex);
+            return m with { Deck = deck };
+        });
+
+    private Task ToggleMemberRelic(int index, string id, bool on) =>
+        EditMember(index, m =>
+        {
+            var relics = m.StartingRelics.Where(r => r != id).ToList();
+            if (on) relics.Add(id);
+            return m with { StartingRelics = relics };
+        });
+
+    private Task ToggleMemberConsumable(int index, string id, bool on) =>
+        EditMember(index, m =>
+        {
+            var consumables = m.StartingConsumables.Where(c => c != id).ToList();
+            if (on) consumables.Add(id);
+            return m with { StartingConsumables = consumables };
+        });
+}

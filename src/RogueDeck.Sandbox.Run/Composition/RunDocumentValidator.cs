@@ -13,6 +13,7 @@ public static class RunDocumentValidator
     public const string EncountersTab = "Encounters";
     public const string RunTab = "Run";
     public const string HeroTab = "Hero";
+    public const string CharactersTab = "Characters";
 
     // Relics that are always available even without an authored definition (the built-in samples).
     private static readonly string[] BuiltInRelics = { "bloodstone", "leech" };
@@ -59,6 +60,28 @@ public static class RunDocumentValidator
             foreach (var consumable in member.StartingConsumables.Distinct(StringComparer.Ordinal))
                 if (!consumableIds.Contains(consumable))
                     problems.Add($"{HeroTab}: {who} starts with consumable '{consumable}', which has no definition.");
+        }
+
+        // Character roster (character selection): ids must be unique + non-empty, and each character's own deck /
+        // starting relics / consumables must reference content that exists — the same cross-refs the hero relies on.
+        var seenCharacterIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var character in blueprint.Characters)
+        {
+            if (string.IsNullOrWhiteSpace(character.Id))
+                problems.Add($"{CharactersTab}: a character has a blank id.");
+            else if (!seenCharacterIds.Add(character.Id))
+                problems.Add($"{CharactersTab}: duplicate character id '{character.Id}'.");
+
+            var who = $"character '{character.Id}'";
+            foreach (var card in character.Start.Deck.Select(c => c.value).Distinct(StringComparer.Ordinal))
+                if (!cardIds.Contains(card))
+                    problems.Add($"{CharactersTab}: {who} has deck card '{card}', which has no definition.");
+            foreach (var relic in character.Start.StartingRelics.Distinct(StringComparer.Ordinal))
+                if (!relicIds.Contains(relic))
+                    problems.Add($"{CharactersTab}: {who} starts with relic '{relic}', which has no definition.");
+            foreach (var consumable in character.Start.StartingConsumables.Distinct(StringComparer.Ordinal))
+                if (!consumableIds.Contains(consumable))
+                    problems.Add($"{CharactersTab}: {who} starts with consumable '{consumable}', which has no definition.");
         }
 
         // Every enemy must run actions that are defined.

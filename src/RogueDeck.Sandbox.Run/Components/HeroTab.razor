@@ -1,48 +1,18 @@
 @rendermode InteractiveServer
 @inject RunDocument Doc
 
-@* The dedicated Hero tab: edits the run's starting state (RunStart) on the shared document — hero name, health,
-   and starting resources. Starting relics/consumables are a later slice (they need content resolution). *@
+@* The dedicated Hero tab: edits the run's starting state (RunStart) on the shared document via the shared
+   RunStartEditor — hero name, health, resources, starting relics/consumables, and party. The hero's deck is the
+   run's shared deck, so per-character deck editing is off here (ShowDeck=false). Combat resources are run-global
+   (not part of RunStart), so they stay on this tab. *@
 <section style="padding:1rem; max-width:60rem">
     <h1>Hero &amp; starting state</h1>
     <p class="muted">The run's hero and how the RunState opens. Part of the shared run document (the Run tab plays
-        from it).</p>
+        from it). For a roster of selectable characters, use the Characters tab.</p>
 
-    <div class="run-bar">
-        <label>Name
-            <input value="@Start.HeroName" style="width:12rem" @onchange="e => SetName(AsString(e.Value))" />
-        </label>
-    </div>
-    <div class="run-bar">
-        <label>Max HP
-            <input type="number" value="@Start.MaxHealth" style="width:5rem"
-                   @onchange="e => SetMaxHealth(AsInt(e.Value, Start.MaxHealth))" />
-        </label>
-        <label>Starting HP
-            <input type="number" value="@Start.StartingHealth" style="width:5rem"
-                   @onchange="e => SetStartingHealth(AsInt(e.Value, Start.StartingHealth))" />
-        </label>
-    </div>
-    <h2>Starting resources</h2>
-    <p class="muted">Run-level resources the hero begins with — gold or any custom resource id. Referenced by id in
-        run effects (events, relics). Combat resources like energy are authored in the Resources tab.</p>
-    @foreach (var (id, amount) in Resources)
-    {
-        <div class="run-bar">
-            <label>@id
-                <input type="number" value="@amount" style="width:5rem"
-                       @onchange="e => SetResource(id, AsInt(e.Value, amount))" />
-            </label>
-            <button class="mini" @onclick="() => RemoveResource(id)">✕</button>
-        </div>
-    }
-    <div class="run-bar">
-        <input value="@_newResourceId" placeholder="new resource id" style="width:10rem"
-               @onchange="e => _newResourceId = AsString(e.Value)" />
-        <input type="number" value="@_newResourceAmount" style="width:5rem"
-               @onchange="e => _newResourceAmount = AsInt(e.Value, _newResourceAmount)" />
-        <button class="mini" @onclick="AddResource" disabled="@string.IsNullOrWhiteSpace(_newResourceId)">+ add resource</button>
-    </div>
+    <RunStartEditor Value="Start" ValueChanged="Apply"
+                    AvailableRelics="AvailableRelics" AvailableConsumables="AvailableConsumables"
+                    AvailableCards="AvailableCards" />
 
     <h2>Combat resources</h2>
     <p class="muted">Energy-like resources the hero has in every fight — id, starting amount, max cap, and whether it
@@ -72,128 +42,6 @@
                @onchange="e => _newCombatResourceId = AsString(e.Value)" />
         <button class="mini" @onclick="AddCombatResource" disabled="@string.IsNullOrWhiteSpace(_newCombatResourceId)">+ add combat resource</button>
     </div>
-
-    <h2>Starting relics</h2>
-    <p class="muted">Relics the hero begins the run with (granted when the run starts). Author relics in the Relics
-        tab; the built-in samples (bloodstone, leech) are always available.</p>
-    @foreach (var id in AvailableRelics)
-    {
-        <div class="run-bar">
-            <label>
-                <input type="checkbox" checked="@Start.StartingRelics.Contains(id)"
-                       @onchange="e => ToggleRelic(id, AsBool(e.Value))" /> @id
-            </label>
-        </div>
-    }
-
-    <h2>Starting consumables</h2>
-    <p class="muted">Consumables the hero begins the run with (one instance each). Author them in the Consumables
-        tab; add one there first to make it selectable here.</p>
-    @if (AvailableConsumables.Count == 0)
-    {
-        <p class="muted">No consumables defined yet.</p>
-    }
-    @foreach (var id in AvailableConsumables)
-    {
-        <div class="run-bar">
-            <label>
-                <input type="checkbox" checked="@Start.StartingConsumables.Contains(id)"
-                       @onchange="e => ToggleConsumable(id, AsBool(e.Value))" /> @id
-            </label>
-        </div>
-    }
-
-    <h2>Party (multiplayer)</h2>
-    <p class="muted">Extra player characters BESIDES the hero (member 0 above), for a party of 1–4. Each is a full
-        player: its own HP, deck, wallet (gold), relics, and consumables. In a fight all members act at once
-        (simultaneous phase); a downed member is out for that fight but the run continues while any member lives.
-        Empty ⇒ a single-hero run, exactly as before.</p>
-    @for (var i = 0; i < Party.Count; i++)
-    {
-        var index = i; // capture for the lambdas
-        var member = Party[index];
-        <div class="member-card" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:.75rem; margin:.5rem 0">
-            <div class="run-bar" style="justify-content:space-between">
-                <strong>Member @(index + 2)</strong>
-                <button class="mini" @onclick="() => RemoveMember(index)">✕ remove member</button>
-            </div>
-            <div class="run-bar">
-                <label>Name
-                    <input value="@member.DisplayNameKey" style="width:10rem"
-                           @onchange="e => SetMemberName(index, AsString(e.Value))" />
-                </label>
-                <label>Max HP
-                    <input type="number" value="@member.MaxHealth" style="width:5rem"
-                           @onchange="e => SetMemberMaxHp(index, AsInt(e.Value, member.MaxHealth))" />
-                </label>
-                <label>Gold
-                    <input type="number" value="@MemberGold(member)" style="width:5rem"
-                           @onchange="e => SetMemberGold(index, AsInt(e.Value, MemberGold(member)))" />
-                </label>
-            </div>
-
-            <div class="run-bar">
-                <span class="muted">Deck:</span>
-                @if (member.Deck.Count == 0)
-                {
-                    <span class="muted">(empty)</span>
-                }
-                @for (var c = 0; c < member.Deck.Count; c++)
-                {
-                    var cardIndex = c;
-                    <span class="chip" style="margin-right:.25rem">@member.Deck[cardIndex]
-                        <button class="mini" @onclick="() => RemoveMemberCard(index, cardIndex)">✕</button>
-                    </span>
-                }
-            </div>
-            <div class="run-bar">
-                <select value="" @onchange="e => AddMemberCard(index, AsString(e.Value))">
-                    <option value="">+ add card…</option>
-                    @foreach (var id in AvailableCards)
-                    {
-                        <option value="@id">@id</option>
-                    }
-                </select>
-                @if (AvailableCards.Count == 0)
-                {
-                    <span class="muted">Author cards in the Cards tab first.</span>
-                }
-            </div>
-
-            <div class="run-bar">
-                <span class="muted">Relics:</span>
-                @foreach (var id in AvailableRelics)
-                {
-                    <label style="margin-right:.5rem">
-                        <input type="checkbox" checked="@member.StartingRelics.Contains(id)"
-                               @onchange="e => ToggleMemberRelic(index, id, AsBool(e.Value))" /> @id
-                    </label>
-                }
-            </div>
-            <div class="run-bar">
-                <span class="muted">Consumables:</span>
-                @if (AvailableConsumables.Count == 0)
-                {
-                    <span class="muted">(none defined)</span>
-                }
-                @foreach (var id in AvailableConsumables)
-                {
-                    <label style="margin-right:.5rem">
-                        <input type="checkbox" checked="@member.StartingConsumables.Contains(id)"
-                               @onchange="e => ToggleMemberConsumable(index, id, AsBool(e.Value))" /> @id
-                    </label>
-                }
-            </div>
-        </div>
-    }
-    @if (Party.Count < 3)
-    {
-        <button class="mini" @onclick="AddMember">+ add party member</button>
-    }
-    else
-    {
-        <p class="muted">Party is full (4 members: the hero + 3).</p>
-    }
 </section>
 
 @code {
@@ -203,12 +51,6 @@
 
     private RunStart Start => _blueprint.Start;
 
-    // Starting resources ordered by id for a stable render. Any id is allowed (gold is just a conventional one).
-    private IEnumerable<KeyValuePair<string, int>> Resources =>
-        Start.Resources.OrderBy(r => r.Key, StringComparer.Ordinal);
-    private string _newResourceId = "";
-    private int _newResourceAmount = 10;
-
     private IReadOnlyList<CombatResourceData> CombatResources => _blueprint.CombatResources;
     private string _newCombatResourceId = "";
 
@@ -216,151 +58,19 @@
     private static int AsInt(object? v, int fallback) => int.TryParse(v?.ToString(), out var n) ? n : fallback;
     private static bool AsBool(object? v) => v is bool b ? b : bool.TryParse(v?.ToString(), out var r) && r;
 
-    // The relics the hero can start with: those authored in the document plus the always-available built-in samples.
+    // The relics/consumables/cards the editor can reference: those authored in the document (plus built-in relics).
     private static readonly string[] BuiltInRelics = { "bloodstone", "leech" };
     private IReadOnlyList<string> AvailableRelics =>
         _blueprint.Relics.Select(r => r.Id).Concat(BuiltInRelics).Distinct(StringComparer.Ordinal).ToList();
-
-    private void ToggleRelic(string id, bool on)
-    {
-        var relics = Start.StartingRelics.Where(r => r != id).ToList();
-        if (on)
-            relics.Add(id);
-        Apply(Start with { StartingRelics = relics });
-    }
-
-    // Consumables the hero can start with: those authored in the document (no built-in samples, unlike relics).
     private IReadOnlyList<string> AvailableConsumables =>
         _blueprint.Consumables.Select(c => c.Id).Distinct(StringComparer.Ordinal).ToList();
-
-    private void ToggleConsumable(string id, bool on)
-    {
-        var consumables = Start.StartingConsumables.Where(c => c != id).ToList();
-        if (on)
-            consumables.Add(id);
-        Apply(Start with { StartingConsumables = consumables });
-    }
+    private IReadOnlyList<string> AvailableCards =>
+        _blueprint.Cards.Select(c => c.Id).Distinct(StringComparer.Ordinal).ToList();
 
     private void Apply(RunStart start)
     {
         _blueprint = _blueprint with { Start = start };
         Doc.Save(_blueprint);
-    }
-
-    // ── party members (party deckbuilding C2: author 1–4 members besides the hero) ──────────────
-    private const string GoldResource = "gold";
-    private IReadOnlyList<RunMemberData> Party => Start.StartingParty;
-    private IReadOnlyList<string> AvailableCards =>
-        _blueprint.Cards.Select(c => c.Id).Distinct(StringComparer.Ordinal).ToList();
-
-    private static int MemberGold(RunMemberData member) =>
-        member.Resources.TryGetValue(GoldResource, out var g) ? g : 0;
-
-    private void EditParty(Func<List<RunMemberData>, List<RunMemberData>> edit) =>
-        Apply(Start with { StartingParty = edit(Party.ToList()) });
-
-    private void EditMember(int index, Func<RunMemberData, RunMemberData> edit) =>
-        EditParty(list =>
-        {
-            if (index >= 0 && index < list.Count)
-                list[index] = edit(list[index]);
-            return list;
-        });
-
-    private void AddMember() =>
-        EditParty(list =>
-        {
-            if (list.Count < 3)
-                list.Add(new RunMemberData { DisplayNameKey = $"Member {list.Count + 2}", MaxHealth = 30 });
-            return list;
-        });
-
-    private void RemoveMember(int index) =>
-        EditParty(list =>
-        {
-            if (index >= 0 && index < list.Count)
-                list.RemoveAt(index);
-            return list;
-        });
-
-    private void SetMemberName(int index, string name) =>
-        EditMember(index, m => m with { DisplayNameKey = string.IsNullOrWhiteSpace(name) ? m.DisplayNameKey : name.Trim() });
-
-    private void SetMemberMaxHp(int index, int value) =>
-        EditMember(index, m => m with { MaxHealth = Math.Max(1, value) });
-
-    private void SetMemberGold(int index, int value) =>
-        EditMember(index, m => m with
-        {
-            Resources = new Dictionary<string, int>(m.Resources) { [GoldResource] = Math.Max(0, value) },
-        });
-
-    private void AddMemberCard(int index, string cardId)
-    {
-        if (string.IsNullOrWhiteSpace(cardId))
-            return;
-        EditMember(index, m => m with { Deck = m.Deck.Append(cardId).ToList() });
-    }
-
-    private void RemoveMemberCard(int index, int cardIndex) =>
-        EditMember(index, m =>
-        {
-            var deck = m.Deck.ToList();
-            if (cardIndex >= 0 && cardIndex < deck.Count)
-                deck.RemoveAt(cardIndex);
-            return m with { Deck = deck };
-        });
-
-    private void ToggleMemberRelic(int index, string id, bool on) =>
-        EditMember(index, m =>
-        {
-            var relics = m.StartingRelics.Where(r => r != id).ToList();
-            if (on)
-                relics.Add(id);
-            return m with { StartingRelics = relics };
-        });
-
-    private void ToggleMemberConsumable(int index, string id, bool on) =>
-        EditMember(index, m =>
-        {
-            var consumables = m.StartingConsumables.Where(c => c != id).ToList();
-            if (on)
-                consumables.Add(id);
-            return m with { StartingConsumables = consumables };
-        });
-
-    private void SetName(string name) => Apply(Start with { HeroName = string.IsNullOrWhiteSpace(name) ? "Hero" : name.Trim() });
-
-    // Keep starting HP within [1, max]; raising max never lowers starting HP.
-    private void SetMaxHealth(int value)
-    {
-        var max = Math.Max(1, value);
-        Apply(Start with { MaxHealth = max, StartingHealth = Math.Clamp(Start.StartingHealth, 1, max) });
-    }
-
-    private void SetStartingHealth(int value) =>
-        Apply(Start with { StartingHealth = Math.Clamp(value, 1, Start.MaxHealth) });
-
-    private void SetResource(string id, int value)
-    {
-        var resources = new Dictionary<string, int>(Start.Resources) { [id] = Math.Max(0, value) };
-        Apply(Start with { Resources = resources });
-    }
-
-    private void RemoveResource(string id)
-    {
-        var resources = new Dictionary<string, int>(Start.Resources);
-        resources.Remove(id);
-        Apply(Start with { Resources = resources });
-    }
-
-    private void AddResource()
-    {
-        var id = _newResourceId.Trim();
-        if (id.Length == 0)
-            return;
-        SetResource(id, Math.Max(0, _newResourceAmount));
-        _newResourceId = "";
     }
 
     // ── combat resources (run-global, injected into every fight's hero) ──────────────

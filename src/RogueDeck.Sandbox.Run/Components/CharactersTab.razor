@@ -1,0 +1,119 @@
+@rendermode InteractiveServer
+@inject RunDocument Doc
+
+@* The Characters tab (character selection): authors RunBlueprint.Characters — a roster of selectable starting
+   characters. Each is a full RunStart (its own name / HP / deck / relics / consumables / party) plus a stable pick
+   id and an optional meta UnlockFlag. When the roster is non-empty the run is seeded from the CHOSEN character
+   (RunBlueprint.ResolveStart); empty ⇒ the single Hero-tab Start is used, exactly as before. *@
+<section style="padding:1rem; max-width:60rem">
+    <h1>Characters (selectable roster)</h1>
+    <p class="muted">A roster of starting characters the player can choose between. Each carries its own deck and
+        opening state. Leave the roster empty to use the single Hero-tab start instead.</p>
+
+    @{ var issues = RunDocumentValidator.ForTab(_blueprint, RunDocumentValidator.CharactersTab); }
+    @if (issues.Count > 0)
+    {
+        <ul class="log">
+            @foreach (var issue in issues)
+            {
+                <li><span class="line-kind">⚠</span> @issue</li>
+            }
+        </ul>
+    }
+
+    @if (Characters.Count == 0)
+    {
+        <p class="muted">No characters yet — the run uses the Hero tab's start. Add one below to offer a choice.</p>
+    }
+
+    @for (var i = 0; i < Characters.Count; i++)
+    {
+        var index = i;
+        var character = Characters[index];
+        <div class="editor-card" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:1rem; margin:.75rem 0">
+            <div class="run-bar" style="justify-content:space-between">
+                <div class="run-bar">
+                    <label>Character id
+                        <input value="@character.Id" style="width:10rem"
+                               @onchange="e => SetId(index, AsString(e.Value))" />
+                    </label>
+                    <label>Unlock flag
+                        <input value="@(character.UnlockFlag ?? "")" placeholder="(always available)" style="width:11rem"
+                               title="Meta-progression flag that unlocks this character; blank ⇒ always available"
+                               @onchange="e => SetUnlockFlag(index, AsString(e.Value))" />
+                    </label>
+                </div>
+                <button class="mini" @onclick="() => RemoveCharacter(index)">✕ remove character</button>
+            </div>
+
+            <RunStartEditor Value="character.Start" ValueChanged="s => SetStart(index, s)" ShowDeck="true"
+                            AvailableRelics="AvailableRelics" AvailableConsumables="AvailableConsumables"
+                            AvailableCards="AvailableCards" />
+        </div>
+    }
+
+    <div class="run-bar">
+        <input value="@_newCharacterId" placeholder="new character id" style="width:11rem"
+               @onchange="e => _newCharacterId = AsString(e.Value)" />
+        <button class="play" @onclick="AddCharacter" disabled="@string.IsNullOrWhiteSpace(_newCharacterId)">Add character</button>
+    </div>
+</section>
+
+@code {
+    private RunBlueprint _blueprint = default!;
+    private string _newCharacterId = "";
+
+    protected override void OnInitialized() => _blueprint = Doc.Load();
+
+    private IReadOnlyList<RunCharacter> Characters => _blueprint.Characters;
+
+    private static string AsString(object? v) => v?.ToString() ?? "";
+
+    private static readonly string[] BuiltInRelics = { "bloodstone", "leech" };
+    private IReadOnlyList<string> AvailableRelics =>
+        _blueprint.Relics.Select(r => r.Id).Concat(BuiltInRelics).Distinct(StringComparer.Ordinal).ToList();
+    private IReadOnlyList<string> AvailableConsumables =>
+        _blueprint.Consumables.Select(c => c.Id).Distinct(StringComparer.Ordinal).ToList();
+    private IReadOnlyList<string> AvailableCards =>
+        _blueprint.Cards.Select(c => c.Id).Distinct(StringComparer.Ordinal).ToList();
+
+    private void Save(IReadOnlyList<RunCharacter> characters)
+    {
+        _blueprint = _blueprint with { Characters = characters };
+        Doc.Save(_blueprint);
+    }
+
+    private void Edit(int index, Func<RunCharacter, RunCharacter> edit)
+    {
+        var list = Characters.ToList();
+        if (index >= 0 && index < list.Count)
+            list[index] = edit(list[index]);
+        Save(list);
+    }
+
+    private void SetId(int index, string id)
+    {
+        id = id.Trim();
+        if (id.Length == 0 || Characters.Where((_, i) => i != index).Any(c => c.Id == id))
+            return; // keep ids non-empty and unique
+        Edit(index, c => c with { Id = id });
+    }
+
+    private void SetUnlockFlag(int index, string flag) =>
+        Edit(index, c => c with { UnlockFlag = string.IsNullOrWhiteSpace(flag) ? null : flag.Trim() });
+
+    private void SetStart(int index, RunStart start) => Edit(index, c => c with { Start = start });
+
+    private void AddCharacter()
+    {
+        var id = _newCharacterId.Trim();
+        if (id.Length == 0 || Characters.Any(c => c.Id == id))
+            return;
+        // Seed a new character from the current single Start so it opens as a sensible copy, not an empty shell.
+        Save(Characters.Append(new RunCharacter(id, _blueprint.Start)).ToList());
+        _newCharacterId = "";
+    }
+
+    private void RemoveCharacter(int index) =>
+        Save(Characters.Where((_, i) => i != index).ToList());
+}

@@ -109,6 +109,35 @@ public class RunDocumentValidatorTests
     }
 
     [Fact]
+    public void A_valid_character_roster_has_no_problems()
+    {
+        var character = new RunCharacter("warrior",
+            new RunStart { Deck = new[] { new CardDefinitionId("strike") }, StartingRelics = new[] { "bloodstone" } });
+        var bp = Valid() with { Characters = new[] { character } };
+        Assert.Empty(RunDocumentValidator.Validate(bp));
+    }
+
+    [Fact]
+    public void Flags_a_character_deck_card_with_no_definition()
+    {
+        var character = new RunCharacter("mage", new RunStart { Deck = new[] { new CardDefinitionId("ghost") } });
+        var bp = Valid() with { Characters = new[] { character } };
+        Assert.Contains(RunDocumentValidator.Validate(bp),
+            p => p.StartsWith("Characters:") && p.Contains("character 'mage'") && p.Contains("deck card 'ghost'"));
+    }
+
+    [Fact]
+    public void Flags_a_duplicate_character_id()
+    {
+        var bp = Valid() with
+        {
+            Characters = new[] { new RunCharacter("hero", new RunStart()), new RunCharacter("hero", new RunStart()) },
+        };
+        Assert.Contains(RunDocumentValidator.Validate(bp),
+            p => p.StartsWith("Characters:") && p.Contains("duplicate character id 'hero'"));
+    }
+
+    [Fact]
     public void Flags_a_map_node_pointing_at_an_unknown_shop()
     {
         var bp = Valid() with
