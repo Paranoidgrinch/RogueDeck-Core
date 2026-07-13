@@ -289,6 +289,17 @@ public interface IModifySelectedStatusStacksNodeCore : INativeEffectOperationNod
     Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(ModifyStatusInstanceStacksEffectRequest);
 }
 
+// Modifies the value of ONE selected resource pool per target (#3 resource domain): the target selector picks
+// the combatant(s); the ResourceSelectionSpec picks which pool (a random pool, the highest, …); the delta (may
+// be negative) changes its current value. Expresses "drain the enemy's highest resource", "boost a random pool".
+public interface IModifySelectedResourceNodeCore : INativeEffectOperationNode
+{
+    ICombatantTargetSelector TargetSelector { get; }
+    ResourceSelectionSpec Selection { get; }
+    int EvaluateDelta(IEffectExecutionContextCore ctx, CombatState combat);
+    Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(ModifyResourceEffectRequest);
+}
+
 // Steals ONE selected status instance from each From target to the single To target (#3 "steal a status"):
 // FromSelector picks whose status; Selection picks which; ToSelector picks the thief.
 public interface IStealSelectedStatusNodeCore : INativeEffectOperationNode

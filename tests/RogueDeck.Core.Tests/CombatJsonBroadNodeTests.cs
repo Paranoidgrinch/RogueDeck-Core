@@ -56,6 +56,10 @@ public class CombatJsonBroadNodeTests
             new StatusSelectionSpec(StatusPolarityFilter.Debuff), Const(-1)));
         RoundTrips(new StealSelectedStatusNode<CardPlayContext>(Enemy,
             new StatusSelectionSpec(StatusPolarityFilter.Buff), Source));
+        RoundTrips(new ModifySelectedResourceNode<CardPlayContext>(Enemy,
+            new ResourceSelectionSpec(ResourcePoolFilter.NonEmpty, ResourcePick.Highest), Const(-2)));
+        RoundTrips(new ModifySelectedResourceNode<CardPlayContext>(Source,
+            new ResourceSelectionSpec(Pick: ResourcePick.First, Index: 1), Const(3)));
         RoundTrips(new ModifyStatusStacksNode<CardPlayContext>(Enemy, burn, Const(2)));
         RoundTrips(new ModifyStatusDurationNode<CardPlayContext>(Enemy, burn, Const(1)));
         RoundTrips(new ModifyStatusChargesNode<CardPlayContext>(Enemy, burn, Const(1)));

@@ -65,6 +65,7 @@ public sealed class EffectNodeExecutorRegistry
         r.RegisterOpenGeneric(typeof(RemoveStatusNode<>), new RemoveStatusNodeExecutor());
         r.RegisterOpenGeneric(typeof(RemoveSelectedStatusNode<>), new RemoveSelectedStatusNodeExecutor());
         r.RegisterOpenGeneric(typeof(ModifySelectedStatusStacksNode<>), new ModifySelectedStatusStacksNodeExecutor());
+        r.RegisterOpenGeneric(typeof(ModifySelectedResourceNode<>), new ModifySelectedResourceNodeExecutor());
         r.RegisterOpenGeneric(typeof(StealSelectedStatusNode<>), new StealSelectedStatusNodeExecutor());
         r.RegisterOpenGeneric(typeof(SetCombatantCounterNode<>), new SetCombatantCounterNodeExecutor());
         r.RegisterOpenGeneric(typeof(RemoveStatusesByPolarityNode<>), new RemoveStatusesByPolarityNodeExecutor());
@@ -966,6 +967,26 @@ internal sealed class ModifySelectedStatusStacksNodeExecutor : IEffectNodeExecut
             var statusId = StatusSelection.Resolve(combat, target, typed.Selection);
             if (statusId is { } id)
                 combat.EnqueueEffect(new ModifyStatusInstanceStacksEffectRequest(target, id, delta));
+        }
+
+        if (onComplete is not null)
+            combat.EnqueueContinuation(onComplete);
+    }
+}
+
+internal sealed class ModifySelectedResourceNodeExecutor : IEffectNodeExecutor
+{
+    public void Execute(IEffectNode node, IEffectExecutionContextCore ctx, CombatState combat,
+        Action<CombatState>? onComplete, Action<IEffectNode, CombatState, Action<CombatState>?> dispatch)
+    {
+        var typed = (IModifySelectedResourceNodeCore)node;
+        var delta = typed.EvaluateDelta(ctx, combat);
+
+        foreach (var target in typed.TargetSelector.ResolveTargetsTraced(ctx, combat))
+        {
+            var resourceId = ResourceSelection.Resolve(combat, target, typed.Selection);
+            if (resourceId is { } id)
+                combat.EnqueueEffect(new ModifyResourceEffectRequest(target, id, delta));
         }
 
         if (onComplete is not null)

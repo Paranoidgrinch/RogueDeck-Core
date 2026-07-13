@@ -453,6 +453,39 @@ public sealed class ModifySelectedStatusStacksNode<TContext> : IModifySelectedSt
         Delta.Evaluate((EffectExecutionContext<TContext>)ctx, combat);
 }
 
+// Modifies the value of a single SELECTED resource pool per target (#3 resource domain): "drain the enemy's
+// highest resource", "boost a random pool". The pool is chosen at execution time by ResourceSelection against
+// the live state; the delta may be negative.
+public sealed class ModifySelectedResourceNode<TContext> : IModifySelectedResourceNodeCore, IEffectNode<TContext>
+    where TContext : class
+{
+    public ICombatantTargetSelector TargetSelector { get; }
+    public IEnumerable<ICombatantTargetSelector> GetTargetSelectors() => [TargetSelector];
+    public ResourceSelectionSpec Selection { get; }
+    public ICombatExpression<TContext, int> Delta { get; }
+
+    public IReadOnlyList<IEffectNode<TContext>> Children => [];
+
+    public ModifySelectedResourceNode(
+        ICombatantTargetSelector targetSelector,
+        ResourceSelectionSpec selection,
+        ICombatExpression<TContext, int> delta)
+    {
+        ArgumentNullException.ThrowIfNull(targetSelector);
+        ArgumentNullException.ThrowIfNull(selection);
+        ArgumentNullException.ThrowIfNull(delta);
+
+        TargetSelector = targetSelector;
+        Selection = selection;
+        Delta = delta;
+    }
+
+    public IEnumerable<IResultKeyConsumer> GetExpressionConsumers() => Delta.GetAllConsumers();
+
+    int IModifySelectedResourceNodeCore.EvaluateDelta(IEffectExecutionContextCore ctx, CombatState combat) =>
+        Delta.Evaluate((EffectExecutionContext<TContext>)ctx, combat);
+}
+
 // Steals a single SELECTED status instance from each From target to the To target (#3): "steal the enemy's
 // Strength". The instance is chosen at execution time by StatusSelection; the thief is the To selector.
 public sealed class StealSelectedStatusNode<TContext> : IStealSelectedStatusNodeCore, IEffectNode<TContext>
