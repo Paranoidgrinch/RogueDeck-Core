@@ -106,6 +106,17 @@ public class CombatProgramEditorRenderTests
     }
 
     [Fact]
+    public async Task Renders_deal_damage_with_element_and_ignores_block()
+    {
+        // Phase 1c: dealDamage shows an element field + an "ignores block" checkbox.
+        var html = await RenderAsync(new CombatNodeModel("dealDamage", "eventTarget", CombatAmountSpec.FromConst(8), Element: "fire", IgnoresBlock: true));
+
+        Assert.Contains("deal damage", html);
+        Assert.Contains("fire", html);
+        Assert.Contains("ignores block", html);
+    }
+
+    [Fact]
     public async Task Renders_refill_resource_with_id_and_max_and_no_amount()
     {
         // Phase 1b: refillResource shows a resource-id + max field and NO amount control (it refills to max).

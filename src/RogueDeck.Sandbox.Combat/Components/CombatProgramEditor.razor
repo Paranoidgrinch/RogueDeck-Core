@@ -101,6 +101,13 @@ else
         {
             @AmountControls(Node.AmountOrDefault, spec => Set(Node with { Amount = spec }))
         }
+        @if (Node.Kind == "dealDamage")
+        {
+            <input value="@Node.Element" style="width:6rem" placeholder="element"
+                   @onchange="e => Set(Node with { Element = AsString(e.Value) })" />
+            <label class="muted"><input type="checkbox" checked="@Node.IgnoresBlock"
+                   @onchange="e => Set(Node with { IgnoresBlock = AsBool(e.Value) })" /> ignores block</label>
+        }
         @if (CombatProgramModel.UsesResourceId(Node.Kind))
         {
             <input value="@Node.ResourceId" style="width:8rem" placeholder="resource id"
@@ -218,6 +225,7 @@ else
     private static int AsInt(object? v, int fallback) => int.TryParse(v?.ToString(), out var n) ? n : fallback;
     // Blank input ⇒ null (an uncapped max / no clamp); otherwise the parsed int.
     private static int? AsNullableInt(object? v) => int.TryParse(v?.ToString(), out var n) ? n : (int?)null;
+    private static bool AsBool(object? v) => v is bool b ? b : bool.TryParse(v?.ToString(), out var p) && p;
     private static StatusPolarity ParsePolarity(object? v) =>
         Enum.TryParse<StatusPolarity>(AsString(v), out var p) ? p : StatusPolarity.Debuff;
     private static CardZone ParseZone(object? v) =>

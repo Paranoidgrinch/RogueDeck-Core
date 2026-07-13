@@ -104,7 +104,12 @@ public sealed record CombatNodeModel(
     int? DefaultMax = null,
     // modifyResource clamps its result to this optional [Min, Max]; null canonically for other kinds.
     int? Min = null,
-    int? Max = null)
+    int? Max = null,
+    // dealDamage's optional damage element (e.g. "fire"), for resistance/weakness. "" = no element (untyped). "" and
+    // IgnoresBlock=false canonically for other kinds so build↔classify round-trips exactly.
+    string Element = "",
+    // dealDamage that bypasses the target's block/defensive pools (pierce). false canonically for other kinds.
+    bool IgnoresBlock = false)
 {
     public CombatAmountSpec AmountOrDefault => Amount ?? CombatAmountSpec.FromConst(3);
     public CombatCardSpec CardOrDefault => Card ?? new CombatCardSpec();
@@ -152,6 +157,8 @@ public sealed record CombatNodeModel(
         && DefaultMax == other.DefaultMax
         && Min == other.Min
         && Max == other.Max
+        && Element == other.Element
+        && IgnoresBlock == other.IgnoresBlock
         && ChildrenOrEmpty.SequenceEqual(other.ChildrenOrEmpty);
 
     public override int GetHashCode()
@@ -175,6 +182,8 @@ public sealed record CombatNodeModel(
         hash.Add(DefaultMax);
         hash.Add(Min);
         hash.Add(Max);
+        hash.Add(Element);
+        hash.Add(IgnoresBlock);
         foreach (var child in ChildrenOrEmpty)
             hash.Add(child);
         return hash.ToHashCode();
@@ -350,6 +359,8 @@ public static class CombatProgramModel
                 DefaultMax = UsesDefaultMax(kind) ? (kind == "refillResource" ? (node.DefaultMax ?? 3) : node.DefaultMax) : null,
                 Min = UsesMinMax(kind) ? node.Min : null,
                 Max = UsesMinMax(kind) ? node.Max : null,
+                Element = kind == "dealDamage" ? node.Element : "",
+                IgnoresBlock = kind == "dealDamage" && node.IgnoresBlock,
                 Amount = UsesAmount(kind) ? (node.Amount ?? CombatAmountSpec.FromConst(3)) : null,
             };
 
@@ -558,7 +569,9 @@ public static class CombatProgramModel
         var amount = BuildAmount<TContext>(model.AmountOrDefault);
         return model.Kind switch
         {
-            "dealDamage" => new DealDamageNode<TContext>(selector, amount),
+            "dealDamage" => new DealDamageNode<TContext>(
+                selector, amount, ignoresBlock: model.IgnoresBlock,
+                element: string.IsNullOrEmpty(model.Element) ? null : new ElementId(model.Element)),
             "heal" => new HealNode<TContext>(selector, amount),
             "gainResource" => new GainResourceNode<TContext>(selector, new ResourceId(model.ResourceId), amount, model.DefaultMax),
             "loseResource" => new LoseResourceNode<TContext>(selector, new ResourceId(model.ResourceId), amount),
@@ -609,8 +622,14 @@ public static class CombatProgramModel
     {
         switch (node)
         {
-            case DealDamageNode<TContext> { ResultKey: null, IgnoresBlock: false } n:
-                return Leaf("dealDamage", n.TargetSelector, n.Amount);
+            case DealDamageNode<TContext> { ResultKey: null } n:
+                if (KeyFor(n.TargetSelector) is not { } ddKey)
+                    return null;
+                var ddAmount = ClassifyAmount(n.Amount);
+                return ddAmount.IsAdvanced
+                    ? null
+                    : new CombatNodeModel("dealDamage", ddKey, ddAmount,
+                        Element: n.Element?.value ?? "", IgnoresBlock: n.IgnoresBlock);
             case HealNode<TContext> { ResultKey: null } n:
                 return Leaf("heal", n.TargetSelector, n.Amount);
             case GainBlockNode<TContext> { ResultKey: null } n:

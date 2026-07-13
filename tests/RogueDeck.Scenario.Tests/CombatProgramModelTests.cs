@@ -187,6 +187,33 @@ public class CombatProgramModelTests
     }
 
     [Fact]
+    public void DealDamage_round_trips_its_element_and_ignores_block()
+    {
+        // Phase 1c: the element + pierce flag were previously JSON-escapes; now they round-trip through the model.
+        var fire = new CombatNodeModel("dealDamage", "eventTarget", CombatAmountSpec.FromConst(8), Element: "fire");
+        var pierce = new CombatNodeModel("dealDamage", "eventTarget", CombatAmountSpec.FromConst(6), IgnoresBlock: true);
+
+        var fireNode = Assert.IsType<DealDamageNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(fire).Root);
+        Assert.Equal("fire", fireNode.Element!.Value.value);
+        Assert.True(Assert.IsType<DealDamageNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(pierce).Root).IgnoresBlock);
+
+        foreach (var model in new[] { fire, pierce })
+            Assert.Equal(model, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(model)));
+    }
+
+    [Fact]
+    public void Untyped_non_piercing_damage_still_round_trips_with_defaults()
+    {
+        // The common case (no element, respects block) must round-trip unchanged after 1c widened the node.
+        var plain = new CombatNodeModel("dealDamage", "eventTarget", CombatAmountSpec.FromConst(6));
+        var node = Assert.IsType<DealDamageNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(plain).Root);
+
+        Assert.Null(node.Element);
+        Assert.False(node.IgnoresBlock);
+        Assert.Equal(plain, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(plain)));
+    }
+
+    [Fact]
     public void Resource_completeness_ops_build_their_nodes_and_round_trip()
     {
         // Phase 1b: refill / modifyDefensivePool / modifySelectedResource + gainResource.DefaultMax + modifyResource.Min/Max.
