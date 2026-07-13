@@ -90,8 +90,9 @@ public class CombatProgramModelTests
     }
 
     [Fact]
-    public void Classify_returns_null_for_arithmetic_amount()
+    public void An_arithmetic_amount_is_modelled_not_escaped()
     {
+        // Phase 1i modelled arithmetic amounts, so what used to escape now classifies to a nested amount spec.
         var program = new EffectProgram<CardPlayContext>(
             new HealNode<CardPlayContext>(
                 CombatantTargetSelectors.Source,
@@ -99,7 +100,9 @@ public class CombatProgramModelTests
                     new ConstantExpression<CardPlayContext>(1),
                     new ConstantExpression<CardPlayContext>(2))));
 
-        Assert.Null(CombatProgramModel.Classify(program));
+        var model = CombatProgramModel.Classify(program);
+        Assert.NotNull(model);
+        Assert.Equal("add", model!.Amount!.Kind);
     }
 
     [Fact]
@@ -181,6 +184,39 @@ public class CombatProgramModelTests
         var model = CombatNodeModel.Conditional(
             new CombatConditionSpec("hasStatus", "eventTarget", Id: "weak"),
             new CombatNodeModel("applyStatus", "eventTarget", CombatAmountSpec.FromConst(2), StatusId: "poison", DurationTurns: 3));
+        var options = CombatJson.CreateOptions<CardPlayContext>();
+
+        var program = CombatProgramModel.Build<CardPlayContext>(model);
+        var json = JsonSerializer.Serialize(program, options);
+        var back = JsonSerializer.Deserialize<EffectProgram<CardPlayContext>>(json, options)!;
+
+        Assert.Equal(model, CombatProgramModel.Classify(back));
+    }
+
+    [Fact]
+    public void Arithmetic_and_nullary_amounts_build_and_round_trip()
+    {
+        // Phase 1i: round/turn reads + recursive arithmetic amounts — previously all JSON escapes.
+        var round = new CombatNodeModel("dealDamage", "eventTarget", new CombatAmountSpec("round"));
+        // deal damage = (combo counter × 2) + 3
+        var arithmetic = new CombatNodeModel("dealDamage", "eventTarget",
+            CombatAmountSpec.Binary("add",
+                CombatAmountSpec.Binary("mul", CombatAmountSpec.Counter("source", "combo"), CombatAmountSpec.FromConst(2)),
+                CombatAmountSpec.FromConst(3)));
+        var unary = new CombatNodeModel("dealDamage", "eventTarget", CombatAmountSpec.Unary("neg", CombatAmountSpec.FromConst(5)));
+
+        Assert.IsType<RoundNumberExpression<CardPlayContext>>(Assert.IsType<DealDamageNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(round).Root).Amount);
+        Assert.IsType<AddExpression<CardPlayContext>>(Assert.IsType<DealDamageNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(arithmetic).Root).Amount);
+
+        foreach (var model in new[] { round, arithmetic, unary })
+            Assert.Equal(model, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(model)));
+    }
+
+    [Fact]
+    public void An_arithmetic_amount_classifies_after_a_CombatJson_round_trip()
+    {
+        var model = new CombatNodeModel("dealDamage", "eventTarget",
+            CombatAmountSpec.Binary("max", CombatAmountSpec.FromConst(1), CombatAmountSpec.Counter("source", "combo")));
         var options = CombatJson.CreateOptions<CardPlayContext>();
 
         var program = CombatProgramModel.Build<CardPlayContext>(model);
@@ -646,17 +682,14 @@ public class CombatProgramModelTests
     }
 
     [Fact]
-    public void Classify_returns_null_when_a_composite_child_is_advanced()
+    public void Classify_returns_null_when_a_composite_child_is_unmodelled()
     {
-        // A sequence whose second child has an arithmetic (advanced) amount is not fully modelled → JSON escape.
+        // A sequence whose second child is outside the modelled subset (a NoOp) is not fully modelled → JSON escape.
         var program = new EffectProgram<CardPlayContext>(
             new SequenceEffectNode<CardPlayContext>(new IEffectNode<CardPlayContext>[]
             {
                 new GainBlockNode<CardPlayContext>(CombatantTargetSelectors.Source, new ConstantExpression<CardPlayContext>(1)),
-                new HealNode<CardPlayContext>(
-                    CombatantTargetSelectors.Source,
-                    new AddExpression<CardPlayContext>(
-                        new ConstantExpression<CardPlayContext>(1), new ConstantExpression<CardPlayContext>(2))),
+                new NoOpEffectNode<CardPlayContext>(),
             }));
 
         Assert.Null(CombatProgramModel.Classify(program));

@@ -106,6 +106,19 @@ public class CombatProgramEditorRenderTests
     }
 
     [Fact]
+    public async Task Renders_an_arithmetic_amount_with_nested_operands()
+    {
+        // Phase 1i: an arithmetic amount renders nested operand widgets (add of a counter and a constant).
+        var html = await RenderAsync(new CombatNodeModel("dealDamage", "eventTarget",
+            CombatAmountSpec.Binary("add", CombatAmountSpec.Counter("source", "combo"), CombatAmountSpec.FromConst(3))));
+
+        Assert.Contains("deal damage", html);
+        Assert.Contains("counter id", html); // the nested counter operand's id field
+        Assert.Contains("combo", html);
+        Assert.Contains("round #", html);     // the amount kind dropdown lists the new kinds
+    }
+
+    [Fact]
     public async Task Renders_a_parameterized_selector_with_status_id_and_union_members()
     {
         // Phase 1h part 2: a status-filtered selector shows a status-id field; union shows its member selectors + add.

@@ -148,14 +148,10 @@ public class RelicEditorRenderTests
     [Fact]
     public async Task RendersJsonEditorForNonVisualCombatRule()
     {
-        // Escape: a combat rule whose program is OUTSIDE the visual subset (here an arithmetic amount) has no
-        // CombatNodeModel, so the editor keeps the JSON textarea and the "edit as JSON" toggle is absent.
+        // Escape: a combat rule whose program is OUTSIDE the visual subset (here a NoOp node) has no CombatNodeModel,
+        // so the editor keeps the JSON textarea and the "edit as JSON" toggle is absent.
         var program = new EffectProgram<TurnStartedTriggeredEffectContext>(
-            new GainBlockNode<TurnStartedTriggeredEffectContext>(
-                CombatantTargetSelectors.Source,
-                new AddExpression<TurnStartedTriggeredEffectContext>(
-                    new ConstantExpression<TurnStartedTriggeredEffectContext>(1),
-                    new ConstantExpression<TurnStartedTriggeredEffectContext>(2))));
+            new NoOpEffectNode<TurnStartedTriggeredEffectContext>());
         var relic = new RelicData
         {
             Id = "arith",
@@ -169,7 +165,7 @@ public class RelicEditorRenderTests
         var html = await RenderAsync(BlueprintWith(relic));
 
         Assert.Contains("program (JSON", html);
-        Assert.Contains("node.gainBlock", html); // the program serialized into the textarea
+        Assert.Contains("node.noOp", html); // the program serialized into the textarea
         Assert.DoesNotContain("edit as JSON", html);
     }
 }

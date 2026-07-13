@@ -18,13 +18,27 @@ namespace RogueDeck.Scenario.Authoring;
 // combatant's per-fight counter (Kind == "counter", over SelectorKey + CounterId — e.g. "deal damage equal to your
 // combo counter"), or "advanced" (any richer expression, left to the JSON editor). Mirrors RelicAmountSpec.
 public sealed record CombatAmountSpec(
-    string Kind = "const", int Const = 3, string SelectorKey = "source", string CounterId = "")
+    string Kind = "const", int Const = 3, string SelectorKey = "source", string CounterId = "",
+    // Operands for the recursive arithmetic kinds: binary (add/sub/mul/div/rem/min/max) uses Left+Right; unary
+    // (neg/abs/sign) uses Left. Null for the non-arithmetic kinds so build↔classify round-trips exactly. Records give
+    // these recursive structural equality for free.
+    CombatAmountSpec? Left = null, CombatAmountSpec? Right = null)
 {
     public static CombatAmountSpec FromConst(int value) => new("const", value);
     public static readonly CombatAmountSpec Event = new("event");
     public static readonly CombatAmountSpec Advanced = new("advanced");
     public static CombatAmountSpec Counter(string selectorKey, string counterId) =>
         new("counter", SelectorKey: selectorKey, CounterId: counterId);
+    public static CombatAmountSpec Binary(string kind, CombatAmountSpec left, CombatAmountSpec right) =>
+        new(kind, Left: left, Right: right);
+    public static CombatAmountSpec Unary(string kind, CombatAmountSpec operand) => new(kind, Left: operand);
+
+    public CombatAmountSpec LeftOrDefault => Left ?? FromConst(1);
+    public CombatAmountSpec RightOrDefault => Right ?? FromConst(1);
+
+    // The binary / unary arithmetic kinds (their editor row shows nested operand widgets).
+    public static bool IsBinaryKind(string kind) => kind is "add" or "sub" or "mul" or "div" or "rem" or "min" or "max";
+    public static bool IsUnaryKind(string kind) => kind is "neg" or "abs" or "sign";
 
     public bool IsAdvanced => Kind == "advanced";
 }
@@ -735,8 +749,37 @@ public static class CombatProgramModel
         {
             "event" => new EventAmountExpression<TContext>(),
             "counter" => new CombatantCounterExpression<TContext>(SelectorFor(spec.SelectorKey), new CounterId(spec.CounterId)),
+            "round" => new RoundNumberExpression<TContext>(),
+            "turn" => new TurnNumberExpression<TContext>(),
+            "add" => new AddExpression<TContext>(BuildAmount<TContext>(spec.LeftOrDefault), BuildAmount<TContext>(spec.RightOrDefault)),
+            "sub" => new SubtractExpression<TContext>(BuildAmount<TContext>(spec.LeftOrDefault), BuildAmount<TContext>(spec.RightOrDefault)),
+            "mul" => new MultiplyExpression<TContext>(BuildAmount<TContext>(spec.LeftOrDefault), BuildAmount<TContext>(spec.RightOrDefault)),
+            "div" => new DivideExpression<TContext>(BuildAmount<TContext>(spec.LeftOrDefault), BuildAmount<TContext>(spec.RightOrDefault)),
+            "rem" => new RemainderExpression<TContext>(BuildAmount<TContext>(spec.LeftOrDefault), BuildAmount<TContext>(spec.RightOrDefault)),
+            "min" => new MinExpression<TContext>(BuildAmount<TContext>(spec.LeftOrDefault), BuildAmount<TContext>(spec.RightOrDefault)),
+            "max" => new MaxExpression<TContext>(BuildAmount<TContext>(spec.LeftOrDefault), BuildAmount<TContext>(spec.RightOrDefault)),
+            "neg" => new NegateExpression<TContext>(BuildAmount<TContext>(spec.LeftOrDefault)),
+            "abs" => new AbsExpression<TContext>(BuildAmount<TContext>(spec.LeftOrDefault)),
+            "sign" => new SignExpression<TContext>(BuildAmount<TContext>(spec.LeftOrDefault)),
             _ => new ConstantExpression<TContext>(spec.Const),
         };
+    }
+
+    // Reduce a classified binary/unary operand pair, propagating "advanced" so an unmodellable operand escapes the
+    // whole arithmetic expression to the JSON editor.
+    private static CombatAmountSpec BinaryAmount<TContext>(
+        string kind, ICombatExpression<TContext, int> left, ICombatExpression<TContext, int> right) where TContext : class
+    {
+        var l = ClassifyAmount(left);
+        var r = ClassifyAmount(right);
+        return l.IsAdvanced || r.IsAdvanced ? CombatAmountSpec.Advanced : CombatAmountSpec.Binary(kind, l, r);
+    }
+
+    private static CombatAmountSpec UnaryAmount<TContext>(
+        string kind, ICombatExpression<TContext, int> operand) where TContext : class
+    {
+        var o = ClassifyAmount(operand);
+        return o.IsAdvanced ? CombatAmountSpec.Advanced : CombatAmountSpec.Unary(kind, o);
     }
 
     public static CombatAmountSpec ClassifyAmount<TContext>(ICombatExpression<TContext, int> amount)
@@ -747,6 +790,18 @@ public static class CombatProgramModel
             EventAmountExpression<TContext> => CombatAmountSpec.Event,
             CombatantCounterExpression<TContext> ce when KeyFor(ce.Selector) is { } key =>
                 CombatAmountSpec.Counter(key, ce.CounterId.value),
+            RoundNumberExpression<TContext> => new CombatAmountSpec("round"),
+            TurnNumberExpression<TContext> => new CombatAmountSpec("turn"),
+            AddExpression<TContext> e => BinaryAmount("add", e.Left, e.Right),
+            SubtractExpression<TContext> e => BinaryAmount("sub", e.Left, e.Right),
+            MultiplyExpression<TContext> e => BinaryAmount("mul", e.Left, e.Right),
+            DivideExpression<TContext> e => BinaryAmount("div", e.Dividend, e.Divisor),
+            RemainderExpression<TContext> e => BinaryAmount("rem", e.Dividend, e.Divisor),
+            MinExpression<TContext> e => BinaryAmount("min", e.Left, e.Right),
+            MaxExpression<TContext> e => BinaryAmount("max", e.Left, e.Right),
+            NegateExpression<TContext> e => UnaryAmount("neg", e.Operand),
+            AbsExpression<TContext> e => UnaryAmount("abs", e.Operand),
+            SignExpression<TContext> e => UnaryAmount("sign", e.Operand),
             _ => CombatAmountSpec.Advanced,
         };
 

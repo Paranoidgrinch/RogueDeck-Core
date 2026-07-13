@@ -619,8 +619,18 @@ else
         }
     };
 
-    // Amount: a kind dropdown (constant / event amount / a combatant counter) plus its parameter — an int input for a
-    // constant, or a single-target selector + counter-id for a counter read (e.g. "equal to your combo counter").
+    // The amount kinds the widget offers: a constant, the event amount, a combatant counter, the round/turn number,
+    // and the recursive arithmetic (binary + unary) operators. Value → dropdown label.
+    private static readonly (string Kind, string Label)[] AmountKinds =
+    {
+        ("const", "constant"), ("event", "event amount"), ("counter", "counter"),
+        ("round", "round #"), ("turn", "turn #"),
+        ("add", "+"), ("sub", "−"), ("mul", "×"), ("div", "÷"), ("rem", "mod"), ("min", "min"), ("max", "max"),
+        ("neg", "negate"), ("abs", "abs"), ("sign", "sign"),
+    };
+
+    // Recursive amount widget: a kind dropdown plus its parameter — an int (constant), a selector + counter-id
+    // (counter), nothing (event/round/turn), or nested operand widgets (binary / unary arithmetic).
     private RenderFragment AmountControls(CombatAmountSpec spec, Action<CombatAmountSpec> onChange) => builder =>
     {
         var seq = 0;
@@ -628,10 +638,11 @@ else
         builder.AddAttribute(seq++, "value", spec.Kind);
         builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
             onChange(AmountForKind(AsString(e.Value), spec))));
-        foreach (var (kind, label) in new[] { ("const", "constant"), ("event", "event amount"), ("counter", "counter") })
+        foreach (var (kind, label) in AmountKinds)
         {
             builder.OpenElement(seq++, "option");
             builder.AddAttribute(seq++, "value", kind);
+            builder.AddAttribute(seq++, "selected", kind == spec.Kind);
             builder.AddContent(seq++, label);
             builder.CloseElement();
         }
@@ -649,7 +660,16 @@ else
                 onChange(spec with { CounterId = AsString(e.Value) })));
             builder.CloseElement();
         }
-        else if (spec.Kind != "event")
+        else if (CombatAmountSpec.IsBinaryKind(spec.Kind))
+        {
+            builder.AddContent(seq++, AmountControls(spec.LeftOrDefault, l => onChange(spec with { Left = l })));
+            builder.AddContent(seq++, AmountControls(spec.RightOrDefault, r => onChange(spec with { Right = r })));
+        }
+        else if (CombatAmountSpec.IsUnaryKind(spec.Kind))
+        {
+            builder.AddContent(seq++, AmountControls(spec.LeftOrDefault, l => onChange(spec with { Left = l })));
+        }
+        else if (spec.Kind is not ("event" or "round" or "turn"))
         {
             builder.OpenElement(seq++, "input");
             builder.AddAttribute(seq++, "type", "number");
@@ -661,14 +681,22 @@ else
         }
     };
 
-    // Seed a fresh amount spec when the amount KIND changes, carrying over the counter target/id sensibly.
-    private static CombatAmountSpec AmountForKind(string kind, CombatAmountSpec prev) => kind switch
+    // Seed a fresh amount spec when the amount KIND changes, carrying over sensible operands for the arithmetic kinds.
+    private static CombatAmountSpec AmountForKind(string kind, CombatAmountSpec prev)
     {
-        "event" => CombatAmountSpec.Event,
-        "counter" => CombatAmountSpec.Counter(
-            prev.SelectorKey == "" ? "source" : prev.SelectorKey, prev.CounterId == "" ? "combo" : prev.CounterId),
-        _ => CombatAmountSpec.FromConst(prev.Const),
-    };
+        if (CombatAmountSpec.IsBinaryKind(kind))
+            return CombatAmountSpec.Binary(kind, prev.Left ?? prev, prev.Right ?? CombatAmountSpec.FromConst(1));
+        if (CombatAmountSpec.IsUnaryKind(kind))
+            return CombatAmountSpec.Unary(kind, prev.Left ?? prev);
+        return kind switch
+        {
+            "event" => CombatAmountSpec.Event,
+            "counter" => CombatAmountSpec.Counter(
+                prev.SelectorKey == "" ? "source" : prev.SelectorKey, prev.CounterId == "" ? "combo" : prev.CounterId),
+            "round" or "turn" => new CombatAmountSpec(kind),
+            _ => CombatAmountSpec.FromConst(prev.Const),
+        };
+    }
 
     // Status-instance selection (removeSelectedStatus / modifySelectedStatusStacks / stealSelectedStatus): which ONE
     // status on the target — a polarity filter, a pick mode (first / random), and an index for the first-pick.
