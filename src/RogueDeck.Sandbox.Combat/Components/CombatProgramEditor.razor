@@ -627,6 +627,12 @@ else
         ("round", "round #"), ("turn", "turn #"),
         ("add", "+"), ("sub", "−"), ("mul", "×"), ("div", "÷"), ("rem", "mod"), ("min", "min"), ("max", "max"),
         ("neg", "negate"), ("abs", "abs"), ("sign", "sign"),
+        // Selector-based state reads.
+        ("currentHealth", "current HP"), ("maxHealth", "max HP"), ("missingHealth", "missing HP"), ("healthPct", "HP %"),
+        ("currentResource", "resource"), ("maxResource", "max resource"), ("missingResource", "missing resource"),
+        ("defensivePool", "defensive pool"), ("zoneCards", "cards in zone"),
+        ("statusStacks", "status stacks"), ("statusDuration", "status duration"), ("statusCharges", "status charges"),
+        ("stacksByPolarity", "stacks by polarity"),
     };
 
     // Recursive amount widget: a kind dropdown plus its parameter — an int (constant), a selector + counter-id
@@ -669,6 +675,41 @@ else
         {
             builder.AddContent(seq++, AmountControls(spec.LeftOrDefault, l => onChange(spec with { Left = l })));
         }
+        else if (CombatAmountSpec.IsStateRead(spec.Kind))
+        {
+            builder.AddContent(seq++, SelectorSelect(
+                CombatProgramModel.SingleTargetSelectorKeys, spec.SelectorKey, key => onChange(spec with { SelectorKey = key })));
+            if (CombatAmountSpec.StateReadUsesId(spec.Kind))
+            {
+                builder.OpenElement(seq++, "input");
+                builder.AddAttribute(seq++, "value", spec.ReadId);
+                builder.AddAttribute(seq++, "style", "width:7rem");
+                builder.AddAttribute(seq++, "placeholder", "id");
+                builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+                    onChange(spec with { ReadId = AsString(e.Value) })));
+                builder.CloseElement();
+            }
+            else if (CombatAmountSpec.StateReadUsesZone(spec.Kind))
+            {
+                builder.AddContent(seq++, ZoneSelect(spec.Zone, z => onChange(spec with { Zone = z })));
+            }
+            else if (CombatAmountSpec.StateReadUsesPolarity(spec.Kind))
+            {
+                builder.OpenElement(seq++, "select");
+                builder.AddAttribute(seq++, "value", spec.Polarity.ToString());
+                builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+                    onChange(spec with { Polarity = ParsePolarity(e.Value) })));
+                foreach (var p in Enum.GetValues<StatusPolarity>())
+                {
+                    builder.OpenElement(seq++, "option");
+                    builder.AddAttribute(seq++, "value", p.ToString());
+                    builder.AddAttribute(seq++, "selected", p == spec.Polarity);
+                    builder.AddContent(seq++, p.ToString());
+                    builder.CloseElement();
+                }
+                builder.CloseElement();
+            }
+        }
         else if (spec.Kind is not ("event" or "round" or "turn"))
         {
             builder.OpenElement(seq++, "input");
@@ -688,6 +729,14 @@ else
             return CombatAmountSpec.Binary(kind, prev.Left ?? prev, prev.Right ?? CombatAmountSpec.FromConst(1));
         if (CombatAmountSpec.IsUnaryKind(kind))
             return CombatAmountSpec.Unary(kind, prev.Left ?? prev);
+        if (CombatAmountSpec.IsStateRead(kind))
+        {
+            var sel = prev.SelectorKey == "" ? "source" : prev.SelectorKey;
+            var id = CombatAmountSpec.StateReadUsesId(kind)
+                ? (kind.StartsWith("status") ? "poison" : kind == "defensivePool" ? "block" : "standard.energy")
+                : "";
+            return new CombatAmountSpec(kind, SelectorKey: sel, ReadId: id);
+        }
         return kind switch
         {
             "event" => CombatAmountSpec.Event,

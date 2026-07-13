@@ -213,6 +213,37 @@ public class CombatProgramModelTests
     }
 
     [Fact]
+    public void State_read_amounts_build_and_round_trip()
+    {
+        // Phase 1i part 2: selector-based state reads as amounts (health / resource / status / pool / zone).
+        var models = new[]
+        {
+            new CombatNodeModel("dealDamage", "eventTarget", new CombatAmountSpec("missingHealth", SelectorKey: "eventTarget")),
+            new CombatNodeModel("dealDamage", "eventTarget", new CombatAmountSpec("currentResource", SelectorKey: "source", ReadId: "standard.energy")),
+            new CombatNodeModel("gainBlock", "source", new CombatAmountSpec("defensivePool", SelectorKey: "source", ReadId: "block")),
+            new CombatNodeModel("drawCards", "source", new CombatAmountSpec("zoneCards", SelectorKey: "source", Zone: CardZone.Hand)),
+            new CombatNodeModel("dealDamage", "eventTarget", new CombatAmountSpec("statusDuration", SelectorKey: "eventTarget", ReadId: "poison")),
+            new CombatNodeModel("heal", "source", new CombatAmountSpec("stacksByPolarity", SelectorKey: "source", Polarity: StatusPolarity.Buff)),
+        };
+
+        Assert.IsType<CombatantMissingHealthExpression<CardPlayContext>>(
+            Assert.IsType<DealDamageNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(models[0]).Root).Amount);
+
+        foreach (var model in models)
+            Assert.Equal(model, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(model)));
+    }
+
+    [Fact]
+    public void A_state_read_nested_in_arithmetic_round_trips()
+    {
+        // "deal damage = the target's missing HP ÷ 2"
+        var model = new CombatNodeModel("dealDamage", "eventTarget",
+            CombatAmountSpec.Binary("div", new CombatAmountSpec("missingHealth", SelectorKey: "eventTarget"), CombatAmountSpec.FromConst(2)));
+
+        Assert.Equal(model, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(model)));
+    }
+
+    [Fact]
     public void An_arithmetic_amount_classifies_after_a_CombatJson_round_trip()
     {
         var model = new CombatNodeModel("dealDamage", "eventTarget",

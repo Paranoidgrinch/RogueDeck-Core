@@ -22,7 +22,10 @@ public sealed record CombatAmountSpec(
     // Operands for the recursive arithmetic kinds: binary (add/sub/mul/div/rem/min/max) uses Left+Right; unary
     // (neg/abs/sign) uses Left. Null for the non-arithmetic kinds so build↔classify round-trips exactly. Records give
     // these recursive structural equality for free.
-    CombatAmountSpec? Left = null, CombatAmountSpec? Right = null)
+    CombatAmountSpec? Left = null, CombatAmountSpec? Right = null,
+    // Parameter for the selector-based STATE-READ kinds (over SelectorKey, a single-target selector): a resource /
+    // status / pool id, a card zone, or a status polarity. Canonical defaults for kinds that don't use them.
+    string ReadId = "", CardZone Zone = CardZone.Hand, StatusPolarity Polarity = StatusPolarity.Buff)
 {
     public static CombatAmountSpec FromConst(int value) => new("const", value);
     public static readonly CombatAmountSpec Event = new("event");
@@ -39,6 +42,17 @@ public sealed record CombatAmountSpec(
     // The binary / unary arithmetic kinds (their editor row shows nested operand widgets).
     public static bool IsBinaryKind(string kind) => kind is "add" or "sub" or "mul" or "div" or "rem" or "min" or "max";
     public static bool IsUnaryKind(string kind) => kind is "neg" or "abs" or "sign";
+
+    // The selector-based state-read kinds (over a single-target selector). Some also carry an id / zone / polarity.
+    public static bool IsStateRead(string kind) =>
+        kind is "currentHealth" or "maxHealth" or "missingHealth" or "healthPct"
+            or "currentResource" or "maxResource" or "missingResource" or "defensivePool"
+            or "zoneCards" or "statusStacks" or "statusDuration" or "statusCharges" or "stacksByPolarity";
+    public static bool StateReadUsesId(string kind) =>
+        kind is "currentResource" or "maxResource" or "missingResource" or "defensivePool"
+            or "statusStacks" or "statusDuration" or "statusCharges";
+    public static bool StateReadUsesZone(string kind) => kind is "zoneCards";
+    public static bool StateReadUsesPolarity(string kind) => kind is "stacksByPolarity";
 
     public bool IsAdvanced => Kind == "advanced";
 }
@@ -761,6 +775,19 @@ public static class CombatProgramModel
             "neg" => new NegateExpression<TContext>(BuildAmount<TContext>(spec.LeftOrDefault)),
             "abs" => new AbsExpression<TContext>(BuildAmount<TContext>(spec.LeftOrDefault)),
             "sign" => new SignExpression<TContext>(BuildAmount<TContext>(spec.LeftOrDefault)),
+            "currentHealth" => new CombatantCurrentHealthExpression<TContext>(SelectorFor(spec.SelectorKey)),
+            "maxHealth" => new CombatantMaxHealthExpression<TContext>(SelectorFor(spec.SelectorKey)),
+            "missingHealth" => new CombatantMissingHealthExpression<TContext>(SelectorFor(spec.SelectorKey)),
+            "healthPct" => new CombatantHealthPercentageExpression<TContext>(SelectorFor(spec.SelectorKey)),
+            "currentResource" => new CombatantCurrentResourceExpression<TContext>(SelectorFor(spec.SelectorKey), new ResourceId(spec.ReadId)),
+            "maxResource" => new CombatantMaxResourceExpression<TContext>(SelectorFor(spec.SelectorKey), new ResourceId(spec.ReadId)),
+            "missingResource" => new CombatantMissingResourceExpression<TContext>(SelectorFor(spec.SelectorKey), new ResourceId(spec.ReadId)),
+            "defensivePool" => new CombatantDefensivePoolExpression<TContext>(SelectorFor(spec.SelectorKey), new DefensivePoolId(spec.ReadId)),
+            "zoneCards" => new CombatantZoneCardCountExpression<TContext>(SelectorFor(spec.SelectorKey), spec.Zone),
+            "statusStacks" => new CombatantStatusStacksExpression<TContext>(SelectorFor(spec.SelectorKey), new StatusDefinitionId(spec.ReadId)),
+            "statusDuration" => new CombatantStatusDurationExpression<TContext>(SelectorFor(spec.SelectorKey), new StatusDefinitionId(spec.ReadId)),
+            "statusCharges" => new CombatantStatusChargesExpression<TContext>(SelectorFor(spec.SelectorKey), new StatusDefinitionId(spec.ReadId)),
+            "stacksByPolarity" => new CombatantStacksByPolarityExpression<TContext>(SelectorFor(spec.SelectorKey), spec.Polarity),
             _ => new ConstantExpression<TContext>(spec.Const),
         };
     }
@@ -802,8 +829,29 @@ public static class CombatProgramModel
             NegateExpression<TContext> e => UnaryAmount("neg", e.Operand),
             AbsExpression<TContext> e => UnaryAmount("abs", e.Operand),
             SignExpression<TContext> e => UnaryAmount("sign", e.Operand),
+            CombatantCurrentHealthExpression<TContext> e => StateReadAmount("currentHealth", e.Selector),
+            CombatantMaxHealthExpression<TContext> e => StateReadAmount("maxHealth", e.Selector),
+            CombatantMissingHealthExpression<TContext> e => StateReadAmount("missingHealth", e.Selector),
+            CombatantHealthPercentageExpression<TContext> e => StateReadAmount("healthPct", e.Selector),
+            CombatantCurrentResourceExpression<TContext> e => StateReadAmount("currentResource", e.Selector, e.ResourceId.value),
+            CombatantMaxResourceExpression<TContext> e => StateReadAmount("maxResource", e.Selector, e.ResourceId.value),
+            CombatantMissingResourceExpression<TContext> e => StateReadAmount("missingResource", e.Selector, e.ResourceId.value),
+            CombatantDefensivePoolExpression<TContext> e => StateReadAmount("defensivePool", e.Selector, e.PoolId.value),
+            CombatantZoneCardCountExpression<TContext> e => StateReadAmount("zoneCards", e.Selector, zone: e.Zone),
+            CombatantStatusStacksExpression<TContext> e => StateReadAmount("statusStacks", e.Selector, e.StatusId.value),
+            CombatantStatusDurationExpression<TContext> e => StateReadAmount("statusDuration", e.Selector, e.StatusId.value),
+            CombatantStatusChargesExpression<TContext> e => StateReadAmount("statusCharges", e.Selector, e.StatusId.value),
+            CombatantStacksByPolarityExpression<TContext> e => StateReadAmount("stacksByPolarity", e.Selector, polarity: e.Polarity),
             _ => CombatAmountSpec.Advanced,
         };
+
+    // A selector-based state read → its amount spec, or "advanced" if the selector is not in the authorable catalog.
+    private static CombatAmountSpec StateReadAmount(
+        string kind, ICombatantTargetSelector selector, string readId = "",
+        CardZone zone = CardZone.Hand, StatusPolarity polarity = StatusPolarity.Buff) =>
+        KeyFor(selector) is { } key
+            ? new CombatAmountSpec(kind, SelectorKey: key, ReadId: readId, Zone: zone, Polarity: polarity)
+            : CombatAmountSpec.Advanced;
 
     // ── conditions (conditional node's if-test) ────────────────────────────────────
     public static ICombatExpression<TContext, bool> BuildCondition<TContext>(CombatConditionSpec spec)

@@ -106,6 +106,17 @@ public class CombatProgramEditorRenderTests
     }
 
     [Fact]
+    public async Task Renders_a_state_read_amount_with_a_selector_and_id()
+    {
+        // Phase 1i part 2: a resource state-read amount shows a single-target selector + an id field.
+        var html = await RenderAsync(new CombatNodeModel("dealDamage", "eventTarget",
+            new CombatAmountSpec("currentResource", SelectorKey: "source", ReadId: "standard.energy")));
+
+        Assert.Contains("resource", html);        // the amount kind label
+        Assert.Contains("standard.energy", html);  // the id field value
+    }
+
+    [Fact]
     public async Task Renders_an_arithmetic_amount_with_nested_operands()
     {
         // Phase 1i: an arithmetic amount renders nested operand widgets (add of a counter and a constant).
