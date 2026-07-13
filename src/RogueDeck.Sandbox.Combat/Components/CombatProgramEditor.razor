@@ -143,6 +143,13 @@ else
             <input value="@Node.StatusId" style="width:8rem" placeholder="status id"
                    @onchange="e => Set(Node with { StatusId = AsString(e.Value) })" />
         }
+        @if (CombatProgramModel.UsesCounterId(Node.Kind))
+        {
+            <input value="@Node.CounterId" style="width:8rem" placeholder="counter id"
+                   @onchange="e => Set(Node with { CounterId = AsString(e.Value) })" />
+            <label class="muted"><input type="checkbox" checked="@Node.Relative"
+                   @onchange="e => Set(Node with { Relative = AsBool(e.Value) })" /> relative</label>
+        }
         @if (Node.Kind == "applyStatus")
         {
             <span class="muted">turns</span>
@@ -367,15 +374,16 @@ else
         }
     };
 
-    // Amount: a kind dropdown (constant / event amount) plus, for a constant, an int input.
+    // Amount: a kind dropdown (constant / event amount / a combatant counter) plus its parameter — an int input for a
+    // constant, or a single-target selector + counter-id for a counter read (e.g. "equal to your combo counter").
     private RenderFragment AmountControls(CombatAmountSpec spec, Action<CombatAmountSpec> onChange) => builder =>
     {
         var seq = 0;
         builder.OpenElement(seq++, "select");
         builder.AddAttribute(seq++, "value", spec.Kind);
         builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
-            onChange(AsString(e.Value) == "event" ? CombatAmountSpec.Event : CombatAmountSpec.FromConst(spec.Const))));
-        foreach (var (kind, label) in new[] { ("const", "constant"), ("event", "event amount") })
+            onChange(AmountForKind(AsString(e.Value), spec))));
+        foreach (var (kind, label) in new[] { ("const", "constant"), ("event", "event amount"), ("counter", "counter") })
         {
             builder.OpenElement(seq++, "option");
             builder.AddAttribute(seq++, "value", kind);
@@ -384,7 +392,19 @@ else
         }
         builder.CloseElement();
 
-        if (spec.Kind != "event")
+        if (spec.Kind == "counter")
+        {
+            builder.AddContent(seq++, SelectorSelect(
+                CombatProgramModel.SingleTargetSelectorKeys, spec.SelectorKey, key => onChange(spec with { SelectorKey = key })));
+            builder.OpenElement(seq++, "input");
+            builder.AddAttribute(seq++, "value", spec.CounterId);
+            builder.AddAttribute(seq++, "style", "width:7rem");
+            builder.AddAttribute(seq++, "placeholder", "counter id");
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+                onChange(spec with { CounterId = AsString(e.Value) })));
+            builder.CloseElement();
+        }
+        else if (spec.Kind != "event")
         {
             builder.OpenElement(seq++, "input");
             builder.AddAttribute(seq++, "type", "number");
@@ -394,6 +414,15 @@ else
                 onChange(CombatAmountSpec.FromConst(AsInt(e.Value, spec.Const)))));
             builder.CloseElement();
         }
+    };
+
+    // Seed a fresh amount spec when the amount KIND changes, carrying over the counter target/id sensibly.
+    private static CombatAmountSpec AmountForKind(string kind, CombatAmountSpec prev) => kind switch
+    {
+        "event" => CombatAmountSpec.Event,
+        "counter" => CombatAmountSpec.Counter(
+            prev.SelectorKey == "" ? "source" : prev.SelectorKey, prev.CounterId == "" ? "combo" : prev.CounterId),
+        _ => CombatAmountSpec.FromConst(prev.Const),
     };
 
     // Status-instance selection (removeSelectedStatus / modifySelectedStatusStacks / stealSelectedStatus): which ONE

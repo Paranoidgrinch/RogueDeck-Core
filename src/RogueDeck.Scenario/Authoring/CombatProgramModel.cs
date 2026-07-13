@@ -14,13 +14,17 @@ namespace RogueDeck.Scenario.Authoring;
 // Anything outside the modelled subset (composite root today, result keys, arithmetic/state-read amounts,
 // unlisted selectors) classifies to null so the consumer keeps the JSON escape.
 
-// An amount, in the small curated shape the editor authors: a constant, the triggering event's amount, or
-// "advanced" (any richer expression — arithmetic, state reads — left to the JSON editor). Mirrors RelicAmountSpec.
-public sealed record CombatAmountSpec(string Kind = "const", int Const = 3)
+// An amount, in the small curated shape the editor authors: a constant, the triggering event's amount, a read of a
+// combatant's per-fight counter (Kind == "counter", over SelectorKey + CounterId — e.g. "deal damage equal to your
+// combo counter"), or "advanced" (any richer expression, left to the JSON editor). Mirrors RelicAmountSpec.
+public sealed record CombatAmountSpec(
+    string Kind = "const", int Const = 3, string SelectorKey = "source", string CounterId = "")
 {
     public static CombatAmountSpec FromConst(int value) => new("const", value);
     public static readonly CombatAmountSpec Event = new("event");
     public static readonly CombatAmountSpec Advanced = new("advanced");
+    public static CombatAmountSpec Counter(string selectorKey, string counterId) =>
+        new("counter", SelectorKey: selectorKey, CounterId: counterId);
 
     public bool IsAdvanced => Kind == "advanced";
 }
@@ -109,7 +113,12 @@ public sealed record CombatNodeModel(
     // IgnoresBlock=false canonically for other kinds so build↔classify round-trips exactly.
     string Element = "",
     // dealDamage that bypasses the target's block/defensive pools (pierce). false canonically for other kinds.
-    bool IgnoresBlock = false)
+    bool IgnoresBlock = false,
+    // setCombatantCounter: the counter id written on the target. "" canonically for other kinds.
+    string CounterId = "",
+    // setCombatantCounter: relative (add the amount) vs absolute (set it). true is the engine default; false
+    // canonically for kinds that don't use it so build↔classify round-trips exactly.
+    bool Relative = false)
 {
     public CombatAmountSpec AmountOrDefault => Amount ?? CombatAmountSpec.FromConst(3);
     public CombatCardSpec CardOrDefault => Card ?? new CombatCardSpec();
@@ -159,6 +168,8 @@ public sealed record CombatNodeModel(
         && Max == other.Max
         && Element == other.Element
         && IgnoresBlock == other.IgnoresBlock
+        && CounterId == other.CounterId
+        && Relative == other.Relative
         && ChildrenOrEmpty.SequenceEqual(other.ChildrenOrEmpty);
 
     public override int GetHashCode()
@@ -184,6 +195,8 @@ public sealed record CombatNodeModel(
         hash.Add(Max);
         hash.Add(Element);
         hash.Add(IgnoresBlock);
+        hash.Add(CounterId);
+        hash.Add(Relative);
         foreach (var child in ChildrenOrEmpty)
             hash.Add(child);
         return hash.ToHashCode();
@@ -214,6 +227,7 @@ public static class CombatProgramModel
         ("modifyStatusStacks", "modify status stacks"),
         ("modifyStatusDuration", "modify status duration"),
         ("modifyStatusCharges", "modify status charges"),
+        ("setCombatantCounter", "set combatant counter"),
         ("removeSelectedStatus", "remove a selected status"),
         ("modifySelectedStatusStacks", "modify a selected status"),
         ("stealSelectedStatus", "steal a selected status"),
@@ -239,6 +253,10 @@ public static class CombatProgramModel
 
     // modifyResource can clamp its result to an optional [min, max]; its row shows min/max fields.
     public static bool UsesMinMax(string kind) => kind is "modifyResource";
+
+    // setCombatantCounter writes a named per-fight counter on the target; its row shows a counter-id field and a
+    // relative/absolute toggle (relative adds the amount, absolute sets it).
+    public static bool UsesCounterId(string kind) => kind is "setCombatantCounter";
 
     // The leaf kinds that name a specific status (apply / remove / modify-* show a status-id field).
     public static bool UsesStatusId(string kind) =>
@@ -312,6 +330,7 @@ public static class CombatProgramModel
         "modifyStatusStacks" => new("modifyStatusStacks", "eventTarget", CombatAmountSpec.FromConst(1), StatusId: "poison"),
         "modifyStatusDuration" => new("modifyStatusDuration", "eventTarget", CombatAmountSpec.FromConst(1), StatusId: "poison"),
         "modifyStatusCharges" => new("modifyStatusCharges", "eventTarget", CombatAmountSpec.FromConst(1), StatusId: "poison"),
+        "setCombatantCounter" => new("setCombatantCounter", "source", CombatAmountSpec.FromConst(1), CounterId: "combo", Relative: true),
         "removeSelectedStatus" => new("removeSelectedStatus", "eventTarget", Selection: new StatusSelectionSpec(StatusPolarityFilter.Buff)),
         "modifySelectedStatusStacks" => new("modifySelectedStatusStacks", "eventTarget", CombatAmountSpec.FromConst(-1), Selection: new StatusSelectionSpec(StatusPolarityFilter.Debuff)),
         "stealSelectedStatus" => new("stealSelectedStatus", "eventTarget", Selection: new StatusSelectionSpec(StatusPolarityFilter.Buff), ToSelectorKey: "source"),
@@ -361,6 +380,8 @@ public static class CombatProgramModel
                 Max = UsesMinMax(kind) ? node.Max : null,
                 Element = kind == "dealDamage" ? node.Element : "",
                 IgnoresBlock = kind == "dealDamage" && node.IgnoresBlock,
+                CounterId = UsesCounterId(kind) ? (node.CounterId == "" ? "combo" : node.CounterId) : "",
+                Relative = UsesCounterId(kind) && (node.Kind == "setCombatantCounter" ? node.Relative : true),
                 Amount = UsesAmount(kind) ? (node.Amount ?? CombatAmountSpec.FromConst(3)) : null,
             };
 
@@ -442,6 +463,7 @@ public static class CombatProgramModel
         return spec.Kind switch
         {
             "event" => new EventAmountExpression<TContext>(),
+            "counter" => new CombatantCounterExpression<TContext>(SelectorFor(spec.SelectorKey), new CounterId(spec.CounterId)),
             _ => new ConstantExpression<TContext>(spec.Const),
         };
     }
@@ -452,6 +474,8 @@ public static class CombatProgramModel
         {
             ConstantExpression<TContext> c => CombatAmountSpec.FromConst(c.Value),
             EventAmountExpression<TContext> => CombatAmountSpec.Event,
+            CombatantCounterExpression<TContext> ce when KeyFor(ce.Selector) is { } key =>
+                CombatAmountSpec.Counter(key, ce.CounterId.value),
             _ => CombatAmountSpec.Advanced,
         };
 
@@ -589,6 +613,7 @@ public static class CombatProgramModel
             "modifyStatusStacks" => new ModifyStatusStacksNode<TContext>(selector, new StatusDefinitionId(model.StatusId), amount),
             "modifyStatusDuration" => new ModifyStatusDurationNode<TContext>(selector, new StatusDefinitionId(model.StatusId), amount),
             "modifyStatusCharges" => new ModifyStatusChargesNode<TContext>(selector, new StatusDefinitionId(model.StatusId), amount),
+            "setCombatantCounter" => new SetCombatantCounterNode<TContext>(selector, new CounterId(model.CounterId), amount, model.Relative),
             "removeSelectedStatus" => new RemoveSelectedStatusNode<TContext>(selector, model.SelectionOrDefault),
             "modifySelectedStatusStacks" => new ModifySelectedStatusStacksNode<TContext>(selector, model.SelectionOrDefault, amount),
             "stealSelectedStatus" => new StealSelectedStatusNode<TContext>(selector, model.SelectionOrDefault, SelectorFor(model.ToSelectorKey)),
@@ -696,6 +721,13 @@ public static class CombatProgramModel
                 return StatusDeltaLeaf("modifyStatusDuration", n.TargetSelector, n.StatusDefinitionId, n.Delta);
             case ModifyStatusChargesNode<TContext> { ResultKey: null } n:
                 return StatusDeltaLeaf("modifyStatusCharges", n.TargetSelector, n.StatusDefinitionId, n.Delta);
+            case SetCombatantCounterNode<TContext> n:
+                if (KeyFor(n.TargetSelector) is not { } scKey)
+                    return null;
+                var scAmount = ClassifyAmount(n.Amount);
+                return scAmount.IsAdvanced
+                    ? null
+                    : new CombatNodeModel("setCombatantCounter", scKey, scAmount, CounterId: n.CounterId.value, Relative: n.Relative);
             case RemoveSelectedStatusNode<TContext> n:
                 return KeyFor(n.TargetSelector) is { } rsKey
                     ? new CombatNodeModel("removeSelectedStatus", rsKey, Selection: n.Selection)

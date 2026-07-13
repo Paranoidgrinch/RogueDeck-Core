@@ -106,6 +106,27 @@ public class CombatProgramEditorRenderTests
     }
 
     [Fact]
+    public async Task Renders_set_combatant_counter_with_id_and_relative_toggle()
+    {
+        // Phase 1d: setCombatantCounter shows a counter-id field and a relative checkbox.
+        var html = await RenderAsync(new CombatNodeModel("setCombatantCounter", "source", CombatAmountSpec.FromConst(1), CounterId: "combo", Relative: true));
+
+        Assert.Contains("set combatant counter", html);
+        Assert.Contains("combo", html);
+        Assert.Contains("relative", html);
+    }
+
+    [Fact]
+    public async Task Renders_a_counter_amount_source_with_selector_and_id()
+    {
+        // The amount widget offers "counter" and, when chosen, a single-target selector + counter-id field.
+        var html = await RenderAsync(new CombatNodeModel("dealDamage", "eventTarget", CombatAmountSpec.Counter("source", "combo")));
+
+        Assert.Contains("counter id", html); // the counter amount's id field placeholder
+        Assert.Contains("combo", html);
+    }
+
+    [Fact]
     public async Task Renders_deal_damage_with_element_and_ignores_block()
     {
         // Phase 1c: dealDamage shows an element field + an "ignores block" checkbox.

@@ -21,9 +21,10 @@ public class CombatProgramModelTests
             // the amount-only template here would build them without a selection and mismatch.
             if (CombatProgramModel.UsesStatusSelection(kind))
                 continue;
-            // Likewise the resource-selection op (ResourceSelectionSpec) and the defensive-pool op (pool id) have
-            // their own round-trip tests below; the amount-only template does not fit them.
-            if (CombatProgramModel.UsesResourceSelection(kind) || CombatProgramModel.UsesPoolId(kind))
+            // Likewise the resource-selection op (ResourceSelectionSpec), the defensive-pool op (pool id) and the
+            // counter op (counter id) have their own round-trip tests below; the amount-only template does not fit them.
+            if (CombatProgramModel.UsesResourceSelection(kind) || CombatProgramModel.UsesPoolId(kind)
+                || CombatProgramModel.UsesCounterId(kind))
                 continue;
             // ResourceId is part of a resource leaf's identity (gain/lose/modify); StatusId of a status leaf's.
             var resourceId = CombatProgramModel.UsesResourceId(kind) ? "standard.energy" : "";
@@ -177,6 +178,49 @@ public class CombatProgramModelTests
         var model = CombatNodeModel.Conditional(
             new CombatConditionSpec("hasStatus", "eventTarget", Id: "weak"),
             new CombatNodeModel("applyStatus", "eventTarget", CombatAmountSpec.FromConst(2), StatusId: "poison", DurationTurns: 3));
+        var options = CombatJson.CreateOptions<CardPlayContext>();
+
+        var program = CombatProgramModel.Build<CardPlayContext>(model);
+        var json = JsonSerializer.Serialize(program, options);
+        var back = JsonSerializer.Deserialize<EffectProgram<CardPlayContext>>(json, options)!;
+
+        Assert.Equal(model, CombatProgramModel.Classify(back));
+    }
+
+    [Fact]
+    public void SetCombatantCounter_round_trips_its_counter_id_and_relative_flag()
+    {
+        // Phase 1d: setCombatantCounter writes a per-fight counter (relative add or absolute set).
+        var relative = new CombatNodeModel("setCombatantCounter", "source", CombatAmountSpec.FromConst(1), CounterId: "combo", Relative: true);
+        var absolute = new CombatNodeModel("setCombatantCounter", "source", CombatAmountSpec.FromConst(0), CounterId: "combo", Relative: false);
+
+        var node = Assert.IsType<SetCombatantCounterNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(relative).Root);
+        Assert.Equal("combo", node.CounterId.value);
+        Assert.True(node.Relative);
+        Assert.False(Assert.IsType<SetCombatantCounterNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(absolute).Root).Relative);
+
+        foreach (var model in new[] { relative, absolute })
+            Assert.Equal(model, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(model)));
+    }
+
+    [Fact]
+    public void A_counter_read_is_a_first_class_amount_source()
+    {
+        // "deal damage equal to your combo counter" — the counter amount builds a CombatantCounterExpression and
+        // classifies back, so it is no longer a JSON escape.
+        var model = new CombatNodeModel("dealDamage", "eventTarget", CombatAmountSpec.Counter("source", "combo"));
+
+        var node = Assert.IsType<DealDamageNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(model).Root);
+        var counter = Assert.IsType<CombatantCounterExpression<CardPlayContext>>(node.Amount);
+        Assert.Equal("combo", counter.CounterId.value);
+        Assert.Equal(model, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(model)));
+    }
+
+    [Fact]
+    public void A_counter_amount_classifies_after_a_CombatJson_round_trip()
+    {
+        // The counter amount must survive being saved into a blueprint: serialize + deserialize, then classify.
+        var model = new CombatNodeModel("dealDamage", "eventTarget", CombatAmountSpec.Counter("source", "combo"));
         var options = CombatJson.CreateOptions<CardPlayContext>();
 
         var program = CombatProgramModel.Build<CardPlayContext>(model);
