@@ -87,10 +87,18 @@ public sealed record CombatNodeModel(
     string ToDefinition = "",
     // moveCardToZone: where the card lands in the destination zone (Top = a tutor / put-on-top; Bottom = default).
     // Canonically Bottom for other kinds so build↔classify round-trips exactly.
-    ZonePlacement Placement = ZonePlacement.Bottom)
+    ZonePlacement Placement = ZonePlacement.Bottom,
+    // Status-instance selection ops (removeSelectedStatus / modifySelectedStatusStacks / stealSelectedStatus): which
+    // ONE status instance on the target to act on (polarity filter × First/Random × index). Null for kinds that name
+    // a status id or none, so build↔classify round-trips exactly. Reuses the engine's serializable spec directly.
+    StatusSelectionSpec? Selection = null,
+    // stealSelectedStatus's SECOND selector — the thief the stolen status moves to (SelectorKey is the victim). "source"
+    // (steal to self) canonically for every other kind so build↔classify round-trips exactly.
+    string ToSelectorKey = "source")
 {
     public CombatAmountSpec AmountOrDefault => Amount ?? CombatAmountSpec.FromConst(3);
     public CombatCardSpec CardOrDefault => Card ?? new CombatCardSpec();
+    public StatusSelectionSpec SelectionOrDefault => Selection ?? new StatusSelectionSpec();
     public IReadOnlyList<CombatNodeModel> ChildrenOrEmpty => Children ?? Array.Empty<CombatNodeModel>();
 
     public static CombatNodeModel Sequence(IReadOnlyList<CombatNodeModel> children) =>
@@ -126,6 +134,8 @@ public sealed record CombatNodeModel(
         && Polarity == other.Polarity
         && FromZone == other.FromZone
         && ToZone == other.ToZone
+        && Selection == other.Selection
+        && ToSelectorKey == other.ToSelectorKey
         && ChildrenOrEmpty.SequenceEqual(other.ChildrenOrEmpty);
 
     public override int GetHashCode()
@@ -142,6 +152,8 @@ public sealed record CombatNodeModel(
         hash.Add(Polarity);
         hash.Add(FromZone);
         hash.Add(ToZone);
+        hash.Add(Selection);
+        hash.Add(ToSelectorKey);
         foreach (var child in ChildrenOrEmpty)
             hash.Add(child);
         return hash.ToHashCode();
@@ -169,6 +181,9 @@ public static class CombatProgramModel
         ("modifyStatusStacks", "modify status stacks"),
         ("modifyStatusDuration", "modify status duration"),
         ("modifyStatusCharges", "modify status charges"),
+        ("removeSelectedStatus", "remove a selected status"),
+        ("modifySelectedStatusStacks", "modify a selected status"),
+        ("stealSelectedStatus", "steal a selected status"),
         ("moveCards", "move cards (zone → zone)"),
         ("moveCardToZone", "move a card (targeted)"),
         ("transformCard", "transform / upgrade a card"),
@@ -183,10 +198,21 @@ public static class CombatProgramModel
         kind is "applyStatus" or "removeStatus"
             or "modifyStatusStacks" or "modifyStatusDuration" or "modifyStatusCharges";
 
-    // The leaf kinds that carry an amount (its stacks/value/count/delta). removeStatus, cleanse and the card ops take
-    // none, so the editor hides the amount control for them (and their model keeps Amount at the canonical null).
+    // The leaf kinds that carry an amount (its stacks/value/count/delta). removeStatus, cleanse, the card ops and the
+    // selection-based removes/steals take none, so the editor hides the amount control for them (and their model keeps
+    // Amount at the canonical null). modifySelectedStatusStacks DOES carry an amount (its delta).
     public static bool UsesAmount(string kind) =>
-        kind is not ("removeStatus" or "cleanse" or "moveCards" or "moveCardToZone" or "transformCard");
+        kind is not ("removeStatus" or "cleanse" or "moveCards" or "moveCardToZone" or "transformCard"
+            or "removeSelectedStatus" or "stealSelectedStatus");
+
+    // The leaf kinds that pick ONE status instance on the target by a StatusSelectionSpec (polarity filter × pick),
+    // rather than naming a status id. Their editor row shows the status-selection widget.
+    public static bool UsesStatusSelection(string kind) =>
+        kind is "removeSelectedStatus" or "modifySelectedStatusStacks" or "stealSelectedStatus";
+
+    // The leaf kind that needs a SECOND selector (the thief a stolen status moves to). Its editor row shows a
+    // to-selector dropdown alongside the from-selector.
+    public static bool UsesToSelector(string kind) => kind is "stealSelectedStatus";
 
     // The leaf kind that moves ALL cards between zones (its editor shows from/to zone dropdowns).
     public static bool UsesZones(string kind) => kind is "moveCards";
@@ -235,6 +261,9 @@ public static class CombatProgramModel
         "modifyStatusStacks" => new("modifyStatusStacks", "eventTarget", CombatAmountSpec.FromConst(1), StatusId: "poison"),
         "modifyStatusDuration" => new("modifyStatusDuration", "eventTarget", CombatAmountSpec.FromConst(1), StatusId: "poison"),
         "modifyStatusCharges" => new("modifyStatusCharges", "eventTarget", CombatAmountSpec.FromConst(1), StatusId: "poison"),
+        "removeSelectedStatus" => new("removeSelectedStatus", "eventTarget", Selection: new StatusSelectionSpec(StatusPolarityFilter.Buff)),
+        "modifySelectedStatusStacks" => new("modifySelectedStatusStacks", "eventTarget", CombatAmountSpec.FromConst(-1), Selection: new StatusSelectionSpec(StatusPolarityFilter.Debuff)),
+        "stealSelectedStatus" => new("stealSelectedStatus", "eventTarget", Selection: new StatusSelectionSpec(StatusPolarityFilter.Buff), ToSelectorKey: "source"),
         "moveCards" => new("moveCards", "source", FromZone: CardZone.Hand, ToZone: CardZone.DiscardPile),
         "moveCardToZone" => new("moveCardToZone", "source", Card: new CombatCardSpec("chosen", CardZone.Hand), ToZone: CardZone.ExhaustPile),
         "transformCard" => new("transformCard", "source", Card: new CombatCardSpec("chosen", CardZone.Hand), ToDefinition: "strike.plus"),
@@ -272,6 +301,8 @@ public static class CombatProgramModel
                 Card = UsesCard(kind) ? (node.Card ?? new CombatCardSpec("chosen", CardZone.Hand)) : null,
                 ToDefinition = kind == "transformCard" ? (node.ToDefinition == "" ? "strike.plus" : node.ToDefinition) : "",
                 Placement = kind == "moveCardToZone" ? node.Placement : ZonePlacement.Bottom,
+                Selection = UsesStatusSelection(kind) ? (node.Selection ?? new StatusSelectionSpec()) : null,
+                ToSelectorKey = UsesToSelector(kind) ? node.ToSelectorKey : "source",
                 Amount = UsesAmount(kind) ? (node.Amount ?? CombatAmountSpec.FromConst(3)) : null,
             };
 
@@ -495,6 +526,9 @@ public static class CombatProgramModel
             "modifyStatusStacks" => new ModifyStatusStacksNode<TContext>(selector, new StatusDefinitionId(model.StatusId), amount),
             "modifyStatusDuration" => new ModifyStatusDurationNode<TContext>(selector, new StatusDefinitionId(model.StatusId), amount),
             "modifyStatusCharges" => new ModifyStatusChargesNode<TContext>(selector, new StatusDefinitionId(model.StatusId), amount),
+            "removeSelectedStatus" => new RemoveSelectedStatusNode<TContext>(selector, model.SelectionOrDefault),
+            "modifySelectedStatusStacks" => new ModifySelectedStatusStacksNode<TContext>(selector, model.SelectionOrDefault, amount),
+            "stealSelectedStatus" => new StealSelectedStatusNode<TContext>(selector, model.SelectionOrDefault, SelectorFor(model.ToSelectorKey)),
             "moveCards" => new MoveAllCardsFromZoneNode<TContext>(selector, model.FromZone, model.ToZone),
             "moveCardToZone" => new MoveCardToZoneNode<TContext>(selector, BuildCard<TContext>(model.CardOrDefault), model.ToZone, placement: model.Placement),
             "transformCard" => new TransformCardNode<TContext>(selector, BuildCard<TContext>(model.CardOrDefault), new CardDefinitionId(model.ToDefinition)),
@@ -565,6 +599,21 @@ public static class CombatProgramModel
                 return StatusDeltaLeaf("modifyStatusDuration", n.TargetSelector, n.StatusDefinitionId, n.Delta);
             case ModifyStatusChargesNode<TContext> { ResultKey: null } n:
                 return StatusDeltaLeaf("modifyStatusCharges", n.TargetSelector, n.StatusDefinitionId, n.Delta);
+            case RemoveSelectedStatusNode<TContext> n:
+                return KeyFor(n.TargetSelector) is { } rsKey
+                    ? new CombatNodeModel("removeSelectedStatus", rsKey, Selection: n.Selection)
+                    : null;
+            case ModifySelectedStatusStacksNode<TContext> n:
+                if (KeyFor(n.TargetSelector) is not { } mssKey)
+                    return null;
+                var mssDelta = ClassifyAmount(n.Delta);
+                return mssDelta.IsAdvanced
+                    ? null
+                    : new CombatNodeModel("modifySelectedStatusStacks", mssKey, mssDelta, Selection: n.Selection);
+            case StealSelectedStatusNode<TContext> n:
+                return KeyFor(n.FromSelector) is { } ssFrom && KeyFor(n.ToSelector) is { } ssTo
+                    ? new CombatNodeModel("stealSelectedStatus", ssFrom, Selection: n.Selection, ToSelectorKey: ssTo)
+                    : null;
             case MoveAllCardsFromZoneNode<TContext> { ResultKey: null } n:
                 return KeyFor(n.TargetSelector) is { } moveKey
                     ? new CombatNodeModel("moveCards", moveKey, FromZone: n.FromZone, ToZone: n.ToZone)

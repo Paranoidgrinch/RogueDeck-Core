@@ -130,6 +130,15 @@ else
                 }
             </select>
         }
+        @if (CombatProgramModel.UsesStatusSelection(Node.Kind))
+        {
+            @SelectionControls(Node.SelectionOrDefault, spec => Set(Node with { Selection = spec }))
+        }
+        @if (CombatProgramModel.UsesToSelector(Node.Kind))
+        {
+            <span class="muted">to</span>
+            @SelectorSelect(CombatProgramModel.SelectorKeys, Node.ToSelectorKey, key => Set(Node with { ToSelectorKey = key }))
+        }
         @if (CombatProgramModel.UsesZones(Node.Kind))
         {
             <span class="muted">from</span>
@@ -351,6 +360,63 @@ else
             builder.CloseElement();
         }
     };
+
+    // Status-instance selection (removeSelectedStatus / modifySelectedStatusStacks / stealSelectedStatus): which ONE
+    // status on the target — a polarity filter, a pick mode (first / random), and an index for the first-pick.
+    private RenderFragment SelectionControls(StatusSelectionSpec spec, Action<StatusSelectionSpec> onChange) => builder =>
+    {
+        var seq = 0;
+        // polarity filter
+        builder.OpenElement(seq++, "select");
+        builder.AddAttribute(seq++, "value", spec.Polarity.ToString());
+        builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+            onChange(spec with { Polarity = ParseSelectionPolarity(e.Value) })));
+        foreach (var f in Enum.GetValues<StatusPolarityFilter>())
+        {
+            builder.OpenElement(seq++, "option");
+            builder.AddAttribute(seq++, "value", f.ToString());
+            builder.AddAttribute(seq++, "selected", f == spec.Polarity);
+            builder.AddContent(seq++, f.ToString().ToLowerInvariant());
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+
+        // pick mode
+        builder.OpenElement(seq++, "select");
+        builder.AddAttribute(seq++, "value", spec.Pick.ToString());
+        builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+            onChange(spec with { Pick = ParseStatusPick(e.Value) })));
+        foreach (var p in Enum.GetValues<StatusPick>())
+        {
+            builder.OpenElement(seq++, "option");
+            builder.AddAttribute(seq++, "value", p.ToString());
+            builder.AddAttribute(seq++, "selected", p == spec.Pick);
+            builder.AddContent(seq++, p.ToString().ToLowerInvariant());
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+
+        // index (only meaningful for the deterministic first-pick)
+        if (spec.Pick == StatusPick.First)
+        {
+            builder.OpenElement(seq++, "span");
+            builder.AddAttribute(seq++, "class", "muted");
+            builder.AddContent(seq++, "#");
+            builder.CloseElement();
+            builder.OpenElement(seq++, "input");
+            builder.AddAttribute(seq++, "type", "number");
+            builder.AddAttribute(seq++, "value", spec.Index);
+            builder.AddAttribute(seq++, "style", "width:3.5rem");
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+                onChange(spec with { Index = AsInt(e.Value, spec.Index) })));
+            builder.CloseElement();
+        }
+    };
+
+    private static StatusPolarityFilter ParseSelectionPolarity(object? v) =>
+        Enum.TryParse<StatusPolarityFilter>(AsString(v), out var f) ? f : StatusPolarityFilter.Any;
+    private static StatusPick ParseStatusPick(object? v) =>
+        Enum.TryParse<StatusPick>(AsString(v), out var p) ? p : StatusPick.First;
 
     // ── condition widget (for the conditional node) ──────────────────────────────
     private static readonly (string Kind, string Label)[] ConditionKinds =

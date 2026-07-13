@@ -17,6 +17,10 @@ public class CombatProgramModelTests
             // round-trip tests cover them below.
             if (!CombatProgramModel.UsesAmount(kind))
                 continue;
+            // The status-selection ops carry a StatusSelectionSpec (not an id) and have a dedicated round-trip test;
+            // the amount-only template here would build them without a selection and mismatch.
+            if (CombatProgramModel.UsesStatusSelection(kind))
+                continue;
             // ResourceId is part of a resource leaf's identity (gain/lose/modify); StatusId of a status leaf's.
             var resourceId = CombatProgramModel.UsesResourceId(kind) ? "standard.energy" : "";
             var statusId = CombatProgramModel.UsesStatusId(kind) ? "poison" : "";
@@ -169,6 +173,47 @@ public class CombatProgramModelTests
         var model = CombatNodeModel.Conditional(
             new CombatConditionSpec("hasStatus", "eventTarget", Id: "weak"),
             new CombatNodeModel("applyStatus", "eventTarget", CombatAmountSpec.FromConst(2), StatusId: "poison", DurationTurns: 3));
+        var options = CombatJson.CreateOptions<CardPlayContext>();
+
+        var program = CombatProgramModel.Build<CardPlayContext>(model);
+        var json = JsonSerializer.Serialize(program, options);
+        var back = JsonSerializer.Deserialize<EffectProgram<CardPlayContext>>(json, options)!;
+
+        Assert.Equal(model, CombatProgramModel.Classify(back));
+    }
+
+    [Fact]
+    public void Status_selection_ops_build_their_nodes_and_round_trip()
+    {
+        // Phase 1a: the status-instance ops (#2/#3) pick ONE status by a StatusSelectionSpec instead of naming an id.
+        var remove = new CombatNodeModel(
+            "removeSelectedStatus", "eventTarget",
+            Selection: new StatusSelectionSpec(StatusPolarityFilter.Buff, StatusPick.Random));
+        var modify = new CombatNodeModel(
+            "modifySelectedStatusStacks", "eventTarget", CombatAmountSpec.FromConst(-2),
+            Selection: new StatusSelectionSpec(StatusPolarityFilter.Debuff, StatusPick.First, Index: 1));
+        var steal = new CombatNodeModel(
+            "stealSelectedStatus", "eventTarget",
+            Selection: new StatusSelectionSpec(StatusPolarityFilter.Buff), ToSelectorKey: "source");
+
+        var removeNode = Assert.IsType<RemoveSelectedStatusNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(remove).Root);
+        Assert.Equal(StatusPolarityFilter.Buff, removeNode.Selection.Polarity);
+        var modifyNode = Assert.IsType<ModifySelectedStatusStacksNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(modify).Root);
+        Assert.Equal(1, modifyNode.Selection.Index);
+        var stealNode = Assert.IsType<StealSelectedStatusNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(steal).Root);
+        Assert.Equal("eventTarget", CombatProgramModel.Classify(new EffectProgram<CardPlayContext>(stealNode))!.SelectorKey);
+
+        foreach (var model in new[] { remove, modify, steal })
+            Assert.Equal(model, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(model)));
+    }
+
+    [Fact]
+    public void Status_selection_op_classifies_after_a_CombatJson_round_trip()
+    {
+        // A deserialized steal holds fresh from/to selector + spec instances; classify must recognise them by type.
+        var model = new CombatNodeModel(
+            "stealSelectedStatus", "eventTarget",
+            Selection: new StatusSelectionSpec(StatusPolarityFilter.Buff, StatusPick.First, Index: 2), ToSelectorKey: "lowestHealthAlly");
         var options = CombatJson.CreateOptions<CardPlayContext>();
 
         var program = CombatProgramModel.Build<CardPlayContext>(model);

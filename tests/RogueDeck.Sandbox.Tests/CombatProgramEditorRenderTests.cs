@@ -106,6 +106,46 @@ public class CombatProgramEditorRenderTests
     }
 
     [Fact]
+    public async Task Renders_remove_selected_status_with_the_selection_widget_and_no_amount()
+    {
+        // Phase 1a: removeSelectedStatus shows the status-selection widget (polarity filter + pick) and no amount.
+        var html = await RenderAsync(new CombatNodeModel(
+            "removeSelectedStatus", "eventTarget",
+            Selection: new StatusSelectionSpec(StatusPolarityFilter.Buff, StatusPick.Random)));
+
+        Assert.Contains("remove a selected status", html);
+        Assert.Contains("buff", html);   // polarity filter option (lower-cased label)
+        Assert.Contains("random", html); // pick mode option
+        Assert.DoesNotContain("event amount", html); // a remove carries no amount control
+    }
+
+    [Fact]
+    public async Task Renders_modify_selected_status_with_an_amount_delta()
+    {
+        // modifySelectedStatusStacks DOES carry an amount (its delta) alongside the selection widget.
+        var html = await RenderAsync(new CombatNodeModel(
+            "modifySelectedStatusStacks", "eventTarget", CombatAmountSpec.FromConst(-2),
+            Selection: new StatusSelectionSpec(StatusPolarityFilter.Debuff, StatusPick.First, Index: 1)));
+
+        Assert.Contains("modify a selected status", html);
+        Assert.Contains("debuff", html);
+        Assert.Contains("first", html);
+        Assert.Contains("constant", html); // the delta amount control is present
+    }
+
+    [Fact]
+    public async Task Renders_steal_selected_status_with_a_second_to_selector()
+    {
+        // stealSelectedStatus shows the selection widget plus a "to" selector (the thief).
+        var html = await RenderAsync(new CombatNodeModel(
+            "stealSelectedStatus", "eventTarget",
+            Selection: new StatusSelectionSpec(StatusPolarityFilter.Buff), ToSelectorKey: "source"));
+
+        Assert.Contains("steal a selected status", html);
+        Assert.Contains("to", html); // the to-selector label
+    }
+
+    [Fact]
     public async Task Renders_cleanse_with_a_polarity_dropdown_and_no_amount()
     {
         // cleanse takes no amount (UsesAmount false), so the amount kind-select is absent; it shows polarity options.
