@@ -39,6 +39,11 @@ public sealed record RunUnitSaveData(
     IReadOnlyList<Core.Combat.StatusGrant> Statuses,
     bool PersistStatuses);
 
+// One installed run program captured by REFERENCE: its runtime instance id plus the source id under which its
+// stateless reaction body is registered in the content catalog. Restore rebuilds the program by re-linking the
+// body from that source id (RunState.Restore). Only save-able for programs that opt in with a source id.
+public sealed record RunProgramSaveData(string InstanceId, string SourceId);
+
 public sealed record RunSaveData(
     string RunId,
     int RandomSeed,
@@ -50,7 +55,9 @@ public sealed record RunSaveData(
     IReadOnlyList<string> Flags,
     IReadOnlyDictionary<string, int> Counters,
     IReadOnlyList<RunMemberSaveData> Party,
-    IReadOnlyList<RunUnitSaveData> Units);
+    IReadOnlyList<RunUnitSaveData> Units,
+    IReadOnlyList<RunProgramSaveData> Programs,
+    int NextProgramSeq);
 
 // Serialize a run save to/from JSON — the save file. Plain values only (ids / ints / strings / an enum), so no
 // RunJson polymorphic converters are needed.

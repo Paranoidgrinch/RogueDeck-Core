@@ -317,10 +317,19 @@ public sealed class RunState
 
     public RunSaveData Snapshot()
     {
-        if (_installedPrograms.Count > 0 || _pendingCombatModifiers.Count > 0 || _rewardModifiers.Count > 0)
+        if (_pendingCombatModifiers.Count > 0 || _rewardModifiers.Count > 0)
             throw new InvalidOperationException(
-                "A run can only be saved at a clean interlude (no installed programs or pending combat/reward "
-                + "modifiers — their bodies are not value-captured). Save between nodes.");
+                "A run can only be saved at a clean interlude (no pending combat / reward modifiers — their "
+                + "bodies are not value-captured). Save between nodes.");
+
+        // Installed programs save by REFERENCE: each must carry a source id naming a registered stateless
+        // reaction body. A program without one (a stateful countdown schedule) cannot be value-captured.
+        var withoutSource = _installedPrograms.FirstOrDefault(p => p.SourceId is null);
+        if (withoutSource is not null)
+            throw new InvalidOperationException(
+                $"Installed program '{withoutSource.Id}' has no source id, so its reaction body cannot be "
+                + "re-linked on restore (e.g. a stateful countdown schedule). Only programs whose reaction is a "
+                + "registered stateless definition (with a source id) can be saved.");
 
         return new RunSaveData(
             RunId: Id.Value,
@@ -335,7 +344,10 @@ public sealed class RunState
             Party: _party.Select(SnapshotMember).ToArray(),
             Units: _units.Select(u => new RunUnitSaveData(
                 u.DefinitionId.value, u.DisplayNameKey, u.Health.Max, u.Health.Current,
-                u.Position, u.Statuses.ToArray(), u.PersistStatuses)).ToArray());
+                u.Position, u.Statuses.ToArray(), u.PersistStatuses)).ToArray(),
+            Programs: _installedPrograms
+                .Select(p => new RunProgramSaveData(p.Id.Value, p.SourceId!.Value.Value)).ToArray(),
+            NextProgramSeq: _nextProgramSeq);
     }
 
     private static RunMemberSaveData SnapshotMember(PartyMember member) => new(
@@ -398,6 +410,22 @@ public sealed class RunState
                 unit.Position,
                 unit.Statuses,
                 unit.PersistStatuses));
+
+        // Installed programs re-link their stateless reaction body by source id from the content catalog. The
+        // runtime instance id is preserved verbatim (a stateless rule references nothing across the save), and
+        // the program-id counter is restored so any later mint continues the sequence collision-free.
+        run._nextProgramSeq = data.NextProgramSeq;
+        foreach (var program in data.Programs)
+        {
+            var sourceId = new RunProgramSourceId(program.SourceId);
+            if (content is null || !content.TryGetProgramDefinition(sourceId, out var reaction))
+                throw new InvalidOperationException(
+                    $"Installed program '{program.InstanceId}' has no registered definition for source id "
+                    + $"'{program.SourceId}' to re-link its reaction body on restore. Register it with "
+                    + "RunContentRegistryBuilder.RegisterProgramDefinition so saved runs carrying it can resume.");
+
+            run.InstallProgram(new InstalledRunProgram(new RunProgramId(program.InstanceId), reaction, sourceId));
+        }
 
         return run;
     }

@@ -43,6 +43,16 @@ public readonly record struct RunProgramId(string Value)
     public override string ToString() => Value;
 }
 
+// Content-addressable identity of a program's REACTION body, for save/restore RE-LINK. Unlike RunProgramId —
+// the runtime instance id minted per install — this names a STATELESS program definition registered in the
+// content catalog. A program that carries a source id promises its reaction is such a definition (no closed-over
+// mutable state), so a saved run carrying the program can rebuild it by reference on restore. Stateful programs
+// (a countdown schedule) have no source id and remain non-saveable.
+public readonly record struct RunProgramSourceId(string Value)
+{
+    public override string ToString() => Value;
+}
+
 // A named boolean fact remembered for the whole run (e.g. "stole-from-merchant"). Open like the resource id
 // so content defines its own vocabulary rather than the engine hard-coding flags.
 public readonly record struct RunFlagId(string Value)

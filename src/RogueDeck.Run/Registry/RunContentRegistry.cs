@@ -12,6 +12,7 @@ public sealed class RunContentRegistry
     private readonly IReadOnlyDictionary<RewardTableId, IRewardSource> _rewardTables;
     private readonly IReadOnlyDictionary<ConsumableId, ConsumableDefinition> _consumables;
     private readonly IReadOnlyDictionary<ShopId, ShopDefinition> _shops;
+    private readonly IReadOnlyDictionary<RunProgramSourceId, ITriggeredRunEffectDefinition> _programDefinitions;
 
     public EncounterCatalog? Encounters { get; }
 
@@ -21,7 +22,8 @@ public sealed class RunContentRegistry
         IReadOnlyDictionary<RelicId, RelicDefinition> relics,
         IReadOnlyDictionary<RewardTableId, IRewardSource> rewardTables,
         IReadOnlyDictionary<ConsumableId, ConsumableDefinition> consumables,
-        IReadOnlyDictionary<ShopId, ShopDefinition> shops)
+        IReadOnlyDictionary<ShopId, ShopDefinition> shops,
+        IReadOnlyDictionary<RunProgramSourceId, ITriggeredRunEffectDefinition> programDefinitions)
     {
         _events = events;
         Encounters = encounters;
@@ -29,6 +31,7 @@ public sealed class RunContentRegistry
         _rewardTables = rewardTables;
         _consumables = consumables;
         _shops = shops;
+        _programDefinitions = programDefinitions;
     }
 
     public EventScript GetEvent(EventId id) =>
@@ -60,6 +63,12 @@ public sealed class RunContentRegistry
     public bool HasRelic(RelicId id) => _relics.ContainsKey(id);
     public bool HasConsumable(ConsumableId id) => _consumables.ContainsKey(id);
     public bool HasShop(ShopId id) => _shops.ContainsKey(id);
+
+    // Look up a registered program reaction body for save/restore re-link (RunState.Restore). Returns false if
+    // no definition was registered under this source id.
+    public bool TryGetProgramDefinition(
+        RunProgramSourceId id, out ITriggeredRunEffectDefinition definition) =>
+        _programDefinitions.TryGetValue(id, out definition!);
 
     // Validates that every node in a map resolves: its node type has a resolver, and any EventRef / EncounterRef
     // it carries names registered content. Throws with all problems aggregated; returns nothing on success.
@@ -101,6 +110,7 @@ public sealed class RunContentRegistryBuilder
     private readonly Dictionary<RewardTableId, IRewardSource> _rewardTables = new();
     private readonly Dictionary<ConsumableId, ConsumableDefinition> _consumables = new();
     private readonly Dictionary<ShopId, ShopDefinition> _shops = new();
+    private readonly Dictionary<RunProgramSourceId, ITriggeredRunEffectDefinition> _programDefinitions = new();
     private EncounterCatalog? _encounters;
 
     public RunContentRegistryBuilder RegisterEvent(EventId id, EventScript script)
@@ -143,6 +153,21 @@ public sealed class RunContentRegistryBuilder
         return this;
     }
 
+    // Register a STATELESS program reaction body under a stable source id. This is a save/restore RE-LINK entry
+    // only — it does not install or fire the program on its own. Content that installs a persistent by-ref
+    // program registers its definition here so a saved run carrying the program can rebuild it on restore
+    // (the run-layer counterpart of CombatDefinitionRegistryBuilder.RegisterTemporaryRuleDefinition).
+    public RunContentRegistryBuilder RegisterProgramDefinition(
+        RunProgramSourceId id, ITriggeredRunEffectDefinition definition)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        if (string.IsNullOrWhiteSpace(id.Value))
+            throw new ArgumentException("Program source id cannot be empty or whitespace.", nameof(id));
+        if (!_programDefinitions.TryAdd(id, definition))
+            throw new InvalidOperationException($"A program definition with id '{id}' is already registered.");
+        return this;
+    }
+
     public RunContentRegistryBuilder SetEncounters(EncounterCatalog encounters)
     {
         ArgumentNullException.ThrowIfNull(encounters);
@@ -151,5 +176,5 @@ public sealed class RunContentRegistryBuilder
     }
 
     public RunContentRegistry Build() =>
-        new(_events, _encounters, _relics, _rewardTables, _consumables, _shops);
+        new(_events, _encounters, _relics, _rewardTables, _consumables, _shops, _programDefinitions);
 }

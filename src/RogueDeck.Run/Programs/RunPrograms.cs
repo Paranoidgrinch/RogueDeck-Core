@@ -16,7 +16,14 @@ public sealed class InstalledRunProgram
     public RunProgramId Id { get; }
     public ITriggeredRunEffectDefinition Reaction { get; }
 
-    public InstalledRunProgram(RunProgramId id, ITriggeredRunEffectDefinition reaction)
+    // Optional: names the reaction's stateless DEFINITION in the content catalog so a saved run carrying this
+    // program can re-link its body by reference on restore. Present ⇒ save-able; absent ⇒ the program's body is
+    // not value-captured (e.g. a stateful countdown), so a run holding it cannot be snapshotted. See
+    // RunContentRegistry.RegisterProgramDefinition and RunState.Snapshot/Restore.
+    public RunProgramSourceId? SourceId { get; }
+
+    public InstalledRunProgram(
+        RunProgramId id, ITriggeredRunEffectDefinition reaction, RunProgramSourceId? sourceId = null)
     {
         ArgumentNullException.ThrowIfNull(reaction);
         if (string.IsNullOrWhiteSpace(id.Value))
@@ -24,6 +31,7 @@ public sealed class InstalledRunProgram
 
         Id = id;
         Reaction = reaction;
+        SourceId = sourceId;
     }
 }
 

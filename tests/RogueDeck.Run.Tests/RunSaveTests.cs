@@ -145,4 +145,67 @@ public class RunSaveTests
 
         Assert.Throws<InvalidOperationException>(() => run.Snapshot());
     }
+
+    // A stateless installed program (data-authored persistent rule) saves BY REFERENCE: the snapshot stores its
+    // source id, and Restore re-links the reaction body from the content catalog — then it still fires.
+    [Fact]
+    public void An_installed_by_reference_program_round_trips_and_still_fires_after_restore()
+    {
+        var source = new RunProgramSourceId("gain-gold-on-node");
+        ITriggeredRunEffectDefinition reaction =
+            RunPrograms.On<NodeEnteredRunEvent>(new ChangeResourceRunEffect(Gold, 5));
+        var content = new RunContentRegistryBuilder()
+            .RegisterProgramDefinition(source, reaction)
+            .Build();
+
+        var map = new RunMap(Array.Empty<Node>());
+        var run = new RunState(new RunId("r"), new HealthState(30, 40), map);
+        run.SetContent(content);
+        run.InstallProgram(new InstalledRunProgram(new RunProgramId("p#1"), reaction, source));
+
+        var json = RunSaveJson.ToJson(run.Snapshot());
+        var restored = RunState.Restore(RunSaveJson.FromJson(json), map, content);
+
+        // Faithful: a save of the restored run is byte-identical, and the program came back with both ids.
+        Assert.Equal(json, RunSaveJson.ToJson(restored.Snapshot()));
+        var program = Assert.Single(restored.InstalledPrograms);
+        Assert.Equal(new RunProgramId("p#1"), program.Id);
+        Assert.Equal(source, program.SourceId);
+
+        // The re-linked body still reacts to its event after the round-trip.
+        var builder = new RunDefinitionRegistryBuilder();
+        new StandardRunPackage().RegisterDefinitions(builder);
+        var registry = builder.Build();
+        restored.RaiseEvent(new NodeEnteredRunEvent(new NodeId("a"), StandardRunIds.EventNode));
+        new RunEffectProcessor().ResolvePending(restored, registry);
+        Assert.Equal(5, restored.GetResource(Gold));
+    }
+
+    [Fact]
+    public void Saving_a_program_without_a_source_id_throws()
+    {
+        var run = new RunState(new RunId("r"), new HealthState(30, 40), new RunMap(Array.Empty<Node>()));
+        run.InstallProgram(new InstalledRunProgram(new RunProgramId("p"),
+            new TriggeredRunEffect<NodeEnteredRunEvent>((_, _) => Array.Empty<IRunEffectRequest>())));
+
+        Assert.Throws<InvalidOperationException>(() => run.Snapshot());
+    }
+
+    [Fact]
+    public void Restoring_a_program_whose_source_is_unregistered_throws_rather_than_dropping_the_rule()
+    {
+        var source = new RunProgramSourceId("known");
+        var reaction = RunPrograms.On<NodeEnteredRunEvent>(new ChangeResourceRunEffect(Gold, 1));
+        var content = new RunContentRegistryBuilder().RegisterProgramDefinition(source, reaction).Build();
+
+        var map = new RunMap(Array.Empty<Node>());
+        var run = new RunState(new RunId("r"), new HealthState(30, 40), map);
+        run.SetContent(content);
+        run.InstallProgram(new InstalledRunProgram(new RunProgramId("p"), reaction, source));
+        var json = RunSaveJson.ToJson(run.Snapshot());
+
+        // Restoring against content that lacks the definition fails loudly rather than silently losing the rule.
+        var empty = new RunContentRegistryBuilder().Build();
+        Assert.Throws<InvalidOperationException>(() => RunState.Restore(RunSaveJson.FromJson(json), map, empty));
+    }
 }
