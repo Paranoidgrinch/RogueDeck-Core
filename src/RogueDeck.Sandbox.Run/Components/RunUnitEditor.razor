@@ -1,0 +1,91 @@
+@* Presentational editor for one persistent player-controlled board unit (RunUnitData, P5c) — the run-layer roster
+   analog of a starting relic. Edits the immutable record and hands the new one back via ValueChanged: its combatant
+   definition id + display name, max HP, an optional starting grid cell, whether it carries its combat statuses
+   between fights, and the innate statuses it is born with. *@
+
+<div class="run-bar">
+    <label>Definition id
+        <input value="@Value.DefinitionId" placeholder="e.g. turret" style="width:9rem"
+               @onchange="e => Emit(Value with { DefinitionId = AsString(e.Value) })" />
+    </label>
+    <label>Name
+        <input value="@Value.DisplayNameKey" style="width:9rem"
+               @onchange="e => Emit(Value with { DisplayNameKey = string.IsNullOrWhiteSpace(AsString(e.Value)) ? Value.DisplayNameKey : AsString(e.Value) })" />
+    </label>
+    <label>Max HP
+        <input type="number" value="@Value.MaxHealth" style="width:5rem"
+               @onchange="e => Emit(Value with { MaxHealth = Math.Max(1, AsInt(e.Value, Value.MaxHealth)) })" />
+    </label>
+</div>
+
+<div class="run-bar">
+    <label class="chk">
+        <input type="checkbox" checked="@(Value.Position is not null)"
+               @onchange="e => TogglePlaced(AsBool(e.Value))" /> placed on grid
+    </label>
+    @if (Value.Position is { } pos)
+    {
+        <label>X
+            <input type="number" value="@pos.X" style="width:4rem"
+                   @onchange="e => Emit(Value with { Position = pos with { X = AsInt(e.Value, pos.X) } })" />
+        </label>
+        <label>Y
+            <input type="number" value="@pos.Y" style="width:4rem"
+                   @onchange="e => Emit(Value with { Position = pos with { Y = AsInt(e.Value, pos.Y) } })" />
+        </label>
+    }
+    <label class="chk">
+        <input type="checkbox" checked="@Value.PersistStatuses"
+               @onchange="e => Emit(Value with { PersistStatuses = AsBool(e.Value) })" /> carry statuses between fights
+    </label>
+</div>
+
+<div class="fx-body">
+    <span class="muted">innate statuses:</span>
+    @for (var i = 0; i < Value.StartingStatuses.Count; i++)
+    {
+        var index = i;
+        var grant = Value.StartingStatuses[index];
+        <div class="run-bar">
+            <input value="@grant.StatusDefinitionId.value" placeholder="status id" style="width:9rem"
+                   @onchange="e => SetGrant(index, grant with { StatusDefinitionId = new StatusDefinitionId(AsString(e.Value)) })" />
+            <label>stacks
+                <input type="number" value="@grant.Stacks" style="width:4rem"
+                       @onchange="e => SetGrant(index, grant with { Stacks = AsInt(e.Value, grant.Stacks) })" />
+            </label>
+            <label>duration
+                <input type="number" value="@grant.DurationTurns" style="width:4rem"
+                       @onchange="e => SetGrant(index, grant with { DurationTurns = AsInt(e.Value, grant.DurationTurns) })" />
+            </label>
+            <label>charges
+                <input type="number" value="@grant.Charges" style="width:4rem"
+                       @onchange="e => SetGrant(index, grant with { Charges = AsInt(e.Value, grant.Charges) })" />
+            </label>
+            <button class="mini" @onclick="() => RemoveGrant(index)">✕</button>
+        </div>
+    }
+    <button class="mini" @onclick="AddGrant">+ status</button>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public RunUnitData Value { get; set; } = default!;
+    [Parameter] public EventCallback<RunUnitData> ValueChanged { get; set; }
+
+    private static string AsString(object? v) => v?.ToString() ?? "";
+    private static int AsInt(object? v, int fallback) => int.TryParse(v?.ToString(), out var n) ? n : fallback;
+    private static bool AsBool(object? v) => v is bool b ? b : bool.TryParse(v?.ToString(), out var r) && r;
+
+    private Task Emit(RunUnitData next) => ValueChanged.InvokeAsync(next);
+
+    private Task TogglePlaced(bool on) =>
+        Emit(Value with { Position = on ? (Value.Position ?? new CombatPosition(0, 0)) : null });
+
+    private Task SetGrant(int index, StatusGrant grant) =>
+        Emit(Value with { StartingStatuses = Value.StartingStatuses.Select((g, i) => i == index ? grant : g).ToList() });
+
+    private Task RemoveGrant(int index) =>
+        Emit(Value with { StartingStatuses = Value.StartingStatuses.Where((_, i) => i != index).ToList() });
+
+    private Task AddGrant() =>
+        Emit(Value with { StartingStatuses = Value.StartingStatuses.Append(new StatusGrant(new StatusDefinitionId(""))).ToList() });
+}

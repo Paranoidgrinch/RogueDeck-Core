@@ -188,6 +188,22 @@ else
     <p class="muted">Party is full (4 members: the hero + 3).</p>
 }
 
+<h3>Starting board units</h3>
+<p class="muted">Persistent player-controlled units the run begins with (turrets, minions, …). Each is fielded on the
+    player team in every fight, keeps its HP between fights, and can start on a grid cell. Empty ⇒ a single-hero run.</p>
+@for (var i = 0; i < Units.Count; i++)
+{
+    var index = i;
+    <div class="member-card" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:.75rem; margin:.5rem 0">
+        <div class="run-bar" style="justify-content:space-between">
+            <strong>Unit @(index + 1)</strong>
+            <button class="mini" @onclick="() => RemoveUnit(index)">✕ remove unit</button>
+        </div>
+        <RunUnitEditor Value="Units[index]" ValueChanged="u => SetUnit(index, u)" />
+    </div>
+}
+<button class="mini" @onclick="AddUnit">+ add board unit</button>
+
 @code {
     [Parameter, EditorRequired] public RunStart Value { get; set; } = default!;
     [Parameter] public EventCallback<RunStart> ValueChanged { get; set; }
@@ -203,6 +219,7 @@ else
     private IEnumerable<KeyValuePair<string, int>> Resources =>
         Value.Resources.OrderBy(r => r.Key, StringComparer.Ordinal);
     private IReadOnlyList<RunMemberData> Party => Value.StartingParty;
+    private IReadOnlyList<RunUnitData> Units => Value.StartingUnits;
 
     private static string AsString(object? v) => v?.ToString() ?? "";
     private static int AsInt(object? v, int fallback) => int.TryParse(v?.ToString(), out var n) ? n : fallback;
@@ -347,5 +364,32 @@ else
             var consumables = m.StartingConsumables.Where(c => c != id).ToList();
             if (on) consumables.Add(id);
             return m with { StartingConsumables = consumables };
+        });
+
+    // ── persistent board units (P5c: RunStart.StartingUnits) ──────────────────────
+    private Task EditUnits(Func<List<RunUnitData>, List<RunUnitData>> edit) =>
+        Emit(Value with { StartingUnits = edit(Units.ToList()) });
+
+    private Task AddUnit() =>
+        EditUnits(list =>
+        {
+            list.Add(new RunUnitData($"unit{list.Count + 1}", $"Unit {list.Count + 1}", 10));
+            return list;
+        });
+
+    private Task RemoveUnit(int index) =>
+        EditUnits(list =>
+        {
+            if (index >= 0 && index < list.Count)
+                list.RemoveAt(index);
+            return list;
+        });
+
+    private Task SetUnit(int index, RunUnitData unit) =>
+        EditUnits(list =>
+        {
+            if (index >= 0 && index < list.Count)
+                list[index] = unit;
+            return list;
         });
 }
