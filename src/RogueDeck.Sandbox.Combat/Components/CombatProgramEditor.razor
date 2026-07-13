@@ -128,6 +128,52 @@ else
             <input value="@Node.RuleId" style="width:9rem" placeholder="temporary rule id"
                    @onchange="e => Set(Node with { RuleId = AsString(e.Value) })" />
         }
+        @if (CombatProgramModel.UsesSummon(Node.Kind))
+        {
+            <input value="@Node.TeamId" style="width:6rem" placeholder="team id"
+                   @onchange="e => Set(Node with { TeamId = AsString(e.Value) })" />
+            <input value="@Node.SummonDefinitionId" style="width:7rem" placeholder="definition id"
+                   @onchange="e => Set(Node with { SummonDefinitionId = AsString(e.Value) })" />
+            <input value="@Node.SummonDisplayName" style="width:7rem" placeholder="display name"
+                   @onchange="e => Set(Node with { SummonDisplayName = AsString(e.Value) })" />
+            <span class="muted">HP</span>
+            @AmountControls(Node.AmountOrDefault, spec => Set(Node with { Amount = spec }))
+            <label class="muted"><input type="checkbox" checked="@HasPosition"
+                   @onchange="e => TogglePosition(AsBool(e.Value))" /> at</label>
+            @if (HasPosition)
+            {
+                <input type="number" value="@Node.PositionX" style="width:3rem" placeholder="x"
+                       @onchange="e => Set(Node with { PositionX = AsInt(e.Value, 0) })" />
+                <input type="number" value="@Node.PositionY" style="width:3rem" placeholder="y"
+                       @onchange="e => Set(Node with { PositionY = AsInt(e.Value, 0) })" />
+            }
+            <div class="fx-body">
+                <span class="muted">starting statuses:</span>
+                @{
+                    var grants = Node.StartingStatusesOrEmpty;
+                }
+                @for (var i = 0; i < grants.Count; i++)
+                {
+                    var ix = i;
+                    var g = grants[ix];
+                    <span class="fx">
+                        <input value="@g.StatusDefinitionId.value" style="width:8rem" placeholder="status id"
+                               @onchange="e => UpdateGrant(ix, g with { StatusDefinitionId = new StatusDefinitionId(AsString(e.Value)) })" />
+                        <span class="muted">stacks</span>
+                        <input type="number" value="@g.Stacks" style="width:3.5rem"
+                               @onchange="e => UpdateGrant(ix, g with { Stacks = AsInt(e.Value, g.Stacks) })" />
+                        <span class="muted">turns</span>
+                        <input type="number" value="@g.DurationTurns" style="width:3.5rem"
+                               @onchange="e => UpdateGrant(ix, g with { DurationTurns = AsInt(e.Value, g.DurationTurns) })" />
+                        <span class="muted">charges</span>
+                        <input type="number" value="@g.Charges" style="width:3.5rem"
+                               @onchange="e => UpdateGrant(ix, g with { Charges = AsInt(e.Value, g.Charges) })" />
+                        <button class="mini" @onclick="() => RemoveGrant(ix)">✕</button>
+                    </span>
+                }
+                <button class="mini" @onclick="AddGrant">+ status</button>
+            </div>
+        }
         @if (CombatProgramModel.UsesAmount(Node.Kind))
         {
             @AmountControls(Node.AmountOrDefault, spec => Set(Node with { Amount = spec }))
@@ -300,6 +346,31 @@ else
         Enum.TryParse<ZonePlacement>(AsString(v), out var p) ? p : ZonePlacement.Bottom;
 
     private void Set(CombatNodeModel node) => _ = NodeChanged.InvokeAsync(node);
+
+    // ── summon combatant: position + starting-status list ────────────────────────
+    private bool HasPosition => Node.PositionX is not null && Node.PositionY is not null;
+
+    private void TogglePosition(bool on) =>
+        Set(on ? Node with { PositionX = 0, PositionY = 0 } : Node with { PositionX = null, PositionY = null });
+
+    private void AddGrant() =>
+        Set(Node with { StartingStatuses = Node.StartingStatusesOrEmpty.Append(new StatusGrant(new StatusDefinitionId("poison"), 1)).ToList() });
+
+    private void RemoveGrant(int i)
+    {
+        var list = Node.StartingStatusesOrEmpty.ToList();
+        if (i >= 0 && i < list.Count)
+            list.RemoveAt(i);
+        Set(Node with { StartingStatuses = list.Count > 0 ? list : null });
+    }
+
+    private void UpdateGrant(int i, StatusGrant grant)
+    {
+        var list = Node.StartingStatusesOrEmpty.ToList();
+        if (i >= 0 && i < list.Count)
+            list[i] = grant;
+        Set(Node with { StartingStatuses = list });
+    }
 
     // ── node kind + shared widgets ───────────────────────────────────────────────
     private RenderFragment KindSelect => builder =>

@@ -188,6 +188,47 @@ public class CombatProgramModelTests
     }
 
     [Fact]
+    public void Summon_combatant_round_trips_core_position_and_starting_statuses()
+    {
+        // Phase 1f (summon slice): team + definition + name + max HP, an optional grid position, and a status list.
+        var bare = new CombatNodeModel(
+            "summonCombatant", "source", CombatAmountSpec.FromConst(20),
+            TeamId: "enemies", SummonDefinitionId: "skeleton", SummonDisplayName: "Skeleton");
+        var full = bare with
+        {
+            PositionX = 1,
+            PositionY = 2,
+            StartingStatuses = new[] { new StatusGrant(new StatusDefinitionId("poison"), 3, 0, 0), new StatusGrant(new StatusDefinitionId("strength"), 2) },
+        };
+
+        var node = Assert.IsType<SummonCombatantNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(full).Root);
+        Assert.Equal("enemies", node.TeamId.value);
+        Assert.Equal("skeleton", node.DefinitionId.value);
+        Assert.Equal(new CombatPosition(1, 2), node.Position);
+        Assert.Equal(2, node.StartingStatuses.Count);
+        Assert.Empty(Assert.IsType<SummonCombatantNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(bare).Root).StartingStatuses);
+
+        foreach (var model in new[] { bare, full })
+            Assert.Equal(model, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(model)));
+    }
+
+    [Fact]
+    public void Summon_classifies_after_a_CombatJson_round_trip()
+    {
+        var model = new CombatNodeModel(
+            "summonCombatant", "source", CombatAmountSpec.FromConst(15),
+            TeamId: "enemies", SummonDefinitionId: "slime", SummonDisplayName: "Slime",
+            PositionX: 0, PositionY: 1, StartingStatuses: new[] { new StatusGrant(new StatusDefinitionId("weak"), 2) });
+        var options = CombatJson.CreateOptions<CardPlayContext>();
+
+        var program = CombatProgramModel.Build<CardPlayContext>(model);
+        var json = JsonSerializer.Serialize(program, options);
+        var back = JsonSerializer.Deserialize<EffectProgram<CardPlayContext>>(json, options)!;
+
+        Assert.Equal(model, CombatProgramModel.Classify(back));
+    }
+
+    [Fact]
     public void Combat_control_ops_build_their_nodes_and_round_trip()
     {
         // Phase 1f: lifecycle state / team change (targeted) + set-result / remove-temporary-rule (combat-global).

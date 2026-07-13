@@ -106,6 +106,24 @@ public class CombatProgramEditorRenderTests
     }
 
     [Fact]
+    public async Task Renders_summon_combatant_with_fields_position_and_status_list()
+    {
+        // Phase 1f (summon slice): team/def/name/HP fields, an optional position, and a starting-status list row.
+        var html = await RenderAsync(new CombatNodeModel(
+            "summonCombatant", "source", CombatAmountSpec.FromConst(20),
+            TeamId: "enemies", SummonDefinitionId: "skeleton", SummonDisplayName: "Skeleton",
+            PositionX: 1, PositionY: 2, StartingStatuses: new[] { new StatusGrant(new StatusDefinitionId("poison"), 3) }));
+
+        Assert.Contains("summon combatant", html);
+        Assert.Contains("skeleton", html);
+        Assert.Contains("Skeleton", html);
+        Assert.Contains("HP", html);
+        Assert.Contains("starting statuses:", html);
+        Assert.Contains("poison", html);
+        Assert.Contains("+ status", html);
+    }
+
+    [Fact]
     public async Task Renders_combat_control_leaves()
     {
         // Phase 1f: lifecycle dropdown, team-id field, combat-result dropdown, rule-id field. The combat-global

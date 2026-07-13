@@ -132,12 +132,21 @@ public sealed record CombatNodeModel(
     CombatantLifecycleState LifecycleState = CombatantLifecycleState.Alive,
     string TeamId = "",
     CombatResult CombatResult = CombatResult.Ongoing,
-    string RuleId = "")
+    string RuleId = "",
+    // summonCombatant: the summoned combatant's definition id + display name, an optional grid position (both
+    // coordinates present or both null), and its starting statuses. "" / null canonically for other kinds. MaxHealth
+    // reuses Amount; the team reuses TeamId.
+    string SummonDefinitionId = "",
+    string SummonDisplayName = "",
+    int? PositionX = null,
+    int? PositionY = null,
+    IReadOnlyList<StatusGrant>? StartingStatuses = null)
 {
     public CombatAmountSpec AmountOrDefault => Amount ?? CombatAmountSpec.FromConst(3);
     public CombatCardSpec CardOrDefault => Card ?? new CombatCardSpec();
     public StatusSelectionSpec SelectionOrDefault => Selection ?? new StatusSelectionSpec();
     public ResourceSelectionSpec ResourceSelectionOrDefault => ResourceSelection ?? new ResourceSelectionSpec();
+    public IReadOnlyList<StatusGrant> StartingStatusesOrEmpty => StartingStatuses ?? Array.Empty<StatusGrant>();
     public IReadOnlyList<CombatNodeModel> ChildrenOrEmpty => Children ?? Array.Empty<CombatNodeModel>();
 
     public static CombatNodeModel Sequence(IReadOnlyList<CombatNodeModel> children) =>
@@ -192,6 +201,11 @@ public sealed record CombatNodeModel(
         && TeamId == other.TeamId
         && CombatResult == other.CombatResult
         && RuleId == other.RuleId
+        && SummonDefinitionId == other.SummonDefinitionId
+        && SummonDisplayName == other.SummonDisplayName
+        && PositionX == other.PositionX
+        && PositionY == other.PositionY
+        && StartingStatusesOrEmpty.SequenceEqual(other.StartingStatusesOrEmpty)
         && ChildrenOrEmpty.SequenceEqual(other.ChildrenOrEmpty);
 
     public override int GetHashCode()
@@ -227,6 +241,12 @@ public sealed record CombatNodeModel(
         hash.Add(TeamId);
         hash.Add(CombatResult);
         hash.Add(RuleId);
+        hash.Add(SummonDefinitionId);
+        hash.Add(SummonDisplayName);
+        hash.Add(PositionX);
+        hash.Add(PositionY);
+        foreach (var grant in StartingStatusesOrEmpty)
+            hash.Add(grant);
         foreach (var child in ChildrenOrEmpty)
             hash.Add(child);
         return hash.ToHashCode();
@@ -270,6 +290,7 @@ public static class CombatProgramModel
         ("changeCombatantTeam", "change team"),
         ("setCombatResult", "set combat result"),
         ("removeTemporaryRule", "remove temporary rule"),
+        ("summonCombatant", "summon combatant"),
     ];
 
     // The leaf kinds that carry a resource id (their editor row shows a resource-id field; ChangeKind seeds a
@@ -306,7 +327,8 @@ public static class CombatProgramModel
         kind is not ("removeStatus" or "cleanse" or "moveCards" or "moveCardToZone" or "transformCard"
             or "removeSelectedStatus" or "stealSelectedStatus" or "refillResource"
             or "moveCombatant" or "swapPositions"
-            or "setCombatantLifecycleState" or "changeCombatantTeam" or "setCombatResult" or "removeTemporaryRule");
+            or "setCombatantLifecycleState" or "changeCombatantTeam" or "setCombatResult" or "removeTemporaryRule"
+            or "summonCombatant");
 
     // moveCombatant (2D-grid positioning): a movement mode plus its coordinate amounts (X/Y for ToAbsolute, else a
     // single Step). swapPositions exchanges two combatants' cells (its second selector reuses ToSelectorKey).
@@ -319,8 +341,14 @@ public static class CombatProgramModel
     public static bool UsesCombatResult(string kind) => kind is "setCombatResult";
     public static bool UsesRuleId(string kind) => kind is "removeTemporaryRule";
 
-    // Whether a leaf acts on a target combatant (shows the selector dropdown). The combat-global controls do not.
-    public static bool UsesSelector(string kind) => kind is not ("setCombatResult" or "removeTemporaryRule");
+    // summonCombatant creates a NEW combatant on a team: it carries a team id, a definition id + display name, a
+    // MaxHealth amount, an optional grid position, and a list of starting statuses. It has no target selector.
+    public static bool UsesSummon(string kind) => kind is "summonCombatant";
+
+    // Whether a leaf acts on a target combatant (shows the selector dropdown). The combat-global controls and the
+    // summon (which creates a new combatant) do not.
+    public static bool UsesSelector(string kind) =>
+        kind is not ("setCombatResult" or "removeTemporaryRule" or "summonCombatant");
 
     // The leaf kinds that pick ONE status instance on the target by a StatusSelectionSpec (polarity filter × pick),
     // rather than naming a status id. Their editor row shows the status-selection widget.
@@ -416,6 +444,8 @@ public static class CombatProgramModel
         "changeCombatantTeam" => new("changeCombatantTeam", "eventTarget", TeamId: "players"),
         "setCombatResult" => new("setCombatResult", "source", CombatResult: CombatResult.Victory),
         "removeTemporaryRule" => new("removeTemporaryRule", "source", RuleId: "rule.id"),
+        "summonCombatant" => new("summonCombatant", "source", CombatAmountSpec.FromConst(20),
+            TeamId: "enemies", SummonDefinitionId: "skeleton", SummonDisplayName: "Skeleton"),
         "sequence" => CombatNodeModel.Sequence(new[] { NewNode("dealDamage") }),
         "forEachTarget" => CombatNodeModel.ForEach("allEnemies", NewNode("dealDamage")),
         "forEachCardInZone" => CombatNodeModel.ForEachCard("source", CardZone.Hand, NewNode("transformCard")),
@@ -466,10 +496,18 @@ public static class CombatProgramModel
                 MoveY = kind == "moveCombatant" ? (node.MoveY ?? CombatAmountSpec.FromConst(0)) : null,
                 MoveStep = kind == "moveCombatant" ? node.MoveStep : null,
                 LifecycleState = UsesLifecycleState(kind) ? (node.LifecycleState == CombatantLifecycleState.Alive ? CombatantLifecycleState.Downed : node.LifecycleState) : CombatantLifecycleState.Alive,
-                TeamId = UsesTeamId(kind) ? (node.TeamId == "" ? "players" : node.TeamId) : "",
+                TeamId = UsesTeamId(kind) ? (node.TeamId == "" ? "players" : node.TeamId)
+                    : UsesSummon(kind) ? (node.TeamId == "" ? "enemies" : node.TeamId) : "",
                 CombatResult = UsesCombatResult(kind) ? (node.CombatResult == CombatResult.Ongoing ? CombatResult.Victory : node.CombatResult) : CombatResult.Ongoing,
                 RuleId = UsesRuleId(kind) ? (node.RuleId == "" ? "rule.id" : node.RuleId) : "",
-                Amount = UsesAmount(kind) ? (node.Amount ?? CombatAmountSpec.FromConst(3)) : null,
+                SummonDefinitionId = UsesSummon(kind) ? (node.SummonDefinitionId == "" ? "skeleton" : node.SummonDefinitionId) : "",
+                SummonDisplayName = UsesSummon(kind) ? (node.SummonDisplayName == "" ? "Skeleton" : node.SummonDisplayName) : "",
+                PositionX = UsesSummon(kind) ? node.PositionX : null,
+                PositionY = UsesSummon(kind) ? node.PositionY : null,
+                StartingStatuses = UsesSummon(kind) ? node.StartingStatuses : null,
+                // summon carries a MaxHealth amount even though it isn't an amount-leaf, so seed/keep one for it.
+                Amount = UsesAmount(kind) ? (node.Amount ?? CombatAmountSpec.FromConst(3))
+                    : UsesSummon(kind) ? (node.Amount ?? CombatAmountSpec.FromConst(20)) : null,
             };
 
         if (wasComposite && isComposite)
@@ -718,6 +756,10 @@ public static class CombatProgramModel
             "changeCombatantTeam" => new ChangeCombatantTeamNode<TContext>(selector, new TeamId(model.TeamId)),
             "setCombatResult" => new SetCombatResultNode<TContext>(model.CombatResult),
             "removeTemporaryRule" => new RemoveTemporaryRuleNode<TContext>(new TriggeredEffectDefinitionId(model.RuleId)),
+            "summonCombatant" => new SummonCombatantNode<TContext>(
+                new TeamId(model.TeamId), amount, new CombatantDefinitionId(model.SummonDefinitionId), model.SummonDisplayName,
+                position: model.PositionX is { } px && model.PositionY is { } py ? new CombatPosition(px, py) : null,
+                startingStatuses: model.StartingStatuses),
             _ => new GainBlockNode<TContext>(selector, amount),
         };
     }
@@ -877,6 +919,14 @@ public static class CombatProgramModel
                 return new CombatNodeModel("setCombatResult", "source", CombatResult: n.Result);
             case RemoveTemporaryRuleNode<TContext> { ResultKey: null } n:
                 return new CombatNodeModel("removeTemporaryRule", "source", RuleId: n.RuleId.value);
+            case SummonCombatantNode<TContext> { ResultKey: null } n:
+                var summonHp = ClassifyAmount(n.MaxHealth);
+                return summonHp.IsAdvanced
+                    ? null
+                    : new CombatNodeModel("summonCombatant", "source", summonHp,
+                        TeamId: n.TeamId.value, SummonDefinitionId: n.DefinitionId.value, SummonDisplayName: n.DisplayNameKey,
+                        PositionX: n.Position?.X, PositionY: n.Position?.Y,
+                        StartingStatuses: n.StartingStatuses.Count > 0 ? n.StartingStatuses.ToArray() : null);
             case MoveCardToZoneNode<TContext> { ResultKey: null } n:
                 return KeyFor(n.OwnerSelector) is { } mtKey && ClassifyCard(n.CardExpression) is { } mtCard
                     ? new CombatNodeModel("moveCardToZone", mtKey, Card: mtCard, ToZone: n.ToZone, Placement: n.Placement)
