@@ -26,6 +26,9 @@ public class CombatProgramModelTests
             if (CombatProgramModel.UsesResourceSelection(kind) || CombatProgramModel.UsesPoolId(kind)
                 || CombatProgramModel.UsesCounterId(kind))
                 continue;
+            // Card-selecting leaves carry a CombatCardSpec (not fit for the amount-only template); dedicated tests cover them.
+            if (CombatProgramModel.UsesCard(kind))
+                continue;
             // ResourceId is part of a resource leaf's identity (gain/lose/modify); StatusId of a status leaf's.
             var resourceId = CombatProgramModel.UsesResourceId(kind) ? "standard.energy" : "";
             var statusId = CombatProgramModel.UsesStatusId(kind) ? "poison" : "";
@@ -185,6 +188,22 @@ public class CombatProgramModelTests
         var back = JsonSerializer.Deserialize<EffectProgram<CardPlayContext>>(json, options)!;
 
         Assert.Equal(model, CombatProgramModel.Classify(back));
+    }
+
+    [Fact]
+    public void Create_card_ops_build_their_nodes_and_round_trip()
+    {
+        // Phase 1g: create card(s) by definition into a zone, and copy a selected card into a zone (count via Amount).
+        var create = new CombatNodeModel("createCardInstance", "source", CombatAmountSpec.FromConst(2), ToDefinition: "wound", ToZone: CardZone.DiscardPile);
+        var copy = new CombatNodeModel("createCardCopy", "source", CombatAmountSpec.FromConst(1), Card: new CombatCardSpec("chosen", CardZone.Hand), ToZone: CardZone.Hand);
+
+        var createNode = Assert.IsType<CreateCardInstanceNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(create).Root);
+        Assert.Equal("wound", createNode.CardDefinitionId.value);
+        Assert.Equal(CardZone.DiscardPile, createNode.ToZone);
+        Assert.Equal(CardZone.Hand, Assert.IsType<CreateCardCopyNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(copy).Root).ToZone);
+
+        foreach (var model in new[] { create, copy })
+            Assert.Equal(model, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(model)));
     }
 
     [Fact]

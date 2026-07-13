@@ -284,6 +284,8 @@ public static class CombatProgramModel
         ("moveCards", "move cards (zone → zone)"),
         ("moveCardToZone", "move a card (targeted)"),
         ("transformCard", "transform / upgrade a card"),
+        ("createCardInstance", "create card(s)"),
+        ("createCardCopy", "copy a card"),
         ("moveCombatant", "move combatant"),
         ("swapPositions", "swap positions"),
         ("setCombatantLifecycleState", "set lifecycle state"),
@@ -362,15 +364,22 @@ public static class CombatProgramModel
     // The leaf kind that moves ALL cards between zones (its editor shows from/to zone dropdowns).
     public static bool UsesZones(string kind) => kind is "moveCards";
 
-    // The card-targeting leaves that select a single card (their editor shows the card-selector widget).
-    public static bool UsesCard(string kind) => kind is "moveCardToZone" or "transformCard";
+    // The card-targeting leaves that select a single card (their editor shows the card-selector widget): move / copy
+    // / transform a card, plus playCard and replayCardProgram which run a chosen card's program.
+    public static bool UsesCard(string kind) =>
+        kind is "moveCardToZone" or "transformCard" or "createCardCopy" or "playCard" or "replayCardProgram";
 
     // The leaf that moves a targeted card to one destination zone (a single "to" dropdown, reusing ToZone).
     public static bool UsesMoveToZone(string kind) => kind is "moveCardToZone";
 
-    // The kinds carrying a definition string in ToDefinition: transformCard's target definition, and
-    // forEachCardInZone's optional definition filter (blank = every card).
-    public static bool UsesToDefinition(string kind) => kind is "transformCard" or "forEachCardInZone";
+    // The leaves that create card(s) into a destination zone (a single "to" dropdown, reusing ToZone): create a card
+    // by definition, or copy a selected card. Their count reuses Amount.
+    public static bool UsesCreateZone(string kind) => kind is "createCardInstance" or "createCardCopy";
+
+    // The kinds carrying a definition string in ToDefinition: transformCard's target definition, createCardInstance's
+    // created-card definition, and forEachCardInZone's optional definition filter (blank = every card).
+    public static bool UsesToDefinition(string kind) =>
+        kind is "transformCard" or "createCardInstance" or "forEachCardInZone";
 
     // The control-flow (composite) kinds the editor offers as their own titled blocks with sub-bodies. Conditional
     // is deferred (it needs a combat condition spec). Each holds a Children body: N for sequence, one for the rest.
@@ -437,6 +446,8 @@ public static class CombatProgramModel
         "moveCards" => new("moveCards", "source", FromZone: CardZone.Hand, ToZone: CardZone.DiscardPile),
         "moveCardToZone" => new("moveCardToZone", "source", Card: new CombatCardSpec("chosen", CardZone.Hand), ToZone: CardZone.ExhaustPile),
         "transformCard" => new("transformCard", "source", Card: new CombatCardSpec("chosen", CardZone.Hand), ToDefinition: "strike.plus"),
+        "createCardInstance" => new("createCardInstance", "source", CombatAmountSpec.FromConst(1), ToDefinition: "wound", ToZone: CardZone.DiscardPile),
+        "createCardCopy" => new("createCardCopy", "source", CombatAmountSpec.FromConst(1), Card: new CombatCardSpec("chosen", CardZone.Hand), ToZone: CardZone.Hand),
         "moveCombatant" => new("moveCombatant", "eventTarget",
             MovementMode: MovementMode.ToAbsolute, MoveX: CombatAmountSpec.FromConst(0), MoveY: CombatAmountSpec.FromConst(0)),
         "swapPositions" => new("swapPositions", "source", ToSelectorKey: "eventTarget"),
@@ -476,9 +487,10 @@ public static class CombatProgramModel
                 Charges = kind == "applyStatus" ? node.Charges : 0,
                 Polarity = kind == "cleanse" ? node.Polarity : StatusPolarity.Debuff,
                 FromZone = UsesZones(kind) ? node.FromZone : CardZone.Hand,
-                ToZone = UsesZones(kind) || UsesMoveToZone(kind) ? node.ToZone : CardZone.DiscardPile,
+                ToZone = UsesZones(kind) || UsesMoveToZone(kind) || UsesCreateZone(kind) ? node.ToZone : CardZone.DiscardPile,
                 Card = UsesCard(kind) ? (node.Card ?? new CombatCardSpec("chosen", CardZone.Hand)) : null,
-                ToDefinition = kind == "transformCard" ? (node.ToDefinition == "" ? "strike.plus" : node.ToDefinition) : "",
+                ToDefinition = kind == "transformCard" ? (node.ToDefinition == "" ? "strike.plus" : node.ToDefinition)
+                    : kind == "createCardInstance" ? (node.ToDefinition == "" ? "wound" : node.ToDefinition) : "",
                 Placement = kind == "moveCardToZone" ? node.Placement : ZonePlacement.Bottom,
                 Selection = UsesStatusSelection(kind) ? (node.Selection ?? new StatusSelectionSpec()) : null,
                 ToSelectorKey = UsesToSelector(kind) ? node.ToSelectorKey : "source",
@@ -745,6 +757,8 @@ public static class CombatProgramModel
             "moveCards" => new MoveAllCardsFromZoneNode<TContext>(selector, model.FromZone, model.ToZone),
             "moveCardToZone" => new MoveCardToZoneNode<TContext>(selector, BuildCard<TContext>(model.CardOrDefault), model.ToZone, placement: model.Placement),
             "transformCard" => new TransformCardNode<TContext>(selector, BuildCard<TContext>(model.CardOrDefault), new CardDefinitionId(model.ToDefinition)),
+            "createCardInstance" => new CreateCardInstanceNode<TContext>(selector, new CardDefinitionId(model.ToDefinition), model.ToZone, amount),
+            "createCardCopy" => new CreateCardCopyNode<TContext>(selector, BuildCard<TContext>(model.CardOrDefault), model.ToZone, amount),
             "moveCombatant" => model.MovementMode == MovementMode.ToAbsolute
                 ? new MoveCombatantNode<TContext>(selector, MovementMode.ToAbsolute,
                     x: BuildAmount<TContext>(model.MoveX ?? CombatAmountSpec.FromConst(0)),
@@ -935,6 +949,20 @@ public static class CombatProgramModel
                 return KeyFor(n.OwnerSelector) is { } tfKey && ClassifyCard(n.CardExpression) is { } tfCard
                     ? new CombatNodeModel("transformCard", tfKey, Card: tfCard, ToDefinition: n.ToDefinition.value)
                     : null;
+            case CreateCardInstanceNode<TContext> { ResultKey: null } n:
+                if (KeyFor(n.TargetSelector) is not { } cciKey)
+                    return null;
+                var cciCount = ClassifyAmount(n.Count);
+                return cciCount.IsAdvanced
+                    ? null
+                    : new CombatNodeModel("createCardInstance", cciKey, cciCount, ToDefinition: n.CardDefinitionId.value, ToZone: n.ToZone);
+            case CreateCardCopyNode<TContext> { ResultKey: null } n:
+                if (KeyFor(n.TargetSelector) is not { } cccKey || ClassifyCard(n.SourceCard) is not { } cccCard)
+                    return null;
+                var cccCount = ClassifyAmount(n.Count);
+                return cccCount.IsAdvanced
+                    ? null
+                    : new CombatNodeModel("createCardCopy", cccKey, cccCount, Card: cccCard, ToZone: n.ToZone);
 
             case SequenceEffectNode<TContext> s:
                 return ClassifyChildren<TContext>(s.Children) is { } children

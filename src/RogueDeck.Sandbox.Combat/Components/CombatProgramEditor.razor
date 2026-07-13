@@ -293,6 +293,16 @@ else
             <input value="@Node.ToDefinition" style="width:9rem" placeholder="target definition id"
                    @onchange="e => Set(Node with { ToDefinition = AsString(e.Value) })" />
         }
+        @if (Node.Kind == "createCardInstance")
+        {
+            <input value="@Node.ToDefinition" style="width:9rem" placeholder="card definition id"
+                   @onchange="e => Set(Node with { ToDefinition = AsString(e.Value) })" />
+        }
+        @if (CombatProgramModel.UsesCreateZone(Node.Kind))
+        {
+            <span class="muted">into</span>
+            @ZoneSelect(Node.ToZone, z => Set(Node with { ToZone = z }))
+        }
         @if (CombatProgramModel.UsesMovement(Node.Kind))
         {
             <select value="@Node.MovementMode"

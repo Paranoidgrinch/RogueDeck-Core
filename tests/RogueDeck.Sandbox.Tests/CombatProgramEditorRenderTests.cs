@@ -106,6 +106,20 @@ public class CombatProgramEditorRenderTests
     }
 
     [Fact]
+    public async Task Renders_create_card_and_copy_card_with_zone()
+    {
+        // Phase 1g: createCardInstance shows a card-definition input + "into" zone; createCardCopy shows the card widget.
+        var create = await RenderAsync(new CombatNodeModel("createCardInstance", "source", CombatAmountSpec.FromConst(2), ToDefinition: "wound", ToZone: CardZone.DiscardPile));
+        Assert.Contains("create card(s)", create);
+        Assert.Contains("wound", create);
+        Assert.Contains("into", create);
+
+        var copy = await RenderAsync(new CombatNodeModel("createCardCopy", "source", CombatAmountSpec.FromConst(1), Card: new CombatCardSpec("chosen", CardZone.Hand), ToZone: CardZone.Hand));
+        Assert.Contains("copy a card", copy);
+        Assert.Contains("player chooses", copy); // the card-selector widget
+    }
+
+    [Fact]
     public async Task Renders_summon_combatant_with_fields_position_and_status_list()
     {
         // Phase 1f (summon slice): team/def/name/HP fields, an optional position, and a starting-status list row.
