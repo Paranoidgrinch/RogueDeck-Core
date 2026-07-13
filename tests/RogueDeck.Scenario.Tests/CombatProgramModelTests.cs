@@ -213,6 +213,49 @@ public class CombatProgramModelTests
     }
 
     [Fact]
+    public void Every_editor_node_kind_builds_and_classifies_without_escaping()
+    {
+        // Phase 1 DoD: every kind the palette offers must build a real program and classify back to the same model —
+        // i.e. nothing the editor can author falls to the JSON escape. Guards node-kind parity going forward.
+        foreach (var (kind, _) in CombatProgramModel.AllKinds)
+        {
+            var model = CombatProgramModel.NewNode(kind);
+            var back = CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(model));
+            Assert.True(back is not null, $"editor kind '{kind}' escaped to JSON (Classify returned null)");
+            Assert.Equal(model, back);
+        }
+    }
+
+    [Fact]
+    public void The_niche_tail_amounts_build_and_round_trip()
+    {
+        // Phase 1i tail: clamp, loop index, this-turn tallies, grid coord, aggregates, and card cost — the LAST escapes.
+        var models = new[]
+        {
+            // clamp(missingHP, 0, 20)
+            new CombatNodeModel("dealDamage", "eventTarget", new CombatAmountSpec("clamp",
+                Left: new CombatAmountSpec("missingHealth", SelectorKey: "eventTarget"), Right: CombatAmountSpec.FromConst(0), Third: CombatAmountSpec.FromConst(20))),
+            new CombatNodeModel("dealDamage", "eventTarget", new CombatAmountSpec("iterationIndex")),
+            new CombatNodeModel("dealDamage", "eventTarget", new CombatAmountSpec("cardsPlayedThisTurn", SelectorKey: "source")),
+            new CombatNodeModel("dealDamage", "eventTarget", new CombatAmountSpec("coord", SelectorKey: "source", Axis: GridAxis.Y)),
+            new CombatNodeModel("dealDamage", "eventTarget", new CombatAmountSpec("countTargets", ReadSelector: new CombatSelectorSpec("enemiesWithStatus", "poison"))),
+            // sum over all enemies of each one's missing HP
+            new CombatNodeModel("dealDamage", "source", new CombatAmountSpec("sumOverTargets",
+                ReadSelector: new CombatSelectorSpec("allEnemies"), Left: new CombatAmountSpec("missingHealth", SelectorKey: "eventTarget"))),
+            new CombatNodeModel("dealDamage", "eventTarget", new CombatAmountSpec("gridDistance",
+                ReadSelector: new CombatSelectorSpec("source"), ReadSelector2: new CombatSelectorSpec("eventTarget"))),
+            new CombatNodeModel("dealDamage", "eventTarget", new CombatAmountSpec("cardCost",
+                ReadId: "standard.energy", ReadCard: new CombatCardSpec("chosen", CardZone.Hand))),
+        };
+
+        Assert.IsType<ClampExpression<CardPlayContext>>(Assert.IsType<DealDamageNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(models[0]).Root).Amount);
+        Assert.IsType<CountTargetsExpression<CardPlayContext>>(Assert.IsType<DealDamageNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(models[4]).Root).Amount);
+
+        foreach (var model in models)
+            Assert.Equal(model, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(model)));
+    }
+
+    [Fact]
     public void State_read_amounts_build_and_round_trip()
     {
         // Phase 1i part 2: selector-based state reads as amounts (health / resource / status / pool / zone).

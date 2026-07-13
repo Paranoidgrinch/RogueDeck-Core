@@ -626,13 +626,17 @@ else
         ("const", "constant"), ("event", "event amount"), ("counter", "counter"),
         ("round", "round #"), ("turn", "turn #"),
         ("add", "+"), ("sub", "−"), ("mul", "×"), ("div", "÷"), ("rem", "mod"), ("min", "min"), ("max", "max"),
-        ("neg", "negate"), ("abs", "abs"), ("sign", "sign"),
+        ("neg", "negate"), ("abs", "abs"), ("sign", "sign"), ("clamp", "clamp"),
         // Selector-based state reads.
         ("currentHealth", "current HP"), ("maxHealth", "max HP"), ("missingHealth", "missing HP"), ("healthPct", "HP %"),
         ("currentResource", "resource"), ("maxResource", "max resource"), ("missingResource", "missing resource"),
         ("defensivePool", "defensive pool"), ("zoneCards", "cards in zone"),
         ("statusStacks", "status stacks"), ("statusDuration", "status duration"), ("statusCharges", "status charges"),
         ("stacksByPolarity", "stacks by polarity"),
+        ("cardsPlayedThisTurn", "cards played (turn)"), ("damageDealtThisTurn", "damage dealt (turn)"),
+        ("resourceGainedThisTurn", "resource gained (turn)"), ("coord", "grid coord"), ("iterationIndex", "loop index"),
+        ("countTargets", "count targets"), ("sumOverTargets", "sum over targets"), ("gridDistance", "grid distance"),
+        ("cardCost", "card cost"),
     };
 
     // Recursive amount widget: a kind dropdown plus its parameter — an int (constant), a selector + counter-id
@@ -675,6 +679,12 @@ else
         {
             builder.AddContent(seq++, AmountControls(spec.LeftOrDefault, l => onChange(spec with { Left = l })));
         }
+        else if (CombatAmountSpec.IsTernaryKind(spec.Kind))
+        {
+            builder.AddContent(seq++, AmountControls(spec.LeftOrDefault, l => onChange(spec with { Left = l })));
+            builder.AddContent(seq++, AmountControls(spec.RightOrDefault, r => onChange(spec with { Right = r })));
+            builder.AddContent(seq++, AmountControls(spec.ThirdOrDefault, t => onChange(spec with { Third = t })));
+        }
         else if (CombatAmountSpec.IsStateRead(spec.Kind))
         {
             builder.AddContent(seq++, SelectorSelect(
@@ -709,8 +719,55 @@ else
                 }
                 builder.CloseElement();
             }
+            else if (CombatAmountSpec.StateReadUsesAxis(spec.Kind))
+            {
+                builder.OpenElement(seq++, "select");
+                builder.AddAttribute(seq++, "value", spec.Axis.ToString());
+                builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+                    onChange(spec with { Axis = Enum.TryParse<GridAxis>(AsString(e.Value), out var ax) ? ax : GridAxis.X })));
+                foreach (var a in Enum.GetValues<GridAxis>())
+                {
+                    builder.OpenElement(seq++, "option");
+                    builder.AddAttribute(seq++, "value", a.ToString());
+                    builder.AddAttribute(seq++, "selected", a == spec.Axis);
+                    builder.AddContent(seq++, a.ToString());
+                    builder.CloseElement();
+                }
+                builder.CloseElement();
+            }
         }
-        else if (spec.Kind is not ("event" or "round" or "turn"))
+        else if (CombatAmountSpec.IsAggregate(spec.Kind))
+        {
+            builder.AddContent(seq++, SelectorControls(spec.ReadSelectorOrDefault, s => onChange(spec with { ReadSelector = s })));
+            if (spec.Kind == "sumOverTargets")
+            {
+                builder.OpenElement(seq++, "span");
+                builder.AddAttribute(seq++, "class", "muted");
+                builder.AddContent(seq++, "of");
+                builder.CloseElement();
+                builder.AddContent(seq++, AmountControls(spec.LeftOrDefault, l => onChange(spec with { Left = l })));
+            }
+            else if (spec.Kind == "gridDistance")
+            {
+                builder.OpenElement(seq++, "span");
+                builder.AddAttribute(seq++, "class", "muted");
+                builder.AddContent(seq++, "to");
+                builder.CloseElement();
+                builder.AddContent(seq++, SelectorControls(spec.ReadSelector2OrDefault, s => onChange(spec with { ReadSelector2 = s })));
+            }
+        }
+        else if (spec.Kind == "cardCost")
+        {
+            builder.AddContent(seq++, CardControls(spec.ReadCardOrDefault, c => onChange(spec with { ReadCard = c })));
+            builder.OpenElement(seq++, "input");
+            builder.AddAttribute(seq++, "value", spec.ReadId);
+            builder.AddAttribute(seq++, "style", "width:7rem");
+            builder.AddAttribute(seq++, "placeholder", "resource id");
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+                onChange(spec with { ReadId = AsString(e.Value) })));
+            builder.CloseElement();
+        }
+        else if (!CombatAmountSpec.IsNullaryKind(spec.Kind))
         {
             builder.OpenElement(seq++, "input");
             builder.AddAttribute(seq++, "type", "number");
@@ -729,6 +786,16 @@ else
             return CombatAmountSpec.Binary(kind, prev.Left ?? prev, prev.Right ?? CombatAmountSpec.FromConst(1));
         if (CombatAmountSpec.IsUnaryKind(kind))
             return CombatAmountSpec.Unary(kind, prev.Left ?? prev);
+        if (CombatAmountSpec.IsTernaryKind(kind))
+            return new CombatAmountSpec(kind, Left: prev.Left ?? prev, Right: prev.Right ?? CombatAmountSpec.FromConst(0), Third: prev.Third ?? CombatAmountSpec.FromConst(10));
+        if (CombatAmountSpec.IsAggregate(kind))
+            return new CombatAmountSpec(kind,
+                ReadSelector: prev.ReadSelector ?? new CombatSelectorSpec("allEnemies"),
+                Left: kind == "sumOverTargets" ? (prev.Left ?? CombatAmountSpec.FromConst(1)) : null,
+                ReadSelector2: kind == "gridDistance" ? (prev.ReadSelector2 ?? new CombatSelectorSpec("eventTarget")) : null);
+        if (kind == "cardCost")
+            return new CombatAmountSpec(kind, ReadId: prev.ReadId == "" ? "standard.energy" : prev.ReadId,
+                ReadCard: prev.ReadCard ?? new CombatCardSpec("chosen", CardZone.Hand));
         if (CombatAmountSpec.IsStateRead(kind))
         {
             var sel = prev.SelectorKey == "" ? "source" : prev.SelectorKey;
@@ -742,7 +809,7 @@ else
             "event" => CombatAmountSpec.Event,
             "counter" => CombatAmountSpec.Counter(
                 prev.SelectorKey == "" ? "source" : prev.SelectorKey, prev.CounterId == "" ? "combo" : prev.CounterId),
-            "round" or "turn" => new CombatAmountSpec(kind),
+            "round" or "turn" or "iterationIndex" => new CombatAmountSpec(kind),
             _ => CombatAmountSpec.FromConst(prev.Const),
         };
     }

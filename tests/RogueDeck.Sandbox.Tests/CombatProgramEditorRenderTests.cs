@@ -106,6 +106,26 @@ public class CombatProgramEditorRenderTests
     }
 
     [Fact]
+    public async Task Renders_the_niche_tail_amounts()
+    {
+        // Phase 1i tail: clamp shows three nested operands; countTargets shows a full (parameterized) selector; cardCost
+        // shows the card widget + a resource id.
+        var clamp = await RenderAsync(new CombatNodeModel("dealDamage", "eventTarget", new CombatAmountSpec("clamp",
+            Left: CombatAmountSpec.FromConst(5), Right: CombatAmountSpec.FromConst(0), Third: CombatAmountSpec.FromConst(10))));
+        Assert.Contains("clamp", clamp);
+
+        var count = await RenderAsync(new CombatNodeModel("dealDamage", "eventTarget",
+            new CombatAmountSpec("countTargets", ReadSelector: new CombatSelectorSpec("enemiesWithStatus", "poison"))));
+        Assert.Contains("count targets", count);
+        Assert.Contains("enemiesWithStatus", count);
+
+        var cost = await RenderAsync(new CombatNodeModel("dealDamage", "eventTarget",
+            new CombatAmountSpec("cardCost", ReadId: "standard.energy", ReadCard: new CombatCardSpec("chosen", CardZone.Hand))));
+        Assert.Contains("card cost", cost);
+        Assert.Contains("resource id", cost);
+    }
+
+    [Fact]
     public async Task Renders_a_state_read_amount_with_a_selector_and_id()
     {
         // Phase 1i part 2: a resource state-read amount shows a single-target selector + an id field.
