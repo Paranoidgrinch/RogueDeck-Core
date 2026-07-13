@@ -51,6 +51,38 @@
                     }
                     <button class="mini" @onclick="() => RemoveEnemy(encId, enemyId)">✕</button>
                 </div>
+
+                var rules = enemy.IntentRules ?? (IReadOnlyList<EnemyIntentRule>)Array.Empty<EnemyIntentRule>();
+                <div class="intent-block">
+                    <span class="muted">Intent AI — first matching rule (highest priority) picks the action; with no rules the enemy just cycles its actions.</span>
+                    @for (var ri = 0; ri < rules.Count; ri++)
+                    {
+                        var rIdx = ri;
+                        var rule = rules[rIdx];
+                        <div class="editor-row intent-rule">
+                            <span class="muted">if</span>
+                            <IntentConditionEditor Condition="rule.Condition"
+                                                   ConditionChanged="c => SetRuleCondition(encId, enemyId, rIdx, c)" />
+                            <span class="muted">→ do</span>
+                            <select value="@rule.Action.value" @onchange="e => SetRuleAction(encId, enemyId, rIdx, AsString(e.Value))">
+                                @if (Blueprint.EnemyActions.Count == 0)
+                                {
+                                    <option value="@rule.Action.value">@rule.Action.value</option>
+                                }
+                                @foreach (var action in Blueprint.EnemyActions)
+                                {
+                                    <option value="@action.Id">@action.Id</option>
+                                }
+                            </select>
+                            <label>priority
+                                <input type="number" value="@rule.Priority" style="width:4rem"
+                                       @onchange="e => SetRulePriority(encId, enemyId, rIdx, AsInt(e.Value, rule.Priority))" />
+                            </label>
+                            <button class="mini" @onclick="() => RemoveRule(encId, enemyId, rIdx)">✕</button>
+                        </div>
+                    }
+                    <button class="mini" @onclick="() => AddRule(encId, enemyId)">+ intent rule</button>
+                </div>
             }
             <button class="mini" @onclick="() => AddEnemy(encId)">+ enemy</button>
         </div>
@@ -148,4 +180,42 @@
             if (on) actions.Add(new EnemyActionDefinitionId(actionId));
             return en with { Actions = actions };
         });
+
+    // ── intent rules (state-conditional AI) ──────────────────────────────────────
+    private Task EditRules(string encId, string enemyId,
+        Func<IReadOnlyList<EnemyIntentRule>, IReadOnlyList<EnemyIntentRule>> edit) =>
+        EditEnemy(encId, enemyId, en =>
+        {
+            var current = en.IntentRules ?? (IReadOnlyList<EnemyIntentRule>)Array.Empty<EnemyIntentRule>();
+            return en with { IntentRules = edit(current) };
+        });
+
+    private Task EditRule(string encId, string enemyId, int index, Func<EnemyIntentRule, EnemyIntentRule> edit) =>
+        EditRules(encId, enemyId, rules =>
+            rules.Select((r, i) => i == index ? edit(r) : r).ToList());
+
+    private Task AddRule(string encId, string enemyId)
+    {
+        // Default action: whatever this enemy already uses, else the blueprint's first authored action, else empty.
+        var enemy = Blueprint.Encounters.FirstOrDefault(e => e.Id.Value == encId)?.Enemies.FirstOrDefault(en => en.Id == enemyId);
+        var action = enemy?.Actions.FirstOrDefault().value
+            ?? Blueprint.EnemyActions.Select(a => a.Id).FirstOrDefault()
+            ?? "";
+        var rule = new EnemyIntentRule(
+            new EnemyHealthPercentCondition(ComparisonOperator.LessOrEqual, 50),
+            new EnemyActionDefinitionId(action));
+        return EditRules(encId, enemyId, rules => rules.Append(rule).ToList());
+    }
+
+    private Task RemoveRule(string encId, string enemyId, int index) =>
+        EditRules(encId, enemyId, rules => rules.Where((_, i) => i != index).ToList());
+
+    private Task SetRuleCondition(string encId, string enemyId, int index, EnemyIntentCondition condition) =>
+        EditRule(encId, enemyId, index, r => r with { Condition = condition });
+
+    private Task SetRuleAction(string encId, string enemyId, int index, string actionId) =>
+        EditRule(encId, enemyId, index, r => r with { Action = new EnemyActionDefinitionId(actionId) });
+
+    private Task SetRulePriority(string encId, string enemyId, int index, int priority) =>
+        EditRule(encId, enemyId, index, r => r with { Priority = priority });
 }

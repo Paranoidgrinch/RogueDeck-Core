@@ -1,0 +1,152 @@
+@* Recursive visual editor for one enemy-intent condition (state-conditional AI, #1). Edits the immutable
+   EnemyIntentCondition record tree in place and hands the new root back via ConditionChanged. The composite
+   kinds (all-of / any-of / not) nest child editors of this same component to arbitrary depth. *@
+
+<span class="intent-cond">
+    <select value="@KindOf(Condition)" @onchange="e => ChangeKind(AsString(e.Value))">
+        @foreach (var (kind, label) in Kinds)
+        {
+            <option value="@kind">@label</option>
+        }
+    </select>
+
+    @switch (Condition)
+    {
+        case EnemyHealthPercentCondition hp:
+            <select value="@hp.Op" @onchange="e => Emit(hp with { Op = ParseOp(e.Value) })">
+                @foreach (var op in Ops) { <option value="@op">@OpSymbol(op)</option> }
+            </select>
+            <input type="number" value="@hp.Percent" style="width:4rem"
+                   @onchange="e => Emit(hp with { Percent = AsInt(e.Value, hp.Percent) })" />
+            <span class="muted">% max HP</span>
+            break;
+
+        case RoundCondition r:
+            <span class="muted">round</span>
+            <select value="@r.Op" @onchange="e => Emit(r with { Op = ParseOp(e.Value) })">
+                @foreach (var op in Ops) { <option value="@op">@OpSymbol(op)</option> }
+            </select>
+            <input type="number" value="@r.Round" style="width:4rem"
+                   @onchange="e => Emit(r with { Round = AsInt(e.Value, r.Round) })" />
+            break;
+
+        case SelfHasStatusCondition s:
+            <span class="muted">self has status</span>
+            <input value="@s.Status.value" placeholder="status id" style="width:8rem"
+                   @onchange="e => Emit(s with { Status = new StatusDefinitionId(AsString(e.Value)) })" />
+            <span class="muted">× ≥</span>
+            <input type="number" value="@s.MinStacks" style="width:3.5rem"
+                   @onchange="e => Emit(s with { MinStacks = AsInt(e.Value, s.MinStacks) })" />
+            break;
+
+        case OpponentHasStatusCondition o:
+            <span class="muted">opponent has status</span>
+            <input value="@o.Status.value" placeholder="status id" style="width:8rem"
+                   @onchange="e => Emit(o with { Status = new StatusDefinitionId(AsString(e.Value)) })" />
+            <span class="muted">× ≥</span>
+            <input type="number" value="@o.MinStacks" style="width:3.5rem"
+                   @onchange="e => Emit(o with { MinStacks = AsInt(e.Value, o.MinStacks) })" />
+            break;
+
+        case NotCondition n:
+            <span class="muted">not:</span>
+            <span class="intent-nest">
+                <IntentConditionEditor Condition="n.Condition"
+                                       ConditionChanged="c => Emit(n with { Condition = c })" />
+            </span>
+            break;
+    }
+
+    @if (AsComposite(Condition) is var (children, rebuild) && children is not null)
+    {
+        <span class="muted">@(Condition is AllOfCondition ? "all of:" : "any of:")</span>
+        <span class="intent-nest">
+            @for (var i = 0; i < children.Count; i++)
+            {
+                var idx = i;
+                <span class="intent-child">
+                    <IntentConditionEditor Condition="children[idx]"
+                                           ConditionChanged="c => Emit(rebuild(children.Select((x, j) => j == idx ? c : x).ToList()))" />
+                    <button class="mini" @onclick="() => Emit(rebuild(children.Where((_, j) => j != idx).ToList()))">✕</button>
+                </span>
+            }
+            <button class="mini" @onclick="() => Emit(rebuild(children.Append(DefaultLeaf()).ToList()))">+ condition</button>
+        </span>
+    }
+</span>
+
+@code {
+    [Parameter] public EnemyIntentCondition Condition { get; set; } = default!;
+    [Parameter] public EventCallback<EnemyIntentCondition> ConditionChanged { get; set; }
+
+    private static readonly ComparisonOperator[] Ops = Enum.GetValues<ComparisonOperator>();
+
+    private static readonly (string kind, string label)[] Kinds =
+    {
+        ("healthPercent", "HP %"),
+        ("round", "round"),
+        ("selfHasStatus", "self has status"),
+        ("opponentHasStatus", "opponent has status"),
+        ("allOf", "all of…"),
+        ("anyOf", "any of…"),
+        ("not", "not…"),
+    };
+
+    private Task Emit(EnemyIntentCondition next) => ConditionChanged.InvokeAsync(next);
+
+    private static string AsString(object? v) => v?.ToString() ?? "";
+    private static int AsInt(object? v, int fallback) => int.TryParse(v?.ToString(), out var n) ? n : fallback;
+    private static ComparisonOperator ParseOp(object? v) => Enum.Parse<ComparisonOperator>(AsString(v));
+
+    private static string KindOf(EnemyIntentCondition c) => c switch
+    {
+        EnemyHealthPercentCondition => "healthPercent",
+        RoundCondition => "round",
+        SelfHasStatusCondition => "selfHasStatus",
+        OpponentHasStatusCondition => "opponentHasStatus",
+        AllOfCondition => "allOf",
+        AnyOfCondition => "anyOf",
+        NotCondition => "not",
+        _ => "healthPercent",
+    };
+
+    // A fresh, canonical condition of the chosen kind. Composites keep the current condition as their first child
+    // so switching to all-of / any-of / not never discards what the author already built.
+    private EnemyIntentCondition DefaultOf(string kind) => kind switch
+    {
+        "healthPercent" => new EnemyHealthPercentCondition(ComparisonOperator.LessOrEqual, 50),
+        "round" => new RoundCondition(ComparisonOperator.GreaterOrEqual, 1),
+        "selfHasStatus" => new SelfHasStatusCondition(new StatusDefinitionId(""), 1),
+        "opponentHasStatus" => new OpponentHasStatusCondition(new StatusDefinitionId(""), 1),
+        "allOf" => new AllOfCondition(new[] { Condition }),
+        "anyOf" => new AnyOfCondition(new[] { Condition }),
+        "not" => new NotCondition(Condition),
+        _ => DefaultLeaf(),
+    };
+
+    private static EnemyIntentCondition DefaultLeaf() =>
+        new EnemyHealthPercentCondition(ComparisonOperator.LessOrEqual, 50);
+
+    private Task ChangeKind(string kind) =>
+        kind == KindOf(Condition) ? Task.CompletedTask : Emit(DefaultOf(kind));
+
+    // For a composite condition, the child list plus a rebuild delegate; null otherwise.
+    private static (IReadOnlyList<EnemyIntentCondition>? children,
+        Func<IReadOnlyList<EnemyIntentCondition>, EnemyIntentCondition> rebuild) AsComposite(EnemyIntentCondition c) => c switch
+    {
+        AllOfCondition a => (a.Conditions, list => new AllOfCondition(list)),
+        AnyOfCondition a => (a.Conditions, list => new AnyOfCondition(list)),
+        _ => (null, list => c),
+    };
+
+    private static string OpSymbol(ComparisonOperator op) => op switch
+    {
+        ComparisonOperator.Equal => "=",
+        ComparisonOperator.NotEqual => "≠",
+        ComparisonOperator.Less => "<",
+        ComparisonOperator.LessOrEqual => "≤",
+        ComparisonOperator.Greater => ">",
+        ComparisonOperator.GreaterOrEqual => "≥",
+        _ => op.ToString(),
+    };
+}
