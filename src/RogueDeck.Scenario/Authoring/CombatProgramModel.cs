@@ -165,6 +165,14 @@ public sealed record CombatNodeModel(
     public static CombatNodeModel Repeat(CombatAmountSpec count, CombatNodeModel body) =>
         new("repeat", Amount: count, Children: new[] { body });
 
+    // repeat the body until a stop condition holds (bounded by the engine's max-iterations guard).
+    public static CombatNodeModel RepeatUntil(CombatConditionSpec stop, CombatNodeModel body) =>
+        new("repeatUntil", Children: new[] { body }, Condition: stop);
+
+    // run the body once for each of Count randomly-chosen targets from the candidate selector.
+    public static CombatNodeModel RandomTargets(string selectorKey, CombatAmountSpec count, CombatNodeModel body) =>
+        new("randomTargets", SelectorKey: selectorKey, Amount: count, Children: new[] { body });
+
     // Conditional: if Condition then Children[0] [else Children[1]]. A branch is a single node (wrap a sequence for
     // several effects), mirroring the engine's ConditionalEffectNode.Then/Else.
     public static CombatNodeModel Conditional(CombatConditionSpec condition, CombatNodeModel then, CombatNodeModel? @else = null) =>
@@ -399,6 +407,8 @@ public static class CombatProgramModel
         ("forEachTarget", "for each target…"),
         ("forEachCardInZone", "for each card in zone…"),
         ("repeat", "repeat…"),
+        ("repeatUntil", "repeat until…"),
+        ("randomTargets", "random targets…"),
         ("conditional", "if…"),
     ];
 
@@ -473,6 +483,8 @@ public static class CombatProgramModel
         "forEachTarget" => CombatNodeModel.ForEach("allEnemies", NewNode("dealDamage")),
         "forEachCardInZone" => CombatNodeModel.ForEachCard("source", CardZone.Hand, NewNode("transformCard")),
         "repeat" => CombatNodeModel.Repeat(CombatAmountSpec.FromConst(2), NewNode("dealDamage")),
+        "repeatUntil" => CombatNodeModel.RepeatUntil(new CombatConditionSpec(), NewNode("dealDamage")),
+        "randomTargets" => CombatNodeModel.RandomTargets("allEnemies", CombatAmountSpec.FromConst(1), NewNode("dealDamage")),
         "conditional" => CombatNodeModel.Conditional(new CombatConditionSpec(), NewNode("dealDamage")),
         _ => new("gainBlock", "source", CombatAmountSpec.FromConst(5)),
     };
@@ -545,6 +557,8 @@ public static class CombatProgramModel
                 "forEachTarget" => CombatNodeModel.ForEach("allEnemies", body),
                 "forEachCardInZone" => CombatNodeModel.ForEachCard("source", CardZone.Hand, body),
                 "repeat" => CombatNodeModel.Repeat(CombatAmountSpec.FromConst(2), body),
+                "repeatUntil" => CombatNodeModel.RepeatUntil(new CombatConditionSpec(), body),
+                "randomTargets" => CombatNodeModel.RandomTargets("allEnemies", CombatAmountSpec.FromConst(1), body),
                 "conditional" => CombatNodeModel.Conditional(new CombatConditionSpec(), body),
                 _ => NewNode(kind),
             };
@@ -580,6 +594,9 @@ public static class CombatProgramModel
         ("backmostEnemy", CombatantTargetSelectors.BackmostEnemyOfSource),
         ("nearestEnemy", CombatantTargetSelectors.NearestEnemyOfSource),
         ("opposingInColumn", CombatantTargetSelectors.OpposingInColumn),
+        // Whole-board / damaged-ally reads (parameterless).
+        ("allCombatants", CombatantTargetSelectors.AllCombatants),
+        ("allDamagedAllies", CombatantTargetSelectors.AllDamagedAlliesOfSource),
     ];
 
     public static IEnumerable<string> SelectorKeys => Selectors.Select(s => s.Key);
@@ -718,6 +735,12 @@ public static class CombatProgramModel
                     definitionFilter: string.IsNullOrEmpty(model.ToDefinition) ? null : new CardDefinitionId(model.ToDefinition));
             case "repeat":
                 return new RepeatEffectNode<TContext>(BuildAmount<TContext>(model.AmountOrDefault), BuildBody<TContext>(model));
+            case "repeatUntil":
+                return new RepeatUntilEffectNode<TContext>(
+                    BuildCondition<TContext>(model.Condition ?? new CombatConditionSpec()), BuildBody<TContext>(model));
+            case "randomTargets":
+                return new RandomTargetSelectionNode<TContext>(
+                    SelectorFor(model.SelectorKey), BuildAmount<TContext>(model.AmountOrDefault), BuildBody<TContext>(model));
             case "conditional":
                 var children = model.ChildrenOrEmpty;
                 return new ConditionalEffectNode<TContext>(
@@ -1011,6 +1034,20 @@ public static class CombatProgramModel
                 var count = ClassifyAmount(r.Count);
                 return !count.IsAdvanced && ClassifyNode<TContext>(r.Body) is { } repeatBody
                     ? CombatNodeModel.Repeat(count, repeatBody)
+                    : null;
+            case RepeatUntilEffectNode<TContext> ru
+                when ru.MaxIterations == RepeatUntilEffectNode<TContext>.DefaultMaxIterations:
+                var stop = ClassifyCondition(ru.StopCondition);
+                return !stop.IsAdvanced && ClassifyNode<TContext>(ru.Body) is { } ruBody
+                    ? CombatNodeModel.RepeatUntil(stop, ruBody)
+                    : null;
+            case RandomTargetSelectionNode<TContext> rt
+                when rt.MaxIterations == RandomTargetSelectionNode<TContext>.DefaultMaxIterations:
+                if (KeyFor(rt.CandidateSelector) is not { } rtKey)
+                    return null;
+                var rtCount = ClassifyAmount(rt.Count);
+                return !rtCount.IsAdvanced && ClassifyNode<TContext>(rt.Body) is { } rtBody
+                    ? CombatNodeModel.RandomTargets(rtKey, rtCount, rtBody)
                     : null;
             case ConditionalEffectNode<TContext> cond:
                 return ClassifyConditional<TContext>(cond);

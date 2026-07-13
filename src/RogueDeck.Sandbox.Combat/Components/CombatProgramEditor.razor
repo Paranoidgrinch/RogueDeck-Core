@@ -31,6 +31,17 @@
                 @AmountControls(Node.AmountOrDefault, spec => Set(Node with { Amount = spec }))
                 <span class="muted">×</span>
             }
+            else if (Node.Kind == "repeatUntil")
+            {
+                <span class="muted">until</span>
+                @ConditionControls(Node.Condition ?? new CombatConditionSpec(), spec => Set(Node with { Condition = spec }))
+            }
+            else if (Node.Kind == "randomTargets")
+            {
+                @AmountControls(Node.AmountOrDefault, spec => Set(Node with { Amount = spec }))
+                <span class="muted">of</span>
+                @SelectorSelect(CombatProgramModel.SelectorKeys, Node.SelectorKey, key => Set(Node with { SelectorKey = key }))
+            }
             else if (Node.Kind == "conditional")
             {
                 @ConditionControls(Node.Condition ?? new CombatConditionSpec(), spec => Set(Node with { Condition = spec }))

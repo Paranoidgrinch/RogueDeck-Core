@@ -191,6 +191,35 @@ public class CombatProgramModelTests
     }
 
     [Fact]
+    public void RepeatUntil_and_randomTargets_composites_round_trip()
+    {
+        // Phase 1h: repeat-until (stop condition + body) and random-targets (candidate selector + count + body).
+        var repeatUntil = CombatNodeModel.RepeatUntil(
+            new CombatConditionSpec("compare", "source", "currentResource", ComparisonOperator.LessOrEqual, 0, "standard.energy"),
+            new CombatNodeModel("dealDamage", "eventTarget", CombatAmountSpec.FromConst(3)));
+        var randomTargets = CombatNodeModel.RandomTargets(
+            "allEnemies", CombatAmountSpec.FromConst(2),
+            new CombatNodeModel("applyStatus", "eventTarget", CombatAmountSpec.FromConst(1), StatusId: "poison"));
+
+        Assert.IsType<RepeatUntilEffectNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(repeatUntil).Root);
+        Assert.IsType<RandomTargetSelectionNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(randomTargets).Root);
+
+        foreach (var model in new[] { repeatUntil, randomTargets })
+            Assert.Equal(model, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(model)));
+    }
+
+    [Fact]
+    public void The_new_whole_board_selectors_round_trip()
+    {
+        // Phase 1h: allCombatants + allDamagedAllies are now in the authoring catalog.
+        foreach (var key in new[] { "allCombatants", "allDamagedAllies" })
+        {
+            var model = new CombatNodeModel("dealDamage", key, CombatAmountSpec.FromConst(4));
+            Assert.Equal(model, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(model)));
+        }
+    }
+
+    [Fact]
     public void Play_and_replay_card_ops_round_trip_with_and_without_a_target()
     {
         // Phase 1g part 2: playCard (optional card target) + replayCardProgram (a card's program at a target).

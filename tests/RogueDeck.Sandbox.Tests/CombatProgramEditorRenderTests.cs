@@ -106,6 +106,24 @@ public class CombatProgramEditorRenderTests
     }
 
     [Fact]
+    public async Task Renders_repeat_until_and_random_targets_composites()
+    {
+        // Phase 1h: repeat-until shows its stop condition; random-targets shows count + candidate selector.
+        var repeatUntil = await RenderAsync(CombatNodeModel.RepeatUntil(
+            new CombatConditionSpec("isAlive", "eventTarget"),
+            new CombatNodeModel("dealDamage", "eventTarget", CombatAmountSpec.FromConst(3))));
+        Assert.Contains("repeat until…", repeatUntil);
+        Assert.Contains("until", repeatUntil);
+        Assert.Contains("deal damage", repeatUntil); // the body recurses
+
+        var randomTargets = await RenderAsync(CombatNodeModel.RandomTargets(
+            "allEnemies", CombatAmountSpec.FromConst(2),
+            new CombatNodeModel("applyStatus", "eventTarget", CombatAmountSpec.FromConst(1), StatusId: "poison")));
+        Assert.Contains("random targets…", randomTargets);
+        Assert.Contains("allEnemies", randomTargets);
+    }
+
+    [Fact]
     public async Task Renders_play_card_with_optional_target_and_replay()
     {
         // Phase 1g part 2: playCard shows the card widget + a target toggle; replay shows the card widget.
