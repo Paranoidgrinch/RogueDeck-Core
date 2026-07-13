@@ -118,7 +118,14 @@ public sealed record CombatNodeModel(
     string CounterId = "",
     // setCombatantCounter: relative (add the amount) vs absolute (set it). true is the engine default; false
     // canonically for kinds that don't use it so build↔classify round-trips exactly.
-    bool Relative = false)
+    bool Relative = false,
+    // moveCombatant: how the target moves. ToAbsolute uses MoveX/MoveY; the relative modes use MoveStep. ToAbsolute
+    // canonically for other kinds. The coordinate amounts are curated amount specs (const/event/counter), null when
+    // unused so build↔classify round-trips exactly.
+    MovementMode MovementMode = MovementMode.ToAbsolute,
+    CombatAmountSpec? MoveX = null,
+    CombatAmountSpec? MoveY = null,
+    CombatAmountSpec? MoveStep = null)
 {
     public CombatAmountSpec AmountOrDefault => Amount ?? CombatAmountSpec.FromConst(3);
     public CombatCardSpec CardOrDefault => Card ?? new CombatCardSpec();
@@ -170,6 +177,10 @@ public sealed record CombatNodeModel(
         && IgnoresBlock == other.IgnoresBlock
         && CounterId == other.CounterId
         && Relative == other.Relative
+        && MovementMode == other.MovementMode
+        && MoveX == other.MoveX
+        && MoveY == other.MoveY
+        && MoveStep == other.MoveStep
         && ChildrenOrEmpty.SequenceEqual(other.ChildrenOrEmpty);
 
     public override int GetHashCode()
@@ -197,6 +208,10 @@ public sealed record CombatNodeModel(
         hash.Add(IgnoresBlock);
         hash.Add(CounterId);
         hash.Add(Relative);
+        hash.Add(MovementMode);
+        hash.Add(MoveX);
+        hash.Add(MoveY);
+        hash.Add(MoveStep);
         foreach (var child in ChildrenOrEmpty)
             hash.Add(child);
         return hash.ToHashCode();
@@ -234,6 +249,8 @@ public static class CombatProgramModel
         ("moveCards", "move cards (zone → zone)"),
         ("moveCardToZone", "move a card (targeted)"),
         ("transformCard", "transform / upgrade a card"),
+        ("moveCombatant", "move combatant"),
+        ("swapPositions", "swap positions"),
     ];
 
     // The leaf kinds that carry a resource id (their editor row shows a resource-id field; ChangeKind seeds a
@@ -268,16 +285,21 @@ public static class CombatProgramModel
     // Amount at the canonical null). modifySelectedStatusStacks DOES carry an amount (its delta).
     public static bool UsesAmount(string kind) =>
         kind is not ("removeStatus" or "cleanse" or "moveCards" or "moveCardToZone" or "transformCard"
-            or "removeSelectedStatus" or "stealSelectedStatus" or "refillResource");
+            or "removeSelectedStatus" or "stealSelectedStatus" or "refillResource"
+            or "moveCombatant" or "swapPositions");
+
+    // moveCombatant (2D-grid positioning): a movement mode plus its coordinate amounts (X/Y for ToAbsolute, else a
+    // single Step). swapPositions exchanges two combatants' cells (its second selector reuses ToSelectorKey).
+    public static bool UsesMovement(string kind) => kind is "moveCombatant";
 
     // The leaf kinds that pick ONE status instance on the target by a StatusSelectionSpec (polarity filter × pick),
     // rather than naming a status id. Their editor row shows the status-selection widget.
     public static bool UsesStatusSelection(string kind) =>
         kind is "removeSelectedStatus" or "modifySelectedStatusStacks" or "stealSelectedStatus";
 
-    // The leaf kind that needs a SECOND selector (the thief a stolen status moves to). Its editor row shows a
-    // to-selector dropdown alongside the from-selector.
-    public static bool UsesToSelector(string kind) => kind is "stealSelectedStatus";
+    // The leaf kinds that need a SECOND selector: the thief a stolen status moves to, and the other combatant a
+    // swap exchanges positions with. Their editor row shows a to-selector dropdown alongside the first selector.
+    public static bool UsesToSelector(string kind) => kind is "stealSelectedStatus" or "swapPositions";
 
     // The leaf kind that moves ALL cards between zones (its editor shows from/to zone dropdowns).
     public static bool UsesZones(string kind) => kind is "moveCards";
@@ -309,6 +331,26 @@ public static class CombatProgramModel
     // A composite is rendered as its own block (with sub-body editors); a leaf as a one-line node. The UI split.
     public static bool IsComposite(string kind) => CompositeKinds.Any(k => k.Kind == kind);
 
+    // Reshape a moveCombatant node when its movement mode changes, so the coordinate amounts match the mode
+    // canonically (ToAbsolute carries X/Y and no Step; a relative mode carries Step and no X/Y) — matching what
+    // Classify produces, so an authored move round-trips.
+    public static CombatNodeModel WithMovementMode(CombatNodeModel node, MovementMode mode) =>
+        mode == MovementMode.ToAbsolute
+            ? node with
+            {
+                MovementMode = mode,
+                MoveX = node.MoveX ?? CombatAmountSpec.FromConst(0),
+                MoveY = node.MoveY ?? CombatAmountSpec.FromConst(0),
+                MoveStep = null,
+            }
+            : node with
+            {
+                MovementMode = mode,
+                MoveX = null,
+                MoveY = null,
+                MoveStep = node.MoveStep ?? CombatAmountSpec.FromConst(1),
+            };
+
     // A default node of the given kind, for the editor's "+ node" palette (composites seed a starter body).
     public static CombatNodeModel NewNode(string kind) => kind switch
     {
@@ -337,6 +379,9 @@ public static class CombatProgramModel
         "moveCards" => new("moveCards", "source", FromZone: CardZone.Hand, ToZone: CardZone.DiscardPile),
         "moveCardToZone" => new("moveCardToZone", "source", Card: new CombatCardSpec("chosen", CardZone.Hand), ToZone: CardZone.ExhaustPile),
         "transformCard" => new("transformCard", "source", Card: new CombatCardSpec("chosen", CardZone.Hand), ToDefinition: "strike.plus"),
+        "moveCombatant" => new("moveCombatant", "eventTarget",
+            MovementMode: MovementMode.ToAbsolute, MoveX: CombatAmountSpec.FromConst(0), MoveY: CombatAmountSpec.FromConst(0)),
+        "swapPositions" => new("swapPositions", "source", ToSelectorKey: "eventTarget"),
         "sequence" => CombatNodeModel.Sequence(new[] { NewNode("dealDamage") }),
         "forEachTarget" => CombatNodeModel.ForEach("allEnemies", NewNode("dealDamage")),
         "forEachCardInZone" => CombatNodeModel.ForEachCard("source", CardZone.Hand, NewNode("transformCard")),
@@ -382,6 +427,10 @@ public static class CombatProgramModel
                 IgnoresBlock = kind == "dealDamage" && node.IgnoresBlock,
                 CounterId = UsesCounterId(kind) ? (node.CounterId == "" ? "combo" : node.CounterId) : "",
                 Relative = UsesCounterId(kind) && (node.Kind == "setCombatantCounter" ? node.Relative : true),
+                MovementMode = UsesMovement(kind) ? node.MovementMode : MovementMode.ToAbsolute,
+                MoveX = kind == "moveCombatant" ? (node.MoveX ?? CombatAmountSpec.FromConst(0)) : null,
+                MoveY = kind == "moveCombatant" ? (node.MoveY ?? CombatAmountSpec.FromConst(0)) : null,
+                MoveStep = kind == "moveCombatant" ? node.MoveStep : null,
                 Amount = UsesAmount(kind) ? (node.Amount ?? CombatAmountSpec.FromConst(3)) : null,
             };
 
@@ -620,6 +669,13 @@ public static class CombatProgramModel
             "moveCards" => new MoveAllCardsFromZoneNode<TContext>(selector, model.FromZone, model.ToZone),
             "moveCardToZone" => new MoveCardToZoneNode<TContext>(selector, BuildCard<TContext>(model.CardOrDefault), model.ToZone, placement: model.Placement),
             "transformCard" => new TransformCardNode<TContext>(selector, BuildCard<TContext>(model.CardOrDefault), new CardDefinitionId(model.ToDefinition)),
+            "moveCombatant" => model.MovementMode == MovementMode.ToAbsolute
+                ? new MoveCombatantNode<TContext>(selector, MovementMode.ToAbsolute,
+                    x: BuildAmount<TContext>(model.MoveX ?? CombatAmountSpec.FromConst(0)),
+                    y: BuildAmount<TContext>(model.MoveY ?? CombatAmountSpec.FromConst(0)))
+                : new MoveCombatantNode<TContext>(selector, model.MovementMode,
+                    step: BuildAmount<TContext>(model.MoveStep ?? CombatAmountSpec.FromConst(1))),
+            "swapPositions" => new SwapPositionsNode<TContext>(selector, SelectorFor(model.ToSelectorKey)),
             _ => new GainBlockNode<TContext>(selector, amount),
         };
     }
@@ -746,6 +802,25 @@ public static class CombatProgramModel
             case MoveAllCardsFromZoneNode<TContext> { ResultKey: null } n:
                 return KeyFor(n.TargetSelector) is { } moveKey
                     ? new CombatNodeModel("moveCards", moveKey, FromZone: n.FromZone, ToZone: n.ToZone)
+                    : null;
+            case MoveCombatantNode<TContext> n:
+                if (KeyFor(n.TargetSelector) is not { } mcKey)
+                    return null;
+                if (n.Mode == MovementMode.ToAbsolute)
+                {
+                    var mx = n.X is null ? CombatAmountSpec.FromConst(0) : ClassifyAmount(n.X);
+                    var my = n.Y is null ? CombatAmountSpec.FromConst(0) : ClassifyAmount(n.Y);
+                    return mx.IsAdvanced || my.IsAdvanced
+                        ? null
+                        : new CombatNodeModel("moveCombatant", mcKey, MovementMode: MovementMode.ToAbsolute, MoveX: mx, MoveY: my);
+                }
+                var ms = n.Step is null ? CombatAmountSpec.FromConst(1) : ClassifyAmount(n.Step);
+                return ms.IsAdvanced
+                    ? null
+                    : new CombatNodeModel("moveCombatant", mcKey, MovementMode: n.Mode, MoveStep: ms);
+            case SwapPositionsNode<TContext> n:
+                return KeyFor(n.FirstSelector) is { } swFirst && KeyFor(n.SecondSelector) is { } swSecond
+                    ? new CombatNodeModel("swapPositions", swFirst, ToSelectorKey: swSecond)
                     : null;
             case MoveCardToZoneNode<TContext> { ResultKey: null } n:
                 return KeyFor(n.OwnerSelector) is { } mtKey && ClassifyCard(n.CardExpression) is { } mtCard

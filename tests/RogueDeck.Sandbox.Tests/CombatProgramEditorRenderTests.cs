@@ -106,6 +106,33 @@ public class CombatProgramEditorRenderTests
     }
 
     [Fact]
+    public async Task Renders_move_combatant_absolute_with_x_and_y_and_swap_with_two_selectors()
+    {
+        // Phase 1e: absolute move shows a mode dropdown + x/y amount controls.
+        var move = await RenderAsync(new CombatNodeModel(
+            "moveCombatant", "source", MovementMode: MovementMode.ToAbsolute,
+            MoveX: CombatAmountSpec.FromConst(1), MoveY: CombatAmountSpec.FromConst(2)));
+        Assert.Contains("move combatant", move);
+        Assert.Contains("ToAbsolute", move);
+        Assert.Contains("x", move);
+        Assert.Contains("y", move);
+
+        var swap = await RenderAsync(new CombatNodeModel("swapPositions", "source", ToSelectorKey: "eventTarget"));
+        Assert.Contains("swap positions", swap);
+        Assert.Contains("eventTarget", swap); // the second selector
+    }
+
+    [Fact]
+    public async Task Renders_move_combatant_relative_with_a_step()
+    {
+        var html = await RenderAsync(new CombatNodeModel(
+            "moveCombatant", "eventTarget", MovementMode: MovementMode.PushFromSource, MoveStep: CombatAmountSpec.FromConst(2)));
+
+        Assert.Contains("PushFromSource", html);
+        Assert.Contains("step", html);
+    }
+
+    [Fact]
     public async Task Renders_set_combatant_counter_with_id_and_relative_toggle()
     {
         // Phase 1d: setCombatantCounter shows a counter-id field and a relative checkbox.

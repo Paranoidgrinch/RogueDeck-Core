@@ -216,6 +216,28 @@ else
             <input value="@Node.ToDefinition" style="width:9rem" placeholder="target definition id"
                    @onchange="e => Set(Node with { ToDefinition = AsString(e.Value) })" />
         }
+        @if (CombatProgramModel.UsesMovement(Node.Kind))
+        {
+            <select value="@Node.MovementMode"
+                    @onchange="e => Set(CombatProgramModel.WithMovementMode(Node, ParseMovementMode(e.Value)))">
+                @foreach (var m in Enum.GetValues<MovementMode>())
+                {
+                    <option value="@m" selected="@(m == Node.MovementMode)">@m</option>
+                }
+            </select>
+            @if (Node.MovementMode == MovementMode.ToAbsolute)
+            {
+                <span class="muted">x</span>
+                @AmountControls(Node.MoveX ?? CombatAmountSpec.FromConst(0), spec => Set(Node with { MoveX = spec }))
+                <span class="muted">y</span>
+                @AmountControls(Node.MoveY ?? CombatAmountSpec.FromConst(0), spec => Set(Node with { MoveY = spec }))
+            }
+            else
+            {
+                <span class="muted">step</span>
+                @AmountControls(Node.MoveStep ?? CombatAmountSpec.FromConst(1), spec => Set(Node with { MoveStep = spec }))
+            }
+        }
         @RemoveButton
     </span>
 }
@@ -233,6 +255,8 @@ else
     // Blank input ⇒ null (an uncapped max / no clamp); otherwise the parsed int.
     private static int? AsNullableInt(object? v) => int.TryParse(v?.ToString(), out var n) ? n : (int?)null;
     private static bool AsBool(object? v) => v is bool b ? b : bool.TryParse(v?.ToString(), out var p) && p;
+    private static MovementMode ParseMovementMode(object? v) =>
+        Enum.TryParse<MovementMode>(AsString(v), out var m) ? m : MovementMode.ToAbsolute;
     private static StatusPolarity ParsePolarity(object? v) =>
         Enum.TryParse<StatusPolarity>(AsString(v), out var p) ? p : StatusPolarity.Debuff;
     private static CardZone ParseZone(object? v) =>

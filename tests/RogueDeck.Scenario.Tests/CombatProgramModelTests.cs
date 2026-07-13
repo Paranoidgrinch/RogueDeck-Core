@@ -187,6 +187,38 @@ public class CombatProgramModelTests
         Assert.Equal(model, CombatProgramModel.Classify(back));
     }
 
+    [Theory]
+    [InlineData(MovementMode.TowardEnemies)]
+    [InlineData(MovementMode.AwayFromEnemies)]
+    [InlineData(MovementMode.PushFromSource)]
+    [InlineData(MovementMode.PullToSource)]
+    public void MoveCombatant_relative_modes_round_trip_with_a_step(MovementMode mode)
+    {
+        var model = new CombatNodeModel("moveCombatant", "eventTarget", MovementMode: mode, MoveStep: CombatAmountSpec.FromConst(2));
+
+        var node = Assert.IsType<MoveCombatantNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(model).Root);
+        Assert.Equal(mode, node.Mode);
+        Assert.Equal(model, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(model)));
+    }
+
+    [Fact]
+    public void MoveCombatant_absolute_round_trips_its_coordinates_and_swap_round_trips_two_selectors()
+    {
+        // Phase 1e: absolute move (x/y) + swap positions (two selectors, the second via ToSelectorKey).
+        var absolute = new CombatNodeModel(
+            "moveCombatant", "source", MovementMode: MovementMode.ToAbsolute,
+            MoveX: CombatAmountSpec.FromConst(1), MoveY: CombatAmountSpec.FromConst(2));
+        var swap = new CombatNodeModel("swapPositions", "source", ToSelectorKey: "eventTarget");
+
+        var move = Assert.IsType<MoveCombatantNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(absolute).Root);
+        Assert.Equal(MovementMode.ToAbsolute, move.Mode);
+        var swapNode = Assert.IsType<SwapPositionsNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(swap).Root);
+        Assert.Equal("eventTarget", CombatProgramModel.Classify(new EffectProgram<CardPlayContext>(swapNode))!.ToSelectorKey);
+
+        foreach (var model in new[] { absolute, swap })
+            Assert.Equal(model, CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(model)));
+    }
+
     [Fact]
     public void SetCombatantCounter_round_trips_its_counter_id_and_relative_flag()
     {
