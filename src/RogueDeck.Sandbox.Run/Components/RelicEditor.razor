@@ -136,6 +136,10 @@
                             <input type="number" value="@rule.Priority" style="width:4rem"
                                    @onchange="e => SetRulePriority(relicIndex, ruleIndex, AsInt(e.Value, rule.Priority))" />
                             @{ var model = _jsonRules.Contains((relicIndex, ruleIndex)) ? null : ModelOf(rule); }
+                            @if (model is { } summaryNode)
+                            {
+                                <span class="muted">— @StudioVocabulary.Describe(summaryNode)</span>
+                            }
                             @if (model is not null)
                             {
                                 <button class="mini" @onclick="() => SetRuleJsonMode(relicIndex, ruleIndex, true)">edit as JSON</button>

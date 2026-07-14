@@ -369,4 +369,64 @@ public static class StudioVocabulary
 
     private static string SplitWords(string pascal) =>
         string.Concat(pascal.Select((c, i) => i > 0 && char.IsUpper(c) ? " " + char.ToLowerInvariant(c) : char.ToString(c)));
+
+    // ── one-line program summaries ───────────────────────────────────────────────────────────────────────────────
+    // A plain-English sentence for a program (CombatNodeModel), so lists of cards / actions / rules can be scanned
+    // without expanding each editor. Best-effort: the common kinds get tailored phrasing, everything else falls
+    // back to "<label> on <target>". Display-only.
+    public static string Describe(CombatNodeModel node)
+    {
+        var target = SelectorLabel(node.SelectorKey);
+        var amount = node.Amount is { } a ? AmountText(a) : "";
+        return node.Kind switch
+        {
+            "sequence" => string.Join("; then ", node.ChildrenOrEmpty.Select(Describe)),
+            "forEachTarget" => $"for each of {target}: {DescribeBody(node)}",
+            "forEachCardInZone" => $"for each card in {EnumDisplayLoose(node.FromZone.ToString())}: {DescribeBody(node)}",
+            "repeat" => $"{amount}× ({DescribeBody(node)})",
+            "repeatUntil" => $"repeat until the condition holds: {DescribeBody(node)}",
+            "randomTargets" => $"for {amount} random of {target}: {DescribeBody(node)}",
+            "conditional" => node.ChildrenOrEmpty.Count > 1
+                ? $"if …: {Describe(node.ChildrenOrEmpty[0])}, else {Describe(node.ChildrenOrEmpty[1])}"
+                : $"if …: {DescribeBody(node)}",
+            "dealDamage" => $"deal {amount} damage to {target}",
+            "heal" => $"heal {target} for {amount}",
+            "gainBlock" => $"give {target} {amount} block",
+            "applyStatus" => $"apply {amount}× {node.StatusId} to {target}",
+            "removeStatus" => $"remove {node.StatusId} from {target}",
+            "drawCards" => $"{target} draws {amount} card(s)",
+            "gainResource" => $"give {target} {amount} {node.ResourceId}",
+            "loseResource" => $"take {amount} {node.ResourceId} from {target}",
+            "modifyResource" => $"change {node.ResourceId} of {target} by {amount}",
+            "modifyStatusStacks" => $"change {node.StatusId} on {target} by {amount}",
+            "summonCombatant" => $"summon {node.SummonDisplayName ?? node.SummonDefinitionId} ({amount} HP)",
+            _ => CombatProgramModel.UsesAmount(node.Kind) && amount.Length > 0
+                ? $"{NodeLabel(node.Kind)} ({amount}) on {target}"
+                : CombatProgramModel.UsesSelector(node.Kind)
+                    ? $"{NodeLabel(node.Kind)} on {target}"
+                    : NodeLabel(node.Kind),
+        };
+    }
+
+    private static string DescribeBody(CombatNodeModel node) =>
+        node.ChildrenOrEmpty.Count > 0 ? Describe(node.ChildrenOrEmpty[0]) : "…";
+
+    private static string AmountText(CombatAmountSpec spec) => spec.Kind switch
+    {
+        "const" => spec.Const.ToString(),
+        "event" => "the event amount",
+        "counter" => $"counter '{spec.CounterId}' of {SelectorLabel(spec.SelectorKey)}",
+        _ when CombatAmountSpec.IsBinaryKind(spec.Kind) =>
+            $"({AmountText(spec.LeftOrDefault)} {LabelFor(AmountKinds, spec.Kind)} {AmountText(spec.RightOrDefault)})",
+        _ when CombatAmountSpec.IsUnaryKind(spec.Kind) =>
+            $"{LabelFor(AmountKinds, spec.Kind)}({AmountText(spec.LeftOrDefault)})",
+        _ when CombatAmountSpec.IsStateRead(spec.Kind) =>
+            $"{LabelFor(AmountKinds, spec.Kind)}{IdSuffix(spec.ReadId)} of {SelectorLabel(spec.SelectorKey)}",
+        _ => LabelFor(AmountKinds, spec.Kind),
+    };
+
+    private static string IdSuffix(string id) => id.Length > 0 ? $" '{id}'" : "";
+
+    // Zone names in running text without the technical parenthetical ("draw pile", not "Draw pile (DrawPile)").
+    private static string EnumDisplayLoose(string raw) => SplitWords(raw).ToLowerInvariant();
 }

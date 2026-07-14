@@ -68,6 +68,34 @@ public class StudioVocabularyTests
     }
 
     [Fact]
+    public void Describe_renders_common_leaves_composites_and_nested_amounts()
+    {
+        Assert.Equal("deal the event amount damage to every enemy",
+            StudioVocabulary.Describe(new CombatNodeModel("dealDamage", "allEnemies", CombatAmountSpec.Event)));
+
+        Assert.Equal("deal (missing HP of self / the acting unit × 2) damage to toughest enemy",
+            StudioVocabulary.Describe(new CombatNodeModel("dealDamage", "highestHealthEnemy",
+                CombatAmountSpec.Binary("mul",
+                    new CombatAmountSpec("missingHealth", SelectorKey: "source"),
+                    CombatAmountSpec.FromConst(2)))));
+
+        Assert.Equal("apply 3× standard.poison to the chosen target",
+            StudioVocabulary.Describe(new CombatNodeModel("applyStatus", "eventTarget",
+                CombatAmountSpec.FromConst(3), StatusId: "standard.poison")));
+
+        Assert.Equal("2× (give self / the acting unit 5 block)",
+            StudioVocabulary.Describe(CombatNodeModel.Repeat(CombatAmountSpec.FromConst(2),
+                new CombatNodeModel("gainBlock", "source", CombatAmountSpec.FromConst(5)))));
+
+        Assert.Equal("heal self / the acting unit for 4; then deal 6 damage to every enemy",
+            StudioVocabulary.Describe(CombatNodeModel.Sequence(new[]
+            {
+                new CombatNodeModel("heal", "source", CombatAmountSpec.FromConst(4)),
+                new CombatNodeModel("dealDamage", "allEnemies", CombatAmountSpec.FromConst(6)),
+            })));
+    }
+
+    [Fact]
     public void Unknown_keys_fall_back_to_the_raw_key()
     {
         Assert.Equal("someFutureKey", StudioVocabulary.SelectorLabel("someFutureKey"));

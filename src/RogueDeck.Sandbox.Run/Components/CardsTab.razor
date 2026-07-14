@@ -39,6 +39,10 @@
                        @onchange="e => SetEnergy(ci, AsInt(e.Value, EnergyCost(card)))" />
                 <button class="mini" title="duplicate this card" @onclick="() => DuplicateCard(ci)">⧉</button>
                 <button class="mini" @onclick="() => RemoveCard(ci)">✕ card</button>
+                @if (ModelOf(card) is { } summary)
+                {
+                    <span class="muted">— @StudioVocabulary.Describe(summary)</span>
+                }
             </div>
             <div class="fx-body">
                 <span class="muted">program:</span>

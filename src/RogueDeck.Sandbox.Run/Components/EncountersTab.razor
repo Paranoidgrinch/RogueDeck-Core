@@ -37,6 +37,10 @@
                 <input value="@(action.NameKey ?? "")" style="width:11rem" @onchange="e => SetActionName(ai, AsString(e.Value))" />
                 <button class="mini" title="duplicate this action" @onclick="() => DuplicateAction(ai)">⧉</button>
                 <button class="mini" @onclick="() => RemoveAction(ai)">✕ action</button>
+                @if (ModelOf(action) is { } summary)
+                {
+                    <span class="muted">— @StudioVocabulary.Describe(summary)</span>
+                }
             </div>
             <div class="run-bar">
                 <span class="muted">intent</span>
