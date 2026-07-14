@@ -245,6 +245,17 @@ h2 {
     background: #37506b;
 }
 
+.validation-badge {
+    color: #ffb4b4;
+    background: #4a2626;
+    border: 1px solid #6b3535;
+}
+
+.validation-badge:hover {
+    color: #fff;
+    background: #6b3535;
+}
+
 .studio-main {
     padding: 1rem 1.5rem 3rem;
 }

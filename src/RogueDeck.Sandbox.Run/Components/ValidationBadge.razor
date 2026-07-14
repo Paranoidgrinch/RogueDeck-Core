@@ -1,0 +1,47 @@
+@rendermode InteractiveServer
+@implements IDisposable
+@inject RunDocument Doc
+@inject ProjectDraft Draft
+
+@* The nav's global validation badge: the full-document issue count (RunDocumentValidator), recomputed on every
+   document write via ProjectDraft.Changed. Click-through to the Run tab, whose validation panel lists everything.
+   Hidden while the document is clean, so a visible badge always means "something to fix". *@
+@if (_count > 0)
+{
+    <a class="studio-link validation-badge" href="run" title="@_tooltip">⚠ @_count</a>
+}
+
+@code {
+    private int _count;
+    private string _tooltip = "";
+
+    protected override void OnInitialized()
+    {
+        Draft.Changed += OnChanged;
+        Recount();
+    }
+
+    private void OnChanged() => _ = InvokeAsync(() =>
+    {
+        Recount();
+        StateHasChanged();
+    });
+
+    private void Recount()
+    {
+        try
+        {
+            var issues = RunDocumentValidator.Validate(Doc.Load());
+            _count = issues.Count;
+            _tooltip = string.Join("\n", issues.Take(12)) + (issues.Count > 12 ? "\n…" : "");
+        }
+        catch (Exception)
+        {
+            // Mid-edit the Run-tab JSON may not parse; that IS an issue worth flagging.
+            _count = 1;
+            _tooltip = "The blueprint JSON does not parse — fix it on the Run tab.";
+        }
+    }
+
+    public void Dispose() => Draft.Changed -= OnChanged;
+}
