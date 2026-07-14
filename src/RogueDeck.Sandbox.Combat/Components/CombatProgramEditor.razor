@@ -403,12 +403,19 @@ else
         builder.AddAttribute(3, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(
             this, e => Set(CombatProgramModel.ChangeKind(Node, AsString(e.Value)))));
         var seq = 4;
-        foreach (var (kind, label) in CombatProgramModel.AllKinds)
+        foreach (var (group, kinds) in StudioVocabulary.NodeKindGroups)
         {
-            builder.OpenElement(seq++, "option");
-            builder.AddAttribute(seq++, "value", kind);
-            builder.AddAttribute(seq++, "title", StudioVocabulary.NodeDescription(kind));
-            builder.AddContent(seq++, StudioVocabulary.Display(label, kind));
+            builder.OpenElement(seq++, "optgroup");
+            builder.AddAttribute(seq++, "label", group);
+            foreach (var kind in kinds)
+            {
+                builder.OpenElement(seq++, "option");
+                builder.AddAttribute(seq++, "value", kind);
+                builder.AddAttribute(seq++, "title", StudioVocabulary.NodeDescription(kind));
+                builder.AddAttribute(seq++, "selected", kind == Node.Kind);
+                builder.AddContent(seq++, StudioVocabulary.NodeDisplay(kind));
+                builder.CloseElement();
+            }
             builder.CloseElement();
         }
         builder.CloseElement();
@@ -624,13 +631,19 @@ else
         builder.AddAttribute(seq++, "title", StudioVocabulary.DescriptionFor(StudioVocabulary.AmountKinds, spec.Kind));
         builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
             onChange(AmountForKind(AsString(e.Value), spec))));
-        foreach (var (kind, label, description) in StudioVocabulary.AmountKinds)
+        foreach (var (group, kinds) in StudioVocabulary.AmountKindGroups)
         {
-            builder.OpenElement(seq++, "option");
-            builder.AddAttribute(seq++, "value", kind);
-            builder.AddAttribute(seq++, "title", description);
-            builder.AddAttribute(seq++, "selected", kind == spec.Kind);
-            builder.AddContent(seq++, StudioVocabulary.Display(label, kind));
+            builder.OpenElement(seq++, "optgroup");
+            builder.AddAttribute(seq++, "label", group);
+            foreach (var kind in kinds)
+            {
+                builder.OpenElement(seq++, "option");
+                builder.AddAttribute(seq++, "value", kind);
+                builder.AddAttribute(seq++, "title", StudioVocabulary.DescriptionFor(StudioVocabulary.AmountKinds, kind));
+                builder.AddAttribute(seq++, "selected", kind == spec.Kind);
+                builder.AddContent(seq++, StudioVocabulary.DisplayFor(StudioVocabulary.AmountKinds, kind));
+                builder.CloseElement();
+            }
             builder.CloseElement();
         }
         builder.CloseElement();

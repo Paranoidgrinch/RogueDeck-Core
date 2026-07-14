@@ -132,6 +132,37 @@ public static class StudioVocabulary
     public static string NodeDescription(string kind) =>
         NodeDescriptions.TryGetValue(kind, out var description) ? description : "";
 
+    public static string NodeLabel(string kind) =>
+        CombatProgramModel.AllKinds.FirstOrDefault(k => k.Kind == kind).Label ?? kind;
+
+    // ── dropdown grouping: the step and amount dropdowns are long, so the editors render them as <optgroup>
+    // sections. Parity tests assert the groups cover the catalogs exactly (every kind once, nothing extra). ──────
+    public static readonly IReadOnlyList<(string Group, IReadOnlyList<string> Kinds)> NodeKindGroups =
+    [
+        ("Damage & healing", ["dealDamage", "heal", "gainBlock", "modifyMaxHealth", "setHealth", "modifyDefensivePool"]),
+        ("Resources", ["gainResource", "loseResource", "modifyResource", "refillResource", "modifySelectedResource"]),
+        ("Statuses", ["applyStatus", "removeStatus", "cleanse", "modifyStatusStacks", "modifyStatusDuration",
+            "modifyStatusCharges", "removeSelectedStatus", "modifySelectedStatusStacks", "stealSelectedStatus"]),
+        ("Cards", ["drawCards", "moveCards", "moveCardToZone", "transformCard", "createCardInstance",
+            "createCardCopy", "playCard", "replayCardProgram"]),
+        ("Movement (grid)", ["moveCombatant", "swapPositions"]),
+        ("Combat control", ["setCombatantCounter", "setCombatantLifecycleState", "changeCombatantTeam",
+            "setCombatResult", "removeTemporaryRule", "summonCombatant"]),
+        ("Control flow", ["sequence", "forEachTarget", "forEachCardInZone", "repeat", "repeatUntil",
+            "randomTargets", "conditional"]),
+    ];
+
+    public static readonly IReadOnlyList<(string Group, IReadOnlyList<string> Kinds)> AmountKindGroups =
+    [
+        ("Basics", ["const", "event", "counter", "round", "turn", "iterationIndex"]),
+        ("Arithmetic", ["add", "sub", "mul", "div", "rem", "min", "max", "neg", "abs", "sign", "clamp"]),
+        ("Unit reads", ["currentHealth", "maxHealth", "missingHealth", "healthPct", "currentResource",
+            "maxResource", "missingResource", "defensivePool", "zoneCards", "statusStacks", "statusDuration",
+            "statusCharges", "stacksByPolarity", "coord"]),
+        ("This turn", ["cardsPlayedThisTurn", "damageDealtThisTurn", "resourceGainedThisTurn"]),
+        ("Over a selection", ["countTargets", "sumOverTargets", "gridDistance", "cardCost"]),
+    ];
+
     public static string NodeDisplay(string kind)
     {
         var label = CombatProgramModel.AllKinds.FirstOrDefault(k => k.Kind == kind).Label ?? kind;

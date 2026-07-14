@@ -48,6 +48,26 @@ public class StudioVocabularyTests
     }
 
     [Fact]
+    public void Node_kind_groups_cover_the_catalog_exactly()
+    {
+        var grouped = StudioVocabulary.NodeKindGroups.SelectMany(g => g.Kinds).ToList();
+        Assert.Equal(grouped.Count, grouped.Distinct().Count());
+        Assert.Equal(
+            CombatProgramModel.AllKinds.Select(k => k.Kind).OrderBy(k => k, StringComparer.Ordinal),
+            grouped.OrderBy(k => k, StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void Amount_kind_groups_cover_the_catalog_exactly()
+    {
+        var grouped = StudioVocabulary.AmountKindGroups.SelectMany(g => g.Kinds).ToList();
+        Assert.Equal(grouped.Count, grouped.Distinct().Count());
+        Assert.Equal(
+            StudioVocabulary.AmountKinds.Select(k => k.Kind).OrderBy(k => k, StringComparer.Ordinal),
+            grouped.OrderBy(k => k, StringComparer.Ordinal));
+    }
+
+    [Fact]
     public void Unknown_keys_fall_back_to_the_raw_key()
     {
         Assert.Equal("someFutureKey", StudioVocabulary.SelectorLabel("someFutureKey"));
