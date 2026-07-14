@@ -39,9 +39,10 @@ public class CombatProgramEditorRenderTests
     {
         var html = await RenderAsync(new CombatNodeModel("dealDamage", "allEnemies", CombatAmountSpec.Event));
 
-        Assert.Contains("deal damage", html);
-        Assert.Contains("allEnemies", html);
-        Assert.Contains("event amount", html);
+        Assert.Contains(StudioVocabulary.NodeDisplay("dealDamage"), html);
+        Assert.Contains("allEnemies", html); // the raw key stays in the option value
+        Assert.Contains(StudioVocabulary.SelectorDisplay("allEnemies"), html); // friendly label in the option text
+        Assert.Contains(StudioVocabulary.DisplayFor(StudioVocabulary.AmountKinds, "event"), html);
     }
 
     [Fact]
@@ -49,7 +50,7 @@ public class CombatProgramEditorRenderTests
     {
         var html = await RenderAsync(new CombatNodeModel("gainResource", "source", CombatAmountSpec.FromConst(1), "standard.energy"));
 
-        Assert.Contains("gain resource", html);
+        Assert.Contains(StudioVocabulary.NodeDisplay("gainResource"), html);
         Assert.Contains("standard.energy", html);
     }
 
@@ -59,7 +60,7 @@ public class CombatProgramEditorRenderTests
         // B2a: lose/modify resource now show the resource-id field via UsesResourceId (previously gainResource only).
         var html = await RenderAsync(new CombatNodeModel("loseResource", "source", CombatAmountSpec.FromConst(2), "faith"));
 
-        Assert.Contains("lose resource", html);
+        Assert.Contains(StudioVocabulary.NodeDisplay("loseResource"), html);
         Assert.Contains("faith", html);
     }
 
@@ -69,15 +70,12 @@ public class CombatProgramEditorRenderTests
         // The kind dropdown lists every AllKinds entry, so the B2a/B2b additions must appear as options on any node.
         var html = await RenderAsync(new CombatNodeModel("dealDamage", "source", CombatAmountSpec.FromConst(1)));
 
-        Assert.Contains("modify max health", html);
-        Assert.Contains("set health", html);
-        Assert.Contains("draw cards", html);
-        Assert.Contains("modify resource", html);
-        Assert.Contains("apply status", html);
-        Assert.Contains("remove status", html);
-        Assert.Contains("cleanse (by polarity)", html);
-        Assert.Contains("modify status stacks", html);
-        Assert.Contains("move cards (zone → zone)", html);
+        foreach (var kind in new[]
+        {
+            "modifyMaxHealth", "setHealth", "drawCards", "modifyResource", "applyStatus",
+            "removeStatus", "cleanse", "modifyStatusStacks", "moveCards",
+        })
+            Assert.Contains(StudioVocabulary.NodeDisplay(kind), html);
     }
 
     [Fact]
@@ -86,10 +84,10 @@ public class CombatProgramEditorRenderTests
         // B2c: moveCards shows from/to zone dropdowns (CardZone options) and no amount control.
         var html = await RenderAsync(new CombatNodeModel("moveCards", "source", FromZone: CardZone.Hand, ToZone: CardZone.DiscardPile));
 
-        Assert.Contains("move cards (zone → zone)", html);
+        Assert.Contains(StudioVocabulary.NodeDisplay("moveCards"), html);
         Assert.Contains("DrawPile", html);
         Assert.Contains("ExhaustPile", html);
-        Assert.DoesNotContain("event amount", html); // no amount control for a zone move
+        Assert.DoesNotContain("Event amount", html); // no amount control for a zone move
     }
 
     [Fact]
@@ -99,7 +97,7 @@ public class CombatProgramEditorRenderTests
         var html = await RenderAsync(
             new CombatNodeModel("applyStatus", "eventTarget", CombatAmountSpec.FromConst(2), StatusId: "poison", DurationTurns: 3, Charges: 1));
 
-        Assert.Contains("apply status", html);
+        Assert.Contains(StudioVocabulary.NodeDisplay("applyStatus"), html);
         Assert.Contains("poison", html);
         Assert.Contains("turns", html);
         Assert.Contains("charges", html);
@@ -116,12 +114,12 @@ public class CombatProgramEditorRenderTests
 
         var count = await RenderAsync(new CombatNodeModel("dealDamage", "eventTarget",
             new CombatAmountSpec("countTargets", ReadSelector: new CombatSelectorSpec("enemiesWithStatus", "poison"))));
-        Assert.Contains("count targets", count);
+        Assert.Contains(StudioVocabulary.DisplayFor(StudioVocabulary.AmountKinds, "countTargets"), count);
         Assert.Contains("enemiesWithStatus", count);
 
         var cost = await RenderAsync(new CombatNodeModel("dealDamage", "eventTarget",
             new CombatAmountSpec("cardCost", ReadId: "standard.energy", ReadCard: new CombatCardSpec("chosen", CardZone.Hand))));
-        Assert.Contains("card cost", cost);
+        Assert.Contains(StudioVocabulary.DisplayFor(StudioVocabulary.AmountKinds, "cardCost"), cost);
         Assert.Contains("resource id", cost);
     }
 
@@ -143,10 +141,10 @@ public class CombatProgramEditorRenderTests
         var html = await RenderAsync(new CombatNodeModel("dealDamage", "eventTarget",
             CombatAmountSpec.Binary("add", CombatAmountSpec.Counter("source", "combo"), CombatAmountSpec.FromConst(3))));
 
-        Assert.Contains("deal damage", html);
+        Assert.Contains(StudioVocabulary.NodeDisplay("dealDamage"), html);
         Assert.Contains("counter id", html); // the nested counter operand's id field
         Assert.Contains("combo", html);
-        Assert.Contains("round #", html);     // the amount kind dropdown lists the new kinds
+        Assert.Contains(StudioVocabulary.DisplayFor(StudioVocabulary.AmountKinds, "round"), html); // the amount kind dropdown lists the new kinds
     }
 
     [Fact]
@@ -172,14 +170,14 @@ public class CombatProgramEditorRenderTests
         var repeatUntil = await RenderAsync(CombatNodeModel.RepeatUntil(
             new CombatConditionSpec("isAlive", "eventTarget"),
             new CombatNodeModel("dealDamage", "eventTarget", CombatAmountSpec.FromConst(3))));
-        Assert.Contains("repeat until…", repeatUntil);
+        Assert.Contains(StudioVocabulary.NodeDisplay("repeatUntil"), repeatUntil);
         Assert.Contains("until", repeatUntil);
-        Assert.Contains("deal damage", repeatUntil); // the body recurses
+        Assert.Contains(StudioVocabulary.NodeDisplay("dealDamage"), repeatUntil); // the body recurses
 
         var randomTargets = await RenderAsync(CombatNodeModel.RandomTargets(
             "allEnemies", CombatAmountSpec.FromConst(2),
             new CombatNodeModel("applyStatus", "eventTarget", CombatAmountSpec.FromConst(1), StatusId: "poison")));
-        Assert.Contains("random targets…", randomTargets);
+        Assert.Contains(StudioVocabulary.NodeDisplay("randomTargets"), randomTargets);
         Assert.Contains("allEnemies", randomTargets);
     }
 
@@ -188,12 +186,12 @@ public class CombatProgramEditorRenderTests
     {
         // Phase 1g part 2: playCard shows the card widget + a target toggle; replay shows the card widget.
         var play = await RenderAsync(new CombatNodeModel("playCard", "source", Card: new CombatCardSpec("chosen", CardZone.Hand), HasCardTarget: true, ToSelectorKey: "eventTarget"));
-        Assert.Contains("play a card", play);
-        Assert.Contains("player chooses", play);
+        Assert.Contains(StudioVocabulary.NodeDisplay("playCard"), play);
+        Assert.Contains(StudioVocabulary.DisplayFor(StudioVocabulary.CardKinds, "chosen"), play);
         Assert.Contains("eventTarget", play); // the card target selector shows when the toggle is on
 
         var replay = await RenderAsync(new CombatNodeModel("replayCardProgram", "eventTarget", Card: new CombatCardSpec("chosen", CardZone.Hand)));
-        Assert.Contains("replay a card's program", replay);
+        Assert.Contains(StudioVocabulary.NodeDisplay("replayCardProgram"), replay);
     }
 
     [Fact]
@@ -201,13 +199,13 @@ public class CombatProgramEditorRenderTests
     {
         // Phase 1g: createCardInstance shows a card-definition input + "into" zone; createCardCopy shows the card widget.
         var create = await RenderAsync(new CombatNodeModel("createCardInstance", "source", CombatAmountSpec.FromConst(2), ToDefinition: "wound", ToZone: CardZone.DiscardPile));
-        Assert.Contains("create card(s)", create);
+        Assert.Contains(StudioVocabulary.NodeDisplay("createCardInstance"), create);
         Assert.Contains("wound", create);
         Assert.Contains("into", create);
 
         var copy = await RenderAsync(new CombatNodeModel("createCardCopy", "source", CombatAmountSpec.FromConst(1), Card: new CombatCardSpec("chosen", CardZone.Hand), ToZone: CardZone.Hand));
-        Assert.Contains("copy a card", copy);
-        Assert.Contains("player chooses", copy); // the card-selector widget
+        Assert.Contains(StudioVocabulary.NodeDisplay("createCardCopy"), copy);
+        Assert.Contains(StudioVocabulary.DisplayFor(StudioVocabulary.CardKinds, "chosen"), copy); // the card-selector widget
     }
 
     [Fact]
@@ -219,7 +217,7 @@ public class CombatProgramEditorRenderTests
             TeamId: "enemies", SummonDefinitionId: "skeleton", SummonDisplayName: "Skeleton",
             PositionX: 1, PositionY: 2, StartingStatuses: new[] { new StatusGrant(new StatusDefinitionId("poison"), 3) }));
 
-        Assert.Contains("summon combatant", html);
+        Assert.Contains(StudioVocabulary.NodeDisplay("summonCombatant"), html);
         Assert.Contains("skeleton", html);
         Assert.Contains("Skeleton", html);
         Assert.Contains("HP", html);
@@ -234,20 +232,20 @@ public class CombatProgramEditorRenderTests
         // Phase 1f: lifecycle dropdown, team-id field, combat-result dropdown, rule-id field. The combat-global
         // controls (set result / remove rule) hide the target selector.
         var lifecycle = await RenderAsync(new CombatNodeModel("setCombatantLifecycleState", "eventTarget", LifecycleState: CombatantLifecycleState.Downed));
-        Assert.Contains("set lifecycle state", lifecycle);
+        Assert.Contains(StudioVocabulary.NodeDisplay("setCombatantLifecycleState"), lifecycle);
         Assert.Contains("Downed", lifecycle);
 
         var team = await RenderAsync(new CombatNodeModel("changeCombatantTeam", "eventTarget", TeamId: "players"));
-        Assert.Contains("change team", team);
+        Assert.Contains(StudioVocabulary.NodeDisplay("changeCombatantTeam"), team);
         Assert.Contains("players", team);
 
         var result = await RenderAsync(new CombatNodeModel("setCombatResult", "source", CombatResult: CombatResult.Victory));
-        Assert.Contains("set combat result", result);
+        Assert.Contains(StudioVocabulary.NodeDisplay("setCombatResult"), result);
         Assert.Contains("Victory", result);
         Assert.DoesNotContain("eventTarget", result); // combat-global: no target selector
 
         var rule = await RenderAsync(new CombatNodeModel("removeTemporaryRule", "source", RuleId: "rule.enrage"));
-        Assert.Contains("remove temporary rule", rule);
+        Assert.Contains(StudioVocabulary.NodeDisplay("removeTemporaryRule"), rule);
         Assert.Contains("rule.enrage", rule);
     }
 
@@ -258,13 +256,13 @@ public class CombatProgramEditorRenderTests
         var move = await RenderAsync(new CombatNodeModel(
             "moveCombatant", "source", MovementMode: MovementMode.ToAbsolute,
             MoveX: CombatAmountSpec.FromConst(1), MoveY: CombatAmountSpec.FromConst(2)));
-        Assert.Contains("move combatant", move);
+        Assert.Contains(StudioVocabulary.NodeDisplay("moveCombatant"), move);
         Assert.Contains("ToAbsolute", move);
         Assert.Contains("x", move);
         Assert.Contains("y", move);
 
         var swap = await RenderAsync(new CombatNodeModel("swapPositions", "source", ToSelectorKey: "eventTarget"));
-        Assert.Contains("swap positions", swap);
+        Assert.Contains(StudioVocabulary.NodeDisplay("swapPositions"), swap);
         Assert.Contains("eventTarget", swap); // the second selector
     }
 
@@ -284,7 +282,7 @@ public class CombatProgramEditorRenderTests
         // Phase 1d: setCombatantCounter shows a counter-id field and a relative checkbox.
         var html = await RenderAsync(new CombatNodeModel("setCombatantCounter", "source", CombatAmountSpec.FromConst(1), CounterId: "combo", Relative: true));
 
-        Assert.Contains("set combatant counter", html);
+        Assert.Contains(StudioVocabulary.NodeDisplay("setCombatantCounter"), html);
         Assert.Contains("combo", html);
         Assert.Contains("relative", html);
     }
@@ -305,7 +303,7 @@ public class CombatProgramEditorRenderTests
         // Phase 1c: dealDamage shows an element field + an "ignores block" checkbox.
         var html = await RenderAsync(new CombatNodeModel("dealDamage", "eventTarget", CombatAmountSpec.FromConst(8), Element: "fire", IgnoresBlock: true));
 
-        Assert.Contains("deal damage", html);
+        Assert.Contains(StudioVocabulary.NodeDisplay("dealDamage"), html);
         Assert.Contains("fire", html);
         Assert.Contains("ignores block", html);
     }
@@ -316,10 +314,10 @@ public class CombatProgramEditorRenderTests
         // Phase 1b: refillResource shows a resource-id + max field and NO amount control (it refills to max).
         var html = await RenderAsync(new CombatNodeModel("refillResource", "source", ResourceId: "standard.energy", DefaultMax: 3));
 
-        Assert.Contains("refill resource", html);
+        Assert.Contains(StudioVocabulary.NodeDisplay("refillResource"), html);
         Assert.Contains("standard.energy", html);
         Assert.Contains("max", html);
-        Assert.DoesNotContain("event amount", html);
+        Assert.DoesNotContain("Event amount", html);
     }
 
     [Fact]
@@ -327,7 +325,7 @@ public class CombatProgramEditorRenderTests
     {
         var html = await RenderAsync(new CombatNodeModel("modifyDefensivePool", "source", CombatAmountSpec.FromConst(5), PoolId: "block"));
 
-        Assert.Contains("modify defensive pool", html);
+        Assert.Contains(StudioVocabulary.NodeDisplay("modifyDefensivePool"), html);
         Assert.Contains("pool id", html); // placeholder
         Assert.Contains("block", html);
     }
@@ -339,9 +337,9 @@ public class CombatProgramEditorRenderTests
             "modifySelectedResource", "eventTarget", CombatAmountSpec.FromConst(-2),
             ResourceSelection: new ResourceSelectionSpec(ResourcePoolFilter.NonEmpty, ResourcePick.Highest)));
 
-        Assert.Contains("modify a selected resource", html);
-        Assert.Contains("nonempty", html); // filter option (lower-cased)
-        Assert.Contains("highest", html);  // pick option
+        Assert.Contains(StudioVocabulary.NodeDisplay("modifySelectedResource"), html);
+        Assert.Contains(StudioVocabulary.EnumDisplay(ResourcePoolFilter.NonEmpty), html); // filter option
+        Assert.Contains(StudioVocabulary.EnumDisplay(ResourcePick.Highest), html);        // pick option
     }
 
     [Fact]
@@ -363,10 +361,10 @@ public class CombatProgramEditorRenderTests
             "removeSelectedStatus", "eventTarget",
             Selection: new StatusSelectionSpec(StatusPolarityFilter.Buff, StatusPick.Random)));
 
-        Assert.Contains("remove a selected status", html);
-        Assert.Contains("buff", html);   // polarity filter option (lower-cased label)
-        Assert.Contains("random", html); // pick mode option
-        Assert.DoesNotContain("event amount", html); // a remove carries no amount control
+        Assert.Contains(StudioVocabulary.NodeDisplay("removeSelectedStatus"), html);
+        Assert.Contains(StudioVocabulary.EnumDisplay(StatusPolarityFilter.Buff), html); // polarity filter option
+        Assert.Contains(StudioVocabulary.EnumDisplay(StatusPick.Random), html);         // pick mode option
+        Assert.DoesNotContain("Event amount", html); // a remove carries no amount control
     }
 
     [Fact]
@@ -377,10 +375,10 @@ public class CombatProgramEditorRenderTests
             "modifySelectedStatusStacks", "eventTarget", CombatAmountSpec.FromConst(-2),
             Selection: new StatusSelectionSpec(StatusPolarityFilter.Debuff, StatusPick.First, Index: 1)));
 
-        Assert.Contains("modify a selected status", html);
-        Assert.Contains("debuff", html);
-        Assert.Contains("first", html);
-        Assert.Contains("constant", html); // the delta amount control is present
+        Assert.Contains(StudioVocabulary.NodeDisplay("modifySelectedStatusStacks"), html);
+        Assert.Contains(StudioVocabulary.EnumDisplay(StatusPolarityFilter.Debuff), html);
+        Assert.Contains(StudioVocabulary.EnumDisplay(StatusPick.First), html);
+        Assert.Contains(StudioVocabulary.DisplayFor(StudioVocabulary.AmountKinds, "const"), html); // the delta amount control is present
     }
 
     [Fact]
@@ -391,7 +389,7 @@ public class CombatProgramEditorRenderTests
             "stealSelectedStatus", "eventTarget",
             Selection: new StatusSelectionSpec(StatusPolarityFilter.Buff), ToSelectorKey: "source"));
 
-        Assert.Contains("steal a selected status", html);
+        Assert.Contains(StudioVocabulary.NodeDisplay("stealSelectedStatus"), html);
         Assert.Contains("to", html); // the to-selector label
     }
 
@@ -401,10 +399,10 @@ public class CombatProgramEditorRenderTests
         // cleanse takes no amount (UsesAmount false), so the amount kind-select is absent; it shows polarity options.
         var html = await RenderAsync(new CombatNodeModel("cleanse", "source", Polarity: StatusPolarity.Debuff));
 
-        Assert.Contains("cleanse (by polarity)", html);
+        Assert.Contains(StudioVocabulary.NodeDisplay("cleanse"), html);
         Assert.Contains("Buff", html);
         Assert.Contains("Debuff", html);
-        Assert.DoesNotContain("event amount", html); // the amount control is hidden for a no-amount leaf
+        Assert.DoesNotContain("Event amount", html); // the amount control is hidden for a no-amount leaf
     }
 
     [Fact]
@@ -420,13 +418,13 @@ public class CombatProgramEditorRenderTests
 
         var html = await RenderAsync(model);
 
-        Assert.Contains("repeat…", html);      // composite kind option (selected)
-        Assert.Contains("value compares", html); // condition kind
-        Assert.Contains("missing HP", html);     // compare value kind
+        Assert.Contains(StudioVocabulary.NodeDisplay("repeat"), html); // composite kind option (selected)
+        Assert.Contains(StudioVocabulary.DisplayFor(StudioVocabulary.ConditionKinds, "compare"), html);          // condition kind
+        Assert.Contains(StudioVocabulary.DisplayFor(StudioVocabulary.CompareValueKinds, "missingHealth"), html); // compare value kind
         Assert.Contains("then:", html);
         Assert.Contains("else:", html);
         Assert.Contains("heal", html);
-        Assert.Contains("deal damage", html);
+        Assert.Contains(StudioVocabulary.NodeDisplay("dealDamage"), html);
     }
 
     [Fact]
@@ -434,9 +432,9 @@ public class CombatProgramEditorRenderTests
     {
         var html = await RenderAsync(new CombatNodeModel("dealDamage", "source", CombatAmountSpec.FromConst(1)));
 
-        Assert.Contains("move a card (targeted)", html);
-        Assert.Contains("transform / upgrade a card", html);
-        Assert.Contains("for each card in zone…", html);
+        Assert.Contains(StudioVocabulary.NodeDisplay("moveCardToZone"), html);
+        Assert.Contains(StudioVocabulary.NodeDisplay("transformCard"), html);
+        Assert.Contains(StudioVocabulary.NodeDisplay("forEachCardInZone"), html);
     }
 
     [Fact]
@@ -446,10 +444,10 @@ public class CombatProgramEditorRenderTests
         var html = await RenderAsync(new CombatNodeModel(
             "transformCard", "source", Card: new CombatCardSpec("chosen", CardZone.Hand), ToDefinition: "strike.plus"));
 
-        Assert.Contains("transform / upgrade a card", html);
-        Assert.Contains("player chooses", html);   // the card-selector kind
-        Assert.Contains("strike.plus", html);       // the target definition input
-        Assert.DoesNotContain("event amount", html); // a card op carries no amount control
+        Assert.Contains(StudioVocabulary.NodeDisplay("transformCard"), html);
+        Assert.Contains(StudioVocabulary.DisplayFor(StudioVocabulary.CardKinds, "chosen"), html); // the card-selector kind
+        Assert.Contains("strike.plus", html);        // the target definition input
+        Assert.DoesNotContain("Event amount", html); // a card op carries no amount control
     }
 
     [Fact]
@@ -464,9 +462,9 @@ public class CombatProgramEditorRenderTests
 
         var html = await RenderAsync(model);
 
-        Assert.Contains("for each card in zone…", html);
-        Assert.Contains("strike", html);              // the definition filter
-        Assert.Contains("current (loop card)", html); // the body's iterated card selector
+        Assert.Contains(StudioVocabulary.NodeDisplay("forEachCardInZone"), html);
+        Assert.Contains("strike", html); // the definition filter
+        Assert.Contains(StudioVocabulary.DisplayFor(StudioVocabulary.CardKinds, "iterated"), html); // the body's iterated card selector
     }
 
     [Fact]

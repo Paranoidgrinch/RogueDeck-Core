@@ -66,7 +66,7 @@
                 @foreach (var (kind, label) in CombatProgramModel.AllKinds)
                 {
                     var k = kind;
-                    <button class="mini" @onclick="() => AddChild(k)">+ @label</button>
+                    <button class="mini" title="@StudioVocabulary.NodeDescription(kind)" @onclick="() => AddChild(k)">+ @label</button>
                 }
             </div>
         }
@@ -113,10 +113,11 @@ else
         }
         @if (CombatProgramModel.UsesLifecycleState(Node.Kind))
         {
-            <select value="@Node.LifecycleState" @onchange="e => Set(Node with { LifecycleState = ParseLifecycleState(e.Value) })">
+            <select value="@Node.LifecycleState" title="@StudioVocabulary.EnumDescription(Node.LifecycleState)"
+                    @onchange="e => Set(Node with { LifecycleState = ParseLifecycleState(e.Value) })">
                 @foreach (var s in Enum.GetValues<CombatantLifecycleState>())
                 {
-                    <option value="@s" selected="@(s == Node.LifecycleState)">@s</option>
+                    <option value="@s" title="@StudioVocabulary.EnumDescription(s)" selected="@(s == Node.LifecycleState)">@StudioVocabulary.EnumDisplay(s)</option>
                 }
             </select>
         }
@@ -127,10 +128,11 @@ else
         }
         @if (CombatProgramModel.UsesCombatResult(Node.Kind))
         {
-            <select value="@Node.CombatResult" @onchange="e => Set(Node with { CombatResult = ParseCombatResult(e.Value) })">
+            <select value="@Node.CombatResult" title="@StudioVocabulary.EnumDescription(Node.CombatResult)"
+                    @onchange="e => Set(Node with { CombatResult = ParseCombatResult(e.Value) })">
                 @foreach (var r in Enum.GetValues<CombatResult>())
                 {
-                    <option value="@r" selected="@(r == Node.CombatResult)">@r</option>
+                    <option value="@r" title="@StudioVocabulary.EnumDescription(r)" selected="@(r == Node.CombatResult)">@StudioVocabulary.EnumDisplay(r)</option>
                 }
             </select>
         }
@@ -253,7 +255,7 @@ else
                     @onchange="e => Set(Node with { Polarity = ParsePolarity(e.Value) })">
                 @foreach (var p in Enum.GetValues<StatusPolarity>())
                 {
-                    <option value="@p" selected="@(p == Node.Polarity)">@p</option>
+                    <option value="@p" selected="@(p == Node.Polarity)">@StudioVocabulary.EnumDisplay(p)</option>
                 }
             </select>
         }
@@ -269,19 +271,9 @@ else
         @if (CombatProgramModel.UsesZones(Node.Kind))
         {
             <span class="muted">from</span>
-            <select value="@Node.FromZone" @onchange="e => Set(Node with { FromZone = ParseZone(e.Value) })">
-                @foreach (var z in Enum.GetValues<CardZone>())
-                {
-                    <option value="@z" selected="@(z == Node.FromZone)">@z</option>
-                }
-            </select>
+            @ZoneSelect(Node.FromZone, z => Set(Node with { FromZone = z }))
             <span class="muted">to</span>
-            <select value="@Node.ToZone" @onchange="e => Set(Node with { ToZone = ParseZone(e.Value) })">
-                @foreach (var z in Enum.GetValues<CardZone>())
-                {
-                    <option value="@z" selected="@(z == Node.ToZone)">@z</option>
-                }
-            </select>
+            @ZoneSelect(Node.ToZone, z => Set(Node with { ToZone = z }))
         }
         @if (CombatProgramModel.UsesCard(Node.Kind))
         {
@@ -303,7 +295,7 @@ else
             <select value="@Node.Placement" @onchange="e => Set(Node with { Placement = ParsePlacement(e.Value) })">
                 @foreach (var p in Enum.GetValues<ZonePlacement>())
                 {
-                    <option value="@p" selected="@(p == Node.Placement)">@(p == ZonePlacement.Top ? "on top" : "at bottom")</option>
+                    <option value="@p" selected="@(p == Node.Placement)">@StudioVocabulary.EnumDisplay(p)</option>
                 }
             </select>
         }
@@ -325,11 +317,11 @@ else
         }
         @if (CombatProgramModel.UsesMovement(Node.Kind))
         {
-            <select value="@Node.MovementMode"
+            <select value="@Node.MovementMode" title="@StudioVocabulary.EnumDescription(Node.MovementMode)"
                     @onchange="e => Set(CombatProgramModel.WithMovementMode(Node, ParseMovementMode(e.Value)))">
                 @foreach (var m in Enum.GetValues<MovementMode>())
                 {
-                    <option value="@m" selected="@(m == Node.MovementMode)">@m</option>
+                    <option value="@m" title="@StudioVocabulary.EnumDescription(m)" selected="@(m == Node.MovementMode)">@StudioVocabulary.EnumDisplay(m)</option>
                 }
             </select>
             @if (Node.MovementMode == MovementMode.ToAbsolute)
@@ -407,14 +399,16 @@ else
     {
         builder.OpenElement(0, "select");
         builder.AddAttribute(1, "value", Node.Kind);
-        builder.AddAttribute(2, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(
+        builder.AddAttribute(2, "title", StudioVocabulary.NodeDescription(Node.Kind));
+        builder.AddAttribute(3, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(
             this, e => Set(CombatProgramModel.ChangeKind(Node, AsString(e.Value)))));
-        var seq = 3;
+        var seq = 4;
         foreach (var (kind, label) in CombatProgramModel.AllKinds)
         {
             builder.OpenElement(seq++, "option");
             builder.AddAttribute(seq++, "value", kind);
-            builder.AddContent(seq++, label);
+            builder.AddAttribute(seq++, "title", StudioVocabulary.NodeDescription(kind));
+            builder.AddContent(seq++, StudioVocabulary.Display(label, kind));
             builder.CloseElement();
         }
         builder.CloseElement();
@@ -435,13 +429,15 @@ else
     {
         builder.OpenElement(0, "select");
         builder.AddAttribute(1, "value", current);
-        builder.AddAttribute(2, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e => onChange(AsString(e.Value))));
-        var seq = 3;
+        builder.AddAttribute(2, "title", StudioVocabulary.SelectorDescription(current));
+        builder.AddAttribute(3, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e => onChange(AsString(e.Value))));
+        var seq = 4;
         foreach (var key in keys)
         {
             builder.OpenElement(seq++, "option");
             builder.AddAttribute(seq++, "value", key);
-            builder.AddContent(seq++, key);
+            builder.AddAttribute(seq++, "title", StudioVocabulary.SelectorDescription(key));
+            builder.AddContent(seq++, StudioVocabulary.SelectorDisplay(key));
             builder.CloseElement();
         }
         builder.CloseElement();
@@ -454,14 +450,16 @@ else
         var seq = 0;
         builder.OpenElement(seq++, "select");
         builder.AddAttribute(seq++, "value", spec.Key);
+        builder.AddAttribute(seq++, "title", StudioVocabulary.SelectorDescription(spec.Key));
         builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
             onChange(SelectorForKey(AsString(e.Value), spec))));
         foreach (var key in CombatProgramModel.AllSelectorKeys)
         {
             builder.OpenElement(seq++, "option");
             builder.AddAttribute(seq++, "value", key);
+            builder.AddAttribute(seq++, "title", StudioVocabulary.SelectorDescription(key));
             builder.AddAttribute(seq++, "selected", key == spec.Key);
-            builder.AddContent(seq++, key);
+            builder.AddContent(seq++, StudioVocabulary.SelectorDisplay(key));
             builder.CloseElement();
         }
         builder.CloseElement();
@@ -543,35 +541,31 @@ else
         {
             builder.OpenElement(seq++, "option");
             builder.AddAttribute(seq++, "value", z.ToString());
+            builder.AddAttribute(seq++, "title", StudioVocabulary.EnumDescription(z));
             builder.AddAttribute(seq++, "selected", z == current);
-            builder.AddContent(seq++, z.ToString());
+            builder.AddContent(seq++, StudioVocabulary.EnumDisplay(z));
             builder.CloseElement();
         }
         builder.CloseElement();
     };
 
     // The card-selector widget (which card a targeted card op points at): a kind dropdown (position / player-chooses /
-    // random / current-loop-card) plus its zone, and either a position index (inZone) or a prompt (chosen).
-    private static readonly (string Kind, string Label)[] CardKinds =
-    {
-        ("inZone", "at position"),
-        ("chosen", "player chooses"),
-        ("random", "random"),
-        ("iterated", "current (loop card)"),
-    };
-
+    // random / current-loop-card) plus its zone, and either a position index (inZone) or a prompt (chosen). The
+    // labeled kind list lives in StudioVocabulary.CardKinds.
     private RenderFragment CardControls(CombatCardSpec spec, Action<CombatCardSpec> onChange) => builder =>
     {
         var seq = 0;
         builder.OpenElement(seq++, "select");
         builder.AddAttribute(seq++, "value", spec.Kind);
+        builder.AddAttribute(seq++, "title", StudioVocabulary.DescriptionFor(StudioVocabulary.CardKinds, spec.Kind));
         builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
             onChange(spec with { Kind = AsString(e.Value) })));
-        foreach (var (kind, label) in CardKinds)
+        foreach (var (kind, label, description) in StudioVocabulary.CardKinds)
         {
             builder.OpenElement(seq++, "option");
             builder.AddAttribute(seq++, "value", kind);
-            builder.AddContent(seq++, label);
+            builder.AddAttribute(seq++, "title", description);
+            builder.AddContent(seq++, StudioVocabulary.Display(label, kind));
             builder.CloseElement();
         }
         builder.CloseElement();
@@ -619,41 +613,24 @@ else
         }
     };
 
-    // The amount kinds the widget offers: a constant, the event amount, a combatant counter, the round/turn number,
-    // and the recursive arithmetic (binary + unary) operators. Value → dropdown label.
-    private static readonly (string Kind, string Label)[] AmountKinds =
-    {
-        ("const", "constant"), ("event", "event amount"), ("counter", "counter"),
-        ("round", "round #"), ("turn", "turn #"),
-        ("add", "+"), ("sub", "−"), ("mul", "×"), ("div", "÷"), ("rem", "mod"), ("min", "min"), ("max", "max"),
-        ("neg", "negate"), ("abs", "abs"), ("sign", "sign"), ("clamp", "clamp"),
-        // Selector-based state reads.
-        ("currentHealth", "current HP"), ("maxHealth", "max HP"), ("missingHealth", "missing HP"), ("healthPct", "HP %"),
-        ("currentResource", "resource"), ("maxResource", "max resource"), ("missingResource", "missing resource"),
-        ("defensivePool", "defensive pool"), ("zoneCards", "cards in zone"),
-        ("statusStacks", "status stacks"), ("statusDuration", "status duration"), ("statusCharges", "status charges"),
-        ("stacksByPolarity", "stacks by polarity"),
-        ("cardsPlayedThisTurn", "cards played (turn)"), ("damageDealtThisTurn", "damage dealt (turn)"),
-        ("resourceGainedThisTurn", "resource gained (turn)"), ("coord", "grid coord"), ("iterationIndex", "loop index"),
-        ("countTargets", "count targets"), ("sumOverTargets", "sum over targets"), ("gridDistance", "grid distance"),
-        ("cardCost", "card cost"),
-    };
-
     // Recursive amount widget: a kind dropdown plus its parameter — an int (constant), a selector + counter-id
-    // (counter), nothing (event/round/turn), or nested operand widgets (binary / unary arithmetic).
+    // (counter), nothing (event/round/turn), or nested operand widgets (binary / unary arithmetic). The labeled
+    // kind list lives in StudioVocabulary.AmountKinds.
     private RenderFragment AmountControls(CombatAmountSpec spec, Action<CombatAmountSpec> onChange) => builder =>
     {
         var seq = 0;
         builder.OpenElement(seq++, "select");
         builder.AddAttribute(seq++, "value", spec.Kind);
+        builder.AddAttribute(seq++, "title", StudioVocabulary.DescriptionFor(StudioVocabulary.AmountKinds, spec.Kind));
         builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
             onChange(AmountForKind(AsString(e.Value), spec))));
-        foreach (var (kind, label) in AmountKinds)
+        foreach (var (kind, label, description) in StudioVocabulary.AmountKinds)
         {
             builder.OpenElement(seq++, "option");
             builder.AddAttribute(seq++, "value", kind);
+            builder.AddAttribute(seq++, "title", description);
             builder.AddAttribute(seq++, "selected", kind == spec.Kind);
-            builder.AddContent(seq++, label);
+            builder.AddContent(seq++, StudioVocabulary.Display(label, kind));
             builder.CloseElement();
         }
         builder.CloseElement();
@@ -714,7 +691,7 @@ else
                     builder.OpenElement(seq++, "option");
                     builder.AddAttribute(seq++, "value", p.ToString());
                     builder.AddAttribute(seq++, "selected", p == spec.Polarity);
-                    builder.AddContent(seq++, p.ToString());
+                    builder.AddContent(seq++, StudioVocabulary.EnumDisplay(p));
                     builder.CloseElement();
                 }
                 builder.CloseElement();
@@ -829,7 +806,7 @@ else
             builder.OpenElement(seq++, "option");
             builder.AddAttribute(seq++, "value", f.ToString());
             builder.AddAttribute(seq++, "selected", f == spec.Polarity);
-            builder.AddContent(seq++, f.ToString().ToLowerInvariant());
+            builder.AddContent(seq++, StudioVocabulary.EnumDisplay(f));
             builder.CloseElement();
         }
         builder.CloseElement();
@@ -844,7 +821,7 @@ else
             builder.OpenElement(seq++, "option");
             builder.AddAttribute(seq++, "value", p.ToString());
             builder.AddAttribute(seq++, "selected", p == spec.Pick);
-            builder.AddContent(seq++, p.ToString().ToLowerInvariant());
+            builder.AddContent(seq++, StudioVocabulary.EnumDisplay(p));
             builder.CloseElement();
         }
         builder.CloseElement();
@@ -886,7 +863,7 @@ else
             builder.OpenElement(seq++, "option");
             builder.AddAttribute(seq++, "value", f.ToString());
             builder.AddAttribute(seq++, "selected", f == spec.Filter);
-            builder.AddContent(seq++, f.ToString().ToLowerInvariant());
+            builder.AddContent(seq++, StudioVocabulary.EnumDisplay(f));
             builder.CloseElement();
         }
         builder.CloseElement();
@@ -901,7 +878,7 @@ else
             builder.OpenElement(seq++, "option");
             builder.AddAttribute(seq++, "value", p.ToString());
             builder.AddAttribute(seq++, "selected", p == spec.Pick);
-            builder.AddContent(seq++, p.ToString().ToLowerInvariant());
+            builder.AddContent(seq++, StudioVocabulary.EnumDisplay(p));
             builder.CloseElement();
         }
         builder.CloseElement();
@@ -928,39 +905,22 @@ else
     private static ResourcePick ParseResourcePick(object? v) =>
         Enum.TryParse<ResourcePick>(AsString(v), out var p) ? p : ResourcePick.First;
 
-    // ── condition widget (for the conditional node) ──────────────────────────────
-    private static readonly (string Kind, string Label)[] ConditionKinds =
-    {
-        ("compare", "value compares"),
-        ("hasStatus", "has status"),
-        ("isAlive", "is alive"),
-        ("downed", "is downed"),
-        ("exists", "exists"),
-    };
-
-    private static readonly (string Kind, string Label)[] CompareValues =
-    {
-        ("currentHealth", "current HP"),
-        ("maxHealth", "max HP"),
-        ("missingHealth", "missing HP"),
-        ("healthPercentage", "HP %"),
-        ("currentResource", "resource…"),
-        ("statusStacks", "status stacks…"),
-    };
-
+    // ── condition widget (for the conditional node); labeled kind lists live in StudioVocabulary ─────────────────
     private RenderFragment ConditionControls(CombatConditionSpec spec, Action<CombatConditionSpec> onChange) => builder =>
     {
         var seq = 0;
         // condition kind
         builder.OpenElement(seq++, "select");
         builder.AddAttribute(seq++, "value", spec.Kind);
+        builder.AddAttribute(seq++, "title", StudioVocabulary.DescriptionFor(StudioVocabulary.ConditionKinds, spec.Kind));
         builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
             onChange(spec with { Kind = AsString(e.Value) })));
-        foreach (var (kind, label) in ConditionKinds)
+        foreach (var (kind, label, description) in StudioVocabulary.ConditionKinds)
         {
             builder.OpenElement(seq++, "option");
             builder.AddAttribute(seq++, "value", kind);
-            builder.AddContent(seq++, label);
+            builder.AddAttribute(seq++, "title", description);
+            builder.AddContent(seq++, StudioVocabulary.Display(label, kind));
             builder.CloseElement();
         }
         builder.CloseElement();
@@ -968,13 +928,15 @@ else
         // target selector (single-target only — scalar reads reject multi-target selectors)
         builder.OpenElement(seq++, "select");
         builder.AddAttribute(seq++, "value", spec.SelectorKey);
+        builder.AddAttribute(seq++, "title", StudioVocabulary.SelectorDescription(spec.SelectorKey));
         builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
             onChange(spec with { SelectorKey = AsString(e.Value) })));
         foreach (var key in CombatProgramModel.SingleTargetSelectorKeys)
         {
             builder.OpenElement(seq++, "option");
             builder.AddAttribute(seq++, "value", key);
-            builder.AddContent(seq++, key);
+            builder.AddAttribute(seq++, "title", StudioVocabulary.SelectorDescription(key));
+            builder.AddContent(seq++, StudioVocabulary.SelectorDisplay(key));
             builder.CloseElement();
         }
         builder.CloseElement();
@@ -984,13 +946,15 @@ else
             // value kind
             builder.OpenElement(seq++, "select");
             builder.AddAttribute(seq++, "value", spec.ValueKind);
+            builder.AddAttribute(seq++, "title", StudioVocabulary.DescriptionFor(StudioVocabulary.CompareValueKinds, spec.ValueKind));
             builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
                 onChange(spec with { ValueKind = AsString(e.Value) })));
-            foreach (var (kind, label) in CompareValues)
+            foreach (var (kind, label, description) in StudioVocabulary.CompareValueKinds)
             {
                 builder.OpenElement(seq++, "option");
                 builder.AddAttribute(seq++, "value", kind);
-                builder.AddContent(seq++, label);
+                builder.AddAttribute(seq++, "title", description);
+                builder.AddContent(seq++, StudioVocabulary.Display(label, kind));
                 builder.CloseElement();
             }
             builder.CloseElement();

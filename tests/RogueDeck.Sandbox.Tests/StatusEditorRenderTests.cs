@@ -84,7 +84,7 @@ public class StatusEditorRenderTests
 
         Assert.Contains("Triggers", html);
         Assert.Contains("DamageTaken", html); // the event dropdown
-        Assert.Contains("gain block", html);   // the CombatProgramEditor leaf renders
+        Assert.Contains(StudioVocabulary.NodeDisplay("gainBlock"), html); // the CombatProgramEditor leaf renders
         Assert.Contains("+ trigger", html);
     }
 

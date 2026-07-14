@@ -138,9 +138,9 @@ public class RelicEditorRenderTests
         Assert.Contains("turnStarted", html);
         Assert.Contains("combat rule", html); // the add button ("+" HTML-encodes)
         // Visual editor: node/selector/amount options + the escape hatch, NOT the JSON textarea.
-        Assert.Contains("gain block", html);
-        Assert.Contains("deal damage", html);
-        Assert.Contains("event amount", html);
+        Assert.Contains(StudioVocabulary.NodeDisplay("gainBlock"), html);
+        Assert.Contains(StudioVocabulary.NodeDisplay("dealDamage"), html);
+        Assert.Contains(StudioVocabulary.DisplayFor(StudioVocabulary.AmountKinds, "event"), html);
         Assert.Contains("edit as JSON", html);
         Assert.DoesNotContain("program (JSON", html);
     }

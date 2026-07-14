@@ -82,6 +82,6 @@ public class ConsumableEditorRenderTests
 
         Assert.Contains("potion.block", html);
         Assert.Contains("first turn start", html); // the opening label
-        Assert.Contains("gain block", html);        // the CombatProgramEditor leaf renders
+        Assert.Contains(StudioVocabulary.NodeDisplay("gainBlock"), html); // the CombatProgramEditor leaf renders
     }
 }

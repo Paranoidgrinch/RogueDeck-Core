@@ -132,4 +132,149 @@ public static class StudioVocabulary
         var label = CombatProgramModel.AllKinds.FirstOrDefault(k => k.Kind == kind).Label ?? kind;
         return Display(label, kind);
     }
+
+    // ── amount expressions (the kinds AmountControls offers, in dropdown order) ─────────────────────────────────
+    public static readonly IReadOnlyList<(string Kind, string Label, string Description)> AmountKinds =
+    [
+        ("const", "constant", "A fixed number you type in."),
+        ("event", "event amount", "The number carried by the triggering event (e.g. the damage that was just dealt)."),
+        ("counter", "counter", "The value of a named per-fight counter on a chosen unit."),
+        ("round", "round #", "The current round number of the fight."),
+        ("turn", "turn #", "The current turn number of the fight."),
+        ("add", "+", "Add two amounts."),
+        ("sub", "−", "Subtract the second amount from the first."),
+        ("mul", "×", "Multiply two amounts."),
+        ("div", "÷", "Divide the first amount by the second (whole-number result)."),
+        ("rem", "mod", "The remainder after dividing the first amount by the second."),
+        ("min", "min", "The smaller of two amounts."),
+        ("max", "max", "The larger of two amounts."),
+        ("neg", "negate", "Flip the sign of an amount."),
+        ("abs", "abs", "The amount without its sign (always zero or positive)."),
+        ("sign", "sign", "−1, 0 or +1 depending on the amount's sign."),
+        ("clamp", "clamp", "Keep an amount between a minimum and a maximum."),
+        ("currentHealth", "current HP", "The chosen unit's current health."),
+        ("maxHealth", "max HP", "The chosen unit's maximum health."),
+        ("missingHealth", "missing HP", "How much health the chosen unit is missing (max − current)."),
+        ("healthPct", "HP %", "The chosen unit's health as a percentage of its maximum (0–100)."),
+        ("currentResource", "resource", "The chosen unit's current amount of a named resource."),
+        ("maxResource", "max resource", "The maximum of a named resource on the chosen unit."),
+        ("missingResource", "missing resource", "How much of a named resource the chosen unit is missing."),
+        ("defensivePool", "defensive pool", "The value of a named defensive pool (e.g. block) on the chosen unit."),
+        ("zoneCards", "cards in zone", "How many cards the chosen unit has in a zone."),
+        ("statusStacks", "status stacks", "The stack count of a named status on the chosen unit."),
+        ("statusDuration", "status duration", "The remaining turns of a named status on the chosen unit."),
+        ("statusCharges", "status charges", "The remaining charges of a named status on the chosen unit."),
+        ("stacksByPolarity", "stacks by polarity", "The total stacks of all buffs (or all debuffs) on the chosen unit."),
+        ("cardsPlayedThisTurn", "cards played (turn)", "How many cards the chosen unit has played this turn."),
+        ("damageDealtThisTurn", "damage dealt (turn)", "How much damage the chosen unit has dealt this turn."),
+        ("resourceGainedThisTurn", "resource gained (turn)", "How much of a named resource the chosen unit has gained this turn."),
+        ("coord", "grid coord", "The chosen unit's grid coordinate on one axis (X or Y). Grid battles only."),
+        ("iterationIndex", "loop index", "The position in the current loop (0 for the first pass, 1 for the second…)."),
+        ("countTargets", "count targets", "How many units a selection currently picks."),
+        ("sumOverTargets", "sum over targets", "Add up an amount evaluated for each unit in a selection."),
+        ("gridDistance", "grid distance", "The number of grid steps between two chosen units. Grid battles only."),
+        ("cardCost", "card cost", "The printed cost of a selected card (in a named resource)."),
+    ];
+
+    // ── condition kinds + compare values (the conditional / repeat-until widget) ────────────────────────────────
+    public static readonly IReadOnlyList<(string Kind, string Label, string Description)> ConditionKinds =
+    [
+        ("compare", "value compares", "Compare a value read from a unit (HP, a resource, status stacks…) against a number."),
+        ("hasStatus", "has status", "True when the chosen unit has the named status."),
+        ("isAlive", "is alive", "True when the chosen unit is alive."),
+        ("downed", "is downed", "True when the chosen unit is downed."),
+        ("exists", "exists", "True when the selection picks at least one unit."),
+    ];
+
+    public static readonly IReadOnlyList<(string Kind, string Label, string Description)> CompareValueKinds =
+    [
+        ("currentHealth", "current HP", "The unit's current health."),
+        ("maxHealth", "max HP", "The unit's maximum health."),
+        ("missingHealth", "missing HP", "How much health the unit is missing (max − current)."),
+        ("healthPercentage", "HP %", "The unit's health as a percentage of its maximum (0–100)."),
+        ("currentResource", "resource…", "The unit's current amount of a named resource (fill in the resource id)."),
+        ("statusStacks", "status stacks…", "The stacks of a named status on the unit (fill in the status id)."),
+    ];
+
+    // ── card selection kinds (which card a targeted card op points at) ──────────────────────────────────────────
+    public static readonly IReadOnlyList<(string Kind, string Label, string Description)> CardKinds =
+    [
+        ("inZone", "at position", "The card at a fixed position in a zone (# counts from 0)."),
+        ("chosen", "player chooses", "The player picks a card when the effect runs (your prompt text is shown)."),
+        ("random", "random", "A random card from the zone."),
+        ("iterated", "current (loop card)", "The card the surrounding 'for each card in zone' loop is currently on."),
+    ];
+
+    // Lookups over the (Kind, Label, Description) lists above; unknown kinds fall back to the raw kind / no help.
+    public static string LabelFor(IReadOnlyList<(string Kind, string Label, string Description)> list, string kind) =>
+        list.FirstOrDefault(e => e.Kind == kind).Label ?? kind;
+
+    public static string DescriptionFor(IReadOnlyList<(string Kind, string Label, string Description)> list, string kind) =>
+        list.FirstOrDefault(e => e.Kind == kind).Description ?? "";
+
+    public static string DisplayFor(IReadOnlyList<(string Kind, string Label, string Description)> list, string kind) =>
+        Display(LabelFor(list, kind), kind);
+
+    // ── enum members (zones, lifecycle states, movement modes…) ─────────────────────────────────────────────────
+    // Curated labels where the auto-split of the member name isn't plain enough; keyed "EnumType.Member".
+    private static readonly IReadOnlyDictionary<string, string> EnumLabels = new Dictionary<string, string>
+    {
+        ["MovementMode.ToAbsolute"] = "to a cell (x,y)",
+        ["MovementMode.TowardEnemies"] = "toward the enemies",
+        ["MovementMode.AwayFromEnemies"] = "away from the enemies",
+        ["MovementMode.PushFromSource"] = "push away from me",
+        ["MovementMode.PullToSource"] = "pull toward me",
+        ["ZonePlacement.Top"] = "on top",
+        ["ZonePlacement.Bottom"] = "at the bottom",
+        ["CombatantLifecycleState.Removed"] = "removed from combat",
+        ["CombatResult.Ongoing"] = "still ongoing",
+        ["ResourcePoolFilter.Any"] = "any pool",
+        ["ResourcePoolFilter.NonEmpty"] = "non-empty pools",
+        ["StatusPolarityFilter.Any"] = "any status",
+        ["StatusPolarityFilter.Buff"] = "buffs only",
+        ["StatusPolarityFilter.Debuff"] = "debuffs only",
+        ["StatusPick.First"] = "first in the list",
+        ["ResourcePick.First"] = "first in the list",
+    };
+
+    private static readonly IReadOnlyDictionary<string, string> EnumDescriptions = new Dictionary<string, string>
+    {
+        ["CardZone.DrawPile"] = "The face-down pile cards are drawn from.",
+        ["CardZone.Hand"] = "The cards currently held and playable.",
+        ["CardZone.DiscardPile"] = "Played or discarded cards; reshuffled into the draw pile when it runs out.",
+        ["CardZone.ExhaustPile"] = "Cards removed for the rest of the fight.",
+        ["CardZone.BanishedPile"] = "Cards removed and untouchable by ordinary effects.",
+        ["CombatantLifecycleState.Alive"] = "Fighting normally.",
+        ["CombatantLifecycleState.Downed"] = "Defeated but still present (can be revived).",
+        ["CombatantLifecycleState.Dead"] = "Defeated for good.",
+        ["CombatantLifecycleState.Removed"] = "Taken out of the fight entirely (no death triggers).",
+        ["CombatantLifecycleState.Escaped"] = "Fled the fight.",
+        ["CombatResult.Ongoing"] = "The fight continues.",
+        ["CombatResult.Victory"] = "The players win the fight.",
+        ["CombatResult.Defeat"] = "The players lose the fight.",
+        ["CombatResult.Draw"] = "The fight ends with no winner.",
+        ["CombatResult.Aborted"] = "The fight is cancelled outright.",
+        ["MovementMode.ToAbsolute"] = "Move the target to an exact grid cell (x, y).",
+        ["MovementMode.TowardEnemies"] = "Step the target toward the enemy side.",
+        ["MovementMode.AwayFromEnemies"] = "Step the target away from the enemy side.",
+        ["MovementMode.PushFromSource"] = "Push the target away from the acting unit.",
+        ["MovementMode.PullToSource"] = "Pull the target toward the acting unit.",
+    };
+
+    // "Friendly label (RawName)" for an enum member: a curated label, or the member name split into words.
+    // When the friendly label is just the sentence-cased name (single-word members like "Hand" or "Random"),
+    // the parenthetical would repeat it and is omitted.
+    public static string EnumDisplay<TEnum>(TEnum value) where TEnum : struct, Enum
+    {
+        var raw = value.ToString();
+        var label = EnumLabels.TryGetValue($"{typeof(TEnum).Name}.{raw}", out var custom) ? custom : SplitWords(raw);
+        var display = SentenceCase(label);
+        return display == raw ? display : $"{display} ({raw})";
+    }
+
+    public static string EnumDescription<TEnum>(TEnum value) where TEnum : struct, Enum =>
+        EnumDescriptions.TryGetValue($"{typeof(TEnum).Name}.{value}", out var description) ? description : "";
+
+    private static string SplitWords(string pascal) =>
+        string.Concat(pascal.Select((c, i) => i > 0 && char.IsUpper(c) ? " " + char.ToLowerInvariant(c) : char.ToString(c)));
 }
