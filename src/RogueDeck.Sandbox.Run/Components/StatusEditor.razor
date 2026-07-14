@@ -29,6 +29,7 @@
                     <input value="@status.NameKey" style="width:10rem"
                            @onchange="e => Edit(index, s => s with { NameKey = Nullable(AsString(e.Value)) })" />
                 </label>
+                <button class="mini" title="duplicate this status" @onclick="() => Duplicate(index)">⧉</button>
                 <button class="mini" @onclick="() => Remove(index)">✕ remove</button>
             </div>
             <div class="run-bar">
@@ -67,7 +68,7 @@
                         </label>
                         <label>damage @EnumSelect(mod.RestrictDamageKind ?? DamageKind.Direct, k => SetModifier(index, modIndex, mod with { RestrictDamageKind = k }))</label>
                         <label title="Only modify applications of this one status (leave blank for all).">only for status
-                            <input value="@mod.AppliesToStatusId" style="width:7rem" placeholder="status id (optional)"
+                            <input value="@mod.AppliesToStatusId" style="width:7rem" placeholder="status id (optional)" list="rd-status-ids"
                                    @onchange="e => SetModifier(index, modIndex, mod with { AppliesToStatusId = Nullable(AsString(e.Value)) })" />
                         </label>
                         <button class="mini" @onclick="() => RemoveModifier(index, modIndex)">✕</button>
@@ -163,6 +164,18 @@
     }
 
     private Task Remove(int index) => Save(Blueprint.Statuses.Where((_, i) => i != index).ToList());
+
+    private Task Duplicate(int index)
+    {
+        var list = Blueprint.Statuses.ToList();
+        if (index < 0 || index >= list.Count)
+            return Task.CompletedTask;
+        list.Insert(index + 1, list[index] with
+        {
+            Id = StudioIds.Copy(list[index].Id, id => list.Any(s => s.Id == id)),
+        });
+        return Save(list);
+    }
 
     private Task Add()
     {

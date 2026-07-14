@@ -9,6 +9,7 @@
     <TabIntro Title="Characters (selectable roster)"
               Text="A roster of characters the player picks from when a run starts. Each has its own deck, health and starting items. Leave the roster empty to always start with the Hero tab's setup."
               Connects="A character's unlock flag is set by the Meta tab's run-end rules." />
+    <IdDatalists Blueprint="_blueprint" />
 
     @{ var issues = RunDocumentValidator.ForTab(_blueprint, RunDocumentValidator.CharactersTab); }
     @if (issues.Count > 0)

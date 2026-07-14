@@ -47,7 +47,7 @@
         var index = i;
         var grant = Value.StartingStatuses[index];
         <div class="run-bar">
-            <input value="@grant.StatusDefinitionId.value" placeholder="status id" style="width:9rem"
+            <input value="@grant.StatusDefinitionId.value" placeholder="status id" style="width:9rem" list="rd-status-ids"
                    @onchange="e => SetGrant(index, grant with { StatusDefinitionId = new StatusDefinitionId(AsString(e.Value)) })" />
             <label>stacks
                 <input type="number" value="@grant.Stacks" style="width:4rem"

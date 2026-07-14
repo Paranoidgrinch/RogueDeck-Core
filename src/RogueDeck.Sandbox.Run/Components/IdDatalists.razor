@@ -1,0 +1,60 @@
+@* Shared id-suggestion datalists, rendered once per tab from the blueprint. Free-text id inputs across the
+   editors carry `list="rd-…-ids"` attributes; a <datalist> keeps free text possible while suggesting every id the
+   project actually defines (plus the engine's standard ones) — killing silent typo bugs. An input whose datalist
+   is not on the page simply shows no suggestions, so the combat editor can name these lists without referencing
+   this component. *@
+<datalist id="rd-status-ids">
+    @foreach (var id in StatusIds())
+    {
+        <option value="@id"></option>
+    }
+</datalist>
+<datalist id="rd-card-ids">
+    @foreach (var card in Blueprint.Cards)
+    {
+        <option value="@card.Id"></option>
+    }
+</datalist>
+<datalist id="rd-relic-ids">
+    @foreach (var id in RelicIds())
+    {
+        <option value="@id"></option>
+    }
+</datalist>
+<datalist id="rd-consumable-ids">
+    @foreach (var consumable in Blueprint.Consumables)
+    {
+        <option value="@consumable.Id"></option>
+    }
+</datalist>
+<datalist id="rd-resource-ids">
+    @foreach (var id in ResourceIds())
+    {
+        <option value="@id"></option>
+    }
+</datalist>
+
+@code {
+    [Parameter, EditorRequired] public RunBlueprint Blueprint { get; set; } = default!;
+
+    // The engine's built-in status ids (StandardCombatIds) — always valid targets for applyStatus & co.
+    private static readonly string[] BuiltInStatusIds =
+    [
+        "standard.poison", "standard.weak", "standard.vulnerable", "standard.frail", "standard.artifact",
+        "standard.strength", "standard.rage", "standard.dexterity", "standard.thorns", "standard.stun",
+    ];
+
+    // The built-in sample relics RunSandbox.BuildContent registers — same set RelicEditor's dropdowns offer.
+    private static readonly string[] BuiltInRelicIds = ["bloodstone", "leech"];
+
+    private IEnumerable<string> StatusIds() =>
+        Blueprint.Statuses.Select(s => s.Id).Concat(BuiltInStatusIds).Distinct(StringComparer.Ordinal);
+
+    private IEnumerable<string> RelicIds() =>
+        Blueprint.Relics.Select(r => r.Id).Concat(BuiltInRelicIds).Distinct(StringComparer.Ordinal);
+
+    private IEnumerable<string> ResourceIds() =>
+        Blueprint.CombatResources.Select(r => r.Id)
+            .Concat(new[] { "standard.energy", "standard.gold" })
+            .Distinct(StringComparer.Ordinal);
+}

@@ -27,6 +27,7 @@
                 <label>Name
                     <input value="@consumable.DisplayName" @onchange="e => SetName(index, AsString(e.Value))" style="width:11rem" />
                 </label>
+                <button class="mini" title="duplicate this consumable" @onclick="() => Duplicate(index)">⧉</button>
                 <button class="mini" @onclick="() => Remove(index)">✕ remove</button>
             </div>
 
@@ -88,6 +89,18 @@
     private Task SetId(int index, string id) => Edit(index, c => c with { Id = id.Trim() });
     private Task SetName(int index, string name) => Edit(index, c => c with { DisplayName = name });
     private Task Remove(int index) => Save(Blueprint.Consumables.Where((_, i) => i != index).ToList());
+
+    private Task Duplicate(int index)
+    {
+        var list = Blueprint.Consumables.ToList();
+        if (index < 0 || index >= list.Count)
+            return Task.CompletedTask;
+        list.Insert(index + 1, list[index] with
+        {
+            Id = StudioIds.Copy(list[index].Id, id => list.Any(c => c.Id == id)),
+        });
+        return Save(list);
+    }
 
     private Task Add()
     {

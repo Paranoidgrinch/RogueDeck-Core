@@ -18,7 +18,10 @@
         <div class="member-card" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:.75rem; margin:.75rem 0">
             <div class="run-bar" style="justify-content:space-between">
                 <strong>Shop "@shopId"</strong>
-                <button class="mini" @onclick="() => RemoveShop(shopId)">✕ remove shop</button>
+                <span>
+                    <button class="mini" title="duplicate this shop" @onclick="() => DuplicateShop(shopId)">⧉</button>
+                    <button class="mini" @onclick="() => RemoveShop(shopId)">✕ remove shop</button>
+                </span>
             </div>
             <div class="run-bar">
                 <label>Currency
@@ -139,6 +142,14 @@
         _blueprint = _blueprint with { Shops = edit(new Dictionary<string, ShopDefinition>(Shops)) };
         Save();
     }
+
+    private void DuplicateShop(string id) =>
+        EditShops(shops =>
+        {
+            if (shops.TryGetValue(id, out var shop))
+                shops[StudioIds.Copy(id, shops.ContainsKey)] = shop;
+            return shops;
+        });
 
     private void EditShop(string id, Func<ShopDefinition, ShopDefinition> edit) =>
         EditShops(shops =>

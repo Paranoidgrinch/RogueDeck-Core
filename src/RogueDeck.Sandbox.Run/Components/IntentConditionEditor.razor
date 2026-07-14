@@ -32,7 +32,7 @@
 
         case SelfHasStatusCondition s:
             <span class="muted">self has status</span>
-            <input value="@s.Status.value" placeholder="status id" style="width:8rem"
+            <input value="@s.Status.value" placeholder="status id" style="width:8rem" list="rd-status-ids"
                    @onchange="e => Emit(s with { Status = new StatusDefinitionId(AsString(e.Value)) })" />
             <span class="muted">× ≥</span>
             <input type="number" value="@s.MinStacks" style="width:3.5rem"
@@ -41,7 +41,7 @@
 
         case OpponentHasStatusCondition o:
             <span class="muted">opponent has status</span>
-            <input value="@o.Status.value" placeholder="status id" style="width:8rem"
+            <input value="@o.Status.value" placeholder="status id" style="width:8rem" list="rd-status-ids"
                    @onchange="e => Emit(o with { Status = new StatusDefinitionId(AsString(e.Value)) })" />
             <span class="muted">× ≥</span>
             <input type="number" value="@o.MinStacks" style="width:3.5rem"

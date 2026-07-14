@@ -23,7 +23,7 @@
                 <span class="muted">in</span>
                 @ZoneSelect(Node.FromZone, z => Set(Node with { FromZone = z }))
                 <span class="muted">only</span>
-                <input value="@Node.ToDefinition" style="width:7rem" placeholder="any card"
+                <input value="@Node.ToDefinition" style="width:7rem" placeholder="any card" list="rd-card-ids"
                        @onchange="e => Set(Node with { ToDefinition = AsString(e.Value) })" />
             }
             else if (Node.Kind == "repeat")
@@ -170,7 +170,7 @@ else
                     var ix = i;
                     var g = grants[ix];
                     <span class="fx">
-                        <input value="@g.StatusDefinitionId.value" style="width:8rem" placeholder="status id"
+                        <input value="@g.StatusDefinitionId.value" style="width:8rem" placeholder="status id" list="rd-status-ids"
                                @onchange="e => UpdateGrant(ix, g with { StatusDefinitionId = new StatusDefinitionId(AsString(e.Value)) })" />
                         <span class="muted">stacks</span>
                         <input type="number" value="@g.Stacks" style="width:3.5rem"
@@ -200,7 +200,7 @@ else
         }
         @if (CombatProgramModel.UsesResourceId(Node.Kind))
         {
-            <input value="@Node.ResourceId" style="width:8rem" placeholder="resource id"
+            <input value="@Node.ResourceId" style="width:8rem" placeholder="resource id" list="rd-resource-ids"
                    @onchange="e => Set(Node with { ResourceId = AsString(e.Value) })" />
         }
         @if (CombatProgramModel.UsesPoolId(Node.Kind))
@@ -230,7 +230,7 @@ else
         }
         @if (CombatProgramModel.UsesStatusId(Node.Kind))
         {
-            <input value="@Node.StatusId" style="width:8rem" placeholder="status id"
+            <input value="@Node.StatusId" style="width:8rem" placeholder="status id" list="rd-status-ids"
                    @onchange="e => Set(Node with { StatusId = AsString(e.Value) })" />
         }
         @if (CombatProgramModel.UsesCounterId(Node.Kind))
@@ -302,12 +302,12 @@ else
         @if (Node.Kind == "transformCard")
         {
             <span class="muted">→</span>
-            <input value="@Node.ToDefinition" style="width:9rem" placeholder="target definition id"
+            <input value="@Node.ToDefinition" style="width:9rem" placeholder="target definition id" list="rd-card-ids"
                    @onchange="e => Set(Node with { ToDefinition = AsString(e.Value) })" />
         }
         @if (Node.Kind == "createCardInstance")
         {
-            <input value="@Node.ToDefinition" style="width:9rem" placeholder="card definition id"
+            <input value="@Node.ToDefinition" style="width:9rem" placeholder="card definition id" list="rd-card-ids"
                    @onchange="e => Set(Node with { ToDefinition = AsString(e.Value) })" />
         }
         @if (CombatProgramModel.UsesCreateZone(Node.Kind))
@@ -477,6 +477,7 @@ else
             builder.AddAttribute(seq++, "value", spec.StatusId);
             builder.AddAttribute(seq++, "style", "width:7rem");
             builder.AddAttribute(seq++, "placeholder", "status id");
+            builder.AddAttribute(seq++, "list", "rd-status-ids");
             builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
                 onChange(spec with { StatusId = AsString(e.Value) })));
             builder.CloseElement();
@@ -685,6 +686,8 @@ else
                 builder.AddAttribute(seq++, "value", spec.ReadId);
                 builder.AddAttribute(seq++, "style", "width:7rem");
                 builder.AddAttribute(seq++, "placeholder", "id");
+                builder.AddAttribute(seq++, "list", spec.Kind.StartsWith("status", StringComparison.Ordinal)
+                    ? "rd-status-ids" : "rd-resource-ids");
                 builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
                     onChange(spec with { ReadId = AsString(e.Value) })));
                 builder.CloseElement();
@@ -753,6 +756,7 @@ else
             builder.AddAttribute(seq++, "value", spec.ReadId);
             builder.AddAttribute(seq++, "style", "width:7rem");
             builder.AddAttribute(seq++, "placeholder", "resource id");
+            builder.AddAttribute(seq++, "list", "rd-resource-ids");
             builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
                 onChange(spec with { ReadId = AsString(e.Value) })));
             builder.CloseElement();
@@ -1001,6 +1005,7 @@ else
                 builder.AddAttribute(seq++, "value", spec.Id);
                 builder.AddAttribute(seq++, "style", "width:8rem");
                 builder.AddAttribute(seq++, "placeholder", spec.ValueKind == "currentResource" ? "resource id" : "status id");
+                builder.AddAttribute(seq++, "list", spec.ValueKind == "currentResource" ? "rd-resource-ids" : "rd-status-ids");
                 builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
                     onChange(spec with { Id = AsString(e.Value) })));
                 builder.CloseElement();
@@ -1012,6 +1017,7 @@ else
             builder.AddAttribute(seq++, "value", spec.Id);
             builder.AddAttribute(seq++, "style", "width:8rem");
             builder.AddAttribute(seq++, "placeholder", "status id");
+            builder.AddAttribute(seq++, "list", "rd-status-ids");
             builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
                 onChange(spec with { Id = AsString(e.Value) })));
             builder.CloseElement();

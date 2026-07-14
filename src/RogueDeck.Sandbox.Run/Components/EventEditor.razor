@@ -34,6 +34,7 @@
                         }
                     </select>
                 </label>
+                <button class="mini" title="duplicate this event" @onclick="() => DuplicateEvent(eventKey)">⧉</button>
                 <button class="mini" @onclick="() => RemoveEvent(eventKey)">✕ remove</button>
             </div>
 
@@ -162,6 +163,15 @@
     {
         var events = EventsCopy();
         events.Remove(key);
+        return ReplaceEvents(events);
+    }
+
+    private Task DuplicateEvent(string key)
+    {
+        var events = EventsCopy();
+        if (!events.TryGetValue(key, out var script))
+            return Task.CompletedTask;
+        events[StudioIds.Copy(key, events.ContainsKey)] = script;
         return ReplaceEvents(events);
     }
 

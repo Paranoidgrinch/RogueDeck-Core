@@ -37,6 +37,7 @@
                 <label>Name
                     <input value="@relic.DisplayName" @onchange="e => SetRelicName(relicIndex, AsString(e.Value))" style="width:11rem" />
                 </label>
+                <button class="mini" title="duplicate this relic" @onclick="() => DuplicateRelic(relicIndex)">⧉</button>
                 <button class="mini" @onclick="() => RemoveRelic(relicIndex)">✕ remove</button>
             </div>
 
@@ -420,6 +421,18 @@
 
     private Task SetRelicName(int relicIndex, string name) =>
         EditRelic(relicIndex, r => r with { DisplayName = name });
+
+    private Task DuplicateRelic(int relicIndex)
+    {
+        var relics = Blueprint.Relics.ToList();
+        if (relicIndex < 0 || relicIndex >= relics.Count)
+            return Task.CompletedTask;
+        relics.Insert(relicIndex + 1, relics[relicIndex] with
+        {
+            Id = StudioIds.Copy(relics[relicIndex].Id, id => relics.Any(r => r.Id == id)),
+        });
+        return Apply(relics);
+    }
 
     private Task RemoveRelic(int relicIndex)
     {

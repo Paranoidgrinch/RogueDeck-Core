@@ -10,6 +10,7 @@
     <TabIntro Title="Cards & deck"
               Text="The cards the player draws and plays in fights — each card is a name, a cost and a visual effect program — plus the starting deck (how many copies of each card a run begins with)."
               Connects="Cards can also be granted by Events, Shops, Relics and rewards; the fights that draw them are authored on the Encounters tab." />
+    <IdDatalists Blueprint="_blueprint" />
 
     @{ var issues = RunDocumentValidator.ForTab(_blueprint, RunDocumentValidator.CardsTab); }
     @if (issues.Count > 0)
@@ -36,6 +37,7 @@
                 <span class="muted">energy</span>
                 <input type="number" value="@EnergyCost(card)" style="width:4rem"
                        @onchange="e => SetEnergy(ci, AsInt(e.Value, EnergyCost(card)))" />
+                <button class="mini" title="duplicate this card" @onclick="() => DuplicateCard(ci)">⧉</button>
                 <button class="mini" @onclick="() => RemoveCard(ci)">✕ card</button>
             </div>
             <div class="fx-body">
@@ -131,6 +133,17 @@
         EditCard(index, c => c with { Program = CombatProgramModel.Build<CardPlayContext>(node) });
 
     private void AddCardProgram(int index) => SetCardProgram(index, CombatProgramModel.NewNode("dealDamage"));
+
+    private void DuplicateCard(int index) =>
+        EditCards(list =>
+        {
+            if (index >= 0 && index < list.Count)
+                list.Insert(index + 1, list[index] with
+                {
+                    Id = StudioIds.Copy(list[index].Id, id => list.Any(c => c.Id == id)),
+                });
+            return list;
+        });
 
     private void RemoveCard(int index) =>
         EditCards(list =>

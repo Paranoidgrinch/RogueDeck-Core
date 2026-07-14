@@ -20,6 +20,7 @@
                 <label>Encounter id
                     <input value="@encId" @onchange="e => RenameEncounter(encId, AsString(e.Value))" style="width:9rem" />
                 </label>
+                <button class="mini" title="duplicate this encounter" @onclick="() => DuplicateEncounter(encId)">⧉</button>
                 <button class="mini" @onclick="() => RemoveEncounter(encId)">✕ remove</button>
             </div>
 
@@ -149,6 +150,14 @@
 
     private Task RemoveEncounter(string id) =>
         Replace(Blueprint.Encounters.Where(e => e.Id.Value != id).ToList());
+
+    private Task DuplicateEncounter(string id)
+    {
+        if (Blueprint.Encounters.FirstOrDefault(e => e.Id.Value == id) is not { } enc)
+            return Task.CompletedTask;
+        var copyId = StudioIds.Copy(id, candidate => Blueprint.Encounters.Any(e => e.Id.Value == candidate));
+        return Replace(Blueprint.Encounters.Append(Rebuild(enc, id: new EncounterId(copyId))).ToList());
+    }
 
     private Task RenameEncounter(string id, string newId)
     {
