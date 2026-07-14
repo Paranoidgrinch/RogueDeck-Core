@@ -5,9 +5,9 @@
    Custom status definitions authored here persist in the one ProjectDraft document and are registered into every
    combat by RunPlayback.BuildContent, so cards / relics / enemy actions that apply them resolve the status. *@
 <section style="padding:1rem; max-width:72rem">
-    <h1>Statuses</h1>
-    <p class="muted">Author the run's custom status effects — passive modifiers, and (below) triggers and
-        interceptors. Part of the shared run document; referenced by id from card / relic / enemy-action effects.</p>
+    <TabIntro Title="Statuses"
+              Text="Custom buffs and debuffs. A status can passively change values while it is on a unit (damage dealt or taken, block gained, card costs), run an effect program when something happens to its bearer, and intercept effects (block incoming debuffs, prevent death)."
+              Connects="Apply a status from any card, enemy or relic program using its id." />
 
     <StatusEditor Blueprint="_blueprint" BlueprintChanged="OnChanged" />
 </section>

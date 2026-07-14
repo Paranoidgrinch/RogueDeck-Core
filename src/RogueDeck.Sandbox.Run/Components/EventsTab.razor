@@ -4,9 +4,9 @@
 @* The dedicated Events tab: a lens over the shared run document, hosting the existing EventEditor. Authored
    events (situations, choices, effects) persist in the one ProjectDraft document and are referenced by the map. *@
 <section style="padding:1rem; max-width:70rem">
-    <h1>Events</h1>
-    <p class="muted">Author the run's events — situations, choices and their effects. Part of the shared run
-        document (referenced by the map in the Run tab).</p>
+    <TabIntro Title="Events"
+              Text="Story moments with choices. Each event is one or more situations; every choice lists what it does — gold, cards, relics, healing or damage, or jumping to a follow-up situation."
+              Connects="Place an event on the map as an event node on the Run tab." />
 
     <EventEditor Blueprint="_blueprint" BlueprintChanged="OnChanged" />
 </section>

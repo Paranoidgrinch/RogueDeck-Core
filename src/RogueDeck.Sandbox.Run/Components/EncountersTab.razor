@@ -6,9 +6,9 @@
    enemy-side sibling of the Cards tab — and the encounter rosters (which HP + which action ids each enemy runs)
    via the existing EncounterEditor. Both are part of the shared document, referenced by the map in the Run tab. *@
 <section style="padding:1rem; max-width:72rem">
-    <h1>Encounters &amp; enemies</h1>
-    <p class="muted">Author the enemy actions (effect programs + intents) and the combat encounters — enemy rosters,
-        their HP, which actions they run, and the hero's combat resources. Part of the shared run document.</p>
+    <TabIntro Title="Encounters & enemies"
+              Text="The enemies and their fights. An enemy action is an effect program plus the intent shown to the player; an encounter lines enemies up into one battle. Intent rules let an enemy pick different actions depending on how the fight is going."
+              Connects="Place an encounter on the map as a combat node on the Run tab, or fight it directly on the Playtest tab." />
 
     @{ var issues = RunDocumentValidator.ForTab(_blueprint, RunDocumentValidator.EncountersTab); }
     @if (issues.Count > 0)

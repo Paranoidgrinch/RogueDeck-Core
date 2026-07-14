@@ -6,10 +6,9 @@
    lone fight — but sourced entirely from the run document (hero, deck, cards, enemies, relics) instead of a separate
    SandboxModel. Pick an encounter, press Play, and it builds a one-combat-node run and hands it to RunSessionView. *@
 <section style="padding:1rem; max-width:70rem">
-    <h1>Playtest an encounter</h1>
-    <p class="muted">Play one fight from the run document — the hero &amp; starting state (Hero tab), the deck &amp;
-        cards (Cards tab), and the encounter's enemies (Encounters tab) all as authored. A quick way to feel out a
-        single fight without arranging a whole map.</p>
+    <TabIntro Title="Playtest an encounter"
+              Text="Fight a single battle from the current project — the hero, deck, relics and consumables all as authored — without arranging a whole map. Pick an encounter and play."
+              Connects="The pieces come from the Hero, Cards and Encounters tabs; to play a full run use the Run tab." />
 
     @if (_encounters.Count == 0)
     {

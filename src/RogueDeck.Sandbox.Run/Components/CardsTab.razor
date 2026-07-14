@@ -7,9 +7,9 @@
    deck is the multiset of card ids the hero starts with. This absorbs the standalone Cards tab (single-card JSON)
    into the one project document. *@
 <section style="padding:1rem; max-width:72rem">
-    <h1>Cards &amp; deck</h1>
-    <p class="muted">Author the run's cards (their effect programs) and the starting deck. Part of the shared run
-        document.</p>
+    <TabIntro Title="Cards & deck"
+              Text="The cards the player draws and plays in fights — each card is a name, a cost and a visual effect program — plus the starting deck (how many copies of each card a run begins with)."
+              Connects="Cards can also be granted by Events, Shops, Relics and rewards; the fights that draw them are authored on the Encounters tab." />
 
     @{ var issues = RunDocumentValidator.ForTab(_blueprint, RunDocumentValidator.CardsTab); }
     @if (issues.Count > 0)

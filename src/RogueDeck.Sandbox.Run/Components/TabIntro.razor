@@ -1,0 +1,16 @@
+@* Shared tab header: the tab's title, a plain-language explanation of what you author here, and an optional
+   "connects" line pointing at the related tabs — so every tab orients a first-time user the same way. *@
+<header class="tab-intro">
+    <h1>@Title</h1>
+    <p class="muted">@Text</p>
+    @if (!string.IsNullOrWhiteSpace(Connects))
+    {
+        <p class="muted connects">@Connects</p>
+    }
+</header>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string Text { get; set; } = "";
+    [Parameter] public string? Connects { get; set; }
+}

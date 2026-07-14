@@ -49,6 +49,30 @@ body {
     padding: 1rem 1.5rem 3rem;
 }
 
+/* Shared TabIntro header (title + plain-language intro + "connects to" line) */
+.tab-intro {
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #2b2f3a;
+}
+
+.tab-intro h1 {
+    margin: 0 0 0.3rem;
+}
+
+.tab-intro p {
+    margin: 0.15rem 0;
+    max-width: 60rem;
+}
+
+.tab-intro .connects {
+    font-size: 0.85em;
+}
+
+.tab-intro .connects::before {
+    content: "↪ ";
+}
+
 .choices {
     display: flex;
     gap: 0.5rem;

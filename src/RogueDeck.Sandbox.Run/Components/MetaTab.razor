@@ -6,10 +6,9 @@
    applies a list of MetaEffects (set an unlock flag, add to a meta counter, promote a run resource). The rules are
    CONTENT; the engine only evaluates them (MetaProgression.ApplyRunEnd). Unlock flags gate the Characters roster. *@
 <section style="padding:1rem; max-width:60rem">
-    <h1>Meta-progression (run-end rules)</h1>
-    <p class="muted">Rules applied to the saved profile when a run ends — unlock flags, meta-currency counters, or
-        carrying a run's resource total into a counter. Flags set here can gate characters (Characters tab, Unlock
-        flag). Empty ⇒ no meta progression.</p>
+    <TabIntro Title="Meta-progression (run-end rules)"
+              Text="Permanent progress between runs. When a run ends, these rules write to the saved profile — set an unlock flag, add to a meta-currency counter, or carry a run resource total over. Empty means no meta-progression."
+              Connects="A flag set here can unlock a character on the Characters tab." />
 
     @if (Rules.Count == 0)
     {

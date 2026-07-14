@@ -7,10 +7,9 @@
    pool of buy-once items (a card or relic for a price), how many are shown at once, an optional paid reroll, and
    an optional card-removal service. Prices use the shop's currency (gold by default). *@
 <section style="padding:1rem; max-width:70rem">
-    <h1>Shops</h1>
-    <p class="muted">Author named shops. A shop shows some of its item pool at once; items are buy-once, a paid
-        reroll refreshes the display, and the card-removal service lets the player pay to remove a deck card.
-        Reference a shop from a map node (kind "shop") on the Run tab.</p>
+    <TabIntro Title="Shops"
+              Text="Places to spend gold. A shop shows part of its item pool at a time; every item can be bought once, a paid reroll refreshes what is on display, and the card-removal service lets the player pay to remove a deck card."
+              Connects="Place a shop on the map as a shop node on the Run tab." />
 
     @foreach (var (id, shop) in Shops)
     {

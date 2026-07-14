@@ -6,9 +6,9 @@
    run's shared deck, so per-character deck editing is off here (ShowDeck=false). Combat resources are run-global
    (not part of RunStart), so they stay on this tab. *@
 <section style="padding:1rem; max-width:60rem">
-    <h1>Hero &amp; starting state</h1>
-    <p class="muted">The run's hero and how the RunState opens. Part of the shared run document (the Run tab plays
-        from it). For a roster of selectable characters, use the Characters tab.</p>
+    <TabIntro Title="Hero & starting state"
+              Text="Who the player is when a run begins: name, health, the energy-like resources they use in fights, and the relics, consumables and party members they start with."
+              Connects="The starting deck is built on the Cards tab · offer several selectable heroes on the Characters tab · the Run tab plays it all." />
 
     <RunStartEditor Value="Start" ValueChanged="Apply"
                     AvailableRelics="AvailableRelics" AvailableConsumables="AvailableConsumables"

@@ -5,9 +5,9 @@
    Consumable kinds authored here persist in the one ProjectDraft document, so the Hero tab (starting consumables),
    events/rewards (grant by id) and the Run/Playtest tabs (use them) all see the same consumables. *@
 <section style="padding:1rem; max-width:70rem">
-    <h1>Consumables</h1>
-    <p class="muted">Author the run's consumables — one-shot items with use effects (heal, gain resource, or a
-        next-combat opening like "start with 20 block"). Part of the shared run document.</p>
+    <TabIntro Title="Consumables"
+              Text="One-use items (potions and the like). Each consumable lists what happens when it is used — heal, gain a resource, or give the next fight an opening effect like &quot;start with 20 block&quot;."
+              Connects="Give consumables from Events, Shops, Relics or rewards; the player uses them from the inventory during a run." />
 
     <ConsumableEditor Blueprint="_blueprint" BlueprintChanged="OnChanged" />
 </section>
