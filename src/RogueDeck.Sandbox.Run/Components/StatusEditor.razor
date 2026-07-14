@@ -57,17 +57,17 @@
                     <div class="run-bar">
                         @EnumSelect(mod.Pipeline, p => SetModifier(index, modIndex, mod with { Pipeline = p }))
                         @EnumSelect(mod.Operation, o => SetModifier(index, modIndex, mod with { Operation = o }))
-                        <label>mag
+                        <label title="How much the value changes (per the chosen operation).">magnitude
                             <input type="number" value="@mod.Magnitude" style="width:4rem"
                                    @onchange="e => SetModifier(index, modIndex, mod with { Magnitude = AsInt(e.Value, mod.Magnitude) })" />
                         </label>
-                        <label>prio
+                        <label title="Order among modifiers on the same value — lower runs first.">priority
                             <input type="number" value="@mod.Priority" style="width:4rem"
                                    @onchange="e => SetModifier(index, modIndex, mod with { Priority = AsInt(e.Value, mod.Priority) })" />
                         </label>
                         <label>damage @EnumSelect(mod.RestrictDamageKind ?? DamageKind.Direct, k => SetModifier(index, modIndex, mod with { RestrictDamageKind = k }))</label>
-                        <label>applies-to
-                            <input value="@mod.AppliesToStatusId" style="width:7rem" placeholder="status id (opt)"
+                        <label title="Only modify applications of this one status (leave blank for all).">only for status
+                            <input value="@mod.AppliesToStatusId" style="width:7rem" placeholder="status id (optional)"
                                    @onchange="e => SetModifier(index, modIndex, mod with { AppliesToStatusId = Nullable(AsString(e.Value)) })" />
                         </label>
                         <button class="mini" @onclick="() => RemoveModifier(index, modIndex)">✕</button>

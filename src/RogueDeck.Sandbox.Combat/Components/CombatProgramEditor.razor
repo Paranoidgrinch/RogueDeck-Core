@@ -145,7 +145,7 @@ else
         {
             <input value="@Node.TeamId" style="width:6rem" placeholder="team id"
                    @onchange="e => Set(Node with { TeamId = AsString(e.Value) })" />
-            <input value="@Node.SummonDefinitionId" style="width:7rem" placeholder="definition id"
+            <input value="@Node.SummonDefinitionId" style="width:7rem" placeholder="new unit's id" title="The definition id the summoned unit is created under."
                    @onchange="e => Set(Node with { SummonDefinitionId = AsString(e.Value) })" />
             <input value="@Node.SummonDisplayName" style="width:7rem" placeholder="display name"
                    @onchange="e => Set(Node with { SummonDisplayName = AsString(e.Value) })" />
