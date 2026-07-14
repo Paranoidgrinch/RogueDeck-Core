@@ -48,12 +48,13 @@
             var (svgW, svgH) = MapGraphLayout.CanvasSize(pos);
             <div class="run-bar">
                 <button class="mini" @onclick="AutoLayout" title="place every node by graph depth">Auto-layout</button>
-                <span class="muted">A branching map, drawn from its edges. Set each node's x/y below (or auto-layout),
-                    green outline = entry, pink = combat, blue = event.</span>
+                <span class="muted">A branching map, drawn from its edges. Drag a node to place it (or set x/y below,
+                    or auto-layout), green outline = entry, pink = combat, blue = event.</span>
             </div>
             <div style="overflow:auto;border:1px solid #ccc;max-height:440px;background:#fafafa">
                 <svg width="@svgW" height="@svgH" viewBox="0 0 @svgW @svgH" xmlns="http://www.w3.org/2000/svg"
-                     style="font:11px sans-serif">
+                     style="font:11px sans-serif;touch-action:none;user-select:none"
+                     @onpointermove="DragMove" @onpointerup="DragEnd" @onpointerleave="DragEnd">
                     <defs>
                         <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"
                                 markerUnits="strokeWidth">
@@ -64,21 +65,25 @@
                     {
                         @if (pos.TryGetValue(edge.From, out var a) && pos.TryGetValue(edge.To, out var b))
                         {
-                            <line x1="@(a.X + MapGraphLayout.NodeWidth / 2)" y1="@(a.Y + MapGraphLayout.NodeHeight / 2)"
-                                  x2="@(b.X + MapGraphLayout.NodeWidth / 2)" y2="@(b.Y + MapGraphLayout.NodeHeight / 2)"
+                            var (ax, ay) = Dragged(edge.From, a.X, a.Y);
+                            var (bx, by) = Dragged(edge.To, b.X, b.Y);
+                            <line x1="@(ax + MapGraphLayout.NodeWidth / 2)" y1="@(ay + MapGraphLayout.NodeHeight / 2)"
+                                  x2="@(bx + MapGraphLayout.NodeWidth / 2)" y2="@(by + MapGraphLayout.NodeHeight / 2)"
                                   stroke="#888" stroke-width="1.5" marker-end="url(#arrow)" />
                         }
                     }
                     @foreach (var mapNode in bp.Map.Nodes)
                     {
                         var p = pos[mapNode.Id];
+                        var (px, py) = Dragged(mapNode.Id, p.X, p.Y);
                         var isEntry = bp.Map.EntryNodeIds.Contains(mapNode.Id);
-                        <g>
-                            <rect x="@p.X" y="@p.Y" width="@MapGraphLayout.NodeWidth" height="@MapGraphLayout.NodeHeight"
+                        <g style="cursor:grab" @onpointerdown="e => DragStart(mapNode.Id, px, py, e)"
+                           @onpointerdown:preventDefault>
+                            <rect x="@px" y="@py" width="@MapGraphLayout.NodeWidth" height="@MapGraphLayout.NodeHeight"
                                   rx="6" fill="@(mapNode.Type == StandardRunIds.CombatNode ? "#fde2e2" : mapNode.Type == StandardRunIds.ShopNode ? "#fef3c7" : "#e2ecfd")"
                                   stroke="@(isEntry ? "#1a7f37" : "#999")" stroke-width="@(isEntry ? "2.5" : "1")" />
-                            <text x="@(p.X + 8)" y="@(p.Y + 18)" font-weight="bold">@mapNode.Id.Value</text>
-                            <text x="@(p.X + 8)" y="@(p.Y + 34)" fill="#555">@NodeKind(mapNode): @NodeTarget(mapNode)</text>
+                            <text x="@(px + 8)" y="@(py + 18)" font-weight="bold">@mapNode.Id.Value</text>
+                            <text x="@(px + 8)" y="@(py + 34)" fill="#555">@NodeKind(mapNode): @NodeTarget(mapNode)</text>
                         </g>
                     }
                 </svg>
@@ -336,6 +341,47 @@
 
     private void SetCoordX(NodeId id, ChangeEventArgs e) => SetCoord(id, ParseInt(e), null);
     private void SetCoordY(NodeId id, ChangeEventArgs e) => SetCoord(id, null, ParseInt(e));
+
+    // ── drag-to-position (pure Blazor pointer events, no JS interop) ────────────────
+    // During a drag the node renders from the transient _drag* fields (Dragged); only the pointer-up commits the
+    // final cell through SetCoord — so one drag is ONE document write (one undo snapshot, one autosave).
+    private NodeId? _dragId;
+    private double _dragClientX, _dragClientY;
+    private int _dragOriginX, _dragOriginY, _dragX, _dragY;
+    private bool _dragMoved;
+
+    private (int X, int Y) Dragged(NodeId id, int x, int y) =>
+        _dragId == id && _dragMoved ? (_dragX, _dragY) : (x, y);
+
+    private void DragStart(NodeId id, int x, int y, PointerEventArgs e)
+    {
+        _dragId = id;
+        _dragClientX = e.ClientX;
+        _dragClientY = e.ClientY;
+        _dragOriginX = _dragX = x;
+        _dragOriginY = _dragY = y;
+        _dragMoved = false;
+    }
+
+    private void DragMove(PointerEventArgs e)
+    {
+        if (_dragId is null)
+            return;
+        _dragX = Math.Max(0, _dragOriginX + (int)Math.Round(e.ClientX - _dragClientX));
+        _dragY = Math.Max(0, _dragOriginY + (int)Math.Round(e.ClientY - _dragClientY));
+        _dragMoved = true;
+    }
+
+    private void DragEnd()
+    {
+        if (_dragId is not { } id)
+            return;
+        var moved = _dragMoved;
+        _dragId = null;
+        _dragMoved = false;
+        if (moved)
+            SetCoord(id, _dragX, _dragY);
+    }
 
     private void SetCoord(NodeId id, int? x, int? y)
     {
