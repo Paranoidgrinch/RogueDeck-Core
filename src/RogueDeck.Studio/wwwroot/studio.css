@@ -73,6 +73,40 @@ body {
     content: "↪ ";
 }
 
+/* Help & glossary page */
+.glossary dl dt {
+    font-weight: 600;
+    margin-top: 0.6rem;
+}
+
+.glossary dl dd {
+    margin: 0.1rem 0 0 1rem;
+    color: #b8c4d0;
+}
+
+.glossary table {
+    border-collapse: collapse;
+    margin: 0.5rem 0 1.5rem;
+}
+
+.glossary th,
+.glossary td {
+    border: 1px solid #2b2f3a;
+    padding: 0.3rem 0.6rem;
+    text-align: left;
+    vertical-align: top;
+}
+
+.glossary th {
+    background: #1c1f26;
+}
+
+.glossary code {
+    background: #23262e;
+    border-radius: 3px;
+    padding: 0.05rem 0.3rem;
+}
+
 .choices {
     display: flex;
     gap: 0.5rem;

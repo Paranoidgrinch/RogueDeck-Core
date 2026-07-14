@@ -1,0 +1,156 @@
+@* The Help & glossary tab: plain-language explanations of every RogueDeck concept, followed by reference tables
+   GENERATED from the engine's own catalogs (CombatProgramModel / StudioVocabulary / RunEventCatalog /
+   RelicCombatTriggers) — so the reference can never drift from what the editors actually offer. Static content:
+   no document access, no interactivity. *@
+
+<section class="glossary" style="padding:1rem; max-width:72rem">
+    <TabIntro Title="Help & glossary"
+              Text="What everything in RogueDeck Studio means, in plain language. The reference tables below are generated straight from the engine's catalogs, so they always match what the editors offer."
+              Connects="Every dropdown in Studio reads “Plain label (technicalKey)” — the technical key in parentheses is exactly what appears in the project's JSON." />
+
+    <h2>Core concepts</h2>
+    <dl>
+        <dt>Run</dt>
+        <dd>One full playthrough: the hero travels a map of nodes, fights, shops, collects cards and relics, and
+            wins or loses. Everything is authored into one shared project document and played from the Run tab.</dd>
+        <dt>Map &amp; nodes</dt>
+        <dd>The run's structure — a graph of nodes connected by paths the player chooses between. A node is a fight
+            (combat), a story moment (event) or a shop.</dd>
+        <dt>Card &amp; deck</dt>
+        <dd>A card is something the player plays in a fight; what it does is its effect program. The deck is the
+            set of cards carried through the run, drawn into a hand each fight.</dd>
+        <dt>Encounter</dt>
+        <dd>One battle: which enemies appear, their health, and which actions they take (fixed rotation, or picked
+            by intent rules based on the fight's state).</dd>
+        <dt>Enemy action &amp; intent</dt>
+        <dd>One thing an enemy can do — an effect program — plus the intent (label + kind) telegraphed to the
+            player before it happens.</dd>
+        <dt>Relic</dt>
+        <dd>A passive item the player keeps. It reacts to run events (e.g. gain gold after every fight) and can add
+            standing combat rules to every fight while owned (e.g. thorns).</dd>
+        <dt>Status</dt>
+        <dd>A buff or debuff sitting on a unit (poison, strength…). It can passively modify values, run a program
+            when something happens to its bearer, and intercept effects (block debuffs, prevent death).</dd>
+        <dt>Consumable</dt>
+        <dd>A one-use item (potion). Its use effects run once when the player uses it.</dd>
+        <dt>Event</dt>
+        <dd>A story moment with choices; each choice lists what it does.</dd>
+        <dt>Shop</dt>
+        <dd>A place to spend gold — buy-once items, paid rerolls, and services like card removal.</dd>
+        <dt>Meta-progression</dt>
+        <dd>Permanent progress between runs, written to the saved profile when a run ends — unlock flags and
+            meta-currency counters.</dd>
+        <dt>Effect program</dt>
+        <dd>A small visual script: steps (deal damage, apply status…), each with a target and an amount, plus
+            control flow (sequences, loops, ifs). Cards, enemy actions, relic rules, status triggers and
+            consumables all run effect programs.</dd>
+        <dt>Target (selector)</dt>
+        <dd>Who a step affects — the chosen target, every enemy, the weakest ally… See the table below.</dd>
+        <dt>Amount</dt>
+        <dd>How much a step does — a fixed number, a value read from the fight (current HP, status stacks…), or
+            arithmetic combining both.</dd>
+        <dt>Trigger</dt>
+        <dd>The moment something reacts: relic reactions hook run events, while relic combat rules and status
+            triggers hook combat events.</dd>
+    </dl>
+
+    <h2>Effect steps (combat programs)</h2>
+    <p class="muted">The building blocks of every combat effect program — what a card, enemy action, relic rule,
+        status trigger or consumable can do.</p>
+    <table>
+        <thead><tr><th>Label</th><th>Technical key</th><th>What it does</th></tr></thead>
+        <tbody>
+            @foreach (var (kind, label) in CombatProgramModel.AllKinds)
+            {
+                <tr><td>@Cap(label)</td><td><code>@kind</code></td><td>@StudioVocabulary.NodeDescription(kind)</td></tr>
+            }
+        </tbody>
+    </table>
+
+    <h2>Targets (selectors)</h2>
+    <p class="muted">Who an effect step can aim at.</p>
+    <table>
+        <thead><tr><th>Label</th><th>Technical key</th><th>Who it picks</th></tr></thead>
+        <tbody>
+            @foreach (var key in CombatProgramModel.AllSelectorKeys)
+            {
+                <tr><td>@Cap(StudioVocabulary.SelectorLabel(key))</td><td><code>@key</code></td><td>@StudioVocabulary.SelectorDescription(key)</td></tr>
+            }
+        </tbody>
+    </table>
+
+    <h2>Amounts</h2>
+    <p class="muted">The ways a step's number can be computed.</p>
+    <table>
+        <thead><tr><th>Label</th><th>Technical key</th><th>What it reads</th></tr></thead>
+        <tbody>
+            @foreach (var (kind, label, description) in StudioVocabulary.AmountKinds)
+            {
+                <tr><td>@Cap(label)</td><td><code>@kind</code></td><td>@description</td></tr>
+            }
+        </tbody>
+    </table>
+
+    <h2>Conditions</h2>
+    <p class="muted">What an “if…” or “repeat until…” can check.</p>
+    <table>
+        <thead><tr><th>Label</th><th>Technical key</th><th>When it is true</th></tr></thead>
+        <tbody>
+            @foreach (var (kind, label, description) in StudioVocabulary.ConditionKinds)
+            {
+                <tr><td>@Cap(label)</td><td><code>@kind</code></td><td>@description</td></tr>
+            }
+        </tbody>
+    </table>
+    <p class="muted">Values a “value compares” condition can read:</p>
+    <table>
+        <thead><tr><th>Label</th><th>Technical key</th><th>What it reads</th></tr></thead>
+        <tbody>
+            @foreach (var (kind, label, description) in StudioVocabulary.CompareValueKinds)
+            {
+                <tr><td>@Cap(label)</td><td><code>@kind</code></td><td>@description</td></tr>
+            }
+        </tbody>
+    </table>
+
+    <h2>Card selections</h2>
+    <p class="muted">How a card-targeting step picks which card it acts on.</p>
+    <table>
+        <thead><tr><th>Label</th><th>Technical key</th><th>Which card</th></tr></thead>
+        <tbody>
+            @foreach (var (kind, label, description) in StudioVocabulary.CardKinds)
+            {
+                <tr><td>@Cap(label)</td><td><code>@kind</code></td><td>@description</td></tr>
+            }
+        </tbody>
+    </table>
+
+    <h2>Relic combat triggers</h2>
+    <p class="muted">The combat moments a relic's injected rule can fire on (Relics tab, “Combat rules”).</p>
+    <table>
+        <thead><tr><th>Label</th><th>Technical key</th><th>When it fires</th></tr></thead>
+        <tbody>
+            @foreach (var key in RelicCombatTriggers.Keys)
+            {
+                <tr><td>@Cap(StudioVocabulary.CombatTriggerLabel(key))</td><td><code>@key</code></td><td>@StudioVocabulary.CombatTriggerDescription(key)</td></tr>
+            }
+        </tbody>
+    </table>
+
+    <h2>Run events</h2>
+    <p class="muted">The run-level moments a relic reaction can hook (Relics tab, “When …”).</p>
+    <table>
+        <thead><tr><th>Label</th><th>Technical key</th><th>When it fires</th></tr></thead>
+        <tbody>
+            @foreach (var kind in RunEventCatalog.All)
+            {
+                <tr><td>@Cap(kind.Label)</td><td><code>@kind.Key</code></td><td>@kind.Description</td></tr>
+            }
+        </tbody>
+    </table>
+</section>
+
+@code {
+    private static string Cap(string s) =>
+        string.IsNullOrEmpty(s) ? s : char.ToUpperInvariant(s[0]) + s[1..];
+}
