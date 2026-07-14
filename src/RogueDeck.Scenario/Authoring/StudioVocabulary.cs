@@ -10,8 +10,13 @@ namespace RogueDeck.Scenario.Authoring;
 // selector or node kind cannot ship unlabeled.
 public static class StudioVocabulary
 {
-    // The Studio-wide display convention: plain label first, technical key in parentheses after it.
-    public static string Display(string label, string key) => $"{SentenceCase(label)} ({key})";
+    // The Studio-wide display convention: plain label first, technical key in parentheses after it. When the label
+    // IS the key (modulo case — single-word labels like "combat" or enum members like "Hand"), the parenthetical
+    // would only repeat it and is omitted.
+    public static string Display(string label, string key) =>
+        string.Equals(label, key, StringComparison.OrdinalIgnoreCase)
+            ? SentenceCase(label)
+            : $"{SentenceCase(label)} ({key})";
 
     private static string SentenceCase(string s) =>
         string.IsNullOrEmpty(s) ? s : char.ToUpperInvariant(s[0]) + s[1..];
@@ -215,6 +220,26 @@ public static class StudioVocabulary
     public static string DisplayFor(IReadOnlyList<(string Kind, string Label, string Description)> list, string kind) =>
         Display(LabelFor(list, kind), kind);
 
+    // ── relic combat-trigger keys (the RelicCombatTriggers catalog in RogueDeck.Run) ────────────────────────────
+    private static readonly IReadOnlyDictionary<string, (string Label, string Description)> CombatTriggerEntries =
+        new Dictionary<string, (string, string)>
+        {
+            ["turnStarted"] = ("a turn starts", "Fires at the start of each turn."),
+            ["cardPlayed"] = ("a card is played", "Fires whenever a card is played."),
+            ["damageReceived"] = ("damage is taken", "Fires when a unit takes damage — 'event amount' is the damage taken."),
+            ["damageDealt"] = ("damage is dealt", "Fires when a unit deals damage — 'event amount' is the damage dealt."),
+            ["healed"] = ("a unit is healed", "Fires when a unit is healed — 'event amount' is the amount restored."),
+            ["resourceGained"] = ("a resource is gained", "Fires when a unit gains a resource — 'event amount' is the amount gained."),
+        };
+
+    public static string CombatTriggerLabel(string key) =>
+        CombatTriggerEntries.TryGetValue(key, out var entry) ? entry.Label : key;
+
+    public static string CombatTriggerDescription(string key) =>
+        CombatTriggerEntries.TryGetValue(key, out var entry) ? entry.Description : "";
+
+    public static string CombatTriggerDisplay(string key) => Display(CombatTriggerLabel(key), key);
+
     // ── enum members (zones, lifecycle states, movement modes…) ─────────────────────────────────────────────────
     // Curated labels where the auto-split of the member name isn't plain enough; keyed "EnumType.Member".
     private static readonly IReadOnlyDictionary<string, string> EnumLabels = new Dictionary<string, string>
@@ -235,6 +260,37 @@ public static class StudioVocabulary
         ["StatusPolarityFilter.Debuff"] = "debuffs only",
         ["StatusPick.First"] = "first in the list",
         ["ResourcePick.First"] = "first in the list",
+        // Custom-status authoring enums (EffectVocabulary + status definition enums).
+        ["TriggerEvent.TurnStarted"] = "the bearer's turn starts",
+        ["TriggerEvent.TurnEnded"] = "the bearer's turn ends",
+        ["TriggerEvent.DamageTaken"] = "the bearer takes damage",
+        ["TriggerEvent.DamageDealt"] = "the bearer deals damage",
+        ["TriggerEvent.Healed"] = "the bearer is healed",
+        ["TriggerEvent.CardPlayed"] = "the bearer plays a card",
+        ["TriggerEvent.Downed"] = "the bearer is downed",
+        ["TriggerEvent.StatusExpired"] = "this status expires",
+        ["TriggerEvent.ResourceGained"] = "the bearer gains a resource",
+        ["TriggerEvent.CardCostPaid"] = "the bearer pays a card cost",
+        ["TriggerEvent.StatusApplied"] = "the bearer gains another status",
+        ["TriggerEvent.StatusRemoved"] = "a status is removed from the bearer",
+        ["TriggerEvent.StatusMerged"] = "a status merges on the bearer",
+        ["TriggerEvent.RoundStarted"] = "a round starts",
+        ["TriggerEvent.RoundEnded"] = "a round ends",
+        ["EffectTarget.Target"] = "the event's target",
+        ["EffectTarget.Self"] = "the bearer",
+        ["StatusStackingBehavior.CreateSeparateInstance"] = "each application is separate",
+        ["StatusStackingBehavior.MergeWithExistingInstance"] = "applications merge (stacks add up)",
+        ["PassiveModifierPipeline.DamageDealt"] = "damage the bearer deals",
+        ["PassiveModifierPipeline.DamageReceived"] = "damage the bearer takes",
+        ["PassiveModifierPipeline.BlockGain"] = "block the bearer gains",
+        ["PassiveModifierPipeline.CardCost"] = "the bearer's card costs",
+        ["PassiveModifierPipeline.OutgoingStatusApplicationStacks"] = "stacks the bearer applies",
+        ["PassiveModifierOperation.AddPerStack"] = "add amount × stacks",
+        ["PassiveModifierOperation.AddFlat"] = "add amount once",
+        ["PassiveModifierOperation.ScalePercent"] = "scale by percent",
+        ["DamageKind.Direct"] = "direct hits",
+        ["DamageKind.DamageOverTime"] = "damage over time",
+        ["DamageKind.Reflected"] = "reflected damage",
     };
 
     private static readonly IReadOnlyDictionary<string, string> EnumDescriptions = new Dictionary<string, string>
@@ -259,17 +315,22 @@ public static class StudioVocabulary
         ["MovementMode.AwayFromEnemies"] = "Step the target away from the enemy side.",
         ["MovementMode.PushFromSource"] = "Push the target away from the acting unit.",
         ["MovementMode.PullToSource"] = "Pull the target toward the acting unit.",
+        ["TriggerEvent.StatusExpired"] = "Fires when this status naturally runs out of duration on its bearer.",
+        ["PassiveModifierPipeline.OutgoingStatusApplicationStacks"] = "Changes how many stacks the bearer applies when it gives statuses to others.",
+        ["PassiveModifierOperation.AddPerStack"] = "Adds the magnitude once per stack of this status.",
+        ["PassiveModifierOperation.AddFlat"] = "Adds the magnitude once while the status is present.",
+        ["PassiveModifierOperation.ScalePercent"] = "Multiplies the value by magnitude/100 (150 = +50%, 75 = −25%).",
+        ["StatusStackingBehavior.CreateSeparateInstance"] = "Applying the status again adds a second independent copy.",
+        ["StatusStackingBehavior.MergeWithExistingInstance"] = "Applying the status again adds its stacks to the existing copy.",
     };
 
     // "Friendly label (RawName)" for an enum member: a curated label, or the member name split into words.
-    // When the friendly label is just the sentence-cased name (single-word members like "Hand" or "Random"),
-    // the parenthetical would repeat it and is omitted.
+    // Display's own guard drops the parenthetical for single-word members like "Hand" or "Random".
     public static string EnumDisplay<TEnum>(TEnum value) where TEnum : struct, Enum
     {
         var raw = value.ToString();
         var label = EnumLabels.TryGetValue($"{typeof(TEnum).Name}.{raw}", out var custom) ? custom : SplitWords(raw);
-        var display = SentenceCase(label);
-        return display == raw ? display : $"{display} ({raw})";
+        return Display(label, raw);
     }
 
     public static string EnumDescription<TEnum>(TEnum value) where TEnum : struct, Enum =>

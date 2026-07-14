@@ -29,6 +29,30 @@ public class RunEventCatalogTests
         Assert.Equal(RunEventCatalog.All.Count, RunEventCatalog.Keys.Distinct().Count());
     }
 
+    [Fact]
+    public void Every_event_has_a_label_and_a_description()
+    {
+        foreach (var kind in RunEventCatalog.All)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(kind.Label), $"Run event '{kind.Key}' has no label.");
+            Assert.False(string.IsNullOrWhiteSpace(kind.Description), $"Run event '{kind.Key}' has no description.");
+        }
+    }
+
+    [Fact]
+    public void Every_relic_combat_trigger_has_a_studio_label_and_description()
+    {
+        // The trigger keys live here (RelicCombatTriggers) but their display vocabulary lives in StudioVocabulary
+        // (RogueDeck.Scenario) — this parity check keeps the two in sync when a trigger is added.
+        foreach (var key in RelicCombatTriggers.Keys)
+        {
+            Assert.NotEqual(key, RogueDeck.Scenario.Authoring.StudioVocabulary.CombatTriggerLabel(key));
+            Assert.False(
+                string.IsNullOrWhiteSpace(RogueDeck.Scenario.Authoring.StudioVocabulary.CombatTriggerDescription(key)),
+                $"Relic combat trigger '{key}' has no description in StudioVocabulary.");
+        }
+    }
+
     [Theory]
     [MemberData(nameof(AllKeys))]
     public void Build_produces_a_program_of_the_right_event_type(string key)

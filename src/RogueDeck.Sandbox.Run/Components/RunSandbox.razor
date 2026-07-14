@@ -101,9 +101,9 @@
             </ol>
             <div class="run-bar">
                 <select @bind="_newNodeType">
-                    <option value="event">event</option>
-                    <option value="combat">combat</option>
-                    <option value="shop">shop</option>
+                    <option value="event" title="A story event with choices, defined on the Events tab.">Story event (event)</option>
+                    <option value="combat" title="A fight against an encounter, defined on the Encounters tab.">Fight (combat)</option>
+                    <option value="shop" title="A shop with purchasable stock, defined on the Shops tab.">Shop</option>
                 </select>
                 <select @bind="_newNodeTarget">
                     <option value="">— target —</option>

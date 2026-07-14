@@ -332,20 +332,23 @@
     };
 
     // A generic enum dropdown bound to a value + change handler — keeps the many enum selects (polarity, stacking,
-    // pipeline, operation, damage kind) to one line each in the markup.
+    // pipeline, operation, damage kind) to one line each in the markup. Options show the StudioVocabulary display
+    // ("Friendly label (RawName)") while the option VALUE stays the raw enum name, so nothing serialized changes.
     private RenderFragment EnumSelect<TEnum>(TEnum current, Func<TEnum, Task> onChange) where TEnum : struct, Enum => builder =>
     {
         builder.OpenElement(0, "select");
         builder.AddAttribute(1, "value", current.ToString());
-        builder.AddAttribute(2, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+        builder.AddAttribute(2, "title", StudioVocabulary.EnumDescription(current));
+        builder.AddAttribute(3, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
             Enum.TryParse<TEnum>(AsString(e.Value), out var value) ? onChange(value) : Task.CompletedTask));
-        var seq = 3;
+        var seq = 4;
         foreach (var value in Enum.GetValues<TEnum>())
         {
             builder.OpenElement(seq++, "option");
             builder.AddAttribute(seq++, "value", value.ToString());
+            builder.AddAttribute(seq++, "title", StudioVocabulary.EnumDescription(value));
             builder.AddAttribute(seq++, "selected", value.Equals(current));
-            builder.AddContent(seq++, value.ToString());
+            builder.AddContent(seq++, StudioVocabulary.EnumDisplay(value));
             builder.CloseElement();
         }
         builder.CloseElement();

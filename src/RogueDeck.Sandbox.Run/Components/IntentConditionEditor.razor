@@ -3,10 +3,10 @@
    kinds (all-of / any-of / not) nest child editors of this same component to arbitrary depth. *@
 
 <span class="intent-cond">
-    <select value="@KindOf(Condition)" @onchange="e => ChangeKind(AsString(e.Value))">
-        @foreach (var (kind, label) in Kinds)
+    <select value="@KindOf(Condition)" title="@DescriptionOf(KindOf(Condition))" @onchange="e => ChangeKind(AsString(e.Value))">
+        @foreach (var (kind, label, description) in Kinds)
         {
-            <option value="@kind">@label</option>
+            <option value="@kind" title="@description">@StudioVocabulary.Display(label, kind)</option>
         }
     </select>
 
@@ -81,16 +81,19 @@
 
     private static readonly ComparisonOperator[] Ops = Enum.GetValues<ComparisonOperator>();
 
-    private static readonly (string kind, string label)[] Kinds =
+    private static readonly (string kind, string label, string description)[] Kinds =
     {
-        ("healthPercent", "HP %"),
-        ("round", "round"),
-        ("selfHasStatus", "self has status"),
-        ("opponentHasStatus", "opponent has status"),
-        ("allOf", "all of…"),
-        ("anyOf", "any of…"),
-        ("not", "not…"),
+        ("healthPercent", "HP %", "True when the enemy's health percentage compares as chosen (e.g. below 50%)."),
+        ("round", "round", "True when the current round number compares as chosen."),
+        ("selfHasStatus", "self has status", "True when this enemy currently has the named status."),
+        ("opponentHasStatus", "opponent has status", "True when the enemy's opponent has the named status."),
+        ("allOf", "all of…", "True only when every nested condition holds."),
+        ("anyOf", "any of…", "True when at least one nested condition holds."),
+        ("not", "not…", "True when the nested condition does NOT hold."),
     };
+
+    private static string DescriptionOf(string kind) =>
+        Kinds.FirstOrDefault(k => k.kind == kind).description ?? "";
 
     private Task Emit(EnemyIntentCondition next) => ConditionChanged.InvokeAsync(next);
 

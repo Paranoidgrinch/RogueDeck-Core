@@ -3,10 +3,10 @@
    finished run's resource total into a meta counter. Not recursive — unlike the intent conditions. *@
 
 <span class="meta-effect">
-    <select value="@KindOf(Value)" @onchange="e => ChangeKind(AsString(e.Value))">
-        @foreach (var (kind, label) in Kinds)
+    <select value="@KindOf(Value)" title="@DescriptionOf(KindOf(Value))" @onchange="e => ChangeKind(AsString(e.Value))">
+        @foreach (var (kind, label, description) in Kinds)
         {
-            <option value="@kind">@label</option>
+            <option value="@kind" title="@description">@StudioVocabulary.Display(label, kind)</option>
         }
     </select>
 
@@ -42,12 +42,15 @@
     [Parameter, EditorRequired] public MetaEffect Value { get; set; } = default!;
     [Parameter] public EventCallback<MetaEffect> ValueChanged { get; set; }
 
-    private static readonly (string kind, string label)[] Kinds =
+    private static readonly (string kind, string label, string description)[] Kinds =
     {
-        ("setFlag", "set flag"),
-        ("addCounter", "add to counter"),
-        ("promoteResource", "promote run resource"),
+        ("setFlag", "set flag", "Set a permanent meta flag (e.g. unlock a character) when the run ends."),
+        ("addCounter", "add to counter", "Add a fixed amount to a permanent meta counter when the run ends."),
+        ("promoteResource", "promote run resource", "Carry the finished run's total of a resource (e.g. gold) into a permanent meta counter."),
     };
+
+    private static string DescriptionOf(string kind) =>
+        Kinds.FirstOrDefault(k => k.kind == kind).description ?? "";
 
     private Task Emit(MetaEffect next) => ValueChanged.InvokeAsync(next);
 

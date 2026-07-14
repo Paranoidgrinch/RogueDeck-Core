@@ -51,10 +51,11 @@
                         <div class="run-bar">
                             <label>When
                                 <select value="@EventKey(reaction.EventType)"
+                                        title="@EventDescription(reaction.EventType)"
                                         @onchange="e => SetReactionEvent(relicIndex, reactionIndex, AsString(e.Value))">
                                     @foreach (var kind in RunEventCatalog.All)
                                     {
-                                        <option value="@kind.Key">@kind.Label</option>
+                                        <option value="@kind.Key" title="@kind.Description">@StudioVocabulary.Display(kind.Label, kind.Key)</option>
                                     }
                                 </select>
                             </label>
@@ -123,10 +124,11 @@
                     <div class="fx-block">
                         <div class="run-bar">
                             <span class="muted">on</span>
-                            <select value="@rule.Trigger" @onchange="e => SetRuleTrigger(relicIndex, ruleIndex, AsString(e.Value))">
+                            <select value="@rule.Trigger" title="@StudioVocabulary.CombatTriggerDescription(rule.Trigger)"
+                                    @onchange="e => SetRuleTrigger(relicIndex, ruleIndex, AsString(e.Value))">
                                 @foreach (var key in RelicCombatTriggers.Keys)
                                 {
-                                    <option value="@key">@key</option>
+                                    <option value="@key" title="@StudioVocabulary.CombatTriggerDescription(key)">@StudioVocabulary.CombatTriggerDisplay(key)</option>
                                 }
                             </select>
                             <span class="muted">priority</span>
@@ -167,7 +169,7 @@
                     <select @bind="_newRuleTrigger">
                         @foreach (var key in RelicCombatTriggers.Keys)
                         {
-                            <option value="@key">@key</option>
+                            <option value="@key" title="@StudioVocabulary.CombatTriggerDescription(key)">@StudioVocabulary.CombatTriggerDisplay(key)</option>
                         }
                     </select>
                     <button class="mini" @onclick="() => AddCombatRule(relicIndex)">+ combat rule</button>
@@ -627,6 +629,9 @@
     private static string EventKey(Type eventType) => RunEventCatalog.KeyFor(eventType);
 
     private static string EventLabel(Type eventType) => RunEventCatalog.LabelFor(eventType);
+
+    private static string EventDescription(Type eventType) =>
+        RunEventCatalog.TryByType(eventType, out var kind) ? kind.Description : "";
 
     // Inline editor for one effect template: a constant/computed amount for gold/resource/heal/damage, or the
     // literal control for max-HP / flag / counter.

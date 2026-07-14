@@ -1,10 +1,11 @@
 namespace RogueDeck.Run;
 
-// One authorable run event: the stable string key used in serialization + UI, the event CLR type, and a
-// human-readable label for editors. This is the single source of truth for "which run events a relic reaction
-// (or any future data trigger) may hook" — the JSON converter (TriggeredRunEffectJsonConverter) and the Studio
-// editors both read it, so adding an event is one entry here, nowhere else.
-public sealed record RunEventKind(string Key, Type EventType, string Label);
+// One authorable run event: the stable string key used in serialization + UI, the event CLR type, a
+// human-readable label, and a one-sentence help text for editors. This is the single source of truth for "which
+// run events a relic reaction (or any future data trigger) may hook" — the JSON converter
+// (TriggeredRunEffectJsonConverter) and the Studio editors both read it, so adding an event is one entry here,
+// nowhere else.
+public sealed record RunEventKind(string Key, Type EventType, string Label, string Description = "");
 
 public static class RunEventCatalog
 {
@@ -12,42 +13,72 @@ public static class RunEventCatalog
     // editor dropdown lists the common triggers first.
     public static readonly IReadOnlyList<RunEventKind> All =
     [
-        new("runStarted", typeof(RunStartedRunEvent), "the run starts"),
-        new("nodeEntered", typeof(NodeEnteredRunEvent), "a node is entered"),
-        new("nodeChosen", typeof(NodeChosenRunEvent), "a next node is chosen"),
-        new("mapChanged", typeof(MapChangedRunEvent), "the map topology changes"),
-        new("combatResolved", typeof(CombatResolvedRunEvent), "a combat resolves"),
-        new("eventChoiceMade", typeof(EventChoiceMadeRunEvent), "an event choice is made"),
-        new("shopItemPurchased", typeof(ShopItemPurchasedRunEvent), "a shop item is purchased"),
-        new("shopRerolled", typeof(ShopRerolledRunEvent), "a shop's stock is rerolled"),
-        new("runEnded", typeof(RunEndedRunEvent), "the run ends"),
+        new("runStarted", typeof(RunStartedRunEvent), "the run starts",
+            "Fires once when a new run begins."),
+        new("nodeEntered", typeof(NodeEnteredRunEvent), "a node is entered",
+            "Fires when the player enters a map node (a fight, a story event, a shop…)."),
+        new("nodeChosen", typeof(NodeChosenRunEvent), "a next node is chosen",
+            "Fires when the player picks which map node to travel to next."),
+        new("mapChanged", typeof(MapChangedRunEvent), "the map topology changes",
+            "Fires when the map itself changes mid-run (nodes or paths added or removed)."),
+        new("combatResolved", typeof(CombatResolvedRunEvent), "a combat resolves",
+            "Fires when a fight ends, win or lose."),
+        new("eventChoiceMade", typeof(EventChoiceMadeRunEvent), "an event choice is made",
+            "Fires when the player picks an option in a story event."),
+        new("shopItemPurchased", typeof(ShopItemPurchasedRunEvent), "a shop item is purchased",
+            "Fires when the player buys something in a shop."),
+        new("shopRerolled", typeof(ShopRerolledRunEvent), "a shop's stock is rerolled",
+            "Fires when the player pays to redraw a shop's stock."),
+        new("runEnded", typeof(RunEndedRunEvent), "the run ends",
+            "Fires once when the run ends, in victory or defeat."),
 
-        new("rewardOffered", typeof(RewardOfferedRunEvent), "a reward is offered"),
-        new("rewardChosen", typeof(RewardChosenRunEvent), "a reward is chosen"),
-        new("rewardGranted", typeof(RewardGrantedRunEvent), "a reward is granted"),
+        new("rewardOffered", typeof(RewardOfferedRunEvent), "a reward is offered",
+            "Fires when a reward choice is put in front of the player."),
+        new("rewardChosen", typeof(RewardChosenRunEvent), "a reward is chosen",
+            "Fires when the player picks one of the offered rewards."),
+        new("rewardGranted", typeof(RewardGrantedRunEvent), "a reward is granted",
+            "Fires when a reward's contents are actually handed over."),
 
-        new("cardAddedToDeck", typeof(CardAddedToDeckRunEvent), "a card is added to the deck"),
-        new("cardRemovedFromDeck", typeof(CardRemovedFromDeckRunEvent), "a card is removed from the deck"),
-        new("cardUpgraded", typeof(CardUpgradedRunEvent), "a card is upgraded"),
-        new("cardTransformed", typeof(CardTransformedRunEvent), "a card is transformed"),
-        new("cardTagChanged", typeof(CardTagChangedRunEvent), "a card tag changes"),
+        new("cardAddedToDeck", typeof(CardAddedToDeckRunEvent), "a card is added to the deck",
+            "Fires when any effect puts a new card into the deck."),
+        new("cardRemovedFromDeck", typeof(CardRemovedFromDeckRunEvent), "a card is removed from the deck",
+            "Fires when a card is taken out of the deck for good."),
+        new("cardUpgraded", typeof(CardUpgradedRunEvent), "a card is upgraded",
+            "Fires when a deck card is upgraded."),
+        new("cardTransformed", typeof(CardTransformedRunEvent), "a card is transformed",
+            "Fires when a deck card is turned into a different card."),
+        new("cardTagChanged", typeof(CardTagChangedRunEvent), "a card tag changes",
+            "Fires when a tag is added to or removed from a deck card."),
 
-        new("relicAcquired", typeof(RelicAcquiredRunEvent), "a relic is acquired"),
-        new("relicRemoved", typeof(RelicRemovedRunEvent), "a relic is removed"),
-        new("relicDisabled", typeof(RelicDisabledRunEvent), "a relic is disabled"),
-        new("relicEnabled", typeof(RelicEnabledRunEvent), "a relic is enabled"),
+        new("relicAcquired", typeof(RelicAcquiredRunEvent), "a relic is acquired",
+            "Fires when the player gains a relic."),
+        new("relicRemoved", typeof(RelicRemovedRunEvent), "a relic is removed",
+            "Fires when the player loses a relic."),
+        new("relicDisabled", typeof(RelicDisabledRunEvent), "a relic is disabled",
+            "Fires when a relic is switched off (e.g. for a number of fights)."),
+        new("relicEnabled", typeof(RelicEnabledRunEvent), "a relic is enabled",
+            "Fires when a disabled relic switches back on."),
 
-        new("resourceChanged", typeof(ResourceChangedRunEvent), "a resource changes"),
-        new("runHealthChanged", typeof(RunHealthChangedRunEvent), "health changes"),
-        new("runMaxHealthChanged", typeof(RunMaxHealthChangedRunEvent), "max health changes"),
-        new("runFlagChanged", typeof(RunFlagChangedRunEvent), "a flag changes"),
-        new("runCounterChanged", typeof(RunCounterChangedRunEvent), "a counter changes"),
+        new("resourceChanged", typeof(ResourceChangedRunEvent), "a resource changes",
+            "Fires when a run resource (gold or a custom resource) goes up or down."),
+        new("runHealthChanged", typeof(RunHealthChangedRunEvent), "health changes",
+            "Fires when the hero's run health goes up or down."),
+        new("runMaxHealthChanged", typeof(RunMaxHealthChangedRunEvent), "max health changes",
+            "Fires when the hero's maximum health changes."),
+        new("runFlagChanged", typeof(RunFlagChangedRunEvent), "a flag changes",
+            "Fires when a named story flag is set or cleared."),
+        new("runCounterChanged", typeof(RunCounterChangedRunEvent), "a counter changes",
+            "Fires when a named run counter changes value."),
 
-        new("runProgramInstalled", typeof(RunProgramInstalledRunEvent), "a program is installed"),
-        new("runProgramUninstalled", typeof(RunProgramUninstalledRunEvent), "a program is uninstalled"),
+        new("runProgramInstalled", typeof(RunProgramInstalledRunEvent), "a program is installed",
+            "Fires when a triggered program (e.g. a relic's reactions) is installed on the run."),
+        new("runProgramUninstalled", typeof(RunProgramUninstalledRunEvent), "a program is uninstalled",
+            "Fires when a triggered program is removed from the run."),
 
-        new("consumableGained", typeof(ConsumableGainedRunEvent), "a consumable is gained"),
-        new("consumableUsed", typeof(ConsumableUsedRunEvent), "a consumable is used"),
+        new("consumableGained", typeof(ConsumableGainedRunEvent), "a consumable is gained",
+            "Fires when the player gains a consumable."),
+        new("consumableUsed", typeof(ConsumableUsedRunEvent), "a consumable is used",
+            "Fires when the player uses a consumable."),
     ];
 
     private static readonly IReadOnlyDictionary<string, RunEventKind> ByKeyMap =

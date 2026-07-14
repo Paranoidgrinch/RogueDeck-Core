@@ -43,7 +43,7 @@
                 <select value="@action.Intent.Kind" @onchange="e => SetIntentKind(ai, AsString(e.Value))">
                     @foreach (var kind in Enum.GetValues<IntentKind>())
                     {
-                        <option value="@kind">@kind</option>
+                        <option value="@kind">@StudioVocabulary.EnumDisplay(kind)</option>
                     }
                 </select>
             </div>

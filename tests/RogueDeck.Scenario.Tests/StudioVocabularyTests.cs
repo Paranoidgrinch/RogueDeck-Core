@@ -52,6 +52,7 @@ public class StudioVocabularyTests
     {
         Assert.Equal("someFutureKey", StudioVocabulary.SelectorLabel("someFutureKey"));
         Assert.Equal("", StudioVocabulary.SelectorDescription("someFutureKey"));
-        Assert.Equal("SomeFutureKind (someFutureKind)", StudioVocabulary.NodeDisplay("someFutureKind"));
+        // The label IS the key, so Display omits the repeating parenthetical.
+        Assert.Equal("SomeFutureKind", StudioVocabulary.NodeDisplay("someFutureKind"));
     }
 }
