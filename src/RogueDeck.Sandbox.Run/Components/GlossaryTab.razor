@@ -54,6 +54,184 @@
             triggers hook combat events.</dd>
     </dl>
 
+    <h2>Worked examples — one per tab</h2>
+    <p class="muted">Each example builds something deliberately non-trivial, step by step, using the exact labels
+        the editors show. Together they touch most of what the engine can do.</p>
+
+    <details>
+        <summary><strong>Hero</strong> — a rage-fueled bruiser with a deployable turret</summary>
+        <ol>
+            <li>Set <em>Name</em> to <code>Bruiser</code>, <em>Max HP</em> 70, <em>Starting HP</em> 70.</li>
+            <li>Under <em>Combat resources</em>, keep <code>standard.energy</code> (start 3, max 3, refill each turn
+                ticked) and add a second resource id <code>rage</code>: start 0, max 10, refill each turn
+                <em>unticked</em> — rage persists across turns and only grows when cards grant it.</li>
+            <li>Tick a starting relic and add a starting consumable so the run begins equipped.</li>
+            <li>Under starting board units, add a unit: <em>Definition id</em> <code>turret</code>, <em>Name</em>
+                Turret, <em>Max HP</em> 12; tick <em>placed on grid</em> and set X 0, Y 1; add an innate status
+                (e.g. <code>thorns</code>, 2 stacks). The turret now fights beside the hero in every battle.</li>
+        </ol>
+        <p class="muted">Cards can then read or spend rage with the amount “Resource (currentResource)”.</p>
+    </details>
+
+    <details>
+        <summary><strong>Cards</strong> — “Rampage”: damage that scales with your missing health</summary>
+        <ol>
+            <li>Add a card: id <code>rampage</code>, name Rampage, energy 2.</li>
+            <li>In its program, set the step to <strong>Deal damage (dealDamage)</strong> and the target to
+                <strong>Toughest enemy (highestHealthEnemy)</strong>.</li>
+            <li>For the amount, pick <strong>× (mul)</strong> — two operand widgets appear.</li>
+            <li>Left operand: <strong>Missing HP (missingHealth)</strong> read from
+                <strong>Self / the acting unit (source)</strong>. Right operand:
+                <strong>Constant (const)</strong> = 2.</li>
+        </ol>
+        <p class="muted">The card now deals (max HP − current HP) × 2 to the biggest enemy — the lower your health,
+            the harder it hits. Add copies of it to the starting deck below the card list.</p>
+    </details>
+
+    <details>
+        <summary><strong>Characters</strong> — a free Knight and a Mage locked behind meta-progression</summary>
+        <ol>
+            <li>Add character <code>knight</code>: its own deck of basic strikes/blocks, 80 HP, a defensive relic.</li>
+            <li>Add character <code>mage</code>: 55 HP, a spell-heavy deck, and set <em>Unlock flag</em> to
+                <code>unlock.character.mage</code>.</li>
+            <li>The Meta example below sets exactly that flag on a victorious run — until then the Mage is not
+                offered at run start.</li>
+        </ol>
+        <p class="muted">With a non-empty roster the run starts from the CHOSEN character; the Hero tab's setup is
+            used only when the roster is empty.</p>
+    </details>
+
+    <details>
+        <summary><strong>Encounters</strong> — “The Enrager”: an enemy that changes tactics below half health</summary>
+        <ol>
+            <li>At the top of the tab, author two enemy actions: <code>claw</code> — intent label Claw, kind Attack,
+                program <strong>Deal damage (dealDamage)</strong> → <strong>The chosen target (eventTarget)</strong>,
+                amount 6; and <code>frenzy</code> — intent label Frenzy, kind Buff, program
+                <strong>Apply status (applyStatus)</strong> → <strong>Self / the acting unit (source)</strong>,
+                status id <code>strength</code>, 3 stacks.</li>
+            <li>Add an encounter <code>enrager-fight</code>, add an enemy <code>enrager</code> with HP 40 and tick
+                both actions.</li>
+            <li>Under <em>Intent AI</em>, add a rule: if <strong>HP % (healthPercent)</strong> <code>&lt;</code> 50
+                → do <code>frenzy</code>, priority 10. With no rule matching, the enemy cycles its actions — so
+                above half health it claws, below it starts stacking strength.</li>
+        </ol>
+        <p class="muted">Conditions nest: wrap the rule in <strong>All of… (allOf)</strong> to also require a round
+            number or a status before frenzying.</p>
+    </details>
+
+    <details>
+        <summary><strong>Relics</strong> — “Bloodpact”: heals after won fights, turns pain into block during them</summary>
+        <ol>
+            <li>Add relic <code>bloodpact</code>.</li>
+            <li>Reaction: <em>When</em> <strong>A combat resolves (combatResolved)</strong>, <em>if</em>
+                <strong>combat was a victory</strong> → add a <strong>Heal</strong> effect, amount 5.</li>
+            <li>Combat rule: <em>on</em> <strong>Damage is taken (damageReceived)</strong> → program
+                <strong>Gain block (gainBlock)</strong> on <strong>Self / the acting unit (source)</strong> with
+                amount <strong>Event amount (event)</strong> — every hit grants that much block.</li>
+        </ol>
+        <p class="muted">Reactions hook run events (the “Run events” table below); combat rules hook combat
+            triggers (the “Relic combat triggers” table). “Event amount” is the number the trigger carried — here,
+            the damage just taken.</p>
+    </details>
+
+    <details>
+        <summary><strong>Events</strong> — “The Shrine”: a choice with a tempting, cursed follow-up</summary>
+        <ol>
+            <li>Add event <code>shrine</code>; its first situation <code>start</code>, text “A weathered shrine hums
+                with power.”</li>
+            <li>Choice <code>pray</code>, button text “Pray (heal 15)”: add a <strong>Heal</strong> 15 effect,
+                <em>then</em> = (end).</li>
+            <li>Choice <code>desecrate</code>, button text “Smash it (gain 80 gold…)”: add <strong>Gold</strong> 80,
+                and set <em>then</em> to a second situation <code>curse</code>.</li>
+            <li>Situation <code>curse</code>, text “The shrine's spirit brands you.”, one choice “Accept your fate”
+                with <strong>Add card</strong> → a curse card authored on the Cards tab, then (end).</li>
+            <li>Set <em>Start</em> to <code>start</code> and place the event on the Run tab's map.</li>
+        </ol>
+    </details>
+
+    <details>
+        <summary><strong>Statuses</strong> — “Frostbrand”: a debuff that saps damage and punishes the turn start</summary>
+        <ol>
+            <li>Add status <code>frostbrand</code>, <em>Polarity</em> Debuff, <em>Stacking</em>
+                <strong>Applications merge (stacks add up)</strong>, tick <em>stacks</em> and <em>duration</em>.</li>
+            <li>Passive modifier: pipeline <strong>Damage the bearer deals (DamageDealt)</strong>, operation
+                <strong>Add amount × stacks (AddPerStack)</strong>, magnitude −1 — each stack lowers the bearer's
+                hits by 1.</li>
+            <li>Trigger: <em>On</em> <strong>The bearer's turn starts (TurnStarted)</strong> → program
+                <strong>Deal damage (dealDamage)</strong> on <strong>Self / the acting unit (source)</strong>,
+                amount <strong>Status stacks (statusStacks)</strong> of <code>frostbrand</code> on self — the brand
+                burns for its own stack count.</li>
+            <li>Apply it from any card or enemy action with <strong>Apply status (applyStatus)</strong>, status id
+                <code>frostbrand</code>, 2 stacks, 3 turns.</li>
+        </ol>
+    </details>
+
+    <details>
+        <summary><strong>Consumables</strong> — “Battle Brew”: nothing now, 20 block when the next fight starts</summary>
+        <ol>
+            <li>Add consumable <code>battle-brew</code>, name Battle Brew.</li>
+            <li>Under <em>On use:</em> click <strong>next-combat opening</strong> — an embedded combat program
+                appears labeled “next combat — at the hero's first turn start”.</li>
+            <li>Set it to <strong>Gain block (gainBlock)</strong> on
+                <strong>Self / the acting unit (source)</strong>, amount 20.</li>
+            <li>Hand it out from an event choice, a shop item, or the Hero tab's starting consumables. Drinking it
+                does nothing visible — the payoff arrives at the next fight's first turn.</li>
+        </ol>
+    </details>
+
+    <details>
+        <summary><strong>Shops</strong> — “The Black Market”: small window, pricey rerolls, card removal</summary>
+        <ol>
+            <li>Add shop <code>black-market</code>; currency <code>standard.gold</code>, <em>Show at once</em> 3.</li>
+            <li>Add five items: two attack cards (60 each), a defensive card (45), and two relics (140, 180) — with
+                only 3 shown, each visit sees a different slice of the pool.</li>
+            <li>Tick <em>reroll</em>, price 25 — redrawing the display costs gold and prices add up fast.</li>
+            <li>Tick <em>card removal</em>, price 75 — the player can pay to slim the deck instead of growing it.</li>
+            <li>Point a <strong>Shop</strong> node at it on the Run tab's map.</li>
+        </ol>
+    </details>
+
+    <details>
+        <summary><strong>Meta</strong> — unlock the Mage and bank leftover gold between runs</summary>
+        <ol>
+            <li>Add a rule, tick <em>Victory</em>: effect <strong>Set flag (setFlag)</strong> with flag
+                <code>unlock.character.mage</code> — winning once permanently unlocks the Mage on the Characters
+                tab.</li>
+            <li>Add a second rule with <em>no</em> outcome ticked (= fires on any run end): effect
+                <strong>Promote run resource (promoteResource)</strong>, run resource <code>standard.gold</code> →
+                counter <code>meta-currency</code> — every run's leftover gold banks into a permanent counter.</li>
+        </ol>
+        <p class="muted">The rules write to the saved profile when a run ends; nothing here affects the run
+            itself.</p>
+    </details>
+
+    <details>
+        <summary><strong>Run</strong> — a branching act: risk the elite or take the safe road</summary>
+        <ol>
+            <li>Add five nodes: a <strong>Fight (combat)</strong> pointing at an easy encounter; a
+                <strong>Story event (event)</strong> pointing at the Shrine; a second <strong>Fight</strong> at the
+                Enrager (the elite); a <strong>Shop</strong> at the Black Market; a final <strong>Fight</strong> as
+                the boss.</li>
+            <li>Add edges so the first fight forks: fight-1 → shrine <em>and</em> fight-1 → enrager; then shrine →
+                shop, enrager → shop, shop → boss. Set the entry to fight-1.</li>
+            <li>Press <em>Auto-layout</em> to see the fork in the map graphic, then <strong>Load &amp; drive</strong>
+                to play it — after the first fight the run offers the choice of path.</li>
+            <li>Use <strong>Simulate</strong> over many seeds to check both paths are survivable.</li>
+        </ol>
+    </details>
+
+    <details>
+        <summary><strong>Playtest</strong> — tune one fight without touching the map</summary>
+        <ol>
+            <li>Pick the Enrager encounter from the dropdown and play it directly — hero, deck, relics and
+                consumables all come from the current project.</li>
+            <li>Play the fight yourself card by card: check the Frenzy intent actually appears once the enemy drops
+                below half health, and that Bloodpact's block shows up when you get hit.</li>
+            <li>Adjust the card/encounter numbers on their tabs and playtest again — the loop is seconds, not a
+                whole run.</li>
+        </ol>
+    </details>
+
     <h2>Effect steps (combat programs)</h2>
     <p class="muted">The building blocks of every combat effect program — what a card, enemy action, relic rule,
         status trigger or consumable can do.</p>

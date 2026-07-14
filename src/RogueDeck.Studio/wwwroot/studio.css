@@ -107,6 +107,37 @@ body {
     padding: 0.05rem 0.3rem;
 }
 
+.glossary details {
+    border: 1px solid #2b2f3a;
+    border-radius: 6px;
+    background: #1a1d24;
+    margin: 0.4rem 0;
+    padding: 0.4rem 0.8rem;
+    max-width: 60rem;
+}
+
+.glossary details[open] {
+    padding-bottom: 0.8rem;
+}
+
+.glossary summary {
+    cursor: pointer;
+    padding: 0.2rem 0;
+}
+
+.glossary summary:hover {
+    color: #fff;
+}
+
+.glossary details ol {
+    margin: 0.5rem 0 0.25rem;
+    padding-left: 1.4rem;
+}
+
+.glossary details li {
+    margin: 0.25rem 0;
+}
+
 .choices {
     display: flex;
     gap: 0.5rem;
