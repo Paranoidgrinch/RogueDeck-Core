@@ -15,8 +15,10 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 // One circuit-scoped project document so switching between the tabs keeps each tab's slice; RunDocument is the
-// shared accessor the focused tabs (Relics, …) use as a lens over the one RunBlueprint JSON.
-builder.Services.AddScoped<ProjectDraft>();
+// shared accessor the focused tabs (Relics, …) use as a lens over the one RunBlueprint JSON. The draft is created
+// through DraftAutosave, which restores the last autosaved document and persists every change to disk — so a page
+// reload (a new circuit) no longer loses the project.
+builder.Services.AddScoped(_ => DraftAutosave.CreateDraft());
 builder.Services.AddScoped<RunDocument>();
 
 var app = builder.Build();
