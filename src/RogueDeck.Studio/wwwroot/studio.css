@@ -1,9 +1,209 @@
-/* Minimal shell chrome for the Studio app. Panel/log/etc. styling comes from the shared combat app.css. */
+/* The Studio look: one dark theme for shell chrome AND every shared editor class (panel, run-bar, fx blocks,
+   muted, log, play, …), so all tabs read as one coherent working environment. Tokens, controls, then structure. */
+:root {
+    color-scheme: dark;
+    --bg: #14161a;
+    --bg-panel: #1a1d24;
+    --bg-control: #23262e;
+    --border: #2b2f3a;
+    --border-strong: #3a3f4b;
+    --text: #e6e6e6;
+    --text-soft: #cbd5e1;
+    --text-muted: #8fa3b8;
+    --accent: #37506b;
+    --accent-hover: #446b93;
+    --accent-bright: #6ea8dc;
+    --danger: #ff7676;
+}
+
 body {
     margin: 0;
-    background: #14161a;
-    color: #e6e6e6;
+    background: var(--bg);
+    color: var(--text);
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* ── uniform controls ─────────────────────────────────────────────────────── */
+input,
+select,
+textarea {
+    background: var(--bg-control);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    padding: 0.22rem 0.45rem;
+    font: inherit;
+    font-size: 0.92em;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    outline: none;
+    border-color: var(--accent-bright);
+}
+
+input[type="checkbox"] {
+    accent-color: var(--accent-bright);
+}
+
+textarea {
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-size: 0.85em;
+}
+
+label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.92em;
+    color: var(--text-soft);
+}
+
+button {
+    font: inherit;
+}
+
+a {
+    color: var(--accent-bright);
+}
+
+h1 {
+    font-size: 1.45rem;
+}
+
+h2 {
+    font-size: 1.12rem;
+    color: #dbe4ee;
+    margin: 1.2rem 0 0.4rem;
+}
+
+/* ── shared structure classes (used by every editor) ──────────────────────── */
+.muted {
+    color: var(--text-muted);
+    font-size: 0.92em;
+}
+
+.run-bar,
+.row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.45rem;
+    margin: 0.35rem 0;
+}
+
+.panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.9rem 1.1rem;
+    margin: 0.9rem 0;
+}
+
+.panel > h2:first-child {
+    margin-top: 0;
+}
+
+.fx {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+    background: var(--bg-control);
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    padding: 0.15rem 0.4rem;
+    font-size: 0.9em;
+}
+
+.fx-block {
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    background: rgba(55, 80, 107, 0.08);
+    padding: 0.45rem 0.6rem;
+    margin: 0.35rem 0;
+}
+
+.fx-body {
+    display: block;
+    margin: 0.3rem 0 0.3rem 0.9rem;
+    padding-left: 0.6rem;
+    border-left: 1px dashed var(--border-strong);
+}
+
+.play {
+    background: var(--accent);
+    color: #fff;
+    border: 1px solid var(--accent-hover);
+    border-radius: 6px;
+    padding: 0.3rem 0.9rem;
+    cursor: pointer;
+}
+
+.play:hover {
+    background: var(--accent-hover);
+}
+
+.log {
+    list-style: none;
+    padding: 0.5rem 0.7rem;
+    margin: 0.5rem 0;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.9em;
+}
+
+.log li {
+    margin: 0.15rem 0;
+}
+
+.line-kind {
+    color: var(--accent-bright);
+    margin-right: 0.4rem;
+}
+
+.error {
+    color: var(--danger);
+}
+
+.member-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem;
+    margin: 0.75rem 0;
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    background: var(--bg-control);
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    padding: 0.05rem 0.55rem;
+    font-size: 0.85em;
+}
+
+.intent-block,
+.intent-nest,
+.intent-child {
+    display: block;
+    margin: 0.25rem 0 0.5rem 1rem;
+    padding-left: 0.6rem;
+    border-left: 1px dashed var(--border-strong);
+}
+
+.intent-rule,
+.intent-cond,
+.meta-effect {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem;
 }
 
 .studio-nav {
@@ -199,17 +399,6 @@ body {
     align-items: center;
     gap: 0.4rem;
     margin: 0.2rem 0 0.4rem;
-}
-
-.editor-effects .fx {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.2rem;
-    background: #23262e;
-    border: 1px solid #3a3f4b;
-    border-radius: 4px;
-    padding: 0.1rem 0.35rem;
-    font-size: 0.85em;
 }
 
 .chk {
