@@ -26,6 +26,8 @@
             <label class="play">Upload<InputFile OnChange="Upload" style="display:none" /></label>
             <button class="play" @onclick="SaveRun" title="save the live run's progress (at an interlude between nodes)">Save run</button>
             <label class="play" title="resume a saved run against this blueprint">Load run<InputFile OnChange="LoadRun" style="display:none" /></label>
+            <button class="mini" @onclick="LoadSample"
+                    title="REPLACES the current project with the built-in sample game (the Help page's worked examples, playable)">Load sample project</button>
         </div>
         <div class="run-bar">
             <label title="on: play each fight yourself (cards + end turn); off: fights auto-resolve headlessly">
@@ -262,6 +264,10 @@
 
     private void RebuildMap(RunBlueprint blueprint, RunMap map) =>
         _json = RunJson.ToJson(blueprint with { Map = map }, _options);
+
+    // Replace the project with the built-in sample game (Help page's worked examples). Destructive by design —
+    // the tooltip warns; Download offers a backup first.
+    private void LoadSample() => _json = RunJson.ToJson(SampleProject.Build(), _options);
 
     private void AddNode()
     {
