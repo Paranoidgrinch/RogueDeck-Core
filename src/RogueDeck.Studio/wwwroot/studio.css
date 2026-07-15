@@ -299,11 +299,65 @@ h2 {
     color: var(--danger);
     background: var(--danger-soft);
     border: 1px solid rgba(255, 145, 145, 0.35);
+    cursor: pointer;
 }
 
 .validation-badge:hover {
     color: #fff;
     background: rgba(255, 145, 145, 0.25);
+}
+
+.validation-anchor {
+    position: relative;
+}
+
+.validation-panel {
+    position: absolute;
+    top: calc(100% + 0.55rem);
+    right: 0;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 26rem;
+    max-width: 34rem;
+    max-height: 24rem;
+    overflow-y: auto;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-panel);
+    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55);
+    padding: 0.5rem;
+}
+
+.validation-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.45rem;
+    text-align: left;
+    background: none;
+    border: none;
+    border-radius: var(--radius);
+    color: var(--text-soft);
+    padding: 0.35rem 0.5rem;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.validation-row:hover {
+    background: var(--accent-soft);
+    color: var(--text);
+}
+
+.validation-row .chip {
+    flex-shrink: 0;
+}
+
+/* An entry the validator complains about (see the tab's inline issue lines) */
+.fx-block.invalid,
+.editor-card.invalid {
+    border-color: rgba(255, 145, 145, 0.4);
+    border-left: 3px solid var(--danger);
 }
 
 .studio-main {

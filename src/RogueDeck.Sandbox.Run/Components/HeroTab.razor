@@ -11,6 +11,17 @@
               Connects="The starting deck is built on the Cards tab · offer several selectable heroes on the Characters tab · the Run tab plays it all." />
     <IdDatalists Blueprint="_blueprint" />
 
+    @{ var issues = RunDocumentValidator.ForTab(_blueprint, RunDocumentValidator.HeroTab); }
+    @if (issues.Count > 0)
+    {
+        <ul class="log">
+            @foreach (var issue in issues)
+            {
+                <li><span class="line-kind">⚠</span> @issue</li>
+            }
+        </ul>
+    }
+
     <RunStartEditor Value="Start" ValueChanged="Apply"
                     AvailableRelics="AvailableRelics" AvailableConsumables="AvailableConsumables"
                     AvailableCards="AvailableCards" />

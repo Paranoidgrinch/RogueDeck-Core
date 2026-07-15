@@ -43,7 +43,8 @@
         {
             continue;
         }
-        <div class="fx-block">
+        var actionIssues = issues.Where(m => m.Contains($"'{action.Id}'")).ToList();
+        <div class="fx-block @(actionIssues.Count > 0 ? "invalid" : "")">
             <div class="run-bar">
                 <span class="muted">id</span>
                 <input value="@action.Id" style="width:9rem" @onchange="e => SetActionId(ai, AsString(e.Value))" />
@@ -56,6 +57,10 @@
                     <span class="muted">— @StudioVocabulary.Describe(summary)</span>
                 }
             </div>
+            @foreach (var issue in actionIssues)
+            {
+                <p class="error">⚠ @issue</p>
+            }
             <div class="run-bar">
                 <span class="muted">intent</span>
                 <input value="@action.Intent.Label" style="width:9rem" title="telegraph label, e.g. Slam"

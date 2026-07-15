@@ -2,18 +2,45 @@
 @implements IDisposable
 @inject RunDocument Doc
 @inject ProjectDraft Draft
+@inject NavigationManager Nav
 
 @* The nav's global validation badge: the full-document issue count (RunDocumentValidator), recomputed on every
-   document write via ProjectDraft.Changed. Click-through to the Run tab, whose validation panel lists everything.
-   Hidden while the document is clean, so a visible badge always means "something to fix". *@
-@if (_count > 0)
+   document write via ProjectDraft.Changed. Clicking it opens the issue list right here — every row names the tab
+   that owns the fix and jumps to it. Hidden while the document is clean, so a visible badge always means
+   "something to fix". *@
+@if (_issues.Count > 0)
 {
-    <a class="studio-link validation-badge" href="run" title="@_tooltip">⚠ @_count</a>
+    <span class="validation-anchor">
+        <button class="studio-link validation-badge" @onclick="() => _open = !_open"
+                title="@(_open ? "hide" : "show") the list of problems">⚠ @_issues.Count</button>
+        @if (_open)
+        {
+            <div class="validation-panel">
+                @foreach (var issue in _issues)
+                {
+                    var (tab, message) = Split(issue);
+                    <button class="validation-row" @onclick="() => Go(tab)" title="jump to the @tab tab">
+                        <span class="chip">@tab</span> @message
+                    </button>
+                }
+            </div>
+        }
+    </span>
 }
 
 @code {
-    private int _count;
-    private string _tooltip = "";
+    private IReadOnlyList<string> _issues = Array.Empty<string>();
+    private bool _open;
+
+    // Tab prefix (RunDocumentValidator's convention "Tab: message") → the tab's route.
+    private static readonly Dictionary<string, string> Routes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [RunDocumentValidator.CardsTab] = "cards",
+        [RunDocumentValidator.EncountersTab] = "encounters",
+        [RunDocumentValidator.RunTab] = "run",
+        [RunDocumentValidator.HeroTab] = "hero",
+        [RunDocumentValidator.CharactersTab] = "characters",
+    };
 
     protected override void OnInitialized()
     {
@@ -31,16 +58,29 @@
     {
         try
         {
-            var issues = RunDocumentValidator.Validate(Doc.Load());
-            _count = issues.Count;
-            _tooltip = string.Join("\n", issues.Take(12)) + (issues.Count > 12 ? "\n…" : "");
+            _issues = RunDocumentValidator.Validate(Doc.Load());
         }
         catch (Exception)
         {
             // Mid-edit the Run-tab JSON may not parse; that IS an issue worth flagging.
-            _count = 1;
-            _tooltip = "The blueprint JSON does not parse — fix it on the Run tab.";
+            _issues = new[] { $"{RunDocumentValidator.RunTab}: the blueprint JSON does not parse — fix it on the Run tab." };
         }
+        if (_issues.Count == 0)
+            _open = false;
+    }
+
+    private static (string Tab, string Message) Split(string issue)
+    {
+        var colon = issue.IndexOf(':');
+        return colon > 0 && Routes.ContainsKey(issue[..colon])
+            ? (issue[..colon], issue[(colon + 1)..].Trim())
+            : (RunDocumentValidator.RunTab, issue);
+    }
+
+    private void Go(string tab)
+    {
+        _open = false;
+        Nav.NavigateTo(Routes.TryGetValue(tab, out var route) ? route : "run");
     }
 
     public void Dispose() => Draft.Changed -= OnChanged;

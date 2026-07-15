@@ -42,7 +42,8 @@
         {
             continue;
         }
-        <div class="fx-block">
+        var cardIssues = issues.Where(m => m.Contains($"'{card.Id}'")).ToList();
+        <div class="fx-block @(cardIssues.Count > 0 ? "invalid" : "")">
             <div class="run-bar">
                 <span class="muted">id</span>
                 <input value="@card.Id" style="width:9rem" @onchange="e => SetCardId(ci, AsString(e.Value))" />
@@ -58,6 +59,10 @@
                     <span class="muted">— @StudioVocabulary.Describe(summary)</span>
                 }
             </div>
+            @foreach (var issue in cardIssues)
+            {
+                <p class="error">⚠ @issue</p>
+            }
             <div class="fx-body">
                 <span class="muted">program:</span>
                 @{ var model = ModelOf(card); }
