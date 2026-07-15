@@ -695,15 +695,16 @@ public class TortureRunAuditTests
         var combat = rig.Driver.Current;
         Assert.NotNull(combat);
 
-        // All four party members (hero + 3) stand on the player team, plus the persistent board unit.
-        // FINDING (audit): the board unit loses its authored identity in combat — DefinitionId "ash-wolf" becomes
-        // "unit#1" and DisplayNameKey "Ash Wolf" becomes "ally.unit#1.name"; members likewise get "member#N"
-        // definition ids (their display names DO survive). Asserted neutrally here; reported for a fix.
+        // All four party members (hero + 3) stand on the player team, plus the persistent board unit — every one
+        // carrying its AUTHORED identity (definition id + display name), while combatant instance ids stay the
+        // stable unit#N/member#N the reconcile machinery keys on.
         var players = combat!.State.Combatants.Where(c => c.TeamId == StandardCombatIds.PlayerTeam).ToList();
         Assert.Equal(5, players.Count);
-        Assert.Contains(players, c => c.DisplayNameKey == "Frostweberin");
-        Assert.Contains(players, c => c.DisplayNameKey == "Blutritter");
-        Assert.Contains(players, c => c.DisplayNameKey == "Totenrufer");
+        var wolf = Assert.Single(players, c => c.DefinitionId.value == "ash-wolf");
+        Assert.Equal("Ash Wolf", wolf.DisplayNameKey);
+        Assert.Contains(players, c => c.DefinitionId.value == "frost" && c.DisplayNameKey == "Frostweberin");
+        Assert.Contains(players, c => c.DefinitionId.value == "blut" && c.DisplayNameKey == "Blutritter");
+        Assert.Contains(players, c => c.DefinitionId.value == "toten" && c.DisplayNameKey == "Totenrufer");
 
         var guard = 0;
         while (rig.Driver.Current is not null && guard++ < 300)

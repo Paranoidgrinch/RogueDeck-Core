@@ -330,6 +330,10 @@ public sealed class CombatNodeResolver : INodeResolver
         {
             var ally = new AllyBlueprint(unit.Id.Value)
             {
+                // Keep the authored identity in the fight: the display name and definition id come from the
+                // RunUnitData ("Ash Wolf"/"ash-wolf"), only the combatant INSTANCE id stays the stable unit#N.
+                NameKey = unit.DisplayNameKey,
+                DefinitionId = unit.DefinitionId.value,
                 MaxHealth = unit.Health.Max,
                 CurrentHealth = unit.Health.Current,
                 Position = unit.Position,
@@ -352,6 +356,7 @@ public sealed class CombatNodeResolver : INodeResolver
                 var ally = new AllyBlueprint(member.Id.Value)
                 {
                     NameKey = member.DisplayNameKey,
+                    DefinitionId = member.DefinitionId.value,
                     MaxHealth = member.Health.Max,
                     CurrentHealth = member.Health.Current,
                 };

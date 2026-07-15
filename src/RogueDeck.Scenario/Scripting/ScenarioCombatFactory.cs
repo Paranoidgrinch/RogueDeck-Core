@@ -88,7 +88,7 @@ internal static class ScenarioCombatFactory
 
         combat.AddCombatant(new CombatantState(
             blueprint.CombatantId,
-            new CombatantDefinitionId(blueprint.Id),
+            new CombatantDefinitionId(blueprint.DefinitionId ?? blueprint.Id),
             blueprint.NameKey,
             team,
             new HealthState(startingHealth, blueprint.MaxHealth)));

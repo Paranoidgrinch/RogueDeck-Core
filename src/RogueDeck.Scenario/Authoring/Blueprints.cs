@@ -140,6 +140,11 @@ public abstract class CombatantBlueprint
     public string NameKey { get; init; }
     public int MaxHealth { get; init; } = 1;
 
+    // The combatant's DEFINITION id (what content refers to: "ash-wolf", "frost"), when it differs from the
+    // instance Id. Null (the default) keeps the historical behaviour of using Id for both — the run layer sets it
+    // so projected units/members keep their authored identity instead of "unit#1"/"member#2".
+    public string? DefinitionId { get; init; }
+
     // Starting current health. Null (the default) means "full" — start at MaxHealth. The run layer sets this
     // so a wounded hero carries their current HP into the next fight instead of being healed to full.
     public int? CurrentHealth { get; init; }
