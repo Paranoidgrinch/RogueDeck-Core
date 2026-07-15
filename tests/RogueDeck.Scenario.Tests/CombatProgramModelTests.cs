@@ -1011,4 +1011,29 @@ public class CombatProgramModelTests
         Assert.Null(back.Card);
         Assert.Equal("", back.ToDefinition);
     }
+
+    // Audit net (2026-07-15): EVERYTHING the editor can build must also SERIALIZE. Build↔Classify parity alone
+    // let two aggregate amounts (countTargets/sumOverTargets) ship without a CombatJson kind registration, so a
+    // Studio author could build a card that could not be saved — RunJson.ToJson threw inside the tab's save
+    // handler. Every editor node kind and every amount kind round-trips through CombatJson here.
+    [Fact]
+    public void Every_editor_built_node_and_amount_serializes_through_combat_json()
+    {
+        var options = CombatJson.CreateOptions<CardPlayContext>();
+
+        foreach (var (kind, _) in CombatProgramModel.NodeKinds.Concat(CombatProgramModel.CompositeKinds))
+        {
+            var program = CombatProgramModel.Build<CardPlayContext>(CombatProgramModel.NewNode(kind));
+            var json = JsonSerializer.Serialize(program, options);
+            Assert.NotNull(JsonSerializer.Deserialize<EffectProgram<CardPlayContext>>(json, options));
+        }
+
+        foreach (var (kind, _, _) in StudioVocabulary.AmountKinds)
+        {
+            var node = new CombatNodeModel("dealDamage", "eventTarget", new CombatAmountSpec(kind));
+            var program = CombatProgramModel.Build<CardPlayContext>(node);
+            var json = JsonSerializer.Serialize(program, options);
+            Assert.NotNull(JsonSerializer.Deserialize<EffectProgram<CardPlayContext>>(json, options));
+        }
+    }
 }

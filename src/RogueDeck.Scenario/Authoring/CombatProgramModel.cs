@@ -816,7 +816,12 @@ public static class CombatProgramModel
             "coord" => new CombatantCoordExpression<TContext>(SelectorFor(spec.SelectorKey), spec.Axis),
             "countTargets" => new CountTargetsExpression<TContext>(SelectorFor(spec.ReadSelectorOrDefault)),
             "sumOverTargets" => new SumOverTargetsExpression<TContext>(SelectorFor(spec.ReadSelectorOrDefault), BuildAmount<TContext>(spec.LeftOrDefault)),
-            "gridDistance" => new GridDistanceExpression<TContext>(SelectorFor(spec.ReadSelectorOrDefault), SelectorFor(spec.ReadSelector2OrDefault)),
+            // Grid distance is a SCALAR read: both endpoints must be at-most-one-target selectors, so its defaults
+            // are source/eventTarget — NOT the aggregate default allEnemies, which made merely switching the
+            // amount dropdown to "grid distance" throw out of Build before the author could pick endpoints.
+            "gridDistance" => new GridDistanceExpression<TContext>(
+                SelectorFor(spec.ReadSelector ?? new CombatSelectorSpec("source")),
+                SelectorFor(spec.ReadSelector2OrDefault)),
             "cardCost" => new CardCostExpression<TContext>(BuildCard<TContext>(spec.ReadCardOrDefault), new ResourceId(spec.ReadId)),
             _ => new ConstantExpression<TContext>(spec.Const),
         };
