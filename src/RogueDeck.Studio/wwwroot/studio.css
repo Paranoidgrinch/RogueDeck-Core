@@ -1,26 +1,47 @@
-/* The Studio look: one dark theme for shell chrome AND every shared editor class (panel, run-bar, fx blocks,
-   muted, log, play, …), so all tabs read as one coherent working environment. Tokens, controls, then structure. */
+/* The Studio look: the Moonvine Forge design language (moonvineforge.com) applied to a dense working tool —
+   near-black forge sky, warm off-white text, forge-green accents — for shell chrome AND every shared editor
+   class (panel, run-bar, fx blocks, muted, log, play, map, …). Tokens, base, controls, then structure. */
 :root {
     color-scheme: dark;
-    --bg: #14161a;
-    --bg-panel: #1a1d24;
-    --bg-control: #23262e;
-    --border: #2b2f3a;
-    --border-strong: #3a3f4b;
-    --text: #e6e6e6;
-    --text-soft: #cbd5e1;
-    --text-muted: #8fa3b8;
-    --accent: #37506b;
-    --accent-hover: #446b93;
-    --accent-bright: #6ea8dc;
-    --danger: #ff7676;
+    /* Moonvine Forge palette */
+    --bg: #06070b;
+    --bg-panel: #0d0f15;
+    --bg-panel-strong: #090a0f;
+    --bg-control: #141821;
+    --border: rgba(205, 207, 210, 0.13);
+    --border-strong: rgba(205, 207, 210, 0.24);
+    --text: #f1f0ec;
+    --text-soft: #d8d6cf;
+    --text-muted: #a9a79f;
+    --dim: #7e7d78;
+    --accent: #a8c88a;
+    --accent-light: #d7efc3;
+    --accent-dark: #76965f;
+    --accent-soft: rgba(168, 200, 138, 0.12);
+    --accent-border: rgba(168, 200, 138, 0.3);
+    --violet: #aaa2c7;
+    --violet-soft: rgba(170, 162, 199, 0.12);
+    --warm: #d4c49a;
+    --warm-soft: rgba(212, 196, 154, 0.12);
+    --danger: #ff9191;
+    --danger-soft: rgba(255, 145, 145, 0.12);
+    --radius: 6px;
+    --radius-panel: 12px;
 }
 
 body {
     margin: 0;
-    background: var(--bg);
+    background:
+        radial-gradient(1100px 700px at 78% -12%, rgba(168, 200, 138, 0.07), transparent 60%),
+        radial-gradient(900px 650px at -8% 28%, rgba(170, 162, 199, 0.055), transparent 55%),
+        var(--bg);
+    background-attachment: fixed;
     color: var(--text);
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+::selection {
+    background: rgba(168, 200, 138, 0.28);
 }
 
 /* ── uniform controls ─────────────────────────────────────────────────────── */
@@ -30,7 +51,7 @@ textarea {
     background: var(--bg-control);
     color: var(--text);
     border: 1px solid var(--border-strong);
-    border-radius: 4px;
+    border-radius: var(--radius);
     padding: 0.22rem 0.45rem;
     font: inherit;
     font-size: 0.92em;
@@ -40,11 +61,12 @@ input:focus,
 select:focus,
 textarea:focus {
     outline: none;
-    border-color: var(--accent-bright);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 input[type="checkbox"] {
-    accent-color: var(--accent-bright);
+    accent-color: var(--accent);
 }
 
 textarea {
@@ -64,17 +86,28 @@ button {
     font: inherit;
 }
 
+button:focus-visible,
+a:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
 a {
-    color: var(--accent-bright);
+    color: var(--accent);
+}
+
+a:hover {
+    color: var(--accent-light);
 }
 
 h1 {
-    font-size: 1.45rem;
+    font-size: 1.6rem;
+    letter-spacing: -0.01em;
 }
 
 h2 {
     font-size: 1.12rem;
-    color: #dbe4ee;
+    color: var(--text-soft);
     margin: 1.2rem 0 0.4rem;
 }
 
@@ -96,7 +129,7 @@ h2 {
 .panel {
     background: var(--bg-panel);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     padding: 0.9rem 1.1rem;
     margin: 0.9rem 0;
 }
@@ -111,17 +144,17 @@ h2 {
     align-items: center;
     gap: 0.25rem;
     background: var(--bg-control);
-    border: 1px solid var(--border-strong);
-    border-radius: 4px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
     padding: 0.15rem 0.4rem;
     font-size: 0.9em;
 }
 
 .fx-block {
     border: 1px solid var(--border);
-    border-left: 3px solid var(--accent);
-    border-radius: 6px;
-    background: rgba(55, 80, 107, 0.08);
+    border-left: 3px solid var(--accent-dark);
+    border-radius: var(--radius);
+    background: rgba(168, 200, 138, 0.05);
     padding: 0.45rem 0.6rem;
     margin: 0.35rem 0;
 }
@@ -135,15 +168,16 @@ h2 {
 
 .play {
     background: var(--accent);
-    color: #fff;
-    border: 1px solid var(--accent-hover);
-    border-radius: 6px;
-    padding: 0.3rem 0.9rem;
+    color: #0c1206;
+    font-weight: 600;
+    border: 1px solid var(--accent-dark);
+    border-radius: 999px;
+    padding: 0.3rem 1rem;
     cursor: pointer;
 }
 
 .play:hover {
-    background: var(--accent-hover);
+    background: var(--accent-light);
 }
 
 .log {
@@ -152,7 +186,7 @@ h2 {
     margin: 0.5rem 0;
     background: var(--bg-panel);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius);
     font-size: 0.9em;
 }
 
@@ -161,7 +195,7 @@ h2 {
 }
 
 .line-kind {
-    color: var(--accent-bright);
+    color: var(--accent);
     margin-right: 0.4rem;
 }
 
@@ -172,7 +206,7 @@ h2 {
 .member-card {
     background: var(--bg-panel);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-panel);
     padding: 0.75rem;
     margin: 0.75rem 0;
 }
@@ -206,54 +240,70 @@ h2 {
     gap: 0.3rem;
 }
 
+/* ── shell chrome ─────────────────────────────────────────────────────────── */
 .studio-nav {
     display: flex;
     align-items: center;
     gap: 1.5rem;
     padding: 0.6rem 1.25rem;
-    background: #1c1f26;
-    border-bottom: 1px solid #2b2f3a;
+    background: rgba(6, 7, 11, 0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
     position: sticky;
     top: 0;
     z-index: 10;
 }
 
 .studio-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
     font-weight: 700;
     letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.brand-moon {
+    width: 1.15rem;
+    height: 1.15rem;
+    fill: var(--accent);
+    filter: drop-shadow(0 0 6px rgba(168, 200, 138, 0.45));
 }
 
 .studio-nav nav {
     display: flex;
-    gap: 1rem;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    align-items: center;
 }
 
 .studio-link {
-    color: #9fb3c8;
+    color: var(--text-muted);
     text-decoration: none;
-    padding: 0.2rem 0.4rem;
-    border-radius: 4px;
+    padding: 0.2rem 0.5rem;
+    border-radius: 999px;
 }
 
 .studio-link:hover {
-    color: #fff;
-    background: #2b2f3a;
+    color: var(--text);
+    background: rgba(205, 207, 210, 0.08);
 }
 
 .studio-link.active {
-    color: #fff;
-    background: #37506b;
+    color: var(--accent-light);
+    background: var(--accent-soft);
+    box-shadow: inset 0 0 0 1px var(--accent-border);
 }
 
 .validation-badge {
-    color: #ffb4b4;
-    background: #4a2626;
-    border: 1px solid #6b3535;
+    color: var(--danger);
+    background: var(--danger-soft);
+    border: 1px solid rgba(255, 145, 145, 0.35);
 }
 
 .validation-badge:hover {
     color: #fff;
-    background: #6b3535;
+    background: rgba(255, 145, 145, 0.25);
 }
 
 .studio-main {
@@ -264,7 +314,7 @@ h2 {
 .tab-intro {
     margin-bottom: 1rem;
     padding-bottom: 0.5rem;
-    border-bottom: 1px solid #2b2f3a;
+    border-bottom: 1px solid var(--border);
 }
 
 .tab-intro h1 {
@@ -274,14 +324,69 @@ h2 {
 .tab-intro p {
     margin: 0.15rem 0;
     max-width: 60rem;
+    color: var(--text-muted);
 }
 
 .tab-intro .connects {
     font-size: 0.85em;
+    color: var(--accent);
 }
 
 .tab-intro .connects::before {
     content: "↪ ";
+}
+
+/* ── run-map SVG (RunSandbox) ─────────────────────────────────────────────── */
+.map-canvas {
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    max-height: 440px;
+    background:
+        radial-gradient(700px 300px at 60% -20%, rgba(168, 200, 138, 0.05), transparent 60%),
+        var(--bg-panel-strong);
+}
+
+.map-edge {
+    stroke: #62645f;
+    stroke-width: 1.5;
+}
+
+.map-arrow {
+    fill: #62645f;
+}
+
+.map-node {
+    stroke-width: 1;
+}
+
+.map-node-combat {
+    fill: #241317;
+    stroke: #96525c;
+}
+
+.map-node-shop {
+    fill: #221c11;
+    stroke: #9a8657;
+}
+
+.map-node-event {
+    fill: #17141f;
+    stroke: #7a72a0;
+}
+
+.map-node.entry {
+    stroke: var(--accent);
+    stroke-width: 2.5;
+}
+
+.map-node-title {
+    fill: var(--text);
+    font-weight: 600;
+}
+
+.map-node-sub {
+    fill: var(--text-muted);
 }
 
 /* Help & glossary page */
@@ -292,7 +397,7 @@ h2 {
 
 .glossary dl dd {
     margin: 0.1rem 0 0 1rem;
-    color: #b8c4d0;
+    color: var(--text-muted);
 }
 
 .glossary table {
@@ -302,26 +407,26 @@ h2 {
 
 .glossary th,
 .glossary td {
-    border: 1px solid #2b2f3a;
+    border: 1px solid var(--border);
     padding: 0.3rem 0.6rem;
     text-align: left;
     vertical-align: top;
 }
 
 .glossary th {
-    background: #1c1f26;
+    background: var(--bg-panel);
 }
 
 .glossary code {
-    background: #23262e;
+    background: var(--bg-control);
     border-radius: 3px;
     padding: 0.05rem 0.3rem;
 }
 
 .glossary details {
-    border: 1px solid #2b2f3a;
-    border-radius: 6px;
-    background: #1a1d24;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-panel);
     margin: 0.4rem 0;
     padding: 0.4rem 0.8rem;
     max-width: 60rem;
@@ -337,7 +442,7 @@ h2 {
 }
 
 .glossary summary:hover {
-    color: #fff;
+    color: var(--accent-light);
 }
 
 .glossary details ol {
@@ -360,25 +465,26 @@ h2 {
     margin-left: 0.25rem;
     padding: 0 0.4rem;
     font-size: 0.85em;
-    background: #2b2f3a;
-    color: #cbd5e1;
-    border: 1px solid #3a3f4b;
-    border-radius: 4px;
+    background: var(--bg-control);
+    color: var(--text-soft);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
     cursor: pointer;
 }
 
 .mini:hover {
-    background: #37506b;
-    color: #fff;
+    background: var(--accent-soft);
+    color: var(--accent-light);
+    border-color: var(--accent-border);
 }
 
 /* Encounter / event visual editors (RunSandbox) */
 .editor-card {
-    border: 1px solid #3a3f4b;
-    border-radius: 6px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
     padding: 0.6rem;
     margin: 0.5rem 0;
-    background: #1a1d24;
+    background: var(--bg-panel);
 }
 
 .editor-row,
@@ -393,13 +499,13 @@ h2 {
 
 .editor-sit {
     display: block;
-    border-left: 2px solid #37506b;
+    border-left: 2px solid var(--accent-dark);
     padding-left: 0.6rem;
     margin: 0.4rem 0;
 }
 
 .editor-choice {
-    border-left: 2px solid #2b2f3a;
+    border-left: 2px solid var(--border-strong);
     padding-left: 0.6rem;
     margin: 0.25rem 0;
 }

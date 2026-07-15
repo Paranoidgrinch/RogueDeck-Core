@@ -49,16 +49,16 @@
             <div class="run-bar">
                 <button class="mini" @onclick="AutoLayout" title="place every node by graph depth">Auto-layout</button>
                 <span class="muted">A branching map, drawn from its edges. Drag a node to place it (or set x/y below,
-                    or auto-layout), green outline = entry, pink = combat, blue = event.</span>
+                    or auto-layout), green outline = entry, red = fight, gold = shop, violet = event.</span>
             </div>
-            <div style="overflow:auto;border:1px solid #ccc;max-height:440px;background:#fafafa">
+            <div class="map-canvas">
                 <svg width="@svgW" height="@svgH" viewBox="0 0 @svgW @svgH" xmlns="http://www.w3.org/2000/svg"
                      style="font:11px sans-serif;touch-action:none;user-select:none"
                      @onpointermove="DragMove" @onpointerup="DragEnd" @onpointerleave="DragEnd">
                     <defs>
                         <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"
                                 markerUnits="strokeWidth">
-                            <path d="M0,0 L7,3 L0,6 Z" fill="#888" />
+                            <path d="M0,0 L7,3 L0,6 Z" class="map-arrow" />
                         </marker>
                     </defs>
                     @foreach (var edge in bp.Map.Edges)
@@ -69,7 +69,7 @@
                             var (bx, by) = Dragged(edge.To, b.X, b.Y);
                             <line x1="@(ax + MapGraphLayout.NodeWidth / 2)" y1="@(ay + MapGraphLayout.NodeHeight / 2)"
                                   x2="@(bx + MapGraphLayout.NodeWidth / 2)" y2="@(by + MapGraphLayout.NodeHeight / 2)"
-                                  stroke="#888" stroke-width="1.5" marker-end="url(#arrow)" />
+                                  class="map-edge" marker-end="url(#arrow)" />
                         }
                     }
                     @foreach (var mapNode in bp.Map.Nodes)
@@ -80,10 +80,10 @@
                         <g style="cursor:grab" @onpointerdown="e => DragStart(mapNode.Id, px, py, e)"
                            @onpointerdown:preventDefault>
                             <rect x="@px" y="@py" width="@MapGraphLayout.NodeWidth" height="@MapGraphLayout.NodeHeight"
-                                  rx="6" fill="@(mapNode.Type == StandardRunIds.CombatNode ? "#fde2e2" : mapNode.Type == StandardRunIds.ShopNode ? "#fef3c7" : "#e2ecfd")"
-                                  stroke="@(isEntry ? "#1a7f37" : "#999")" stroke-width="@(isEntry ? "2.5" : "1")" />
-                            <text x="@(px + 8)" y="@(py + 18)" font-weight="bold">@mapNode.Id.Value</text>
-                            <text x="@(px + 8)" y="@(py + 34)" fill="#555">@NodeKind(mapNode): @NodeTarget(mapNode)</text>
+                                  rx="6"
+                                  class="@($"map-node {(mapNode.Type == StandardRunIds.CombatNode ? "map-node-combat" : mapNode.Type == StandardRunIds.ShopNode ? "map-node-shop" : "map-node-event")}{(isEntry ? " entry" : "")}")" />
+                            <text x="@(px + 8)" y="@(py + 18)" class="map-node-title">@mapNode.Id.Value</text>
+                            <text x="@(px + 8)" y="@(py + 34)" class="map-node-sub">@NodeKind(mapNode): @NodeTarget(mapNode)</text>
                         </g>
                     }
                 </svg>
