@@ -20,6 +20,8 @@ public sealed record InterludeContinueEntry : ReplayEntry;
 
 public sealed record EntityPicksEntry(IReadOnlyList<int> Indices) : ReplayEntry;
 
+public sealed record NodePickEntry(string NodeId) : ReplayEntry;
+
 public sealed record CombatPlayEntry(CombatantId? Member, CardInstanceId Card, CombatantId? Target) : ReplayEntry;
 
 public sealed record CombatEndTurnEntry(CombatantId? Member) : ReplayEntry;

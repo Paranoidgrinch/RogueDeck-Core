@@ -23,6 +23,10 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
     public EventSituation? PendingSituation { get; private set; }
     public IReadOnlyList<EventChoice> PendingChoices { get; private set; } = Array.Empty<EventChoice>();
     public EntitySelectionRequest? PendingEntities { get; private set; }
+
+    // A branching-map path decision: the reachable next nodes the player must pick between (empty = none pending).
+    public IReadOnlyList<Node> PendingNodeChoices { get; private set; } = Array.Empty<Node>();
+    public bool IsAwaitingNodeChoice => PendingNodeChoices.Count > 0;
     public bool IsComplete { get; private set; }
     public bool IsAwaitingChoice => PendingSituation is not null;
     public bool IsAwaitingEntities => PendingEntities is not null;
@@ -65,6 +69,7 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
         PendingSituation = null;
         PendingChoices = Array.Empty<EventChoice>();
         PendingEntities = null;
+        PendingNodeChoices = Array.Empty<Node>();
         PendingInterlude = false;
         Error = null;
         IsComplete = false;
@@ -163,6 +168,26 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
         if (!PendingInterlude)
             return;
         _script.Advance(new InterludeContinueEntry());
+    }
+
+    // IRunChoiceProvider — a branching map's path decision. RunRunner only asks when there is more than one
+    // reachable candidate, so linear maps and single-successor steps never park here.
+    public NodeId ChooseNextNode(IReadOnlyList<Node> candidates, RunState run)
+    {
+        if (_script.TryTake<NodePickEntry>(out var pick))
+            return candidates.FirstOrDefault(n => n.Id.Value == pick.NodeId)?.Id ?? candidates[0].Id;
+
+        _script.ThrowIfMismatched(nameof(ChooseNextNode));
+        PendingNodeChoices = candidates;
+        throw new ReplayParkedException();
+    }
+
+    // Called by the UI when the player picks the next map node; records it and replays.
+    public void PickNode(string nodeId)
+    {
+        if (!IsAwaitingNodeChoice)
+            return;
+        _script.Advance(new NodePickEntry(nodeId));
     }
 
     // IRunEntityChooser — an unanswered entity selection (e.g. cards to remove) parks the replay.

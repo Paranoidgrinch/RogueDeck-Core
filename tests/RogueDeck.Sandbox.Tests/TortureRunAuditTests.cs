@@ -818,6 +818,31 @@ public class TortureRunAuditTests
         Assert.Null(rig.Session.Error);
     }
 
+    [Fact]
+    public void Branching_map_parks_for_the_player_to_pick_the_path()
+    {
+        var rig = PartySession(TortureRun.Build());
+        rig.Session.Start();
+
+        // Play the vanguard fight out, then continue through the interlude to the branch.
+        var guard = 0;
+        while (rig.Driver.Current is not null && guard++ < 300)
+            ActOnce(rig);
+        Assert.True(rig.Session.IsAwaitingInterlude);
+        rig.Session.Continue();
+
+        // The map branches vanguard → altar | den: the run parks and offers BOTH nodes.
+        Assert.True(rig.Session.IsAwaitingNodeChoice);
+        Assert.Equal(new[] { "altar", "den" },
+            rig.Session.PendingNodeChoices.Select(n => n.Id.Value).OrderBy(x => x).ToArray());
+
+        // Picking the den walks there: the next park is the summoner fight, not the altar event.
+        rig.Session.PickNode("den");
+        Assert.NotNull(rig.Driver.Current);
+        Assert.Contains(rig.Driver.Current!.State.Combatants, c => c.DefinitionId.value == "summoner");
+        Assert.Equal("den", rig.Session.Run.CurrentNodeId?.Value);
+    }
+
     // The whole run, played interactively member by member through fights, the event, the shop and the boss —
     // the closest an automated test gets to a human playing the Studio's Run tab. Any faulting construct anywhere
     // in the pipeline surfaces as Session.Error / an exception; the run itself may end either way.
@@ -834,6 +859,8 @@ public class TortureRunAuditTests
                 ActOnce(rig);
             else if (rig.Session.IsAwaitingEntities)
                 rig.Session.PickEntities(new[] { 0 });
+            else if (rig.Session.IsAwaitingNodeChoice)
+                rig.Session.PickNode(rig.Session.PendingNodeChoices[^1].Id.Value);
             else if (rig.Session.IsAwaitingChoice)
                 rig.Session.Pick(rig.Session.PendingChoices[0].Id);
             else if (rig.Session.IsAwaitingInterlude)

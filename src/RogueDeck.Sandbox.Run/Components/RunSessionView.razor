@@ -40,6 +40,20 @@
                 Confirm (@_selected.Count/@request.Count)
             </button>
         }
+        else if (session.IsAwaitingNodeChoice)
+        {
+            <h2>Choose your path</h2>
+            <p class="muted">The map branches here — pick the node to walk to next.</p>
+            <div class="choices">
+                @foreach (var node in session.PendingNodeChoices)
+                {
+                    var nodeId = node.Id.Value;
+                    <button class="play" @onclick="() => session.PickNode(nodeId)">
+                        @nodeId <span class="muted">(@node.Type.Value)</span>
+                    </button>
+                }
+            </div>
+        }
         else if (session.IsAwaitingInterlude)
         {
             <h2>Before the next node</h2>
