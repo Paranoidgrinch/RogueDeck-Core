@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RogueDeck Studio</title>
+    <meta name="description"
+          content="Forge a whole roguelike in your browser — cards, enemies, relics, events and a branching map, playtested on the spot and downloaded as one JSON file. A Moonvine Forge tool." />
+    <base href="/" />
+    <link rel="preload" id="webassembly" />
+    <link rel="icon"
+          href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M21 14.5A9 9 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5Z' fill='%23a8c88a'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="app.css" />
+    <link rel="stylesheet" href="_content/RogueDeck.Sandbox.Run/studio.css" />
+    <script type="importmap"></script>
+    <style>
+        /* Forge-styled splash while the WebAssembly runtime downloads (replaced by the app on boot). */
+        .studio-splash {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1.1rem;
+        }
+
+        .studio-splash svg {
+            width: 3.2rem;
+            height: 3.2rem;
+            fill: #a8c88a;
+            filter: drop-shadow(0 0 14px rgba(168, 200, 138, 0.55));
+            animation: studio-splash-pulse 1.6s ease-in-out infinite;
+        }
+
+        .studio-splash p {
+            color: #b8b6af;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+        }
+
+        .studio-splash .loading-progress-text::after {
+            content: "Stoking the forge — " var(--blazor-load-percentage-text, "…");
+        }
+
+        @keyframes studio-splash-pulse {
+
+            0%,
+            100% {
+                opacity: 0.55;
+                transform: scale(0.96);
+            }
+
+            50% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div class="studio-splash">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M21 14.5A9 9 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5Z" />
+            </svg>
+            <p class="loading-progress-text"></p>
+        </div>
+    </div>
+
+    <div id="blazor-error-ui">
+        An unhandled error has occurred.
+        <a href="." class="reload">Reload</a>
+        <span class="dismiss">🗙</span>
+    </div>
+    <script src="_framework/blazor.webassembly.js"></script>
+</body>
+
+</html>

@@ -8,7 +8,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <!-- Components-only reference (not the full ASP.NET Core framework) so the library loads under browser-wasm
+         (RogueDeck.Studio.Web) as well as in the server host. -->
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.9" />
   </ItemGroup>
 
   <ItemGroup>

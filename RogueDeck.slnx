@@ -4,6 +4,7 @@
     <Project Path="src/RogueDeck.Core/RogueDeck.Core.csproj" />
     <Project Path="src/RogueDeck.Sandbox.Combat/RogueDeck.Sandbox.Combat.csproj" />
     <Project Path="src/RogueDeck.Sandbox.Run/RogueDeck.Sandbox.Run.csproj" />
+    <Project Path="src/RogueDeck.Studio.Web/RogueDeck.Studio.Web.csproj" />
     <Project Path="src/RogueDeck.Studio/RogueDeck.Studio.csproj" />
     <Project Path="src/RogueDeck.Scenario/RogueDeck.Scenario.csproj" />
     <Project Path="src/RogueDeck.Run/RogueDeck.Run.csproj" />

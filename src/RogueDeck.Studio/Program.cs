@@ -35,7 +35,10 @@ app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages:
 app.UseStaticFiles();
 app.UseAntiforgery();
 
+// The pages/layout live in the Sandbox.Run RCL (shared with the WebAssembly host), so endpoint routing must scan
+// that assembly too — the Router component's AdditionalAssemblies alone only covers client-side navigation.
 app.MapRazorComponents<App>()
+    .AddAdditionalAssemblies(typeof(RogueDeck.Sandbox.Run.Components.Pages.Home).Assembly)
     .AddInteractiveServerRenderMode();
 
 app.Run();
