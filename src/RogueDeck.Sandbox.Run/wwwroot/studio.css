@@ -462,6 +462,32 @@ h2 {
     fill: var(--text-muted);
 }
 
+/* Blazor's unhandled-error bar: HIDDEN until the runtime shows it on a real fault. Without this rule the
+   template div renders permanently (the WebAssembly host shipped without the template CSS that hides it). */
+#blazor-error-ui {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background: #3a1518;
+    color: var(--text);
+    border-top: 1px solid rgba(255, 145, 145, 0.5);
+    padding: 0.6rem 1.2rem;
+}
+
+#blazor-error-ui .reload {
+    color: var(--accent-light);
+    margin-left: 0.75rem;
+}
+
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    float: right;
+    padding: 0 0.4rem;
+}
+
 /* Global undo (UndoButton) + its confirmation toast */
 .undo-button {
     background: none;

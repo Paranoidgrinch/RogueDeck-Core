@@ -58,7 +58,7 @@
         else if (CombatDriver?.Current is { } combat)
         {
             <h2>Combat — round @combat.Round</h2>
-            <div class="row"><span class="muted">Energy</span> @combat.HeroEnergy/@combat.HeroEnergyMax</div>
+            <div class="row"><span class="muted">Resources</span> @ResourcePoolsLine(combat.State.GetCombatant(combat.HeroId))</div>
             @foreach (var c in combat.State.Combatants)
             {
                 <div class="row">
@@ -90,10 +90,9 @@
                 <div class="choices">
                     @foreach (var card in combat.Hand)
                     {
-                        var cost = CardEnergyCost(card.DefinitionId.value);
-                        <button class="play" disabled="@(cost > combat.HeroEnergy)"
+                        <button class="play" disabled="@(!CanPay(combat.State.GetCombatant(combat.HeroId), card.DefinitionId.value))"
                                 @onclick="() => PlayCombatCard(card.Id)">
-                            @CardName(card.DefinitionId.value) ⚡@cost
+                            @CardName(card.DefinitionId.value) @CostLabel(card.DefinitionId.value)
                         </button>
                     }
                     @if (combat.Hand.Count == 0)
@@ -167,15 +166,14 @@
                     <div class="panel" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:.5rem; margin:.5rem 0">
                         <div class="row">
                             <strong>@PartyMemberName(mid)</strong>
-                            <span class="muted">⚡ @party.EnergyOf(mid)</span>
+                            <span class="muted">@ResourcePoolsLine(party.State.GetCombatant(mid))</span>
                         </div>
                         <div class="choices">
                             @foreach (var card in party.HandOf(mid))
                             {
-                                var cost = CardEnergyCost(card.DefinitionId.value);
-                                <button class="play" disabled="@(cost > party.EnergyOf(mid))"
+                                <button class="play" disabled="@(!CanPay(party.State.GetCombatant(mid), card.DefinitionId.value))"
                                         @onclick="() => PlayPartyCard(mid, card.Id)">
-                                    @CardName(card.DefinitionId.value) ⚡@cost
+                                    @CardName(card.DefinitionId.value) @CostLabel(card.DefinitionId.value)
                                 </button>
                             }
                             @if (party.HandOf(mid).Count == 0)
@@ -307,6 +305,47 @@
     [Parameter] public IReadOnlyDictionary<string, string> CardNames { get; set; } = new Dictionary<string, string>();
     [Parameter] public IReadOnlyDictionary<string, string> EnemyNames { get; set; } = new Dictionary<string, string>();
     [Parameter] public string? HeroName { get; set; }
+
+    // The FULL authored cost list per card id (energy AND custom resources like embers/blood) plus display names
+    // for the custom combat resources — so cost labels, affordability greying and the resource line cover the
+    // whole economy, not just energy. Hosts that don't supply them keep the energy-only behaviour.
+    [Parameter] public IReadOnlyDictionary<string, IReadOnlyList<ResourceCost>>? CardFullCosts { get; set; }
+    [Parameter] public IReadOnlyDictionary<string, string> ResourceNames { get; set; } = new Dictionary<string, string>();
+
+    private IReadOnlyList<ResourceCost> FullCosts(string definitionId) =>
+        CardFullCosts is not null && CardFullCosts.TryGetValue(definitionId, out var costs)
+            ? costs
+            : new[] { new ResourceCost(StandardCombatIds.EnergyResource, CardEnergyCost(definitionId)) };
+
+    private string ResourceLabel(ResourceId id) =>
+        id == StandardCombatIds.EnergyResource ? "⚡"
+        : ResourceNames.TryGetValue(id.value, out var name) ? name + " "
+        : id.value + " ";
+
+    // "⚡1 · Embers 2" — every cost the card charges; zero-cost cards read "⚡0".
+    private string CostLabel(string definitionId)
+    {
+        var costs = FullCosts(definitionId);
+        return costs.Count == 0
+            ? "⚡0"
+            : string.Join(" · ", costs.Select(c => $"{ResourceLabel(c.ResourceId)}{c.Amount}"));
+    }
+
+    // Whether the combatant can pay ALL of the card's costs right now (energy and custom resources alike).
+    private bool CanPay(CombatantState payer, string definitionId) =>
+        FullCosts(definitionId).All(cost =>
+            payer.Resources.TryGetValue(cost.ResourceId, out var pool) && pool.Current >= cost.Amount);
+
+    // "⚡ 3/3 · Embers 1/10 · Blood 0/5" — every resource pool the combatant carries, energy first.
+    private string ResourcePoolsLine(CombatantState combatant)
+    {
+        var pools = combatant.Resources
+            .OrderBy(p => p.Key == StandardCombatIds.EnergyResource ? 0 : 1)
+            .ThenBy(p => p.Key.value, StringComparer.Ordinal)
+            .Select(p => $"{ResourceLabel(p.Key).TrimEnd()} {p.Value.Current}{(p.Value.Max is { } max ? $"/{max}" : "")}");
+        var line = string.Join(" · ", pools);
+        return line.Length == 0 ? "—" : line;
+    }
 
     // Transient pick state, owned here: which entity-request options are selected, the current attack target, and
     // which candidate cards are selected for a pending in-combat card choice (keyed by card instance id).

@@ -23,6 +23,12 @@ public sealed class RunPlayback(Action onChanged) : IDisposable
     public IReadOnlyDictionary<string, string> EnemyNames { get; private set; } = new Dictionary<string, string>();
     public string? HeroName { get; private set; }
 
+    // The FULL authored cost list per card id (energy AND custom resources) + display names for the custom combat
+    // resources, so the fight view can label and gate the whole economy (see RunSessionView.CardFullCosts).
+    public IReadOnlyDictionary<string, IReadOnlyList<ResourceCost>> CardFullCosts { get; private set; } =
+        new Dictionary<string, IReadOnlyList<ResourceCost>>();
+    public IReadOnlyDictionary<string, string> ResourceNames { get; private set; } = new Dictionary<string, string>();
+
     // Start (or restart) a run from the blueprint. interactive=true hands each fight to the player via an
     // InteractiveCombatDriver (surfaced through CombatDriver); false auto-resolves fights headlessly.
     public void Start(RunBlueprint blueprint, int seed, bool interactive) =>
@@ -59,6 +65,9 @@ public sealed class RunPlayback(Action onChanged) : IDisposable
         {
             var content = BuildContent(blueprint);
             (CardCosts, CardNames, EnemyNames, HeroName) = DisplayNames(blueprint);
+            CardFullCosts = blueprint.Cards.ToDictionary(card => card.Id, card => card.Costs);
+            ResourceNames = blueprint.CombatResources.ToDictionary(
+                r => r.Id, r => string.IsNullOrWhiteSpace(r.DisplayName) ? r.Id : r.DisplayName);
 
             // A party run (party deckbuilding C2) uses the simultaneous team phase. Interactive party fights are
             // driven per member by the PartyInteractiveCombatDriver; a non-interactive party run auto-resolves them
