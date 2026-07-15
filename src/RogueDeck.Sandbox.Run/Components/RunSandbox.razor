@@ -419,7 +419,7 @@
     // Save the current blueprint JSON as a file (via a small JS download helper).
     private async Task Download()
     {
-        _jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./runSandbox.js");
+        _jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./_content/RogueDeck.Sandbox.Run/runSandbox.js");
         await _jsModule.InvokeVoidAsync("download", "run-blueprint.json", _json);
     }
 
@@ -450,7 +450,7 @@
         _error = _play.Error;
         if (json is null)
             return;
-        _jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./runSandbox.js");
+        _jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./_content/RogueDeck.Sandbox.Run/runSandbox.js");
         await _jsModule.InvokeVoidAsync("download", "run-save.json", json);
     }
 
