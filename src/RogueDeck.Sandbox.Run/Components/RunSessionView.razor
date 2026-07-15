@@ -92,12 +92,20 @@
             }
             else if (combat.IsHeroTurn)
             {
+                @* Chosen-target cards (eventTarget) can aim at ANYONE alive — enemies first, then yourself and
+                   your allies (buffs, block, heals). Cards targeting "source"/fixed selectors ignore this. *@
                 <div class="row">
                     <span class="muted">Target</span>
                     <select @bind="_combatTarget">
-                        @foreach (var enemy in combat.State.Combatants.Where(x => x.Id != combat.HeroId && x.IsAlive))
+                        @foreach (var c in combat.State.Combatants
+                            .Where(x => x.IsAlive)
+                            .OrderBy(x => x.TeamId == StandardCombatIds.EnemyTeam ? 0 : 1))
                         {
-                            <option value="@enemy.Id.value">@EnemyName(enemy.Id)</option>
+                            <option value="@c.Id.value">
+                                @(c.Id == combat.HeroId ? $"{HeroName ?? "You"} (you)"
+                                    : c.TeamId == StandardCombatIds.EnemyTeam ? EnemyName(c.Id)
+                                    : $"{EnemyName(c.Id)} (ally)")
+                            </option>
                         }
                     </select>
                 </div>
@@ -153,12 +161,20 @@
                 </div>
             }
 
+            @* Chosen-target cards (eventTarget) can aim at ANYONE alive — enemies first, then the party and its
+               units (buffs, block, heals land on your own side too). *@
             <div class="row">
                 <span class="muted">Target</span>
                 <select @bind="_combatTarget">
-                    @foreach (var enemy in party.State.Combatants.Where(x => x.TeamId == StandardCombatIds.EnemyTeam && x.IsAlive))
+                    @foreach (var c in party.State.Combatants
+                        .Where(x => x.IsAlive)
+                        .OrderBy(x => x.TeamId == StandardCombatIds.EnemyTeam ? 0 : 1))
                     {
-                        <option value="@enemy.Id.value">@EnemyName(enemy.Id)</option>
+                        <option value="@c.Id.value">
+                            @(c.TeamId == StandardCombatIds.EnemyTeam
+                                ? EnemyName(c.Id)
+                                : $"{PartyCombatantName(c)} (ally)")
+                        </option>
                     }
                 </select>
             </div>
@@ -491,8 +507,16 @@
         Session?.Run.Party.FirstOrDefault(m => m.Id.Value == id.value)?.DisplayNameKey
         ?? (HeroName ?? id.value);
 
+    // A player-team combatant that is NOT a party member (a board unit, a summon) carries its own authored
+    // display name — fall back to that, not to the hero's name.
     private string PartyCombatantName(CombatantState c) =>
-        c.TeamId == StandardCombatIds.EnemyTeam ? EnemyName(c.Id) : PartyMemberName(c.Id);
+        c.TeamId == StandardCombatIds.EnemyTeam
+            ? EnemyName(c.Id)
+            : Session?.Run.Party.FirstOrDefault(m => m.Id.Value == c.Id.value)?.DisplayNameKey
+              ?? (IsHeroCombatant(c.Id) ? HeroName ?? c.DisplayNameKey : c.DisplayNameKey);
+
+    private bool IsHeroCombatant(CombatantId id) =>
+        Session?.Run.Party.FirstOrDefault()?.Id.Value == id.value || id.value == "hero";
 
     private int CardEnergyCost(string definitionId) => CardCosts.TryGetValue(definitionId, out var cost) ? cost : 0;
 

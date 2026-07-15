@@ -617,6 +617,46 @@ public class TortureRunAuditTests
     }
 
     [Fact]
+    public void A_chosen_target_card_can_aim_at_the_players_own_side()
+    {
+        // A "guard" card granting block to THE CHOSEN TARGET (eventTarget) — the shape a "shield an ally" card
+        // takes. Aiming it at the hero's own board unit must land the block there (user report: the target picker
+        // only offered enemies; the engine itself must accept friendly targets).
+        var blueprint = TortureRun.Build();
+        var guard = new CardData
+        {
+            Id = "guard",
+            NameKey = "Guard",
+            Costs = new[] { new ResourceCost(StandardCombatIds.EnergyResource, 1) },
+            Program = CombatProgramModel.Build<CardPlayContext>(
+                new CombatNodeModel("gainBlock", "eventTarget", CombatAmountSpec.FromConst(7))),
+        };
+        var solo = blueprint with
+        {
+            Cards = blueprint.Cards.Append(guard).ToList(),
+            Deck = new[] { "guard", "guard", "guard", "guard", "guard" }
+                .Select(id => new CardDefinitionId(id)).ToList(),
+            Map = new RunMap(new[] { blueprint.Map.Nodes.First(n => n.Id.Value == "vanguard") }),
+            Start = blueprint.Start with { StartingParty = Array.Empty<RunMemberData>() },
+        };
+
+        var rig = SoloRig(solo);
+        Park(rig);
+        var combat = rig.Driver.Current!;
+        var wolf = combat.State.Combatants.First(c => c.DefinitionId.value == "ash-wolf");
+
+        rig.Driver.PlayCard(combat.Hand[0].Id, wolf.Id);
+        Park(rig);
+        var replayed = rig.Driver.Current!;
+
+        Assert.DoesNotContain(replayed.Steps, s => s.HasProblems);
+        var shielded = replayed.State.Combatants.First(c => c.DefinitionId.value == "ash-wolf");
+        Assert.True(shielded.DefensivePools.TryGetValue(StandardCombatIds.BlockDefensivePool, out var pool)
+                    && pool.Current == 7,
+            "the ally-targeted guard did not land its block on the board unit");
+    }
+
+    [Fact]
     public void Summon_joins_the_player_team_with_its_starting_status()
     {
         var rig = SoloRig(SoloEmberFight());
