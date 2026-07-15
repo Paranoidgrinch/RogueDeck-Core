@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
 
 <div class="studio-shell">
+    <a class="skip-link" href="#studio-content">Skip to content</a>
     <header class="studio-nav">
         <span class="studio-brand">
             <svg class="brand-moon" viewBox="0 0 24 24" aria-hidden="true">
@@ -8,7 +9,7 @@
             </svg>
             RogueDeck Studio
         </span>
-        <nav>
+        <nav aria-label="Studio tabs">
             <NavLink class="studio-link" href="" Match="NavLinkMatch.All">Home</NavLink>
             <NavLink class="studio-link" href="run">Run</NavLink>
             <NavLink class="studio-link" href="playtest">Playtest</NavLink>
@@ -27,7 +28,7 @@
             <ValidationBadge />
         </nav>
     </header>
-    <main class="studio-main">
+    <main class="studio-main" id="studio-content">
         @Body
     </main>
     <FirstVisitTutorial />

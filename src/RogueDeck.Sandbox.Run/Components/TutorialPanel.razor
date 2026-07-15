@@ -22,11 +22,12 @@
                 <button class="mini" @onclick="OnClose">Start blank</button>
             }
         </div>
-        <div class="tutorial-dots" aria-hidden="true">
+        <div class="tutorial-dots">
             @for (var i = 0; i < Steps.Count; i++)
             {
                 var di = i;
-                <button class="dot @(di == Step ? "active" : "")" @onclick="() => OnGoTo.InvokeAsync(di)"></button>
+                <button class="dot @(di == Step ? "active" : "")" aria-label="go to step @(di + 1)"
+                        @onclick="() => OnGoTo.InvokeAsync(di)"></button>
             }
         </div>
     </div>
