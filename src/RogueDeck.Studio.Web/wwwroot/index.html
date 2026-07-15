@@ -75,7 +75,32 @@
         <a href="." class="reload">Reload</a>
         <span class="dismiss">🗙</span>
     </div>
-    <script src="_framework/blazor.webassembly.js"></script>
+    <script src="_framework/blazor.webassembly#[.{fingerprint}].js" autostart="false"></script>
+    <script type="module">
+        // GitHub Pages serves no precompressed content negotiation, so fetch the published .br siblings and
+        // decode them in the browser (the documented Blazor static-hosting pattern) — 2.6 MB over the wire
+        // instead of 8.6. The dev server negotiates compression itself, so localhost keeps the default path,
+        // and any missing .br falls back to the framework's own loading.
+        import { BrotliDecode } from './decode.min.js';
+
+        const devHost = location.hostname === 'localhost';
+        Blazor.start({
+            loadBootResource: (type, name, defaultUri, integrity) => {
+                if (devHost || type === 'dotnetjs' || type === 'configuration' || type === 'manifest') {
+                    return undefined; // default loading
+                }
+                return (async () => {
+                    const response = await fetch(defaultUri + '.br', { cache: 'no-cache' });
+                    if (!response.ok) {
+                        return fetch(defaultUri); // no .br published for this resource — load it plain
+                    }
+                    const decompressed = BrotliDecode(new Int8Array(await response.arrayBuffer()));
+                    const contentType = type === 'dotnetwasm' ? 'application/wasm' : 'application/octet-stream';
+                    return new Response(decompressed, { headers: { 'content-type': contentType } });
+                })();
+            },
+        });
+    </script>
 </body>
 
 </html>
