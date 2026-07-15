@@ -1,0 +1,63 @@
+@* The tour's face: one step of the first-visit walkthrough, with dots, back/next and the final calls to action.
+   Presentational (state and storage live in FirstVisitTutorial), so HtmlRenderer can test every step. *@
+<div class="tutorial-backdrop">
+    <div class="tutorial-card" role="dialog" aria-modal="true" aria-label="Studio tour">
+        <button class="tutorial-close" title="close the tour (reopen it any time from the Help tab)"
+                @onclick="OnClose">✕</button>
+        <p class="step-kicker">@(Step + 1) / @Steps.Count · Studio tour</p>
+        <h2>@Steps[Step].Title</h2>
+        <p class="tutorial-text">@Steps[Step].Text</p>
+        <div class="tutorial-actions">
+            @if (Step > 0)
+            {
+                <button class="mini" @onclick="() => OnGoTo.InvokeAsync(Step - 1)">← Back</button>
+            }
+            @if (Step < Steps.Count - 1)
+            {
+                <button class="play" @onclick="() => OnGoTo.InvokeAsync(Step + 1)">Next →</button>
+            }
+            else
+            {
+                <button class="play" @onclick="OnStartSample">Start with the sample project</button>
+                <button class="mini" @onclick="OnClose">Start blank</button>
+            }
+        </div>
+        <div class="tutorial-dots" aria-hidden="true">
+            @for (var i = 0; i < Steps.Count; i++)
+            {
+                var di = i;
+                <button class="dot @(di == Step ? "active" : "")" @onclick="() => OnGoTo.InvokeAsync(di)"></button>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    public sealed record TourStep(string Title, string Text);
+
+    // The walkthrough itself — the five things a stranger needs to know, in order.
+    public static readonly IReadOnlyList<TourStep> Steps = new TourStep[]
+    {
+        new("Welcome to RogueDeck Studio",
+            "You are looking at the workbench of a roguelike deckbuilder. Everything you build — cards, enemies, " +
+            "relics, events, the map — lives in one project document you can download at any time."),
+        new("Author, tab by tab",
+            "Each tab edits one slice of the project: the Hero's start, the Cards & deck, Encounters (enemies and " +
+            "their intent AI), Statuses, Relics, Events, Shops, and the branching map on the Run tab. Everything " +
+            "connects by id — dropdowns, suggestions and hints guide you."),
+        new("Playtest instantly",
+            "The Playtest tab fights any single encounter straight from your document, card by card. The Run tab " +
+            "drives the whole run — map choices, fights, shops, events — seed by seed."),
+        new("Nothing is ever lost",
+            "The project autosaves as you work, and every change can be undone (↶ on the Run tab). Download the " +
+            "whole project as one JSON file from the Run tab; upload it later to keep working — or share it."),
+        new("Ready?",
+            "Start from the built-in sample game to see every piece working, or begin blank. You can reopen this " +
+            "tour any time from the Help tab."),
+    };
+
+    [Parameter] public int Step { get; set; }
+    [Parameter] public EventCallback<int> OnGoTo { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnStartSample { get; set; }
+}

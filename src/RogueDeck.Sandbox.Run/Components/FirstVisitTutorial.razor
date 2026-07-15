@@ -1,0 +1,68 @@
+@rendermode InteractiveServer
+@implements IDisposable
+@inject IJSRuntime Js
+@inject ProjectDraft Draft
+@inject NavigationManager Nav
+
+@* First-contact walkthrough: shows the TutorialPanel overlay on the very first visit (no localStorage flag yet)
+   and whenever the URL carries ?tour=1 — that is how the Help/Home "take the tour" links reopen it from static
+   pages. Dismissing it writes the flag, so returning visitors are never interrupted again. localStorage keeps
+   working unchanged on the coming WebAssembly host. *@
+@if (_show)
+{
+    <TutorialPanel Step="_step"
+                   OnGoTo="s => { _step = s; }"
+                   OnClose="Close"
+                   OnStartSample="StartSample" />
+}
+
+@code {
+    private const string SeenKey = "roguedeck-tutorial-seen";
+
+    private bool _show;
+    private int _step;
+
+    protected override void OnInitialized() => Nav.LocationChanged += OnLocationChanged;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        var seen = await Js.InvokeAsync<string?>("localStorage.getItem", SeenKey);
+        if (seen is null || TourRequested())
+        {
+            _show = true;
+            _step = 0;
+            StateHasChanged();
+        }
+    }
+
+    private bool TourRequested() => Nav.ToAbsoluteUri(Nav.Uri).Query.Contains("tour=1");
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        if (!TourRequested())
+            return;
+        _show = true;
+        _step = 0;
+        StateHasChanged();
+    }
+
+    private async Task Close()
+    {
+        _show = false;
+        await Js.InvokeVoidAsync("localStorage.setItem", SeenKey, "1");
+        // Strip ?tour=1 so a reload doesn't reopen the tour the user just closed.
+        if (TourRequested())
+            Nav.NavigateTo(Nav.ToAbsoluteUri(Nav.Uri).AbsolutePath.TrimStart('/'));
+    }
+
+    private async Task StartSample()
+    {
+        Draft.RunJson = RunJson.ToJson(SampleProject.Build(), RunJson.CreateOptions());
+        await Close();
+        Nav.NavigateTo("run");
+    }
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
+}
