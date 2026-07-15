@@ -389,6 +389,138 @@ h2 {
     fill: var(--text-muted);
 }
 
+/* ── landing page (Home) ──────────────────────────────────────────────────── */
+.landing {
+    max-width: 68rem;
+    margin: 0 auto;
+}
+
+.landing-hero {
+    padding: 3.5rem 0 2.5rem;
+}
+
+.hero-kicker,
+.step-kicker {
+    color: var(--accent);
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin: 0 0 0.8rem;
+}
+
+.hero-kicker::before {
+    content: "—— ";
+    color: var(--accent-dark);
+}
+
+.hero-title {
+    font-size: clamp(2.2rem, 6vw, 3.6rem);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin: 0 0 1.2rem;
+}
+
+.hero-title span {
+    display: block;
+    color: var(--accent-light);
+}
+
+.hero-intro {
+    font-size: 1.1rem;
+    line-height: 1.6;
+    color: var(--text-soft);
+    max-width: 38rem;
+    margin: 0 0 1.6rem;
+}
+
+.hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.9rem;
+    margin: 0 0 0.9rem;
+}
+
+.hero-cta {
+    font-size: 1.05rem;
+    padding: 0.55rem 1.5rem;
+}
+
+.hero-secondary {
+    color: var(--text-soft);
+    text-decoration: none;
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    padding: 0.55rem 1.4rem;
+}
+
+.hero-secondary:hover {
+    color: var(--text);
+    border-color: var(--text-muted);
+}
+
+.landing-steps {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 0 2.5rem;
+}
+
+.step-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    padding: 1.2rem 1.4rem;
+}
+
+.step-card h2 {
+    margin: 0 0 0.5rem;
+    color: var(--text);
+}
+
+.step-card p {
+    margin: 0;
+    color: var(--text-muted);
+    line-height: 1.55;
+}
+
+.step-kicker {
+    margin-bottom: 0.5rem;
+}
+
+.landing-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.8rem;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.7rem 1.4rem;
+    margin: 0 0 2rem;
+}
+
+.landing-foot p {
+    margin: 0;
+    color: var(--text-muted);
+    flex: 1;
+    min-width: 16rem;
+}
+
+.landing-foot a {
+    white-space: nowrap;
+}
+
+.status-dot {
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px rgba(168, 200, 138, 0.7);
+    flex-shrink: 0;
+}
+
 /* Help & glossary page */
 .glossary dl dt {
     font-weight: 600;

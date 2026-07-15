@@ -1,0 +1,19 @@
+@rendermode InteractiveServer
+@inject ProjectDraft Draft
+@inject NavigationManager Nav
+
+@* The landing page's primary call to action: put the built-in sample game into the shared project draft and jump
+   straight to the workbench. One click from "what is this?" to a playable, fully-authored project. The write goes
+   through ProjectDraft, so it is undoable and autosaved like any other edit. *@
+<button class="play hero-cta" @onclick="LoadSampleAndGo"
+        title="loads the built-in sample game (the Help page's worked examples, playable) and opens the Run tab">
+    Start with the sample project →
+</button>
+
+@code {
+    private void LoadSampleAndGo()
+    {
+        Draft.RunJson = RunJson.ToJson(SampleProject.Build(), RunJson.CreateOptions());
+        Nav.NavigateTo("run");
+    }
+}

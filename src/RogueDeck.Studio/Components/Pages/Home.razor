@@ -2,14 +2,67 @@
 
 <PageTitle>RogueDeck Studio</PageTitle>
 
-<h1>RogueDeck Studio</h1>
-<p class="muted">
-    Author a whole roguelike as one <strong>run document</strong>, tab by tab: the
-    <a href="hero">Hero</a> &amp; starting state, the <a href="cards">Cards</a> &amp; deck, the
-    <a href="encounters">Encounters</a> (enemies), <a href="relics">Relics</a>, and
-    <a href="events">Events</a>. Every tab is a lens over the same document.
-</p>
-<p class="muted">
-    Then play it: <a href="playtest">Playtest</a> a single encounter straight from the document, or assemble the
-    map and drive or balance the whole thing in the <a href="run">Run</a> tab.
-</p>
+<div class="landing">
+    <section class="landing-hero">
+        <p class="hero-kicker">A Moonvine Forge tool</p>
+        <h1 class="hero-title">
+            Forge a whole roguelike.
+            <span>No code. One document.</span>
+        </h1>
+        <p class="hero-intro">
+            Cards, enemies, relics, statuses, events, shops and a branching map — author every piece of a
+            deckbuilding roguelike visually, playtest it on the spot, and take the result with you as a single
+            JSON file.
+        </p>
+        <div class="hero-actions">
+            <SampleQuickStart />
+            <a class="hero-secondary" href="help">Read the guide</a>
+        </div>
+        <p class="hero-note muted">
+            No account, no setup. Balanced ideas welcome. Broken ideas encouraged.
+        </p>
+    </section>
+
+    <section class="landing-steps" aria-label="How it works">
+        <article class="step-card">
+            <p class="step-kicker">1 · Author</p>
+            <h2>Every tab, one document</h2>
+            <p>
+                The <a href="hero">Hero</a>, the <a href="cards">Cards</a> &amp; deck, the
+                <a href="encounters">Encounters</a>, <a href="relics">Relics</a>, <a href="events">Events</a> and
+                <a href="shops">Shops</a> — each tab is a lens over the same run document, so everything you build
+                connects.
+            </p>
+        </article>
+        <article class="step-card">
+            <p class="step-kicker">2 · Playtest</p>
+            <h2>Play it immediately</h2>
+            <p>
+                <a href="playtest">Fight a single encounter</a> straight from the document, or assemble the map and
+                drive the whole run seed by seed in the <a href="run">Run</a> tab — fights play out card by card.
+            </p>
+        </article>
+        <article class="step-card">
+            <p class="step-kicker">3 · Take it with you</p>
+            <h2>Download your creation</h2>
+            <p>
+                The finished project is one JSON blueprint. Download it from the <a href="run">Run</a> tab, share
+                it, and upload it later to keep working — it is the same contract the
+                <a href="https://github.com/Paranoidgrinch/RogueDeck-Core" rel="noopener noreferrer"
+                   target="_blank">RogueDeck Core engine</a> consumes.
+            </p>
+        </article>
+    </section>
+
+    <footer class="landing-foot">
+        <span class="status-dot" aria-hidden="true"></span>
+        <p>
+            RogueDeck Studio is the authoring workbench for <strong>RogueDeck Core</strong>, a deterministic C#
+            engine for roguelike deckbuilders — forged by
+            <a href="https://moonvineforge.com" rel="noopener noreferrer" target="_blank">Moonvine Forge</a>.
+        </p>
+        <a href="https://github.com/Paranoidgrinch/RogueDeck-Core" rel="noopener noreferrer" target="_blank">
+            Follow development →
+        </a>
+    </footer>
+</div>
