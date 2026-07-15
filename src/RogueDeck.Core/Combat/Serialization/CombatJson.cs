@@ -161,6 +161,10 @@ public static class CombatJson
          // Positional reads (P3) — inert (0) in a flat combat.
          .Register("combatantCoord", typeof(CombatantCoordExpression<>))
          .Register("gridDistance", typeof(GridDistanceExpression<>))
+         // Aggregates over a selector (1i Step B siblings of gridDistance — these two were missing, so a card
+         // authored with them in the Studio could not be saved: ToJson threw mid-edit).
+         .Register("countTargets", typeof(CountTargetsExpression<>))
+         .Register("sumOverTargets", typeof(SumOverTargetsExpression<>))
          .Register("cardsPlayedThisTurn", typeof(CardsPlayedThisTurnExpression<>))
          .Register("damageDealtThisTurn", typeof(DamageDealtThisTurnExpression<>))
          .Register("resourceGainedThisTurn", typeof(ResourceGainedThisTurnExpression<>))
