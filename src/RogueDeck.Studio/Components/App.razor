@@ -13,7 +13,9 @@
 </head>
 
 <body>
-    <Routes />
+    @* The whole app runs as ONE interactive-server tree (Routes carries the render mode) so the RCL components
+       stay render-mode-free — that is what lets the standalone WebAssembly host reuse them untouched. *@
+    <Routes @rendermode="InteractiveServer" />
     <script src="_framework/blazor.web.js"></script>
 </body>
 
