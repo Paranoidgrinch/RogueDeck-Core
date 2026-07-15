@@ -25,6 +25,11 @@
     <h2>Enemy actions (@Actions.Count)</h2>
     <p class="muted">Each action is an effect program an enemy can run, plus a telegraphed intent. Reference an
         action by its id in an enemy's roster below.</p>
+    @if (Actions.Count == 0)
+    {
+        <EmptyHint Title="No enemy actions yet."
+                   Text="Start here: an action is one thing an enemy can do — an effect program plus the intent shown to the player. Define a claw or a snarl below, then assemble enemies and encounter rosters from them." />
+    }
     @for (var i = 0; i < Actions.Count; i++)
     {
         var ai = i;

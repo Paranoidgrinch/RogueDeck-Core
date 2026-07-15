@@ -13,7 +13,8 @@
 
     @if (Blueprint.Events.Count == 0)
     {
-        <p class="muted">No events yet — add one below.</p>
+        <EmptyHint Title="No events yet."
+                   Text="An event is a story moment with choices — each choice lists what it does (give gold, grant a card or relic, heal…). Add one below, then point a map node at it." />
     }
 
     @foreach (var (key, script) in Blueprint.Events)

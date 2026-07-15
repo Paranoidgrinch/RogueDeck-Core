@@ -12,7 +12,8 @@
 
     @if (Blueprint.Statuses.Count == 0)
     {
-        <p class="muted">No statuses yet — add one below.</p>
+        <EmptyHint Title="No statuses yet."
+                   Text="A status is a buff or debuff that sits on a unit — poison, strength, a burning brand… Name one below, then apply it from any card, enemy or relic program by its id." />
     }
 
     @for (var si = 0; si < Blueprint.Statuses.Count; si++)

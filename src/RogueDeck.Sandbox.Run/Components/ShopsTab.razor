@@ -11,6 +11,11 @@
               Text="Places to spend gold. A shop shows part of its item pool at a time; every item can be bought once, a paid reroll refreshes what is on display, and the card-removal service lets the player pay to remove a deck card."
               Connects="Place a shop on the map as a shop node on the Run tab." />
 
+    @if (Shops.Count == 0)
+    {
+        <EmptyHint Title="No shops yet."
+                   Text="A shop is a place to spend gold — buy-once offers, paid rerolls, a card-removal service. Add one below, then place it on the map as a shop node." />
+    }
     @foreach (var (id, shop) in Shops)
     {
         var shopId = id;

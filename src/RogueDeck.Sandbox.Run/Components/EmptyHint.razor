@@ -1,0 +1,19 @@
+@* The friendly face of an empty list: what this thing is and how to create the first one, plus the sample-project
+   shortcut for people who learn from working examples. Presentational (no injects), so HtmlRenderer can test it. *@
+<div class="empty-hint">
+    <p class="empty-title">@Title</p>
+    <p class="muted">@Text</p>
+    @if (ShowSampleTip)
+    {
+        <p class="muted">
+            Tip: <a href="run">load the sample project</a> on the Run tab to explore working examples of
+            everything — this included.
+        </p>
+    }
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string Text { get; set; } = "";
+    [Parameter] public bool ShowSampleTip { get; set; } = true;
+}

@@ -12,7 +12,8 @@
 
     @if (Blueprint.Consumables.Count == 0)
     {
-        <p class="muted">No consumables yet — add one below.</p>
+        <EmptyHint Title="No consumables yet."
+                   Text="A consumable is a one-use item — a potion. Its effects run once when the player uses it, in or out of a fight. Add one below." />
     }
 
     @for (var ci = 0; ci < Blueprint.Consumables.Count; ci++)

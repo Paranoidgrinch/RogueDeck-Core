@@ -389,6 +389,24 @@ h2 {
     fill: var(--text-muted);
 }
 
+/* Empty-list hint (EmptyHint component) */
+.empty-hint {
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-panel);
+    padding: 0.9rem 1.2rem;
+    margin: 0.6rem 0;
+    max-width: 44rem;
+}
+
+.empty-hint .empty-title {
+    margin: 0 0 0.25rem;
+    font-weight: 600;
+}
+
+.empty-hint p {
+    margin: 0.15rem 0;
+}
+
 /* ── landing page (Home) ──────────────────────────────────────────────────── */
 .landing {
     max-width: 68rem;

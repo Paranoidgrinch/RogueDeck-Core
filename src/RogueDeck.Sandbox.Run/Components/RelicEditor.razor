@@ -22,7 +22,8 @@
 
     @if (Blueprint.Relics.Count == 0)
     {
-        <p class="muted">No relics yet — add one below.</p>
+        <EmptyHint Title="No relics yet."
+                   Text="A relic is a passive item the player keeps for the whole run: it reacts to run events (gain gold after every fight…) and can add standing combat rules (thorns…). Add one below." />
     }
 
     @for (var ri = 0; ri < Blueprint.Relics.Count; ri++)

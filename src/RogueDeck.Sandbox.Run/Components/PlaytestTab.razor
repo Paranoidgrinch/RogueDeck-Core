@@ -12,7 +12,8 @@
 
     @if (_encounters.Count == 0)
     {
-        <p class="muted">No encounters yet — author one in the <strong>Encounters</strong> tab first.</p>
+        <EmptyHint Title="Nothing to fight yet."
+                   Text="Author an encounter on the Encounters tab first — every roster you define there becomes instantly playable here." />
     }
     else
     {

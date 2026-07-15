@@ -24,6 +24,11 @@
     }
 
     <h2>Cards (@Cards.Count)</h2>
+    @if (Cards.Count == 0)
+    {
+        <EmptyHint Title="No cards yet."
+                   Text="Type an id below (like fireball) and press Add card — a new card starts with a simple deal-damage program you can reshape step by step." />
+    }
     @for (var i = 0; i < Cards.Count; i++)
     {
         var ci = i;
