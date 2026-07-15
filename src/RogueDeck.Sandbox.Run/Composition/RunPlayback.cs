@@ -63,19 +63,25 @@ public sealed class RunPlayback(Action onChanged) : IDisposable
             // A party run (party deckbuilding C2) uses the simultaneous team phase. Interactive party fights are
             // driven per member by the PartyInteractiveCombatDriver; a non-interactive party run auto-resolves them
             // (PartyAutoPlayCombatDriver). Single-hero runs keep the hero-centric interactive / auto drivers.
+            // The interactive session and drivers share ONE replay script (see ReplayScript): every player answer
+            // is recorded there and the run re-executes deterministically to the next prompt.
             var isParty = blueprint.Start.StartingParty.Count > 0;
+            var script = new ReplayScript();
+            var resettables = new List<IReplayResettable>();
 
             ICombatDriver driver;
             if (interactive && isParty)
             {
-                PartyCombatDriver = new PartyInteractiveCombatDriver();
+                PartyCombatDriver = new PartyInteractiveCombatDriver(script);
                 PartyCombatDriver.Changed += onChanged;
+                resettables.Add(PartyCombatDriver);
                 driver = PartyCombatDriver;
             }
             else if (interactive)
             {
-                CombatDriver = new InteractiveCombatDriver();
+                CombatDriver = new InteractiveCombatDriver(script);
                 CombatDriver.Changed += onChanged;
+                resettables.Add(CombatDriver);
                 driver = CombatDriver;
             }
             else if (isParty)
@@ -91,8 +97,7 @@ public sealed class RunPlayback(Action onChanged) : IDisposable
             new StandardRunPackage(driver, content).RegisterDefinitions(defs);
             var registry = defs.Build();
 
-            var run = makeRun(content);
-            var session = new InteractiveRunSession(run, registry, content);
+            var session = new InteractiveRunSession(() => makeRun(content), registry, content, script, resettables);
             session.Changed += onChanged;
             Session = session;
             session.Start();
@@ -103,19 +108,19 @@ public sealed class RunPlayback(Action onChanged) : IDisposable
         }
     }
 
-    // Use a held consumable's combat-use program during a live fight: remove the spent consumable from the run
-    // inventory, then run its program on the combat. Runs on the circuit thread while the run thread is parked in
-    // Drive, so both mutations are single-threaded. No-op unless a fight is active and the consumable has a combat use.
+    // Use a held consumable's combat-use program during a live fight. The use is recorded on the replay script and
+    // applied INSIDE the fight during the replay (the driver looks the program up on the live run and removes the
+    // spent copy), so it re-applies deterministically. No-op unless a fight is parked and the consumable has a
+    // combat use.
     public void UseConsumableInCombat(ConsumableInstanceId instance)
     {
         if (CombatDriver?.Current is null || Session is not { } session)
             return;
         var consumable = session.Run.FindConsumable(instance);
-        if (consumable?.CombatUse?.Program is not EffectProgram<TurnStartedTriggeredEffectContext> program)
+        if (consumable?.CombatUse?.Program is not EffectProgram<TurnStartedTriggeredEffectContext>)
             return;
 
-        session.Run.RemoveConsumable(instance);
-        CombatDriver.UseConsumable(program); // applies the combat effect + re-renders via Changed
+        session.UseConsumableInCombat(instance);
     }
 
     public void Dispose()

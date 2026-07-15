@@ -2,26 +2,22 @@ using RogueDeck.Run;
 
 namespace RogueDeck.Sandbox.Run;
 
-// Drives a run interactively for the UI. RunRunner is a synchronous loop that asks an IRunChoiceProvider for
-// each event choice; to let a human pick, the run is executed on a background task and this provider BLOCKS
-// that task at each choice (via a TaskCompletionSource) until the UI calls Pick. State is only mutated on the
-// background thread, and while a choice is pending that thread is parked inside Choose, so the UI can safely
-// read RunState to render the current situation. Entity selection (ChooseByPlayer) is auto (first-N) for now.
+// Drives a run interactively for the UI — via deterministic REPLAY (see ReplayScript). RunRunner is a synchronous
+// loop that asks an IRunChoiceProvider for each decision; instead of parking a background thread at each prompt
+// (impossible on single-threaded WebAssembly), every answer is recorded and the run is re-executed from its
+// initial state up to the first unanswered prompt, where ReplayParkedException unwinds the runner and the UI
+// renders the parked RunState. Everything happens on the caller's thread: Start() and every answer method run
+// the replay synchronously and raise Changed once at the end.
 public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChooser, IRunInterlude, IDisposable
 {
-    private readonly object _gate = new();
-    private readonly RunState _run;
+    private readonly Func<RunState> _makeRun;
     private readonly RunDefinitionRegistry _registry;
     private readonly RunContentRegistry? _content;
+    private readonly ReplayScript _script;
+    private readonly IReadOnlyList<IReplayResettable> _resettables;
     private readonly RunEffectProcessor _processor = new();
-    private TaskCompletionSource<ChoiceResolution>? _pending;
-    private TaskCompletionSource<IReadOnlyList<int>>? _pendingEntities;
-    private volatile bool _disposed;
-
-    // How a parked interaction (Choose or BetweenNodes) resumes: pick a choice, continue past an interlude, or use a
-    // consumable first (applied on the run-loop thread, then the same point re-parks). A record-struct union keeps
-    // the single TCS type-safe.
-    private readonly record struct ChoiceResolution(EventChoice? Choice, ConsumableInstanceId? Use, bool Continue = false);
+    private RunState _run;
+    private bool _disposed;
 
     public RunState Run => _run;
     public EventSituation? PendingSituation { get; private set; }
@@ -37,198 +33,159 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
     public bool IsAwaitingInterlude => PendingInterlude;
     public string? Error { get; private set; }
 
-    // Raised (on the background thread) when a choice is needed or the run finished; the UI marshals it.
+    // Raised once after every replay (an answer was applied, or the run finished); the UI re-renders on it.
     public event Action? Changed;
 
-    public InteractiveRunSession(RunState run, RunDefinitionRegistry registry, RunContentRegistry? content)
+    // makeRun must build the run's INITIAL state afresh on every call (a new RunState from the blueprint+seed, or
+    // a new restore of the same save) — replay determinism depends on every attempt starting identically.
+    public InteractiveRunSession(
+        Func<RunState> makeRun,
+        RunDefinitionRegistry registry,
+        RunContentRegistry? content,
+        ReplayScript? script = null,
+        IReadOnlyList<IReplayResettable>? resettables = null)
     {
-        ArgumentNullException.ThrowIfNull(run);
+        ArgumentNullException.ThrowIfNull(makeRun);
         ArgumentNullException.ThrowIfNull(registry);
-        _run = run;
+        _makeRun = makeRun;
         _registry = registry;
         _content = content;
+        _script = script ?? new ReplayScript();
+        _script.OnAdvance = Replay;
+        _resettables = resettables ?? Array.Empty<IReplayResettable>();
+        _run = makeRun(); // so Run is never null before Start
     }
 
-    public void Start() => Task.Run(RunToCompletion);
+    public void Start() => Replay();
 
-    private void RunToCompletion()
+    private void Replay()
     {
+        if (_disposed)
+            return;
+        PendingSituation = null;
+        PendingChoices = Array.Empty<EventChoice>();
+        PendingEntities = null;
+        PendingInterlude = false;
+        Error = null;
+        IsComplete = false;
+        foreach (var resettable in _resettables)
+            resettable.ResetForReplay();
+        _script.Reset();
+
+        var run = _makeRun();
+        _run = run;
+        _script.Run = run;
         try
         {
-            new RunRunner(_registry, this, content: _content, interlude: this).Run(_run);
+            new RunRunner(_registry, this, content: _content, interlude: this).Run(run);
+            IsComplete = true;
         }
-        catch (OperationCanceledException)
+        catch (ReplayParkedException)
         {
-            // Disposed mid-choice; nothing to report.
+            // Parked at an unanswered prompt; the prompt's owner published its pending state.
         }
         catch (Exception ex)
         {
             Error = $"{ex.GetType().Name}: {ex.Message}";
+            IsComplete = true;
         }
-        finally
-        {
-            lock (_gate)
-            {
-                PendingSituation = null;
-                PendingChoices = Array.Empty<EventChoice>();
-                IsComplete = true;
-            }
-            Changed?.Invoke();
-        }
+        Changed?.Invoke();
     }
 
-    // IRunChoiceProvider — parks the background run thread until the UI picks a choice. While parked, the UI can ask
-    // to use a consumable first; that is applied HERE (on the run-loop thread, the only place RunState is mutated),
-    // then the same choice re-parks — so the player can spend consumables at an event before choosing.
+    // IRunChoiceProvider — consume recorded consumable-uses (each re-resolves at the same choice, so the player
+    // can spend consumables before choosing) and then the recorded pick; an unanswered choice parks the replay.
     public EventChoice Choose(EventSituation situation, IReadOnlyList<EventChoice> available, RunState run)
     {
         while (true)
         {
-            TaskCompletionSource<ChoiceResolution> tcs;
-            lock (_gate)
+            if (_script.TryTake<ParkConsumableEntry>(out var use))
             {
-                if (_disposed)
-                    throw new OperationCanceledException();
-                tcs = new TaskCompletionSource<ChoiceResolution>(TaskCreationOptions.RunContinuationsAsynchronously);
-                _pending = tcs;
-                PendingSituation = situation;
-                PendingChoices = available;
+                run.EnqueueEffect(new UseConsumableRunEffect(use.Instance));
+                _processor.ResolvePending(run, _registry);
+                continue;
             }
-            Changed?.Invoke();
+            if (_script.TryTake<EventPickEntry>(out var pick))
+                return available.FirstOrDefault(c => c.Id == pick.ChoiceId) ?? available[0];
 
-            var resolution = tcs.Task.GetAwaiter().GetResult();
-            if (resolution.Use is { } instance)
-            {
-                _run.EnqueueEffect(new UseConsumableRunEffect(instance));
-                _processor.ResolvePending(_run, _registry);
-                continue; // re-park at the same choice, now with the consumable spent
-            }
-
-            lock (_gate)
-            {
-                _pending = null;
-                PendingSituation = null;
-                PendingChoices = Array.Empty<EventChoice>();
-            }
-            return resolution.Choice ?? available[0];
+            _script.ThrowIfMismatched(nameof(Choose));
+            PendingSituation = situation;
+            PendingChoices = available;
+            throw new ReplayParkedException();
         }
     }
 
-    // Called by the UI when the player clicks a choice; resumes the background run.
+    // Called by the UI when the player clicks a choice; records it and replays.
     public void Pick(string choiceId)
     {
-        TaskCompletionSource<ChoiceResolution>? tcs;
-        EventChoice choice;
-        lock (_gate)
-        {
-            tcs = _pending;
-            if (tcs is null || PendingChoices.Count == 0)
-                return;
-            choice = PendingChoices.FirstOrDefault(c => c.Id == choiceId) ?? PendingChoices[0];
-            _pending = null;
-        }
-        tcs.SetResult(new ChoiceResolution(choice, null));
+        if (PendingSituation is null || PendingChoices.Count == 0)
+            return;
+        _script.Advance(new EventPickEntry(choiceId));
     }
 
-    // Called by the UI while parked at a choice to spend a held consumable; the run-loop thread applies it and the
-    // same choice re-parks. No-op if the run is not currently awaiting a choice (the only safe point to mutate).
+    // Called by the UI while parked at a choice or an interlude to spend a held consumable; the replay applies it
+    // at the park point and re-parks the same prompt with the consumable spent.
     public void UseConsumable(ConsumableInstanceId instance)
     {
-        TaskCompletionSource<ChoiceResolution>? tcs;
-        lock (_gate)
-        {
-            tcs = _pending;
-            if (tcs is null)
-                return;
-            _pending = null;
-        }
-        tcs.SetResult(new ChoiceResolution(null, instance));
+        if (PendingSituation is null && !PendingInterlude)
+            return;
+        _script.Advance(new ParkConsumableEntry(instance));
     }
 
-    // IRunInterlude — parks the background run thread between map nodes so the player can view the inventory/deck and
-    // spend consumables (their run effects) before the next combat/event. Same loop as Choose: a use is applied on
-    // this thread and re-parks; Continue resumes the run to the next node.
+    // Called by the UI while a fight is parked to spend a held consumable's combat use; the combat driver applies
+    // it inside the fight during replay (looking the program up on the live run and removing the spent copy).
+    public void UseConsumableInCombat(ConsumableInstanceId instance) =>
+        _script.Advance(new CombatConsumableEntry(instance));
+
+    // IRunInterlude — parks between map nodes so the player can view the inventory/deck and spend consumables
+    // before the next combat/event.
     public void BetweenNodes(RunState run)
     {
         while (true)
         {
-            TaskCompletionSource<ChoiceResolution> tcs;
-            lock (_gate)
+            if (_script.TryTake<ParkConsumableEntry>(out var use))
             {
-                if (_disposed)
-                    throw new OperationCanceledException();
-                tcs = new TaskCompletionSource<ChoiceResolution>(TaskCreationOptions.RunContinuationsAsynchronously);
-                _pending = tcs;
-                PendingInterlude = true;
-            }
-            Changed?.Invoke();
-
-            var resolution = tcs.Task.GetAwaiter().GetResult();
-            if (resolution.Use is { } instance)
-            {
-                _run.EnqueueEffect(new UseConsumableRunEffect(instance));
-                _processor.ResolvePending(_run, _registry);
+                run.EnqueueEffect(new UseConsumableRunEffect(use.Instance));
+                _processor.ResolvePending(run, _registry);
                 continue;
             }
+            if (_script.TryTake<InterludeContinueEntry>(out _))
+                return;
 
-            lock (_gate)
-            {
-                _pending = null;
-                PendingInterlude = false;
-            }
-            return;
+            _script.ThrowIfMismatched(nameof(BetweenNodes));
+            PendingInterlude = true;
+            throw new ReplayParkedException();
         }
     }
 
     // Called by the UI to resume past a between-nodes interlude.
     public void Continue()
     {
-        TaskCompletionSource<ChoiceResolution>? tcs;
-        lock (_gate)
-        {
-            tcs = _pending;
-            if (tcs is null || !PendingInterlude)
-                return;
-            _pending = null;
-        }
-        tcs.SetResult(new ChoiceResolution(null, null, Continue: true));
+        if (!PendingInterlude)
+            return;
+        _script.Advance(new InterludeContinueEntry());
     }
 
-    // IRunEntityChooser — parks the background run thread until the UI selects entities (e.g. cards to remove).
+    // IRunEntityChooser — an unanswered entity selection (e.g. cards to remove) parks the replay.
     public IReadOnlyList<T> ChooseEntities<T>(IReadOnlyList<T> candidates, int count, string purpose)
     {
         if (candidates.Count == 0 || count <= 0)
             return Array.Empty<T>();
 
-        TaskCompletionSource<IReadOnlyList<int>> tcs;
-        lock (_gate)
-        {
-            if (_disposed)
-                throw new OperationCanceledException();
-            tcs = new TaskCompletionSource<IReadOnlyList<int>>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _pendingEntities = tcs;
-            PendingEntities = new EntitySelectionRequest(
-                purpose, Math.Min(count, candidates.Count), candidates.Select(c => Display(c)).ToArray());
-        }
-        Changed?.Invoke();
+        if (_script.TryTake<EntityPicksEntry>(out var picks))
+            return picks.Indices.Where(i => i >= 0 && i < candidates.Count).Select(i => candidates[i]).ToArray();
 
-        var indices = tcs.Task.GetAwaiter().GetResult();
-        return indices.Select(i => candidates[i]).ToArray();
+        _script.ThrowIfMismatched(nameof(ChooseEntities));
+        PendingEntities = new EntitySelectionRequest(
+            purpose, Math.Min(count, candidates.Count), candidates.Select(c => Display(c)).ToArray());
+        throw new ReplayParkedException();
     }
 
     // Called by the UI when the player confirms an entity selection (indices into PendingEntities.Displays).
     public void PickEntities(IReadOnlyList<int> indices)
     {
-        TaskCompletionSource<IReadOnlyList<int>>? tcs;
-        lock (_gate)
-        {
-            tcs = _pendingEntities;
-            if (tcs is null)
-                return;
-            _pendingEntities = null;
-            PendingEntities = null;
-        }
-        tcs.SetResult(indices);
+        if (PendingEntities is null)
+            return;
+        _script.Advance(new EntityPicksEntry(indices));
     }
 
     private static string Display(object? candidate) => candidate switch
@@ -242,18 +199,8 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
 
     public void Dispose()
     {
-        TaskCompletionSource<ChoiceResolution>? choice;
-        TaskCompletionSource<IReadOnlyList<int>>? entities;
-        lock (_gate)
-        {
-            _disposed = true;
-            choice = _pending;
-            entities = _pendingEntities;
-            _pending = null;
-            _pendingEntities = null;
-        }
-        choice?.TrySetCanceled();
-        entities?.TrySetCanceled();
+        _disposed = true;
+        _script.OnAdvance = null;
     }
 }
 

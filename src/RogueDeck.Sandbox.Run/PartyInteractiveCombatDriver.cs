@@ -5,26 +5,18 @@ using RogueDeck.Scenario.Scripting;
 
 namespace RogueDeck.Sandbox.Run;
 
-// The party counterpart of InteractiveCombatDriver (party deckbuilding C2 follow-up): lets a human drive a
-// SIMULTANEOUS-phase party fight from the UI instead of auto-resolving it. Same threading contract as the
-// single-hero interactive driver — RunRunner drives the run on a background thread and calls Drive at a combat
-// node; Drive builds a PartyCombat, surfaces it via Current/Changed, and PARKS the run thread on a
-// TaskCompletionSource until the fight ends. The UI mutates the fight (PlayCardFor/EndTurnFor) on the circuit
-// thread while the run thread is parked, so combat state is never touched by two threads at once. Ending the last
-// living member runs the enemy phase synchronously inside PartyCombat.EndTurn (still on the circuit thread), then
-// a fresh player phase opens. On completion it reports each projected member for per-member HP reconcile.
+// The party counterpart of InteractiveCombatDriver (party deckbuilding C2 follow-up): lets humans drive a
+// SIMULTANEOUS-phase party fight from the UI, under the same deterministic replay contract — Drive rebuilds the
+// fight per attempt and applies the recorded per-member actions; an owed action parks the replay with Current
+// surfacing the fight. Ending the last living member runs the enemy phase synchronously inside PartyCombat.EndTurn,
+// then a fresh player phase opens. On completion it reports each projected member for per-member HP reconcile.
 //
 // A non-party fight (no simultaneous phase) can't be driven here; Drive falls back to headless auto-play so the
 // run never strands — in practice a party run projects every fight as simultaneous, so this is only a safety net.
-public sealed class PartyInteractiveCombatDriver : ICombatDriver, IDisposable
+public sealed class PartyInteractiveCombatDriver : ICombatDriver, IReplayResettable, IDisposable
 {
-    private readonly object _gate = new();
-    private readonly UiCombatCardChooser _cardChooser = new();
-    private TaskCompletionSource<CombatDriveResult>? _pending;
-    private bool _resolving;
-    private IReadOnlyList<AllyBlueprint> _allies = [];
-    private CombatantId _heroId;
-    private volatile bool _disposed;
+    private readonly ReplayScript _script;
+    private readonly UiCombatCardChooser _cardChooser;
 
     // The party fight currently awaiting the players, or null when no party combat is in progress.
     public PartyCombat? Current { get; private set; }
@@ -35,21 +27,24 @@ public sealed class PartyInteractiveCombatDriver : ICombatDriver, IDisposable
     public int PendingCardChoiceCount => _cardChooser.PendingCount;
     public string PendingCardChoicePurpose => _cardChooser.PendingPurpose;
 
-    // True while a member's action is resolving on the background task, including while parked on a card choice. New
-    // actions are ignored until it clears; the UI disables its controls and callers pace against it.
-    public bool IsResolving
-    {
-        get { lock (_gate) return _resolving; }
-    }
+    // Replay applies every action synchronously inside the caller's answer method; kept because the view disables
+    // its controls against it.
+    public bool IsResolving => false;
 
-    // Raised (possibly off the UI thread) when a combat starts, needs a re-render, or finishes. The UI marshals it.
+    // Raised when a fight completes during a replay; the session's Changed covers every park.
     public event Action? Changed;
 
-    public PartyInteractiveCombatDriver()
+    public PartyInteractiveCombatDriver(ReplayScript? script = null)
     {
-        // A card choice parking mid-resolution is a valid render point (blocked on input), so forward the chooser's
-        // park signal as our own Changed — the only Changed fired mid-action.
-        _cardChooser.Changed += () => Changed?.Invoke();
+        _script = script ?? new ReplayScript();
+        _cardChooser = new UiCombatCardChooser(_script);
+    }
+
+    public void ResetForReplay()
+    {
+        Current = null;
+        _cardChooser.ResetForReplay();
+        _script.Reset(); // idempotent with the session's own reset; keeps driver-only rigs (tests) correct
     }
 
     public CombatDriveResult Drive(Playthrough playthrough)
@@ -64,111 +59,59 @@ public sealed class PartyInteractiveCombatDriver : ICombatDriver, IDisposable
         var combat = new PartyCombat(
             compiled, EnemyIntentSelectors.Build(compiled), playthrough.CombatId, playthrough.RandomSeed);
         combat.State.SetCardChooser(_cardChooser);
+        Current = combat;
+        var allies = playthrough.Blueprint.Allies;
+        var heroId = compiled.Hero.CombatantId;
 
-        TaskCompletionSource<CombatDriveResult> tcs;
-        lock (_gate)
+        while (true)
         {
-            if (_disposed)
-                throw new OperationCanceledException();
-            tcs = new TaskCompletionSource<CombatDriveResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _pending = tcs;
-            Current = combat;
-            _allies = playthrough.Blueprint.Allies;
-            _heroId = compiled.Hero.CombatantId;
+            if (combat.IsOver)
+            {
+                Current = null;
+                var heroHp = combat.State.TryGetCombatant(heroId, out var hero) && hero is not null
+                    ? hero.Health.Current
+                    : 0;
+                Changed?.Invoke();
+                return new CombatDriveResult(combat.Result, heroHp, UnitDriveResults.Read(combat.State, allies));
+            }
+
+            if (_script.TryTake<CombatPlayEntry>(out var play))
+                combat.PlayCard(RequireMember(play.Member), play.Card, play.Target);
+            else if (_script.TryTake<CombatEndTurnEntry>(out var end))
+                combat.EndTurn(RequireMember(end.Member));
+            else
+            {
+                _script.ThrowIfMismatched(nameof(Drive));
+                throw new ReplayParkedException(); // Current stays set — the UI renders the parked fight
+            }
         }
-        Changed?.Invoke();
-
-        // A fight already decided (no living enemies) must not strand the parked run thread.
-        if (combat.IsOver)
-            Finish(combat);
-
-        return tcs.Task.GetAwaiter().GetResult();
     }
 
-    // ── UI actions (called on the circuit thread while the run thread is parked in Drive) ──
-    // A member's play may PARK on a ChosenCardInZone choice, blocking the resolving thread until the player picks; so
-    // each action runs on a background task (not the circuit) and only one resolves at a time (_resolving guards
-    // re-entry, including while parked). Changed fires only at a park (the chooser) or on completion (AfterAction).
+    private static CombatantId RequireMember(CombatantId? member) =>
+        member ?? throw new InvalidOperationException("A party combat entry was recorded without its member.");
 
-    public void PlayCardFor(CombatantId member, CardInstanceId cardId, CombatantId? target) =>
-        RunAction(combat => combat.PlayCard(member, cardId, target));
+    // ── UI actions (each records an entry and replays; ignored unless a fight is parked and no card choice is open) ──
+
+    public void PlayCardFor(CombatantId member, CardInstanceId cardId, CombatantId? target)
+    {
+        if (Current is null || _cardChooser.IsAwaitingChoice)
+            return;
+        _script.Advance(new CombatPlayEntry(member, cardId, target));
+    }
 
     // Ending the last living member runs the enemy phase + opens the next player phase, inside PartyCombat.EndTurn.
-    public void EndTurnFor(CombatantId member) => RunAction(combat => combat.EndTurn(member));
+    public void EndTurnFor(CombatantId member)
+    {
+        if (Current is null || _cardChooser.IsAwaitingChoice)
+            return;
+        _script.Advance(new CombatEndTurnEntry(member));
+    }
 
-    // The UI's answer to a pending in-combat card choice; unparks the resolving task so the action completes.
+    // The UI's answer to a pending in-combat card choice.
     public void SupplyCardChoice(IReadOnlyList<CardInstanceId> picks) => _cardChooser.Supply(picks);
 
-    private void RunAction(Action<PartyCombat> action)
-    {
-        PartyCombat combat;
-        lock (_gate)
-        {
-            if (_disposed || _resolving || Current is null)
-                return;
-            combat = Current;
-            _resolving = true;
-        }
-        Task.Run(() =>
-        {
-            try
-            {
-                action(combat);
-            }
-            catch (OperationCanceledException)
-            {
-                // Disposed mid-choice; the session is tearing down.
-            }
-            finally
-            {
-                lock (_gate)
-                    _resolving = false;
-            }
-            AfterAction(combat);
-        });
-    }
-
-    private void AfterAction(PartyCombat combat)
-    {
-        if (_disposed)
-            return;
-        if (combat.IsOver)
-            Finish(combat);
-        else
-            Changed?.Invoke();
-    }
-
-    // Resume the parked run thread with the fight's outcome + each member's final state (for per-member reconcile).
-    private void Finish(PartyCombat combat)
-    {
-        TaskCompletionSource<CombatDriveResult>? tcs;
-        IReadOnlyList<AllyBlueprint> allies;
-        CombatantId heroId;
-        lock (_gate)
-        {
-            tcs = _pending;
-            allies = _allies;
-            heroId = _heroId;
-            _pending = null;
-            Current = null;
-        }
-        var heroHp = combat.State.TryGetCombatant(heroId, out var hero) && hero is not null ? hero.Health.Current : 0;
-        tcs?.TrySetResult(new CombatDriveResult(combat.Result, heroHp, UnitDriveResults.Read(combat.State, allies)));
-        Changed?.Invoke();
-    }
-
-    // Each enemy acts the next action in its list, cycling by round (1-based) — same rule as the auto drivers.
     public void Dispose()
     {
-        TaskCompletionSource<CombatDriveResult>? tcs;
-        lock (_gate)
-        {
-            _disposed = true;
-            tcs = _pending;
-            _pending = null;
-            Current = null;
-        }
-        _cardChooser.Dispose(); // cancel any card-choice park so the resolving task unblocks
-        tcs?.TrySetCanceled();
+        // Replay holds no threads or parked waits; nothing to tear down.
     }
 }

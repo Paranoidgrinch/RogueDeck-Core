@@ -5,49 +5,50 @@ using RogueDeck.Scenario.Scripting;
 
 namespace RogueDeck.Sandbox.Run;
 
-// An ICombatDriver that lets a human play each run combat instead of auto-resolving it. It mirrors the event
-// interactivity in InteractiveRunSession: RunRunner drives the run on a background thread and calls Drive when a
-// combat node is reached; Drive builds an InteractiveCombat, surfaces it to the UI via Current/Changed, and PARKS
-// the background thread on a TaskCompletionSource until the fight ends. The UI mutates the combat (PlayCard/EndTurn)
-// on the circuit thread while the run thread is parked inside Drive, so the combat state is never touched by two
-// threads at once. Pass AutoPlayCombatDriver instead for headless play (balancing / simulate).
-public sealed class InteractiveCombatDriver : ICombatDriver, IDisposable
+// An ICombatDriver that lets a human play each run combat instead of auto-resolving it — under deterministic
+// replay (see ReplayScript). When RunRunner reaches a combat node, Drive rebuilds the fight (same blueprint +
+// seed on every replay attempt) and applies the recorded actions; when the script runs out and the fight is not
+// over, the replay PARKS with Current surfacing the live fight to the UI. Each UI action (PlayCard/EndTurn)
+// records an entry and replays the run, which deterministically reaches this same fight and advances it one
+// action. Pass AutoPlayCombatDriver instead for headless play (balancing / simulate).
+public sealed class InteractiveCombatDriver : ICombatDriver, IReplayResettable, IDisposable
 {
-    private readonly object _gate = new();
-    private readonly UiCombatCardChooser _cardChooser = new();
-    private TaskCompletionSource<CombatDriveResult>? _pending;
-    private bool _resolving;
-    private volatile bool _disposed;
+    private readonly ReplayScript _script;
+    private readonly UiCombatCardChooser _cardChooser;
 
     // The fight currently awaiting the player, or null when no combat is in progress.
     public InteractiveCombat? Current { get; private set; }
 
-    // A pending in-combat card choice (e.g. Armaments): the candidate cards the player must pick from, how many, and
-    // what for — null when no card choice is awaiting a pick. The UI renders these and calls SupplyCardChoice.
+    // A pending in-combat card choice (e.g. Armaments): the candidate cards the player must pick from, how many,
+    // and what for — null when no card choice is awaiting a pick. The UI renders these and calls SupplyCardChoice.
     public IReadOnlyList<CardInstance>? PendingCardChoice => _cardChooser.PendingCandidates;
     public int PendingCardChoiceCount => _cardChooser.PendingCount;
     public string PendingCardChoicePurpose => _cardChooser.PendingPurpose;
 
-    // True while an action (play/end-turn) is resolving on the background task, including while it is parked on a card
-    // choice. New actions are ignored until it clears; the UI disables its controls and callers pace against it.
-    public bool IsResolving
-    {
-        get { lock (_gate) return _resolving; }
-    }
+    // Replay applies every action synchronously inside the caller's answer method, so nothing is ever mid-flight
+    // when the UI runs. Kept because the view disables its controls against it.
+    public bool IsResolving => false;
 
-    // Raised (possibly off the UI thread) when a combat starts, needs a re-render, or finishes. The UI marshals it.
+    // Raised when a fight completes during a replay; the session's Changed covers every park, so this is only a
+    // supplementary render signal.
     public event Action? Changed;
 
-    public InteractiveCombatDriver()
+    public InteractiveCombatDriver(ReplayScript? script = null)
     {
-        // A card choice parking mid-resolution is a valid render point (state is quiescent, blocked on input), so
-        // forward the chooser's park signal as our own Changed — this is the only Changed fired mid-action.
-        _cardChooser.Changed += () => Changed?.Invoke();
+        _script = script ?? new ReplayScript();
+        _cardChooser = new UiCombatCardChooser(_script);
     }
 
-    // Called on the background run thread by CombatNodeResolver. Builds the fight the same way AutoPlayCombatDriver
-    // does, installs the UI card chooser so ChosenCardInZone selections prompt the player, then blocks here until the
-    // player finishes it (or the session is disposed).
+    public void ResetForReplay()
+    {
+        Current = null;
+        _cardChooser.ResetForReplay();
+        _script.Reset(); // idempotent with the session's own reset; keeps driver-only rigs (tests) correct
+    }
+
+    // Called by CombatNodeResolver during a replay. Builds the fight the same way AutoPlayCombatDriver does
+    // (deterministic per blueprint+seed), installs the UI card chooser so ChosenCardInZone selections prompt the
+    // player, then applies the recorded actions — parking when the player still owes the next one.
     public CombatDriveResult Drive(Playthrough playthrough)
     {
         ArgumentNullException.ThrowIfNull(playthrough);
@@ -55,114 +56,67 @@ public sealed class InteractiveCombatDriver : ICombatDriver, IDisposable
         var combat = new InteractiveCombat(
             compiled, EnemyIntentSelectors.Build(compiled), playthrough.CombatId, playthrough.RandomSeed);
         combat.State.SetCardChooser(_cardChooser);
+        Current = combat;
 
-        TaskCompletionSource<CombatDriveResult> tcs;
-        lock (_gate)
+        while (true)
         {
-            if (_disposed)
-                throw new OperationCanceledException();
-            tcs = new TaskCompletionSource<CombatDriveResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _pending = tcs;
-            Current = combat;
+            if (combat.IsOver)
+            {
+                Current = null;
+                var heroHp = combat.State.TryGetCombatant(combat.HeroId, out var hero) && hero is not null
+                    ? hero.Health.Current
+                    : 0;
+                Changed?.Invoke();
+                return new CombatDriveResult(combat.Result, heroHp);
+            }
+
+            if (_script.TryTake<CombatPlayEntry>(out var play))
+                combat.PlayCard(play.Card, play.Target);
+            else if (_script.TryTake<CombatEndTurnEntry>(out _))
+                combat.EndTurn();
+            else if (_script.TryTake<CombatConsumableEntry>(out var use))
+                ApplyConsumable(combat, use.Instance);
+            else
+            {
+                _script.ThrowIfMismatched(nameof(Drive));
+                throw new ReplayParkedException(); // Current stays set — the UI renders the parked fight
+            }
         }
-        Changed?.Invoke();
-
-        // A fight with no living enemies is already decided; don't strand the run waiting for input.
-        if (combat.IsOver)
-            Finish(combat);
-
-        return tcs.Task.GetAwaiter().GetResult();
     }
 
-    // ── UI actions (called on the circuit thread while the run thread is parked in Drive) ──
-    // Card resolution may PARK on a ChosenCardInZone choice, which blocks the resolving thread until the player picks.
-    // So each action runs on a background task (not the circuit): the task blocks at the choice while the circuit
-    // renders the prompt and calls SupplyCardChoice. Only one action resolves at a time (_resolving guards re-entry),
-    // and Changed fires only at a park (the chooser) or on completion (AfterAction) — never mid-mutation.
+    // A recorded in-combat consumable use: remove the spent copy from the run inventory (the session put the
+    // attempt's live run on the script) and run its combat-use program on the fight.
+    private void ApplyConsumable(InteractiveCombat combat, ConsumableInstanceId instance)
+    {
+        var run = _script.Run;
+        var consumable = run?.FindConsumable(instance);
+        if (run is null || consumable?.CombatUse?.Program is not EffectProgram<TurnStartedTriggeredEffectContext> program)
+            return;
+        run.RemoveConsumable(instance);
+        combat.UseHeroCombatProgram(program);
+    }
 
-    public void PlayCard(CardInstanceId cardId, CombatantId? target) =>
-        RunAction(combat => combat.PlayCard(cardId, target));
+    // ── UI actions (each records an entry and replays; ignored unless a fight is parked and no card choice is open) ──
 
-    public void EndTurn() => RunAction(combat => combat.EndTurn());
+    public void PlayCard(CardInstanceId cardId, CombatantId? target)
+    {
+        if (Current is null || _cardChooser.IsAwaitingChoice)
+            return;
+        _script.Advance(new CombatPlayEntry(null, cardId, target));
+    }
 
-    // Run a consumable's combat-use program on the live fight. The caller (RunPlayback) removes the spent consumable
-    // from the run inventory.
-    public void UseConsumable(EffectProgram<TurnStartedTriggeredEffectContext> program) =>
-        RunAction(combat => combat.UseHeroCombatProgram(program));
+    public void EndTurn()
+    {
+        if (Current is null || _cardChooser.IsAwaitingChoice)
+            return;
+        _script.Advance(new CombatEndTurnEntry(null));
+    }
 
-    // The UI's answer to a pending in-combat card choice; unparks the resolving task so the action completes.
+    // The UI's answer to a pending in-combat card choice.
     public void SupplyCardChoice(IReadOnlyList<CardInstanceId> picks) => _cardChooser.Supply(picks);
 
-    // Kick a combat mutation onto a background task so a card-choice park blocks the task, not the circuit. Ignores
-    // re-entry while an action is still resolving (including while parked at a choice).
-    private void RunAction(Action<InteractiveCombat> action)
-    {
-        InteractiveCombat combat;
-        lock (_gate)
-        {
-            if (_disposed || _resolving || Current is null)
-                return;
-            combat = Current;
-            _resolving = true;
-        }
-        Task.Run(() =>
-        {
-            try
-            {
-                action(combat);
-            }
-            catch (OperationCanceledException)
-            {
-                // Disposed mid-choice; the session is tearing down.
-            }
-            finally
-            {
-                lock (_gate)
-                    _resolving = false;
-            }
-            AfterAction(combat);
-        });
-    }
-
-    private void AfterAction(InteractiveCombat combat)
-    {
-        if (_disposed)
-            return;
-        if (combat.IsOver)
-            Finish(combat);
-        else
-            Changed?.Invoke();
-    }
-
-    // Resume the parked run thread with the fight's outcome and clear the pending combat.
-    private void Finish(InteractiveCombat combat)
-    {
-        TaskCompletionSource<CombatDriveResult>? tcs;
-        lock (_gate)
-        {
-            tcs = _pending;
-            _pending = null;
-            Current = null;
-        }
-        var heroHp = combat.State.TryGetCombatant(combat.HeroId, out var hero) && hero is not null
-            ? hero.Health.Current
-            : 0;
-        tcs?.TrySetResult(new CombatDriveResult(combat.Result, heroHp));
-        Changed?.Invoke();
-    }
-
-    // Each enemy acts the next action in its list, cycling by round (1-based) — same rule as AutoPlayCombatDriver.
     public void Dispose()
     {
-        TaskCompletionSource<CombatDriveResult>? tcs;
-        lock (_gate)
-        {
-            _disposed = true;
-            tcs = _pending;
-            _pending = null;
-            Current = null;
-        }
-        _cardChooser.Dispose(); // cancel any card-choice park so the resolving task unblocks
-        tcs?.TrySetCanceled();
+        // Replay holds no threads or parked waits; nothing to tear down.
     }
 }

@@ -150,7 +150,7 @@ public class RunAuthoringWorkflowTests
     }
 
     [Fact]
-    public async Task CardApplyingACustomStatus_CarriesTheStatus_AndTheCardIsPlayableInTheRun()
+    public void CardApplyingACustomStatus_CarriesTheStatus_AndTheCardIsPlayableInTheRun()
     {
         var options = RunJson.CreateOptions();
 
@@ -200,35 +200,33 @@ public class RunAuthoringWorkflowTests
             }),
         };
         var content = RunPlayback.BuildContent(blueprint);
-        var driver = new InteractiveCombatDriver();
+        using var driver = new InteractiveCombatDriver();
         var defs = new RunDefinitionRegistryBuilder();
         new StandardRunPackage(driver, content).RegisterDefinitions(defs);
         var registry = defs.Build();
-        var run = new RunState(new RunId("t"), new HealthState(40, 40), blueprint.Map, randomSeed: 1);
-        foreach (var card in blueprint.Deck)
-            run.AddDeckCard(card);
-        var runTask = Task.Run(() => new RunRunner(registry, new ScriptedChoiceProvider(), content: content).Run(run));
-        try
+        RunState MakeRun()
         {
-            var combat = WaitFor(() => driver.Current, TimeSpan.FromSeconds(5));
-            Assert.NotNull(combat);
-            var bless = combat!.Hand.First(c => c.DefinitionId.value == "bless");
-            driver.PlayCard(bless.Id, combat.HeroId);
+            var run = new RunState(new RunId("t"), new HealthState(40, 40), blueprint.Map, randomSeed: 1);
+            foreach (var card in blueprint.Deck)
+                run.AddDeckCard(card);
+            return run;
+        }
 
-            // The play resolves on the driver's background task; wait for the blessing to land before asserting.
-            var hero = WaitFor(
-                () => combat.State.Combatants.FirstOrDefault(
-                    c => c.Id == combat.HeroId && c.Statuses.Any(s => s.DefinitionId.value == "blessing")),
-                TimeSpan.FromSeconds(5));
-            Assert.NotNull(hero);
-            Assert.DoesNotContain(combat.Steps, s => s.HasProblems);
-        }
-        finally
-        {
-            driver.Dispose(); // unblock the parked run thread (the dummy never dies, so the fight won't end on its own)
-            try { await runTask.WaitAsync(TimeSpan.FromSeconds(5)); }
-            catch { /* the run was canceled by disposing the driver mid-combat */ }
-        }
+        // First replay attempt parks at the fight awaiting the first player action.
+        DriveToPark(driver, registry, content, MakeRun);
+        var combat = driver.Current;
+        Assert.NotNull(combat);
+        var bless = combat!.Hand.First(c => c.DefinitionId.value == "bless");
+
+        // Record the play; the replay applies it and parks awaiting the next action.
+        driver.PlayCard(bless.Id, combat.HeroId);
+        DriveToPark(driver, registry, content, MakeRun);
+        var replayed = driver.Current;
+        Assert.NotNull(replayed);
+        var hero = replayed!.State.Combatants.FirstOrDefault(
+            c => c.Id == replayed.HeroId && c.Statuses.Any(s => s.DefinitionId.value == "blessing"));
+        Assert.NotNull(hero);
+        Assert.DoesNotContain(replayed.Steps, s => s.HasProblems);
     }
 
     [Fact]
@@ -334,7 +332,7 @@ public class RunAuthoringWorkflowTests
     }
 
     [Fact]
-    public async Task DeathPreventionInterceptor_FiresInsideARunCombat()
+    public void DeathPreventionInterceptor_FiresInsideARunCombat()
     {
         var options = RunJson.CreateOptions();
 
@@ -377,35 +375,34 @@ public class RunAuthoringWorkflowTests
             }),
         };
         var content = RunPlayback.BuildContent(blueprint);
-        var driver = new InteractiveCombatDriver();
+        using var driver = new InteractiveCombatDriver();
         var defs = new RunDefinitionRegistryBuilder();
         new StandardRunPackage(driver, content).RegisterDefinitions(defs);
         var registry = defs.Build();
-        var run = new RunState(new RunId("t"), new HealthState(10, 10), blueprint.Map, randomSeed: 1);
-        foreach (var card in blueprint.Deck)
-            run.AddDeckCard(card);
-        var runTask = Task.Run(() => new RunRunner(registry, new ScriptedChoiceProvider(), content: content).Run(run));
-        try
+        RunState MakeRun()
         {
-            var combat = WaitFor(() => driver.Current, TimeSpan.FromSeconds(5));
-            Assert.NotNull(combat);
-            if (combat!.IsHeroTurn)
-                driver.EndTurn(); // hand the turn to the enemy, which swings for lethal
+            var run = new RunState(new RunId("t"), new HealthState(10, 10), blueprint.Map, randomSeed: 1);
+            foreach (var card in blueprint.Deck)
+                run.AddDeckCard(card);
+            return run;
+        }
 
-            // The death-prevention interceptor fired: the hero is alive at 5 HP (not downed) and the shield is spent.
-            var hero = WaitFor(
-                () => driver.Current?.State.Combatants.FirstOrDefault(c => c.Id == driver.Current!.HeroId && c.Health.Current == 5),
-                TimeSpan.FromSeconds(5));
-            Assert.NotNull(hero);
-            Assert.True(hero!.IsAlive);
-            Assert.DoesNotContain(hero.Statuses, s => s.DefinitionId.value == "phoenixshield");
-        }
-        finally
+        DriveToPark(driver, registry, content, MakeRun);
+        var combat = driver.Current;
+        Assert.NotNull(combat);
+        if (combat!.IsHeroTurn)
         {
-            driver.Dispose();
-            try { await runTask.WaitAsync(TimeSpan.FromSeconds(5)); }
-            catch { /* canceled by disposing the driver mid-combat */ }
+            driver.EndTurn(); // hand the turn to the enemy, which swings for lethal
+            DriveToPark(driver, registry, content, MakeRun);
         }
+
+        // The death-prevention interceptor fired: the hero is alive at 5 HP (not downed) and the shield is spent.
+        var live = driver.Current;
+        Assert.NotNull(live);
+        var hero = live!.State.Combatants.FirstOrDefault(c => c.Id == live.HeroId && c.Health.Current == 5);
+        Assert.NotNull(hero);
+        Assert.True(hero!.IsAlive);
+        Assert.DoesNotContain(hero.Statuses, s => s.DefinitionId.value == "phoenixshield");
     }
 
     [Fact]
@@ -847,7 +844,7 @@ public class RunAuthoringWorkflowTests
     }
 
     [Fact]
-    public async Task InteractiveCombatDriver_LetsThePlayerFinishTheFight_AndTheRunContinues()
+    public void InteractiveCombatDriver_LetsThePlayerFinishTheFight_AndTheRunContinues()
     {
         var blueprint = SampleBlueprint() with
         {
@@ -858,53 +855,38 @@ public class RunAuthoringWorkflowTests
         };
 
         var content = RunPlayback.BuildContent(blueprint);
-        var driver = new InteractiveCombatDriver();
+        using var driver = new InteractiveCombatDriver();
         var defs = new RunDefinitionRegistryBuilder();
         new StandardRunPackage(driver, content).RegisterDefinitions(defs);
         var registry = defs.Build();
 
-        var run = new RunState(new RunId("test"), new HealthState(30, 40), blueprint.Map, randomSeed: 1);
-        foreach (var card in blueprint.Deck)
-            run.AddDeckCard(card);
+        RunState MakeRun()
+        {
+            var run = new RunState(new RunId("test"), new HealthState(30, 40), blueprint.Map, randomSeed: 1);
+            foreach (var card in blueprint.Deck)
+                run.AddDeckCard(card);
+            return run;
+        }
 
-        // Drive the run on a background thread, exactly as InteractiveRunSession does; the driver parks it at the
-        // combat node until we (standing in for the UI) play the fight out.
-        var runTask = Task.Run(() => new RunRunner(registry, new ScriptedChoiceProvider(), content: content).Run(run));
+        // Replay the run to the parked fight, then (standing in for the UI) record one action per attempt until
+        // the fight ends and the run continues to completion.
+        var finalRun = DriveToPark(driver, registry, content, MakeRun);
+        Assert.NotNull(driver.Current);
 
-        var combat = WaitFor(() => driver.Current, TimeSpan.FromSeconds(5));
-        Assert.NotNull(combat);
-
-        // Each play/end-turn resolves on the driver's background task (so a card-choice could park it), and the driver
-        // ignores a new action until the current one clears — so pace every action against IsResolving.
         var guard = 0;
         while (driver.Current is { } fight && guard++ < 200)
         {
-            if (!fight.IsHeroTurn)
-            {
-                Thread.Sleep(5);
-                continue;
-            }
-            foreach (var card in fight.Hand.ToArray())
-            {
-                var target = fight.State.Combatants.FirstOrDefault(x => x.Id != fight.HeroId && x.IsAlive)?.Id;
-                if (target is null)
-                    break;
-                driver.PlayCard(card.Id, target);
-                WaitWhile(() => driver.IsResolving, TimeSpan.FromSeconds(5));
-                if (driver.Current is null)
-                    break;
-            }
-            if (driver.Current is not null)
-            {
+            var target = fight.State.Combatants.FirstOrDefault(x => x.Id != fight.HeroId && x.IsAlive)?.Id;
+            if (fight.IsHeroTurn && target is not null && fight.Hand.Count > 0 && fight.HeroEnergy > 0)
+                driver.PlayCard(fight.Hand[0].Id, target);
+            else
                 driver.EndTurn();
-                WaitWhile(() => driver.IsResolving, TimeSpan.FromSeconds(5));
-            }
+            finalRun = DriveToPark(driver, registry, content, MakeRun);
         }
 
-        await runTask.WaitAsync(TimeSpan.FromSeconds(5)); // throws if the fight never resumed the run
         Assert.Null(driver.Current);
-        Assert.Equal(RunResult.Victory, run.Result);
-        Assert.Contains(run.Log, e => e.Type == StandardRunLogTypes.CombatResolved);
+        Assert.Equal(RunResult.Victory, finalRun.Result);
+        Assert.Contains(finalRun.Log, e => e.Type == StandardRunLogTypes.CombatResolved);
     }
 
     private static T? WaitFor<T>(Func<T?> read, TimeSpan timeout) where T : class
@@ -919,13 +901,24 @@ public class RunAuthoringWorkflowTests
         return null;
     }
 
-    // Block until a condition clears (or the timeout elapses) — used to pace against the driver's IsResolving so the
-    // next action isn't dropped while the previous one is still resolving on its background task.
-    private static void WaitWhile(Func<bool> condition, TimeSpan timeout)
+    // One replay attempt of the interactive rig (see ReplayScript): run to the next unanswered prompt
+    // (ReplayParkedException, parked state left on the driver) or to completion. Returns the attempt's run —
+    // the parked/final state the UI would render.
+    private static RunState DriveToPark(
+        InteractiveCombatDriver driver, RunDefinitionRegistry registry, RunContentRegistry content,
+        Func<RunState> makeRun)
     {
-        var deadline = DateTime.UtcNow + timeout;
-        while (condition() && DateTime.UtcNow < deadline)
-            Thread.Sleep(5);
+        driver.ResetForReplay();
+        var run = makeRun();
+        try
+        {
+            new RunRunner(registry, new ScriptedChoiceProvider(), content: content).Run(run);
+        }
+        catch (ReplayParkedException)
+        {
+            // Parked awaiting the player — exactly the state under test.
+        }
+        return run;
     }
 
     // Headless drive of a whole run, exactly as the Run tab's Load & drive / Simulate does (via RunPlayback +

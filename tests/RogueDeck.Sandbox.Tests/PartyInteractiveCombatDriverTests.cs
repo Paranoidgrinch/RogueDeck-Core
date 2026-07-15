@@ -6,36 +6,27 @@ using RogueDeck.Scenario.Scripting;
 
 namespace RogueDeck.Sandbox.Tests;
 
-// Party deckbuilding C2 follow-up (interactive party combat): PartyInteractiveCombatDriver parks the run thread in
-// Drive and lets the UI drive the simultaneous phase per member on another thread, then reports each member for
-// reconcile. This test mirrors that exact threading — Drive runs on a background task (the run thread) while the
-// test thread (the circuit) plays cards and ends turns — proving a human-driven party fight completes and reports
-// per-member results, and that a fight with no living enemies never strands the parked run thread.
-[Xunit.Collection("Threaded")]
+// Party deckbuilding C2 follow-up (interactive party combat): PartyInteractiveCombatDriver lets the UI drive the
+// simultaneous phase per member under deterministic replay (see ReplayScript) — each recorded action re-runs the
+// fight to the next unanswered prompt, then reports each member for reconcile. Proves a human-driven party fight
+// completes with per-member results and that a mid-play card choice parks and resumes.
 public class PartyInteractiveCombatDriverTests
 {
     private static readonly CombatantId GoblinId = new("goblin");
     private static readonly CardDefinitionId Strike = new("strike");
 
-    private static T? WaitFor<T>(Func<T?> read, TimeSpan timeout) where T : class
+    // One replay attempt: park at the next unanswered prompt (null) or finish the fight (the result).
+    private static CombatDriveResult? Attempt(PartyInteractiveCombatDriver driver, Func<Playthrough> fight)
     {
-        var deadline = DateTime.UtcNow + timeout;
-        while (DateTime.UtcNow < deadline)
+        driver.ResetForReplay();
+        try
         {
-            if (read() is { } value)
-                return value;
-            Thread.Sleep(10);
+            return driver.Drive(fight());
         }
-        return null;
-    }
-
-    // Block until a condition clears (or the timeout elapses) — used to pace against the driver's IsResolving so the
-    // next action isn't dropped while the previous one is still resolving on its background task.
-    private static void WaitWhile(Func<bool> condition, TimeSpan timeout)
-    {
-        var deadline = DateTime.UtcNow + timeout;
-        while (condition() && DateTime.UtcNow < deadline)
-            Thread.Sleep(5);
+        catch (ReplayParkedException)
+        {
+            return null;
+        }
     }
 
     // A two-member party (hero + knight, each a 5-card 5-damage strike deck) vs a 60-HP goblin that slams a player
@@ -101,74 +92,60 @@ public class PartyInteractiveCombatDriverTests
     }
 
     [Fact]
-    public async Task A_members_play_parks_on_a_card_choice_and_resumes_on_the_supplied_pick()
+    public void A_members_play_parks_on_a_card_choice_and_resumes_on_the_supplied_pick()
     {
         using var driver = new PartyInteractiveCombatDriver();
 
-        CombatDriveResult? result = null;
-        var runThread = Task.Run(() => result = driver.Drive(ReclaimPartyFight()));
-
-        var party = WaitFor(() => driver.Current, TimeSpan.FromSeconds(30));
+        // The first attempt parks awaiting the first player action.
+        Assert.Null(Attempt(driver, ReclaimPartyFight));
+        var party = driver.Current;
         Assert.NotNull(party);
 
-        // The hero plays its first card; the play resolves on a background task and PARKS on the draw-pile choice.
+        // The hero plays its first card; the replay PARKS on the draw-pile choice.
         var hero = new CombatantId("hero");
-        var handCard = party!.HandOf(hero)[0].Id;
-        driver.PlayCardFor(hero, handCard, GoblinId);
+        driver.PlayCardFor(hero, party!.HandOf(hero)[0].Id, GoblinId);
+        Assert.Null(Attempt(driver, ReclaimPartyFight));
 
-        var candidates = WaitFor(() => driver.PendingCardChoice, TimeSpan.FromSeconds(30));
+        var candidates = driver.PendingCardChoice;
         Assert.NotNull(candidates);
         Assert.Equal(3, candidates!.Count); // 8 in deck, 5 drawn to the opening hand, 3 left in the draw pile
         Assert.Equal("reclaim a card", driver.PendingCardChoicePurpose);
 
-        // Supply the middle candidate; the play resumes, exhausts it, blasts the goblin, and the fight ends.
-        var picked = candidates[1].Id;
-        driver.SupplyCardChoice(new[] { picked });
-
-        var finished = await Task.WhenAny(runThread, Task.Delay(TimeSpan.FromSeconds(30)));
-        Assert.Same(runThread, finished);
-        await runThread;
+        // Supply the middle candidate; the replay resumes the play (the pick is exhausted, the goblin blasted) and
+        // the fight ends. The pick-moves-the-chosen-card behaviour itself is engine-covered in the Scenario suite.
+        driver.SupplyCardChoice(new[] { candidates[1].Id });
+        var result = Attempt(driver, ReclaimPartyFight);
 
         Assert.NotNull(result);
         Assert.Equal(CombatResult.Victory, result!.Result);
         Assert.Null(driver.PendingCardChoice);
-        Assert.Contains(picked, party.State.GetCardZones(hero).ExhaustPile.Select(c => c.Id));
+        Assert.Null(driver.Current);
     }
 
     [Fact]
-    public async Task A_human_drives_the_party_fight_to_victory_and_each_member_is_reported()
+    public void A_human_drives_the_party_fight_to_victory_and_each_member_is_reported()
     {
         using var driver = new PartyInteractiveCombatDriver();
 
-        // The run thread: parks inside Drive until the fight ends, exactly as RunRunner would.
-        CombatDriveResult? result = null;
-        var runThread = Task.Run(() => result = driver.Drive(PartyFight()));
+        // Park at the fight, then record one action per attempt — every active member plays its hand at the goblin
+        // and ends its turn, across as many rounds as it takes — until the fight resolves.
+        var result = Attempt(driver, () => PartyFight());
+        Assert.Null(result);
+        Assert.NotNull(driver.Current);
 
-        // The circuit thread: wait for the fight to surface, then play every active member's hand at the goblin and
-        // end its turn, across as many rounds as it takes. Current goes null when the fight finishes.
-        var party = WaitFor(() => driver.Current, TimeSpan.FromSeconds(30));
-        Assert.NotNull(party);
-
-        // Each play/end-turn now resolves on a background task (so a card-choice could park it), and the driver
-        // ignores a new action until the current one clears — so pace each action against IsResolving.
-        for (var guard = 0; driver.Current is { IsOver: false } live && guard < 200; guard++)
+        for (var guard = 0; result is null && guard < 400; guard++)
         {
-            foreach (var member in live.ActiveMembers().ToArray())
-            {
-                foreach (var card in live.HandOf(member).ToArray())
-                {
-                    driver.PlayCardFor(member, card.Id, GoblinId);
-                    WaitWhile(() => driver.IsResolving, TimeSpan.FromSeconds(30));
-                }
+            var live = driver.Current;
+            Assert.NotNull(live);
+            var member = live!.ActiveMembers().First();
+            var hand = live.HandOf(member);
+            if (hand.Count > 0)
+                driver.PlayCardFor(member, hand[0].Id, GoblinId);
+            else
                 driver.EndTurnFor(member);
-                WaitWhile(() => driver.IsResolving, TimeSpan.FromSeconds(30));
-            }
+            result = Attempt(driver, () => PartyFight());
         }
 
-        // Drive returns once the fight ends; await it (no blocking wait) to observe the result + any exception.
-        var finished = await Task.WhenAny(runThread, Task.Delay(TimeSpan.FromSeconds(30)));
-        Assert.Same(runThread, finished);
-        await runThread;
         Assert.NotNull(result);
         Assert.Equal(CombatResult.Victory, result!.Result);
 

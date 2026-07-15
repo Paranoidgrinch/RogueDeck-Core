@@ -11,26 +11,28 @@ using RogueDeck.Scenario.Scripting;
 
 namespace RogueDeck.Sandbox.Tests;
 
-// Static-render smoke for the in-combat card-choice prompt (card-targeting CT5). The threading tests prove the
-// driver parks and resumes; this proves the RunSessionView markup that surfaces the pending choice actually renders
-// on-screen without a Blazor error — the one thing unit tests over the driver can't show. It drives a real fight to
-// a parked draw-pile choice, then renders RunSessionView (with an unstarted session, so it falls through to the
-// combat view) and asserts the prompt and its candidate cards are in the HTML. Uses the framework HtmlRenderer.
-[Xunit.Collection("Threaded")]
+// Static-render smoke for the in-combat card-choice prompt (card-targeting CT5). This proves the RunSessionView
+// markup that surfaces the pending choice actually renders on-screen without a Blazor error — the one thing unit
+// tests over the driver can't show. It replays a real fight to a parked draw-pile choice (Drive unwinds via
+// ReplayParkedException at each unanswered prompt), then renders RunSessionView (with an unstarted session, so it
+// falls through to the combat view) and asserts the prompt and its candidate cards are in the HTML.
 public class RunSessionViewCardChoiceRenderTests
 {
     private static readonly CombatantId GoblinId = new("goblin");
 
-    private static T? WaitFor<T>(Func<T?> read, TimeSpan timeout) where T : class
+    // One replay attempt: run Drive until it parks at the next unanswered prompt (the parked state stays on the
+    // driver for the UI/assertions). The driver has no session here, so the test replays manually per answer.
+    private static void DriveToPark(InteractiveCombatDriver driver)
     {
-        var deadline = DateTime.UtcNow + timeout;
-        while (DateTime.UtcNow < deadline)
+        driver.ResetForReplay();
+        try
         {
-            if (read() is { } value)
-                return value;
-            Thread.Sleep(10);
+            driver.Drive(ReclaimFight());
         }
-        return null;
+        catch (ReplayParkedException)
+        {
+            // Parked awaiting the player — exactly the state under test.
+        }
     }
 
     // A hero whose deck is a "reclaim" card: on play it prompts a pick from the DRAW pile, parking the fight.
@@ -76,20 +78,21 @@ public class RunSessionViewCardChoiceRenderTests
     public async Task The_card_choice_prompt_renders_its_purpose_and_candidate_cards()
     {
         using var driver = new InteractiveCombatDriver();
-        var runThread = Task.Run(() => driver.Drive(ReclaimFight()));
-
-        var live = WaitFor(() => driver.Current, TimeSpan.FromSeconds(30));
+        DriveToPark(driver); // parks awaiting the first player action, Current = the live fight
+        var live = driver.Current;
         Assert.NotNull(live);
-        driver.PlayCard(live!.Hand[0].Id, GoblinId);
 
-        var candidates = WaitFor(() => driver.PendingCardChoice, TimeSpan.FromSeconds(30));
-        Assert.NotNull(candidates);
+        // Record the reclaim play (no session wired, so replay manually), then replay: the card's resolution
+        // prompts a draw-pile pick and parks on it.
+        driver.PlayCard(live!.Hand[0].Id, GoblinId);
+        DriveToPark(driver);
+        Assert.NotNull(driver.PendingCardChoice);
 
         // An unstarted session provides the inventory lens but matches none of the awaiting-* branches, so
         // RunSessionView falls through to the combat view — where the pending card choice is rendered.
         var registry = new RunDefinitionRegistryBuilder().Build();
         var session = new InteractiveRunSession(
-            new RunState(new RunId("t"), new HealthState(30, 30), new RunMap(Array.Empty<Node>()), randomSeed: 1),
+            () => new RunState(new RunId("t"), new HealthState(30, 30), new RunMap(Array.Empty<Node>()), randomSeed: 1),
             registry, content: null);
 
         var html = await RenderAsync(session, driver);
@@ -98,8 +101,5 @@ public class RunSessionViewCardChoiceRenderTests
         Assert.Contains("Pick 1.", html);                            // single-pick prompt
         Assert.Contains("reclaim", html);                            // candidate card buttons
         Assert.DoesNotContain("End turn", html);                     // normal hand controls hidden while choosing
-
-        driver.Dispose(); // unpark the fight thread
-        try { await runThread.WaitAsync(TimeSpan.FromSeconds(30)); } catch { /* canceled */ }
     }
 }
