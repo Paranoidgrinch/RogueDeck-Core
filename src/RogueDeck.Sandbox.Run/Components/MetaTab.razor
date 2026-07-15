@@ -1,5 +1,7 @@
 @rendermode InteractiveServer
 @inject RunDocument Doc
+@inject ProjectDraft Draft
+@implements IDisposable
 
 @* The Meta tab (meta-progression): authors RunBlueprint.MetaRules — the run-end rules the host folds into the
    persistent profile (MetaState) when a run ends. Each rule fires on a chosen set of outcomes (empty ⇒ any) and
@@ -60,7 +62,28 @@
 @code {
     private RunBlueprint _blueprint = default!;
 
-    protected override void OnInitialized() => _blueprint = Doc.Load();
+    protected override void OnInitialized()
+    {
+        _blueprint = Doc.Load();
+        Draft.Changed += OnDraftChanged;
+    }
+
+    // Reload when the document changes elsewhere in this circuit (the nav's global Undo) so the tab never shows
+    // a stale copy. Self-echoes (our own Save) reload the data we just wrote — harmless.
+    private void OnDraftChanged() => _ = InvokeAsync(() =>
+    {
+        try
+        {
+            _blueprint = Doc.Load();
+        }
+        catch (Exception)
+        {
+            return; // mid-edit the Run-tab JSON may not parse; keep the last good copy
+        }
+        StateHasChanged();
+    });
+
+    public void Dispose() => Draft.Changed -= OnDraftChanged;
 
     private IReadOnlyList<MetaRule> Rules => _blueprint.MetaRules;
 

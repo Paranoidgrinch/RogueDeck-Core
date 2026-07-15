@@ -28,8 +28,6 @@
             <label class="play" title="resume a saved run against this blueprint">Load run<InputFile OnChange="LoadRun" style="display:none" /></label>
             <button class="mini" @onclick="LoadSample"
                     title="REPLACES the current project with the built-in sample game (the Help page's worked examples, playable)">Load sample project</button>
-            <button class="mini" disabled="@(!Draft.CanUndo)" @onclick="() => Draft.Undo()"
-                    title="undo the last document change (@Draft.UndoDepth step(s) available; covers edits from every tab)">↶ Undo</button>
         </div>
         <div class="run-bar">
             <label title="on: play each fight yourself (cards + end turn); off: fights auto-resolve headlessly">
@@ -412,7 +410,12 @@
     {
         _play = new RunPlayback(OnSessionChanged);
         Draft.RunJson ??= RunJson.ToJson(DemoBlueprint(), _options);
+        // Re-render when the document changes elsewhere in this circuit (the nav's global Undo) — _json reads
+        // straight off the draft, so refreshing the render is all it takes.
+        Draft.Changed += OnDraftChanged;
     }
+
+    private void OnDraftChanged() => _ = InvokeAsync(StateHasChanged);
 
     // Save the current blueprint JSON as a file (via a small JS download helper).
     private async Task Download()
@@ -521,6 +524,7 @@
 
     public async ValueTask DisposeAsync()
     {
+        Draft.Changed -= OnDraftChanged;
         _play.Dispose();
         if (_jsModule is not null)
         {

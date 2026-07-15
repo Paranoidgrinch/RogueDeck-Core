@@ -1,5 +1,7 @@
 @rendermode InteractiveServer
 @inject RunDocument Doc
+@inject ProjectDraft Draft
+@implements IDisposable
 
 @* The dedicated Cards & deck tab: authors the run's card definitions (RunBlueprint.Cards) and its starting deck
    (RunBlueprint.Deck) on the shared document. Each card's effect program is edited with the visual
@@ -111,7 +113,28 @@
     private string _filter = "";
     private string _newCardId = "";
 
-    protected override void OnInitialized() => _blueprint = Doc.Load();
+    protected override void OnInitialized()
+    {
+        _blueprint = Doc.Load();
+        Draft.Changed += OnDraftChanged;
+    }
+
+    // Reload when the document changes elsewhere in this circuit (the nav's global Undo) so the tab never shows
+    // a stale copy. Self-echoes (our own Save) reload the data we just wrote — harmless.
+    private void OnDraftChanged() => _ = InvokeAsync(() =>
+    {
+        try
+        {
+            _blueprint = Doc.Load();
+        }
+        catch (Exception)
+        {
+            return; // mid-edit the Run-tab JSON may not parse; keep the last good copy
+        }
+        StateHasChanged();
+    });
+
+    public void Dispose() => Draft.Changed -= OnDraftChanged;
 
     private IReadOnlyList<CardData> Cards => _blueprint.Cards;
     private IReadOnlyList<CardDefinitionId> Deck => _blueprint.Deck;

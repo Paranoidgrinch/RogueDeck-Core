@@ -1,6 +1,7 @@
 @rendermode InteractiveServer
 @implements IDisposable
 @inject RunDocument Doc
+@inject ProjectDraft Draft
 
 @* The Playtest tab: drive a SINGLE encounter from the shared document, the way the old Combat tab let you play a
    lone fight — but sourced entirely from the run document (hero, deck, cards, enemies, relics) instead of a separate
@@ -57,7 +58,26 @@
         _blueprint = Doc.Load();
         _encounters = _blueprint.Encounters;
         _encounterId = _encounters.FirstOrDefault()?.Id.Value ?? "";
+        Draft.Changed += OnDraftChanged;
     }
+
+    // Reload when the document changes elsewhere in this circuit (the nav's global Undo) so the encounter list
+    // never goes stale.
+    private void OnDraftChanged() => _ = InvokeAsync(() =>
+    {
+        try
+        {
+            _blueprint = Doc.Load();
+        }
+        catch (Exception)
+        {
+            return; // mid-edit the Run-tab JSON may not parse; keep the last good copy
+        }
+        _encounters = _blueprint.Encounters;
+        if (_encounters.All(e => e.Id.Value != _encounterId))
+            _encounterId = _encounters.FirstOrDefault()?.Id.Value ?? "";
+        StateHasChanged();
+    });
 
     // Build a one-combat-node run for the chosen encounter and start it. The blueprint's deck/hero/relics all carry
     // in via RunPlayback (same content path as the Run tab); only the map is swapped for a single fight.
@@ -80,5 +100,9 @@
         return string.IsNullOrEmpty(enemies) ? encounter.Id.Value : $"{encounter.Id.Value} — {enemies}";
     }
 
-    public void Dispose() => _play.Dispose();
+    public void Dispose()
+    {
+        Draft.Changed -= OnDraftChanged;
+        _play.Dispose();
+    }
 }

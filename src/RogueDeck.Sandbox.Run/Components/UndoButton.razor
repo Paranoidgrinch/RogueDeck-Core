@@ -1,0 +1,54 @@
+@rendermode InteractiveServer
+@implements IDisposable
+@inject ProjectDraft Draft
+
+@* The nav's global Undo: visible from every tab as soon as there is something to undo. Clicking steps the shared
+   document back one write and confirms it with a short toast — the open tab reloads itself via Draft.Changed. *@
+@if (Draft.CanUndo)
+{
+    <button class="studio-link undo-button" @onclick="Undo"
+            title="undo the last document change (@Draft.UndoDepth step(s) available; covers edits from every tab)">
+        ↶ Undo
+    </button>
+}
+@if (_toast is not null)
+{
+    <div class="toast" role="status">@_toast</div>
+}
+
+@code {
+    private string? _toast;
+    private CancellationTokenSource? _toastCts;
+
+    protected override void OnInitialized() => Draft.Changed += OnChanged;
+
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private async Task Undo()
+    {
+        if (!Draft.Undo())
+            return;
+        _toastCts?.Cancel();
+        _toastCts = new CancellationTokenSource();
+        _toast = Draft.CanUndo
+            ? $"Undone — {Draft.UndoDepth} more step(s) available."
+            : "Undone — nothing left to undo.";
+        var token = _toastCts.Token;
+        try
+        {
+            await Task.Delay(2500, token);
+            _toast = null;
+            StateHasChanged();
+        }
+        catch (TaskCanceledException)
+        {
+            // A newer toast replaced this one.
+        }
+    }
+
+    public void Dispose()
+    {
+        Draft.Changed -= OnChanged;
+        _toastCts?.Cancel();
+    }
+}
