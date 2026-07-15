@@ -17,8 +17,17 @@
                    Text="An event is a story moment with choices — each choice lists what it does (give gold, grant a card or relic, heal…). Add one below, then point a map node at it." />
     }
 
+    @if (Blueprint.Events.Count >= StudioFilter.ShowThreshold)
+    {
+        <FilterBox @bind-Value="_filter" Total="Blueprint.Events.Count"
+                   Shown="Blueprint.Events.Keys.Count(k => StudioFilter.Matches(_filter, k))" />
+    }
     @foreach (var (key, script) in Blueprint.Events)
     {
+        if (!StudioFilter.Matches(_filter, key))
+        {
+            continue;
+        }
         var eventKey = key;
         var eventScript = script;
         var situations = Situations(eventScript);
@@ -116,6 +125,7 @@
     [Parameter] public RunBlueprint Blueprint { get; set; } = default!;
     [Parameter] public EventCallback<RunBlueprint> BlueprintChanged { get; set; }
 
+    private string _filter = "";
     private string _newEventId = "";
 
     private static string AsString(object? v) => v?.ToString() ?? "";

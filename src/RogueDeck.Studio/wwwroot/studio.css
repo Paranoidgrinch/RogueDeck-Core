@@ -389,6 +389,11 @@ h2 {
     fill: var(--text-muted);
 }
 
+/* List filter (FilterBox component) */
+.filter-box input {
+    min-width: 14rem;
+}
+
 /* First-visit tour (TutorialPanel overlay) */
 .tutorial-backdrop {
     position: fixed;

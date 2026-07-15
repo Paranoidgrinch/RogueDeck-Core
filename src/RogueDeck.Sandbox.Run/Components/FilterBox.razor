@@ -1,0 +1,18 @@
+@* The list tabs' shared filter box: narrows the rendered entries as you type (the document itself is untouched).
+   Presentational — the owning tab holds the filter string and computes Shown/Total. *@
+<div class="run-bar filter-box">
+    <input placeholder="filter by id or name" value="@Value" aria-label="filter the list"
+           @oninput="e => ValueChanged.InvokeAsync(e.Value?.ToString() ?? string.Empty)" />
+    @if (!string.IsNullOrWhiteSpace(Value))
+    {
+        <span class="muted">showing @Shown of @Total</span>
+        <button class="mini" @onclick='() => ValueChanged.InvokeAsync(string.Empty)'>✕ clear</button>
+    }
+</div>
+
+@code {
+    [Parameter] public string Value { get; set; } = "";
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public int Shown { get; set; }
+    [Parameter] public int Total { get; set; }
+}

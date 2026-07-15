@@ -29,10 +29,19 @@
         <EmptyHint Title="No cards yet."
                    Text="Type an id below (like fireball) and press Add card — a new card starts with a simple deal-damage program you can reshape step by step." />
     }
+    @if (Cards.Count >= StudioFilter.ShowThreshold)
+    {
+        <FilterBox @bind-Value="_filter" Total="Cards.Count"
+                   Shown="Cards.Count(c => StudioFilter.Matches(_filter, c.Id, c.NameKey))" />
+    }
     @for (var i = 0; i < Cards.Count; i++)
     {
         var ci = i;
         var card = Cards[ci];
+        if (!StudioFilter.Matches(_filter, card.Id, card.NameKey))
+        {
+            continue;
+        }
         <div class="fx-block">
             <div class="run-bar">
                 <span class="muted">id</span>
@@ -94,6 +103,7 @@
 
 @code {
     private RunBlueprint _blueprint = default!;
+    private string _filter = "";
     private string _newCardId = "";
 
     protected override void OnInitialized() => _blueprint = Doc.Load();

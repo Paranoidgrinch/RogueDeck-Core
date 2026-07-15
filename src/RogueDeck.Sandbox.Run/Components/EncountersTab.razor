@@ -30,10 +30,19 @@
         <EmptyHint Title="No enemy actions yet."
                    Text="Start here: an action is one thing an enemy can do — an effect program plus the intent shown to the player. Define a claw or a snarl below, then assemble enemies and encounter rosters from them." />
     }
+    @if (Actions.Count >= StudioFilter.ShowThreshold)
+    {
+        <FilterBox @bind-Value="_filter" Total="Actions.Count"
+                   Shown="Actions.Count(a => StudioFilter.Matches(_filter, a.Id, a.NameKey))" />
+    }
     @for (var i = 0; i < Actions.Count; i++)
     {
         var ai = i;
         var action = Actions[ai];
+        if (!StudioFilter.Matches(_filter, action.Id, action.NameKey))
+        {
+            continue;
+        }
         <div class="fx-block">
             <div class="run-bar">
                 <span class="muted">id</span>
@@ -87,6 +96,7 @@
 
 @code {
     private RunBlueprint _blueprint = default!;
+    private string _filter = "";
     private string _newActionId = "";
 
     protected override void OnInitialized() => _blueprint = Doc.Load();

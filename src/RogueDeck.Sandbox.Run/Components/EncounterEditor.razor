@@ -9,11 +9,22 @@
 
     @if (Blueprint.Encounters.Count == 0)
     {
-        <p class="muted">No encounters yet — add one below.</p>
+        <EmptyHint Title="No encounters yet."
+                   Text="An encounter is one battle: which enemies appear, their health, and the actions they pick. Add one below — it becomes instantly playable on the Playtest tab."
+                   ShowSampleTip="false" />
     }
 
+    @if (Blueprint.Encounters.Count >= StudioFilter.ShowThreshold)
+    {
+        <FilterBox @bind-Value="_filter" Total="Blueprint.Encounters.Count"
+                   Shown="Blueprint.Encounters.Count(x => StudioFilter.Matches(_filter, x.Id.Value))" />
+    }
     @foreach (var encounter in Blueprint.Encounters)
     {
+        if (!StudioFilter.Matches(_filter, encounter.Id.Value))
+        {
+            continue;
+        }
         var encId = encounter.Id.Value;
         <div class="editor-card">
             <div class="run-bar">
@@ -99,6 +110,7 @@
     [Parameter] public RunBlueprint Blueprint { get; set; } = default!;
     [Parameter] public EventCallback<RunBlueprint> BlueprintChanged { get; set; }
 
+    private string _filter = "";
     private string _newEncounterId = "";
 
     private static string AsString(object? v) => v?.ToString() ?? "";

@@ -16,10 +16,19 @@
                    Text="A consumable is a one-use item — a potion. Its effects run once when the player uses it, in or out of a fight. Add one below." />
     }
 
+    @if (Blueprint.Consumables.Count >= StudioFilter.ShowThreshold)
+    {
+        <FilterBox @bind-Value="_filter" Total="Blueprint.Consumables.Count"
+                   Shown="Blueprint.Consumables.Count(c => StudioFilter.Matches(_filter, c.Id, c.DisplayName))" />
+    }
     @for (var ci = 0; ci < Blueprint.Consumables.Count; ci++)
     {
         var index = ci;
         var consumable = Blueprint.Consumables[ci];
+        if (!StudioFilter.Matches(_filter, consumable.Id, consumable.DisplayName))
+        {
+            continue;
+        }
         <div class="editor-card">
             <div class="run-bar">
                 <label>Consumable id
@@ -69,6 +78,7 @@
     [Parameter] public RunBlueprint Blueprint { get; set; } = default!;
     [Parameter] public EventCallback<RunBlueprint> BlueprintChanged { get; set; }
 
+    private string _filter = "";
     private string _newId = "";
 
     private const string OpeningTrigger = "turnStarted";

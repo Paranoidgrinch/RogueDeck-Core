@@ -26,10 +26,19 @@
                    Text="A relic is a passive item the player keeps for the whole run: it reacts to run events (gain gold after every fight…) and can add standing combat rules (thorns…). Add one below." />
     }
 
+    @if (Blueprint.Relics.Count >= StudioFilter.ShowThreshold)
+    {
+        <FilterBox @bind-Value="_filter" Total="Blueprint.Relics.Count"
+                   Shown="Blueprint.Relics.Count(r => StudioFilter.Matches(_filter, r.Id, r.DisplayName))" />
+    }
     @for (var ri = 0; ri < Blueprint.Relics.Count; ri++)
     {
         var relicIndex = ri;
         var relic = Blueprint.Relics[ri];
+        if (!StudioFilter.Matches(_filter, relic.Id, relic.DisplayName))
+        {
+            continue;
+        }
         <div class="editor-card">
             <div class="run-bar">
                 <label>Relic id
@@ -194,6 +203,7 @@
     [Parameter] public RunBlueprint Blueprint { get; set; } = default!;
     [Parameter] public EventCallback<RunBlueprint> BlueprintChanged { get; set; }
 
+    private string _filter = "";
     private string _newRelicId = "";
 
     private static string AsString(object? v) => v?.ToString() ?? "";

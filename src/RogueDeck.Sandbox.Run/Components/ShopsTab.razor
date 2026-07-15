@@ -16,8 +16,17 @@
         <EmptyHint Title="No shops yet."
                    Text="A shop is a place to spend gold — buy-once offers, paid rerolls, a card-removal service. Add one below, then place it on the map as a shop node." />
     }
+    @if (Shops.Count >= StudioFilter.ShowThreshold)
+    {
+        <FilterBox @bind-Value="_filter" Total="Shops.Count"
+                   Shown="Shops.Keys.Count(k => StudioFilter.Matches(_filter, k))" />
+    }
     @foreach (var (id, shop) in Shops)
     {
+        if (!StudioFilter.Matches(_filter, id))
+        {
+            continue;
+        }
         var shopId = id;
         var s = shop;
         <div class="member-card" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:.75rem; margin:.75rem 0">
@@ -97,6 +106,7 @@
 
 @code {
     private RunBlueprint _blueprint = default!;
+    private string _filter = "";
     private string _newShopId = "";
 
     protected override void OnInitialized() => _blueprint = Doc.Load();

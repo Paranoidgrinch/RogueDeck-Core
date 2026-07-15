@@ -16,10 +16,19 @@
                    Text="A status is a buff or debuff that sits on a unit — poison, strength, a burning brand… Name one below, then apply it from any card, enemy or relic program by its id." />
     }
 
+    @if (Blueprint.Statuses.Count >= StudioFilter.ShowThreshold)
+    {
+        <FilterBox @bind-Value="_filter" Total="Blueprint.Statuses.Count"
+                   Shown="Blueprint.Statuses.Count(s => StudioFilter.Matches(_filter, s.Id, s.NameKey))" />
+    }
     @for (var si = 0; si < Blueprint.Statuses.Count; si++)
     {
         var index = si;
         var status = Blueprint.Statuses[si];
+        if (!StudioFilter.Matches(_filter, status.Id, status.NameKey))
+        {
+            continue;
+        }
         <div class="editor-card">
             <div class="run-bar">
                 <label>Status id
@@ -145,6 +154,7 @@
     [Parameter] public RunBlueprint Blueprint { get; set; } = default!;
     [Parameter] public EventCallback<RunBlueprint> BlueprintChanged { get; set; }
 
+    private string _filter = "";
     private string _newId = "";
 
     private static string AsString(object? v) => v?.ToString() ?? "";
