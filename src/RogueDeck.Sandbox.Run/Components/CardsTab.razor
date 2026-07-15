@@ -53,6 +53,19 @@
                 <span class="muted">energy</span>
                 <input type="number" value="@EnergyCost(card)" style="width:4rem"
                        @onchange="e => SetEnergy(ci, AsInt(e.Value, EnergyCost(card)))" />
+                @* Custom-resource costs (embers, blood, …): each is a resource id + amount next to the energy
+                   field, so the whole cost of a card is authorable — not just its energy. *@
+                @foreach (var (cost, costIndex) in CustomCosts(card))
+                {
+                    var costI = costIndex;
+                    <input value="@cost.ResourceId.value" list="rd-resource-ids" style="width:7rem"
+                           title="a custom combat resource this card costs (authored on the Hero tab)"
+                           @onchange="e => SetCostResource(ci, costI, AsString(e.Value))" />
+                    <input type="number" value="@cost.Amount" style="width:3.5rem"
+                           @onchange="e => SetCostAmount(ci, costI, AsInt(e.Value, cost.Amount))" />
+                    <button class="mini" title="remove this cost" @onclick="() => RemoveCost(ci, costI)">✕</button>
+                }
+                <button class="mini" title="add a custom-resource cost (e.g. embers 2)" @onclick="() => AddCost(ci)">+ cost</button>
                 <button class="mini" title="duplicate this card" @onclick="() => DuplicateCard(ci)">⧉</button>
                 <button class="mini" @onclick="() => RemoveCard(ci)">✕ card</button>
                 @if (ModelOf(card) is { } summary)
@@ -222,6 +235,44 @@
         if (energy > 0)
             list.Add(new ResourceCost(StandardCombatIds.EnergyResource, energy));
         return list;
+    }
+
+    // ── custom-resource costs (the non-energy entries of card.Costs, by their index in the full list) ───────────
+    private static IEnumerable<(ResourceCost Cost, int Index)> CustomCosts(CardData card) =>
+        card.Costs.Select((cost, index) => (cost, index))
+            .Where(x => x.cost.ResourceId != StandardCombatIds.EnergyResource);
+
+    private void EditCost(int cardIndex, int costIndex, Func<ResourceCost, ResourceCost?> edit) =>
+        EditCard(cardIndex, c =>
+        {
+            if (costIndex < 0 || costIndex >= c.Costs.Count)
+                return c;
+            var list = c.Costs.ToList();
+            if (edit(list[costIndex]) is { } updated)
+                list[costIndex] = updated;
+            else
+                list.RemoveAt(costIndex);
+            return c with { Costs = list };
+        });
+
+    private void SetCostResource(int cardIndex, int costIndex, string resourceId)
+    {
+        if (!string.IsNullOrWhiteSpace(resourceId))
+            EditCost(cardIndex, costIndex, cost => cost with { ResourceId = new ResourceId(resourceId.Trim()) });
+    }
+
+    private void SetCostAmount(int cardIndex, int costIndex, int amount) =>
+        EditCost(cardIndex, costIndex, cost => cost with { Amount = Math.Max(0, amount) });
+
+    private void RemoveCost(int cardIndex, int costIndex) => EditCost(cardIndex, costIndex, _ => null);
+
+    private void AddCost(int cardIndex)
+    {
+        var defaultResource = _blueprint.CombatResources.FirstOrDefault()?.Id ?? "resource";
+        EditCard(cardIndex, c => c with
+        {
+            Costs = c.Costs.Append(new ResourceCost(new ResourceId(defaultResource), 1)).ToList(),
+        });
     }
 
     // ── deck ─────────────────────────────────────────────────────────────────────
