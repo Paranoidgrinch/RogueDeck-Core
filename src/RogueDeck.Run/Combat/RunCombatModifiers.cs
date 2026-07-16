@@ -58,9 +58,12 @@ public static class RunDeckMappers
     public static Func<RunCardInstance, CardDefinitionId> Identity { get; } = card => card.DefinitionId;
 
     // Convention: an upgraded copy (level > 0) fights as "<id><suffix>" (default "+"); the base id otherwise.
-    // Content provides the "<id>+" combat definitions.
+    // Content provides the "<id>+" combat definitions. Composed cards (Shred Engine) are exempt — their
+    // derived shred:… definition is synthesized per fight and no "<id>+" variant exists to map to.
     public static Func<RunCardInstance, CardDefinitionId> UpgradeSuffix(string suffix = "+") =>
-        card => card.UpgradeLevel > 0 ? new CardDefinitionId(card.DefinitionId + suffix) : card.DefinitionId;
+        card => card.UpgradeLevel > 0 && card.Composition.Count == 0
+            ? new CardDefinitionId(card.DefinitionId + suffix)
+            : card.DefinitionId;
 }
 
 // Queue a combat modifier from the normal effect flow (an event choice, a relic, a scheduled consequence).

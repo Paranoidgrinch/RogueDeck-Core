@@ -236,20 +236,25 @@ public sealed class CombatNodeResolver : INodeResolver
     private readonly ICombatDriver _driver;
     private readonly Func<RunCardInstance, CardDefinitionId> _deckMapper;
     private readonly EncounterCatalog? _encounters;
+    private readonly IReadOnlyList<IRunCombatModifier> _projectionModifiers;
 
     // The deck mapper projects a run card copy to the combat card definition it fights as. The default is
     // identity (ignore per-copy state); a caller passes an upgrade-aware mapper to make upgrades matter in
     // combat (Phase G3). The encounter catalog resolves data-defined combats (EncounterRef payloads); it is
     // optional so runs that only use Func payloads need not supply one. The run owns deck projection either way.
+    // Projection modifiers are STANDING blueprint mutations applied to every spawned fight (the Shred Engine's
+    // per-fight card synthesis) — unlike the run's pending modifiers, which are one-shot and consumed.
     public CombatNodeResolver(
         ICombatDriver driver,
         Func<RunCardInstance, CardDefinitionId>? deckMapper = null,
-        EncounterCatalog? encounters = null)
+        EncounterCatalog? encounters = null,
+        IReadOnlyList<IRunCombatModifier>? projectionModifiers = null)
     {
         ArgumentNullException.ThrowIfNull(driver);
         _driver = driver;
         _deckMapper = deckMapper ?? (card => card.DefinitionId);
         _encounters = encounters;
+        _projectionModifiers = projectionModifiers ?? [];
     }
 
     public NodeType NodeType => StandardRunIds.CombatNode;
@@ -366,6 +371,12 @@ public sealed class CombatNodeResolver : INodeResolver
                 blueprint.Allies.Add(ally);
             }
         }
+
+        // Standing projection modifiers apply to EVERY fight (e.g. the Shred Engine synthesizing composed
+        // card definitions the projected decks reference) — before the one-shot pending modifiers, so a
+        // "next fight" consequence still has the last word.
+        foreach (var modifier in _projectionModifiers)
+            modifier.Apply(blueprint, run);
 
         // Pending combat modifiers apply last so a "next fight" consequence can override the encounter, and
         // are consumed here so each affects exactly one fight.

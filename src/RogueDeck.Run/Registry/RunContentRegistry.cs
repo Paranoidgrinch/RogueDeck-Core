@@ -1,3 +1,5 @@
+using RogueDeck.ShredEngine;
+
 namespace RogueDeck.Run;
 
 // The id-keyed catalog of run CONTENT — events, encounters, relics, reward tables — as opposed to
@@ -13,8 +15,15 @@ public sealed class RunContentRegistry
     private readonly IReadOnlyDictionary<ConsumableId, ConsumableDefinition> _consumables;
     private readonly IReadOnlyDictionary<ShopId, ShopDefinition> _shops;
     private readonly IReadOnlyDictionary<RunProgramSourceId, ITriggeredRunEffectDefinition> _programDefinitions;
+    private readonly IReadOnlyDictionary<string, ShredData> _shreds;
+    private readonly IReadOnlyDictionary<WorkbenchId, WorkbenchDefinition> _workbenches;
 
     public EncounterCatalog? Encounters { get; }
+
+    // Shred-Engine content: the authored recipes (matched as unordered multisets when a card is built) and
+    // the per-game composition rules. Both defaulted so shred-free games carry nothing.
+    public IReadOnlyList<RecipeData> Recipes { get; }
+    public ShredRules ShredRules { get; }
 
     internal RunContentRegistry(
         IReadOnlyDictionary<EventId, EventScript> events,
@@ -23,7 +32,11 @@ public sealed class RunContentRegistry
         IReadOnlyDictionary<RewardTableId, IRewardSource> rewardTables,
         IReadOnlyDictionary<ConsumableId, ConsumableDefinition> consumables,
         IReadOnlyDictionary<ShopId, ShopDefinition> shops,
-        IReadOnlyDictionary<RunProgramSourceId, ITriggeredRunEffectDefinition> programDefinitions)
+        IReadOnlyDictionary<RunProgramSourceId, ITriggeredRunEffectDefinition> programDefinitions,
+        IReadOnlyDictionary<string, ShredData>? shreds = null,
+        IReadOnlyList<RecipeData>? recipes = null,
+        ShredRules? shredRules = null,
+        IReadOnlyDictionary<WorkbenchId, WorkbenchDefinition>? workbenches = null)
     {
         _events = events;
         Encounters = encounters;
@@ -32,6 +45,10 @@ public sealed class RunContentRegistry
         _consumables = consumables;
         _shops = shops;
         _programDefinitions = programDefinitions;
+        _shreds = shreds ?? new Dictionary<string, ShredData>();
+        Recipes = recipes ?? [];
+        ShredRules = shredRules ?? new ShredRules();
+        _workbenches = workbenches ?? new Dictionary<WorkbenchId, WorkbenchDefinition>();
     }
 
     public EventScript GetEvent(EventId id) =>
@@ -59,10 +76,25 @@ public sealed class RunContentRegistry
             ? shop
             : throw new InvalidOperationException($"No shop registered with id '{id}'.");
 
+    public ShredData GetShred(string id) =>
+        _shreds.TryGetValue(id, out var shred)
+            ? shred
+            : throw new InvalidOperationException($"No shred registered with id '{id}'.");
+
+    public WorkbenchDefinition GetWorkbench(WorkbenchId id) =>
+        _workbenches.TryGetValue(id, out var workbench)
+            ? workbench
+            : throw new InvalidOperationException($"No workbench registered with id '{id}'.");
+
     public bool HasEvent(EventId id) => _events.ContainsKey(id);
     public bool HasRelic(RelicId id) => _relics.ContainsKey(id);
     public bool HasConsumable(ConsumableId id) => _consumables.ContainsKey(id);
     public bool HasShop(ShopId id) => _shops.ContainsKey(id);
+    public bool HasShred(string id) => _shreds.ContainsKey(id);
+    public bool HasWorkbench(WorkbenchId id) => _workbenches.ContainsKey(id);
+
+    // Every registered shred kind, in registration order — the workbench's offer list.
+    public IEnumerable<ShredData> Shreds => _shreds.Values;
 
     // Look up a registered program reaction body for save/restore re-link (RunState.Restore). Returns false if
     // no definition was registered under this source id.
@@ -94,6 +126,9 @@ public sealed class RunContentRegistry
                 case ShopRef reference when !HasShop(reference.Id):
                     problems.Add($"Node '{node.Id}' references unknown shop '{reference.Id}'.");
                     break;
+                case WorkbenchRef reference when !HasWorkbench(reference.Id):
+                    problems.Add($"Node '{node.Id}' references unknown workbench '{reference.Id}'.");
+                    break;
             }
         }
 
@@ -111,6 +146,10 @@ public sealed class RunContentRegistryBuilder
     private readonly Dictionary<ConsumableId, ConsumableDefinition> _consumables = new();
     private readonly Dictionary<ShopId, ShopDefinition> _shops = new();
     private readonly Dictionary<RunProgramSourceId, ITriggeredRunEffectDefinition> _programDefinitions = new();
+    private readonly Dictionary<string, ShredData> _shreds = new(StringComparer.Ordinal);
+    private readonly List<RecipeData> _recipes = new();
+    private readonly Dictionary<WorkbenchId, WorkbenchDefinition> _workbenches = new();
+    private ShredRules? _shredRules;
     private EncounterCatalog? _encounters;
 
     public RunContentRegistryBuilder RegisterEvent(EventId id, EventScript script)
@@ -175,6 +214,41 @@ public sealed class RunContentRegistryBuilder
         return this;
     }
 
+    // ── Shred-Engine content ────────────────────────────────────────────────────────
+
+    public RunContentRegistryBuilder RegisterShred(ShredData shred)
+    {
+        ArgumentNullException.ThrowIfNull(shred);
+        if (!_shreds.TryAdd(shred.Id, shred))
+            throw new InvalidOperationException($"A shred with id '{shred.Id}' is already registered.");
+        return this;
+    }
+
+    public RunContentRegistryBuilder RegisterRecipe(RecipeData recipe)
+    {
+        ArgumentNullException.ThrowIfNull(recipe);
+        if (_recipes.Any(r => r.Id == recipe.Id))
+            throw new InvalidOperationException($"A recipe with id '{recipe.Id}' is already registered.");
+        _recipes.Add(recipe);
+        return this;
+    }
+
+    public RunContentRegistryBuilder RegisterWorkbench(WorkbenchId id, WorkbenchDefinition workbench)
+    {
+        ArgumentNullException.ThrowIfNull(workbench);
+        if (!_workbenches.TryAdd(id, workbench))
+            throw new InvalidOperationException($"A workbench with id '{id}' is already registered.");
+        return this;
+    }
+
+    public RunContentRegistryBuilder SetShredRules(ShredRules rules)
+    {
+        ArgumentNullException.ThrowIfNull(rules);
+        _shredRules = rules;
+        return this;
+    }
+
     public RunContentRegistry Build() =>
-        new(_events, _encounters, _relics, _rewardTables, _consumables, _shops, _programDefinitions);
+        new(_events, _encounters, _relics, _rewardTables, _consumables, _shops, _programDefinitions,
+            _shreds, _recipes, _shredRules, _workbenches);
 }

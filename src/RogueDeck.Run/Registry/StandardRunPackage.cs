@@ -68,7 +68,8 @@ public sealed class StandardRunPackage : IRunPackage
             .RegisterEffectHandler(new ShredEngine.AddComposedCardRunEffectHandler());
 
         builder
-            .RegisterResolver(new CombatNodeResolver(_combatDriver, encounters: _content?.Encounters))
+            .RegisterResolver(new CombatNodeResolver(_combatDriver, encounters: _content?.Encounters,
+                projectionModifiers: new IRunCombatModifier[] { new ShredEngine.ShredCombatInjection() }))
             .RegisterResolver(new EventNodeResolver(_content))
             .RegisterResolver(new ShopNodeResolver(_content));
     }
