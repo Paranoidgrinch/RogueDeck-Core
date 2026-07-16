@@ -16,6 +16,8 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
     private readonly ReplayScript _script;
     private readonly IReadOnlyList<IReplayResettable> _resettables;
     private readonly RunEffectProcessor _processor = new();
+    private readonly MetaState? _meta;
+    private readonly IReadOnlyList<MetaRule>? _metaRules;
     private RunState _run;
     private bool _disposed;
 
@@ -47,7 +49,9 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
         RunDefinitionRegistry registry,
         RunContentRegistry? content,
         ReplayScript? script = null,
-        IReadOnlyList<IReplayResettable>? resettables = null)
+        IReadOnlyList<IReplayResettable>? resettables = null,
+        MetaState? meta = null,
+        IReadOnlyList<MetaRule>? metaRules = null)
     {
         ArgumentNullException.ThrowIfNull(makeRun);
         ArgumentNullException.ThrowIfNull(registry);
@@ -57,6 +61,8 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
         _script = script ?? new ReplayScript();
         _script.OnAdvance = Replay;
         _resettables = resettables ?? Array.Empty<IReplayResettable>();
+        _meta = meta;
+        _metaRules = metaRules;
         _run = makeRun(); // so Run is never null before Start
     }
 
@@ -82,7 +88,10 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
         _script.Run = run;
         try
         {
-            new RunRunner(_registry, this, content: _content, interlude: this).Run(run);
+            // The meta profile rides along safely under replay: parked replays throw before the runner's
+            // run-end hook, so MetaProgression.ApplyRunEnd fires exactly once — on the completing replay.
+            new RunRunner(_registry, this, content: _content, interlude: this, meta: _meta, metaRules: _metaRules)
+                .Run(run);
             IsComplete = true;
         }
         catch (ReplayParkedException)

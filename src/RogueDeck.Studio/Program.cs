@@ -21,6 +21,9 @@ builder.Services.AddRazorComponents()
 builder.Services.AddScoped(_ => DraftAutosave.CreateDraft());
 builder.Services.AddScoped<RunDocument>();
 
+// The cross-run META profile (unlocks, discovered recipes, meta-currency) — persisted beside the draft.
+builder.Services.AddScoped<IMetaStore>(_ => new FileMetaStore());
+
 var app = builder.Build();
 
 if (!app.Environment.IsDevelopment())

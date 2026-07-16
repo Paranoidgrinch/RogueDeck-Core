@@ -19,6 +19,12 @@ public sealed record AddMetaCounter(string Counter, int Amount) : MetaEffect;
 // flow, without hardcoding which resource or counter.
 public sealed record PromoteRunResource(string RunResource, string MetaCounter) : MetaEffect;
 
+// Promote a run flag into a permanent meta flag: when the finished run has RunFlag set, the profile gains
+// MetaFlag. The flag counterpart of PromoteRunResource — how a mid-run discovery (a crafted recipe, a story
+// secret) survives across runs. The runner mirrors profile flags back as "meta.<flag>" run flags at run
+// start, closing the loop for content that gates on the unlock.
+public sealed record PromoteRunFlag(string RunFlag, string MetaFlag) : MetaEffect;
+
 // A run-end progression rule: apply its effects to the profile when the finished run's result is one of WhenResult
 // (empty ⇒ any outcome). The rules are content; ApplyRunEnd is the engine tool that evaluates them.
 public sealed record MetaRule(IReadOnlyList<RunResult> WhenResult, IReadOnlyList<MetaEffect> Effects);
@@ -53,6 +59,10 @@ public static class MetaProgression
                 break;
             case PromoteRunResource e:
                 meta.AddCounter(e.MetaCounter, run.GetResource(new RunResourceId(e.RunResource)));
+                break;
+            case PromoteRunFlag e:
+                if (run.HasFlag(new RunFlagId(e.RunFlag)))
+                    meta.SetFlag(e.MetaFlag);
                 break;
         }
     }

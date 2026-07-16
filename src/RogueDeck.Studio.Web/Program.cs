@@ -14,4 +14,8 @@ builder.Services.AddScoped(sp =>
     BrowserDraftAutosave.CreateDraft((IJSInProcessRuntime)sp.GetRequiredService<IJSRuntime>()));
 builder.Services.AddScoped<RunDocument>();
 
+// The cross-run META profile (unlocks, discovered recipes, meta-currency) — localStorage-persisted.
+builder.Services.AddScoped<IMetaStore>(sp =>
+    new BrowserMetaStore((IJSInProcessRuntime)sp.GetRequiredService<IJSRuntime>()));
+
 await builder.Build().RunAsync();

@@ -58,6 +58,13 @@ public sealed class RunRunner
             run.SetEntityChooser(chooser);
         run.SetContent(_content);
 
+        // Mirror the profile into the run as "meta.<flag>" run flags, so content (a workbench's recipe list,
+        // an event choice, a shop entry) can gate on cross-run unlocks with the ordinary flag machinery. The
+        // read-side twin of MetaProgression.ApplyRunEnd; resolvers never touch MetaState directly.
+        if (_meta is { } profile)
+            foreach (var flag in profile.Flags)
+                run.SetFlag(new RunFlagId("meta." + flag), true);
+
         // A RESUMED run (restored from a save) has already walked part of the map and been granted its opening, so
         // it skips the starting grants + RunStarted; a fresh run has Position -1 and no current node. The walkers
         // continue from the saved position (WalkLinear from Position+1, WalkGraph from the current node's successors).

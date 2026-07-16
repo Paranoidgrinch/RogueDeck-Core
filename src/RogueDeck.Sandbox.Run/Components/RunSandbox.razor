@@ -1,6 +1,7 @@
 @implements IAsyncDisposable
 @inject IJSRuntime JS
 @inject ProjectDraft Draft
+@inject IMetaStore MetaStore
 
 <header class="tab-intro">
     <h1>Run — assemble &amp; play</h1>
@@ -453,7 +454,7 @@
 
     protected override void OnInitialized()
     {
-        _play = new RunPlayback(OnSessionChanged);
+        _play = new RunPlayback(OnSessionChanged, MetaStore);
         Draft.RunJson ??= RunJson.ToJson(DemoBlueprint(), _options);
         // Re-render when the document changes elsewhere in this circuit (the nav's global Undo) — _json reads
         // straight off the draft, so refreshing the render is all it takes.

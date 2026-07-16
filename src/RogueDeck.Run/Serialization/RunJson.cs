@@ -262,7 +262,8 @@ public static class RunJson
     {
         r.Register("meta.setFlag", typeof(SetMetaFlag))
          .Register("meta.addCounter", typeof(AddMetaCounter))
-         .Register("meta.promoteResource", typeof(PromoteRunResource));
+         .Register("meta.promoteResource", typeof(PromoteRunResource))
+         .Register("meta.promoteFlag", typeof(PromoteRunFlag));
     }
 
     // Data node payloads (references). Inline EventScript / Func combat payloads are escapes.

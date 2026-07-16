@@ -35,6 +35,15 @@
             <input value="@p.MetaCounter" placeholder="meta-currency" style="width:11rem"
                    @onchange="e => Emit(p with { MetaCounter = AsString(e.Value) })" />
             break;
+
+        case PromoteRunFlag pf:
+            <span class="muted">run flag</span>
+            <input value="@pf.RunFlag" placeholder="recipe.expert-parry" style="width:12rem"
+                   @onchange="e => Emit(pf with { RunFlag = AsString(e.Value) })" />
+            <span class="muted">→ meta flag</span>
+            <input value="@pf.MetaFlag" placeholder="recipe.expert-parry" style="width:12rem"
+                   @onchange="e => Emit(pf with { MetaFlag = AsString(e.Value) })" />
+            break;
     }
 </span>
 
@@ -47,6 +56,7 @@
         ("setFlag", "set flag", "Set a permanent meta flag (e.g. unlock a character) when the run ends."),
         ("addCounter", "add to counter", "Add a fixed amount to a permanent meta counter when the run ends."),
         ("promoteResource", "promote run resource", "Carry the finished run's total of a resource (e.g. gold) into a permanent meta counter."),
+        ("promoteFlag", "promote run flag", "When the finished run has a flag set (e.g. a discovered recipe), set a permanent meta flag — win or lose. Discovered recipes are promoted automatically; this is for extra flags."),
     };
 
     private static string DescriptionOf(string kind) =>
@@ -62,6 +72,7 @@
         SetMetaFlag => "setFlag",
         AddMetaCounter => "addCounter",
         PromoteRunResource => "promoteResource",
+        PromoteRunFlag => "promoteFlag",
         _ => "setFlag",
     };
 
@@ -73,6 +84,7 @@
         "setFlag" => new SetMetaFlag(""),
         "addCounter" => new AddMetaCounter("", 1),
         "promoteResource" => new PromoteRunResource("", ""),
+        "promoteFlag" => new PromoteRunFlag("", ""),
         _ => new SetMetaFlag(""),
     };
 }

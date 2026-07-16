@@ -1,6 +1,7 @@
 @implements IDisposable
 @inject RunDocument Doc
 @inject ProjectDraft Draft
+@inject IMetaStore MetaStore
 
 @* The Playtest tab: drive a SINGLE encounter from the shared document, the way the old Combat tab let you play a
    lone fight — but sourced entirely from the run document (hero, deck, cards, enemies, relics) instead of a separate
@@ -54,7 +55,7 @@
 
     protected override void OnInitialized()
     {
-        _play = new RunPlayback(() => InvokeAsync(StateHasChanged));
+        _play = new RunPlayback(() => InvokeAsync(StateHasChanged), MetaStore);
         _blueprint = Doc.Load();
         _encounters = _blueprint.Encounters;
         _encounterId = _encounters.FirstOrDefault()?.Id.Value ?? "";

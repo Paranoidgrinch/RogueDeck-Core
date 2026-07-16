@@ -10,7 +10,7 @@ namespace RogueDeck.Sandbox.Composition;
 // Owns the session + combat-driver lifecycle and the per-card / per-enemy display-name lookups the RunSessionView
 // needs. The host passes an onChanged callback (its StateHasChanged) that we hook onto the session's and driver's
 // Changed events so the UI re-renders as the run advances.
-public sealed class RunPlayback(Action onChanged) : IDisposable
+public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) : IDisposable
 {
     public InteractiveRunSession? Session { get; private set; }
     public InteractiveCombatDriver? CombatDriver { get; private set; }
@@ -106,8 +106,23 @@ public sealed class RunPlayback(Action onChanged) : IDisposable
             new StandardRunPackage(driver, content).RegisterDefinitions(defs);
             var registry = defs.Build();
 
-            var session = new InteractiveRunSession(() => makeRun(content), registry, content, script, resettables);
+            // The cross-run META profile (host-persisted): mirrored into the run as meta.<flag> run flags at
+            // start; run-end rules — the blueprint's authored ones PLUS one implicit promotion per recipe
+            // (ShredMeta) — fold the finished run back in, and the profile saves once the run completes.
+            var meta = metaStore?.Load();
+            var metaRules = meta is null
+                ? null
+                : blueprint.MetaRules.Concat(ShredEngine.ShredMeta.ImplicitRecipeRules(blueprint)).ToList();
+
+            var session = new InteractiveRunSession(
+                () => makeRun(content), registry, content, script, resettables, meta, metaRules);
             session.Changed += onChanged;
+            if (metaStore is { } store && meta is { } profile)
+                session.Changed += () =>
+                {
+                    if (session.IsComplete && session.Error is null)
+                        store.Save(profile);
+                };
             Session = session;
             session.Start();
         }
