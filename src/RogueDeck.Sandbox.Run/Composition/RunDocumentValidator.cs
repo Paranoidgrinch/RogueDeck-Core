@@ -143,6 +143,53 @@ public static class RunDocumentValidator
         return problems;
     }
 
+    // The EXPORT gate (Godot bridge 3b): everything Validate flags, plus completeness checks that a work-in-
+    // progress document may legitimately violate while authoring but a SHIPPED game must not. Export is only
+    // offered when this list is empty — a Godot game never sees a document that fails here.
+    public static IReadOnlyList<string> ValidateForExport(RunBlueprint blueprint)
+    {
+        var problems = new List<string>(Validate(blueprint));
+
+        // A playable opening: every way the run can start must yield a non-empty deck (a character's own deck,
+        // else the blueprint's shared one). An exported game whose hero holds zero cards is unplayable.
+        if (blueprint.Characters.Count == 0)
+        {
+            if (EffectiveDeckSize(blueprint, blueprint.Start) == 0)
+                problems.Add($"{RunTab}: export — the starting deck is empty; the exported game would begin with no cards.");
+        }
+        else
+        {
+            foreach (var character in blueprint.Characters)
+                if (EffectiveDeckSize(blueprint, character.Start) == 0)
+                    problems.Add(
+                        $"{CharactersTab}: export — character '{character.Id}' starts with an empty deck (no own deck and the shared deck is empty).");
+        }
+
+        // Card costs must name a resource that exists SOMEWHERE — a run-global combat resource, a resource an
+        // encounter grants the hero, or the standard energy. A cost nothing defines makes the card unplayable
+        // in every fight of the exported game.
+        var resourceIds = new HashSet<string>(StringComparer.Ordinal)
+        {
+            Core.Combat.StandardCombatIds.EnergyResource.value,
+        };
+        foreach (var resource in blueprint.CombatResources)
+            resourceIds.Add(resource.Id);
+        foreach (var encounter in blueprint.Encounters)
+            foreach (var spec in encounter.HeroResources)
+                resourceIds.Add(spec.Resource.value);
+        foreach (var card in blueprint.Cards)
+            foreach (var cost in card.Costs)
+                if (!resourceIds.Contains(cost.ResourceId.value))
+                    problems.Add(
+                        $"{CardsTab}: export — card '{card.Id}' costs resource '{cost.ResourceId.value}', which no combat resource or encounter defines.");
+
+        return problems;
+    }
+
+    // The deck a RunStart actually begins with: its own, else the blueprint's shared deck.
+    private static int EffectiveDeckSize(RunBlueprint blueprint, RunStart start) =>
+        start.Deck.Count > 0 ? start.Deck.Count : blueprint.Deck.Count;
+
     private static void CheckPresentation(
         List<string> problems, string tab, string kind,
         IReadOnlyDictionary<string, EntityPresentation> section, HashSet<string> knownIds)

@@ -104,6 +104,76 @@ public class RunDocumentValidatorTests
         Assert.Contains(problems, p => p.Contains("event 'no-such-event'") && p.StartsWith("Run:"));
     }
 
+    // ── Export gate (Godot bridge 3b) ───────────────────────────────────────────────
+
+    [Fact]
+    public void A_consistent_document_passes_the_export_gate() =>
+        Assert.Empty(RunDocumentValidator.ValidateForExport(Valid()));
+
+    [Fact]
+    public void Export_flags_an_empty_starting_deck()
+    {
+        var bp = Valid() with { Deck = Array.Empty<CardDefinitionId>() };
+        Assert.Contains(RunDocumentValidator.ValidateForExport(bp),
+            p => p.Contains("starting deck is empty") && p.StartsWith("Run:"));
+        // ...but plain Validate stays quiet: an empty deck is fine mid-authoring.
+        Assert.Empty(RunDocumentValidator.Validate(bp));
+    }
+
+    [Fact]
+    public void Export_flags_a_character_whose_effective_deck_is_empty()
+    {
+        var bp = Valid() with
+        {
+            Deck = Array.Empty<CardDefinitionId>(),
+            Characters = new[]
+            {
+                new RunCharacter("warrior", new RunStart { Deck = new[] { new CardDefinitionId("strike") } }),
+                new RunCharacter("pauper", new RunStart()),
+            },
+        };
+        var problems = RunDocumentValidator.ValidateForExport(bp);
+        Assert.Contains(problems, p => p.Contains("character 'pauper'") && p.Contains("empty deck"));
+        Assert.DoesNotContain(problems, p => p.Contains("character 'warrior'"));
+    }
+
+    [Fact]
+    public void Export_flags_a_card_costing_an_undefined_resource()
+    {
+        var mana = new CardData { Id = "bolt", Costs = new[] { new ResourceCost(new ResourceId("mana"), 2) } };
+        var bp = Valid() with { Cards = new[] { new CardData { Id = "strike" }, mana } };
+        Assert.Contains(RunDocumentValidator.ValidateForExport(bp),
+            p => p.Contains("card 'bolt'") && p.Contains("resource 'mana'"));
+    }
+
+    [Fact]
+    public void Export_accepts_a_cost_covered_by_a_run_global_combat_resource()
+    {
+        var mana = new CardData { Id = "bolt", Costs = new[] { new ResourceCost(new ResourceId("mana"), 2) } };
+        var bp = Valid() with
+        {
+            Cards = new[] { new CardData { Id = "strike" }, mana },
+            CombatResources = new[] { new CombatResourceData { Id = "mana", Max = 3 } },
+        };
+        Assert.Empty(RunDocumentValidator.ValidateForExport(bp));
+    }
+
+    [Fact]
+    public void Export_accepts_a_cost_covered_by_an_encounter_hero_resource()
+    {
+        var mana = new CardData { Id = "bolt", Costs = new[] { new ResourceCost(new ResourceId("mana"), 2) } };
+        var encounter = new EncounterDefinition(
+            new EncounterId("fight"),
+            new[] { new EncounterEnemy("goblin", 5, new[] { new EnemyActionDefinitionId("jab") }) },
+            heroResources: new[] { new ResourceSpec(new ResourceId("mana"), 3, 3) });
+        var bp = Valid() with
+        {
+            Cards = new[] { new CardData { Id = "strike" }, mana },
+            Encounters = new[] { encounter },
+        };
+        Assert.Empty(RunDocumentValidator.ValidateForExport(bp));
+    }
+
     [Fact]
     public void A_valid_party_member_has_no_problems()
     {
