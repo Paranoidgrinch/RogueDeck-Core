@@ -16,15 +16,22 @@ public sealed class RunCardInstance
     public CardDefinitionId DefinitionId { get; }
     public int UpgradeLevel { get; private set; }
 
+    // The ordered shred-id list this card was composed from (Shred Engine). Empty = a normal authored card.
+    // For a composed card the DefinitionId is DERIVED deterministically from this list, and the definition
+    // itself is re-synthesized for every fight — the composition is the only persisted truth.
+    public IReadOnlyList<string> Composition { get; }
+
     public IReadOnlyCollection<RunCardTagId> Tags => _tags;
     public IReadOnlyDictionary<string, int> Memory => _memory;
 
-    public RunCardInstance(RunCardInstanceId id, CardDefinitionId definitionId)
+    public RunCardInstance(
+        RunCardInstanceId id, CardDefinitionId definitionId, IReadOnlyList<string>? composition = null)
     {
         if (string.IsNullOrWhiteSpace(id.Value))
             throw new ArgumentException("Card instance id cannot be empty.", nameof(id));
         Id = id;
         DefinitionId = definitionId;
+        Composition = composition ?? [];
     }
 
     public void Upgrade(int levels = 1)

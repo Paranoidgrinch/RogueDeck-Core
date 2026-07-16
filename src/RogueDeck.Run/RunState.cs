@@ -152,11 +152,15 @@ public sealed class RunState
         return member;
     }
 
-    // Add a card to a specific member's deck, minting a run-scoped (party-unique) instance id.
-    public RunCardInstance AddDeckCardTo(PartyMember member, CardDefinitionId card)
+    // Add a card to a specific member's deck, minting a run-scoped (party-unique) instance id. A non-empty
+    // composition marks a Shred-Engine card: its definition id derives from the shred list and the definition
+    // is re-synthesized per fight (the instance persists only the list).
+    public RunCardInstance AddDeckCardTo(
+        PartyMember member, CardDefinitionId card, IReadOnlyList<string>? composition = null)
     {
         ArgumentNullException.ThrowIfNull(member);
-        return member.AddDeckCard(new RunCardInstance(new RunCardInstanceId($"card#{++_nextCardSeq}"), card));
+        return member.AddDeckCard(
+            new RunCardInstance(new RunCardInstanceId($"card#{++_nextCardSeq}"), card, composition));
     }
 
     // ── Setup / mutation (used by effect handlers and node resolvers) ──────────────
@@ -187,6 +191,15 @@ public sealed class RunState
     public RunConsumable? FindConsumable(ConsumableInstanceId id) => ActiveMember.FindConsumable(id);
 
     public bool RemoveConsumable(ConsumableInstanceId id) => ActiveMember.RemoveConsumable(id);
+
+    // Shred inventory (Shred Engine) — the active member's card parts, like the other single-hero accessors.
+    public IReadOnlyDictionary<string, int> Shreds => ActiveMember.Shreds;
+
+    public int GetShredCount(string shredId) => ActiveMember.GetShredCount(shredId);
+
+    public void AddShreds(string shredId, int count = 1) => ActiveMember.AddShreds(shredId, count);
+
+    public bool TryRemoveShreds(string shredId, int count = 1) => ActiveMember.TryRemoveShreds(shredId, count);
 
     // Field a persistent board unit into the roster from its authored data (P5c). Generates a deterministic
     // instance id, seeds a fresh HealthState at full HP, and copies its starting position + statuses.
@@ -360,9 +373,11 @@ public sealed class RunState
             c.DefinitionId.value,
             c.UpgradeLevel,
             c.Tags.Select(t => t.Value).ToArray(),
-            c.Memory.ToDictionary(m => m.Key, m => m.Value))).ToArray(),
+            c.Memory.ToDictionary(m => m.Key, m => m.Value))
+        { Composition = c.Composition }).ToArray(),
         Relics: member.Relics.Select(r => new RunRelicSaveData(r.Id.Value, r.Enabled)).ToArray(),
-        Consumables: member.Consumables.Select(c => c.DefinitionId.Value).ToArray());
+        Consumables: member.Consumables.Select(c => c.DefinitionId.Value).ToArray())
+    { Shreds = member.Shreds.ToDictionary(kv => kv.Key, kv => kv.Value) };
 
     // Rebuild a run from a save. The map is authored content (supplied by the caller, as in the constructor); the
     // content catalog rehydrates relics/consumables by id. Requires at least the primary member.
@@ -438,7 +453,7 @@ public sealed class RunState
 
         foreach (var card in data.Deck)
         {
-            var instance = run.AddDeckCardTo(member, new CardDefinitionId(card.DefinitionId));
+            var instance = run.AddDeckCardTo(member, new CardDefinitionId(card.DefinitionId), card.Composition);
             if (card.UpgradeLevel > 0)
                 instance.Upgrade(card.UpgradeLevel);
             foreach (var tag in card.Tags)
@@ -446,6 +461,10 @@ public sealed class RunState
             foreach (var (key, value) in card.Memory)
                 instance.SetMemory(key, value);
         }
+
+        foreach (var (shredId, count) in data.Shreds)
+            if (count > 0)
+                member.AddShreds(shredId, count);
 
         if (content is null)
             return;

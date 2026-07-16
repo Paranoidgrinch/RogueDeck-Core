@@ -21,11 +21,16 @@ public sealed class PartyMember
     private readonly List<RunCardInstance> _deck = new();
     private readonly List<RelicInstance> _relics = new();
     private readonly List<RunConsumable> _consumables = new();
+    private readonly Dictionary<string, int> _shreds = new(StringComparer.Ordinal);
 
     public IReadOnlyDictionary<RunResourceId, int> Resources => _resources;
     public IReadOnlyList<RunCardInstance> Deck => _deck;
     public IReadOnlyList<RelicInstance> Relics => _relics;
     public IReadOnlyList<RunConsumable> Consumables => _consumables;
+
+    // The member's card-part inventory (Shred Engine): shred kind id → owned count. Shreds are fungible per
+    // kind (no per-copy state), so a count map — not an instance list — is the honest model.
+    public IReadOnlyDictionary<string, int> Shreds => _shreds;
 
     // Relic / consumable definition ids this member should start with (party deckbuilding B3b). Seeded from the
     // member's authored data by RunSetup and granted by the runner once content is attached, mirroring the hero's
@@ -87,6 +92,34 @@ public sealed class PartyMember
     }
 
     public RelicInstance? FindRelic(RelicId id) => _relics.FirstOrDefault(r => r.Id == id);
+
+    public int GetShredCount(string shredId) =>
+        _shreds.TryGetValue(shredId, out var count) ? count : 0;
+
+    public void AddShreds(string shredId, int count = 1)
+    {
+        if (string.IsNullOrWhiteSpace(shredId))
+            throw new ArgumentException("Shred id cannot be empty.", nameof(shredId));
+        if (count < 1)
+            throw new ArgumentOutOfRangeException(nameof(count), count, "Shred count must be >= 1.");
+        _shreds[shredId] = GetShredCount(shredId) + count;
+    }
+
+    // Removes `count` shreds of the kind; false (and no change) when the member holds fewer. Zeroed kinds
+    // leave the map so the inventory view never shows empty rows.
+    public bool TryRemoveShreds(string shredId, int count = 1)
+    {
+        if (count < 1)
+            throw new ArgumentOutOfRangeException(nameof(count), count, "Shred count must be >= 1.");
+        var held = GetShredCount(shredId);
+        if (held < count)
+            return false;
+        if (held == count)
+            _shreds.Remove(shredId);
+        else
+            _shreds[shredId] = held - count;
+        return true;
+    }
 
     public RunConsumable AddConsumable(RunConsumable consumable)
     {

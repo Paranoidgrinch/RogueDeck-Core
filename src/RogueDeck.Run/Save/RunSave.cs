@@ -14,7 +14,12 @@ public sealed record RunCardSaveData(
     string DefinitionId,
     int UpgradeLevel,
     IReadOnlyList<string> Tags,
-    IReadOnlyDictionary<string, int> Memory);
+    IReadOnlyDictionary<string, int> Memory)
+{
+    // The ordered shred list of a composed card (Shred Engine); empty for normal cards. An init property
+    // with a default so pre-shred saves (no such JSON field) keep loading unchanged.
+    public IReadOnlyList<string> Composition { get; init; } = [];
+}
 
 public sealed record RunRelicSaveData(string Id, bool Enabled);
 
@@ -26,7 +31,11 @@ public sealed record RunMemberSaveData(
     IReadOnlyDictionary<string, int> Resources,
     IReadOnlyList<RunCardSaveData> Deck,
     IReadOnlyList<RunRelicSaveData> Relics,
-    IReadOnlyList<string> Consumables);
+    IReadOnlyList<string> Consumables)
+{
+    // The member's shred inventory (Shred Engine): kind id → count. Defaulted so pre-shred saves load.
+    public IReadOnlyDictionary<string, int> Shreds { get; init; } = new Dictionary<string, int>();
+}
 
 // One persistent board unit (P5c) with its LIVE state (current HP, position, statuses) — RunUnitData is authoring
 // data (full HP), so a save needs this to carry wounds forward. StatusGrant/CombatPosition are plain values.

@@ -180,4 +180,8 @@ public static class Rewards
         new(id ?? $"{resource}-{amount}", new IRunEffectRequest[] { new ChangeResourceRunEffect(resource, amount) });
 
     public static RewardOffer Gold(int amount) => Resource(StandardRunIds.Gold, amount, $"gold-{amount}");
+
+    // Grant card parts for the workbench (Shred Engine).
+    public static RewardOffer Shred(string shredId, int count = 1, string? id = null) =>
+        new(id ?? $"shred-{shredId}", new IRunEffectRequest[] { new ShredEngine.AddShredRunEffect(shredId, count) });
 }

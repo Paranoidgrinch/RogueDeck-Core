@@ -243,7 +243,10 @@ public static class RunJson
          .Register("fx.tagCards", typeof(TagCardsRunEffect))
          .Register("fx.setCardMemory", typeof(SetCardMemoryRunEffect))
          .Register("fx.transformCards", typeof(TransformCardsRunEffect))
-         .Register("fx.forEachCard", typeof(ForEachCardRunEffect));
+         .Register("fx.forEachCard", typeof(ForEachCardRunEffect))
+         .Register("fx.addShred", typeof(ShredEngine.AddShredRunEffect))
+         .Register("fx.removeShred", typeof(ShredEngine.RemoveShredRunEffect))
+         .Register("fx.addComposedCard", typeof(ShredEngine.AddComposedCardRunEffect));
     }
 
     // Reward sources. The Func-backed DelegateRewardSource is an escape.

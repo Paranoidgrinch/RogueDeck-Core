@@ -142,6 +142,10 @@ public sealed class ChoiceBuilder
     public ChoiceBuilder AddConsumable(ConsumableId definition, params IRunEffectRequest[] useEffects) =>
         Effect(new AddConsumableRunEffect(definition, useEffects));
 
+    // Grant card parts for the workbench (Shred Engine).
+    public ChoiceBuilder AddShred(string shredId, int count = 1) =>
+        Effect(new ShredEngine.AddShredRunEffect(shredId, count));
+
     // Repeat a block of effects a computed number of times.
     public ChoiceBuilder Repeat(IRunExpression<int> count, params IRunEffectRequest[] effects) =>
         Effect(new RepeatRunEffect(count, effects));

@@ -79,6 +79,9 @@ public static class RunEventCatalog
             "Fires when the player gains a consumable."),
         new("consumableUsed", typeof(ConsumableUsedRunEvent), "a consumable is used",
             "Fires when the player uses a consumable."),
+
+        new("shredGained", typeof(ShredEngine.ShredGainedRunEvent), "a shred is gained",
+            "Fires when the player gains a card part (a shred) for the workbench."),
     ];
 
     private static readonly IReadOnlyDictionary<string, RunEventKind> ByKeyMap =
