@@ -93,6 +93,8 @@
                     <span class="muted"> advanced program (outside the visual subset) — edit in the Run tab JSON</span>
                 }
             </div>
+            <PresentationEditor Value="PresentationAuthoring.Get(_blueprint.Presentation.Cards, card.Id)"
+                                ValueChanged="p => SetCardPresentation(card.Id, p)" />
         </div>
     }
     <div class="run-bar">
@@ -176,10 +178,35 @@
             return list;
         });
 
+    // A rename carries the card's authored look along instead of orphaning it — one document write.
     private void SetCardId(int index, string id)
     {
-        if (!string.IsNullOrWhiteSpace(id))
-            EditCard(index, c => c with { Id = id.Trim() });
+        if (string.IsNullOrWhiteSpace(id) || index < 0 || index >= Cards.Count)
+            return;
+        var oldId = Cards[index].Id;
+        var list = Cards.ToList();
+        list[index] = list[index] with { Id = id.Trim() };
+        _blueprint = _blueprint with
+        {
+            Cards = list,
+            Presentation = _blueprint.Presentation with
+            {
+                Cards = PresentationAuthoring.Rename(_blueprint.Presentation.Cards, oldId, id.Trim()),
+            },
+        };
+        Save();
+    }
+
+    private void SetCardPresentation(string id, EntityPresentation? presentation)
+    {
+        _blueprint = _blueprint with
+        {
+            Presentation = _blueprint.Presentation with
+            {
+                Cards = PresentationAuthoring.With(_blueprint.Presentation.Cards, id, presentation),
+            },
+        };
+        Save();
     }
 
     private void SetCardName(int index, string name) =>

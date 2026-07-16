@@ -34,6 +34,9 @@
                 <button class="mini" title="duplicate this encounter" @onclick="() => DuplicateEncounter(encId)">⧉</button>
                 <button class="mini" @onclick="() => RemoveEncounter(encId)">✕ remove</button>
             </div>
+            @* The encounter's own look = the fight's backdrop/scene; each enemy row below carries the enemy's. *@
+            <PresentationEditor Value="PresentationAuthoring.Get(Blueprint.Presentation.Encounters, encId)"
+                                ValueChanged="p => SetEncounterPresentation(encId, p)" />
 
             @foreach (var enemy in encounter.Enemies)
             {
@@ -63,6 +66,8 @@
                     }
                     <button class="mini" @onclick="() => RemoveEnemy(encId, enemyId)">✕</button>
                 </div>
+                <PresentationEditor Value="PresentationAuthoring.Get(Blueprint.Presentation.Enemies, enemyId)"
+                                    ValueChanged="p => SetEnemyPresentation(enemyId, p)" />
 
                 var rules = enemy.IntentRules ?? (IReadOnlyList<EnemyIntentRule>)Array.Empty<EnemyIntentRule>();
                 <div class="intent-block">
@@ -171,13 +176,41 @@
         return Replace(Blueprint.Encounters.Append(Rebuild(enc, id: new EncounterId(copyId))).ToList());
     }
 
+    // A rename carries the encounter's authored look along instead of orphaning it — one document write.
     private Task RenameEncounter(string id, string newId)
     {
         newId = newId.Trim();
         if (newId.Length == 0 || (newId != id && Blueprint.Encounters.Any(e => e.Id.Value == newId)))
             return Task.CompletedTask;
-        return Edit(id, enc => Rebuild(enc, id: new EncounterId(newId)));
+        var encounters = Blueprint.Encounters
+            .Select(enc => enc.Id.Value == id ? Rebuild(enc, id: new EncounterId(newId)) : enc).ToList();
+        return BlueprintChanged.InvokeAsync(Blueprint with
+        {
+            Encounters = encounters,
+            Presentation = Blueprint.Presentation with
+            {
+                Encounters = PresentationAuthoring.Rename(Blueprint.Presentation.Encounters, id, newId),
+            },
+        });
     }
+
+    private Task SetEncounterPresentation(string id, EntityPresentation? presentation) =>
+        BlueprintChanged.InvokeAsync(Blueprint with
+        {
+            Presentation = Blueprint.Presentation with
+            {
+                Encounters = PresentationAuthoring.With(Blueprint.Presentation.Encounters, id, presentation),
+            },
+        });
+
+    private Task SetEnemyPresentation(string enemyId, EntityPresentation? presentation) =>
+        BlueprintChanged.InvokeAsync(Blueprint with
+        {
+            Presentation = Blueprint.Presentation with
+            {
+                Enemies = PresentationAuthoring.With(Blueprint.Presentation.Enemies, enemyId, presentation),
+            },
+        });
 
     private Task AddEnemy(string encId) =>
         Edit(encId, enc => Rebuild(enc, enemies: enc.Enemies.Append(NewEnemy(enc.Enemies.Count + 1)).ToList()));
@@ -187,9 +220,25 @@
             ? enc // an encounter needs at least one enemy
             : Rebuild(enc, enemies: enc.Enemies.Where(en => en.Id != enemyId).ToList()));
 
-    private Task SetEnemyId(string encId, string enemyId, string newId) =>
-        string.IsNullOrWhiteSpace(newId) ? Task.CompletedTask
-            : EditEnemy(encId, enemyId, en => en with { Id = newId.Trim() });
+    // Enemy ids are looked up ACROSS encounters in the presentation manifest (same id = same look), so a rename
+    // only carries the look along when no other enemy still uses the old id.
+    private Task SetEnemyId(string encId, string enemyId, string newId)
+    {
+        if (string.IsNullOrWhiteSpace(newId))
+            return Task.CompletedTask;
+        newId = newId.Trim();
+        var encounters = Blueprint.Encounters.Select(enc => enc.Id.Value != encId ? enc
+            : Rebuild(enc, enemies: enc.Enemies.Select(en => en.Id == enemyId ? en with { Id = newId } : en).ToList())).ToList();
+        var stillUsed = encounters.SelectMany(e => e.Enemies).Any(en => en.Id == enemyId);
+        return BlueprintChanged.InvokeAsync(Blueprint with
+        {
+            Encounters = encounters,
+            Presentation = stillUsed ? Blueprint.Presentation : Blueprint.Presentation with
+            {
+                Enemies = PresentationAuthoring.Rename(Blueprint.Presentation.Enemies, enemyId, newId),
+            },
+        });
+    }
 
     private Task SetEnemyHealth(string encId, string enemyId, int hp) =>
         EditEnemy(encId, enemyId, en => en with { MaxHealth = Math.Max(1, hp) });

@@ -38,6 +38,8 @@
                     <button class="mini" @onclick="() => RemoveShop(shopId)">✕ remove shop</button>
                 </span>
             </div>
+            <PresentationEditor Value="PresentationAuthoring.Get(_blueprint.Presentation.Shops, shopId)"
+                                ValueChanged="p => SetShopPresentation(shopId, p)" />
             <div class="run-bar">
                 <label>Currency
                     <input value="@ShopCurrency(s)" style="width:6rem"
@@ -173,6 +175,18 @@
 
     // ── document plumbing ──────────────────────────────────────────────────────────
     private void Save() => Doc.Save(_blueprint);
+
+    private void SetShopPresentation(string id, EntityPresentation? presentation)
+    {
+        _blueprint = _blueprint with
+        {
+            Presentation = _blueprint.Presentation with
+            {
+                Shops = PresentationAuthoring.With(_blueprint.Presentation.Shops, id, presentation),
+            },
+        };
+        Save();
+    }
 
     private void EditShops(Func<Dictionary<string, ShopDefinition>, Dictionary<string, ShopDefinition>> edit)
     {

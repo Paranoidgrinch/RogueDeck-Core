@@ -47,6 +47,8 @@
                 </div>
                 <button class="mini" @onclick="() => RemoveCharacter(index)">✕ remove character</button>
             </div>
+            <PresentationEditor Value="PresentationAuthoring.Get(_blueprint.Presentation.Characters, character.Id)"
+                                ValueChanged="p => SetPresentation(character.Id, p)" />
 
             <RunStartEditor Value="character.Start" ValueChanged="s => SetStart(index, s)" ShowDeck="true"
                             AvailableRelics="AvailableRelics" AvailableConsumables="AvailableConsumables"
@@ -114,12 +116,36 @@
         Save(list);
     }
 
+    // A rename carries the character's authored look along instead of orphaning it — one document write.
     private void SetId(int index, string id)
     {
         id = id.Trim();
         if (id.Length == 0 || Characters.Where((_, i) => i != index).Any(c => c.Id == id))
             return; // keep ids non-empty and unique
-        Edit(index, c => c with { Id = id });
+        var oldId = Characters[index].Id;
+        var list = Characters.ToList();
+        list[index] = list[index] with { Id = id };
+        _blueprint = _blueprint with
+        {
+            Characters = list,
+            Presentation = _blueprint.Presentation with
+            {
+                Characters = PresentationAuthoring.Rename(_blueprint.Presentation.Characters, oldId, id),
+            },
+        };
+        Doc.Save(_blueprint);
+    }
+
+    private void SetPresentation(string id, EntityPresentation? presentation)
+    {
+        _blueprint = _blueprint with
+        {
+            Presentation = _blueprint.Presentation with
+            {
+                Characters = PresentationAuthoring.With(_blueprint.Presentation.Characters, id, presentation),
+            },
+        };
+        Doc.Save(_blueprint);
     }
 
     private void SetUnlockFlag(int index, string flag) =>

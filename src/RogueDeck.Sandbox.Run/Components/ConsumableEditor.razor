@@ -40,6 +40,8 @@
                 <button class="mini" title="duplicate this consumable" @onclick="() => Duplicate(index)">⧉</button>
                 <button class="mini" @onclick="() => Remove(index)">✕ remove</button>
             </div>
+            <PresentationEditor Value="PresentationAuthoring.Get(Blueprint.Presentation.Consumables, consumable.Id)"
+                                ValueChanged="p => SetPresentation(consumable.Id, p)" />
 
             <div class="editor-effects">
                 <span class="muted">On use:</span>
@@ -97,7 +99,33 @@
         return Save(list);
     }
 
-    private Task SetId(int index, string id) => Edit(index, c => c with { Id = id.Trim() });
+    // A rename carries the consumable's authored look along instead of orphaning it — one document write.
+    private Task SetId(int index, string id)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return Task.CompletedTask;
+        var oldId = Blueprint.Consumables[index].Id;
+        var list = Blueprint.Consumables.ToList();
+        list[index] = list[index] with { Id = id.Trim() };
+        return BlueprintChanged.InvokeAsync(Blueprint with
+        {
+            Consumables = list,
+            Presentation = Blueprint.Presentation with
+            {
+                Consumables = PresentationAuthoring.Rename(Blueprint.Presentation.Consumables, oldId, id.Trim()),
+            },
+        });
+    }
+
+    private Task SetPresentation(string id, EntityPresentation? presentation) =>
+        BlueprintChanged.InvokeAsync(Blueprint with
+        {
+            Presentation = Blueprint.Presentation with
+            {
+                Consumables = PresentationAuthoring.With(Blueprint.Presentation.Consumables, id, presentation),
+            },
+        });
+
     private Task SetName(int index, string name) => Edit(index, c => c with { DisplayName = name });
     private Task Remove(int index) => Save(Blueprint.Consumables.Where((_, i) => i != index).ToList());
 

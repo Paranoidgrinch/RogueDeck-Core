@@ -50,6 +50,8 @@
                 <button class="mini" title="duplicate this relic" @onclick="() => DuplicateRelic(relicIndex)">⧉</button>
                 <button class="mini" @onclick="() => RemoveRelic(relicIndex)">✕ remove</button>
             </div>
+            <PresentationEditor Value="PresentationAuthoring.Get(Blueprint.Presentation.Relics, relic.Id)"
+                                ValueChanged="p => SetRelicPresentation(relic.Id, p)" />
 
             @for (var pi = 0; pi < relic.RunPrograms.Count; pi++)
             {
@@ -431,8 +433,32 @@
     }
 
     // ── relic level ─────────────────────────────────────────────────────────────
-    private Task SetRelicId(int relicIndex, string id) =>
-        string.IsNullOrWhiteSpace(id) ? Task.CompletedTask : EditRelic(relicIndex, r => r with { Id = id.Trim() });
+    // A rename carries the relic's authored look along instead of orphaning it — one document write.
+    private Task SetRelicId(int relicIndex, string id)
+    {
+        if (string.IsNullOrWhiteSpace(id) || relicIndex < 0 || relicIndex >= Blueprint.Relics.Count)
+            return Task.CompletedTask;
+        var oldId = Blueprint.Relics[relicIndex].Id;
+        var relics = Blueprint.Relics.ToList();
+        relics[relicIndex] = relics[relicIndex] with { Id = id.Trim() };
+        return BlueprintChanged.InvokeAsync(Blueprint with
+        {
+            Relics = relics,
+            Presentation = Blueprint.Presentation with
+            {
+                Relics = PresentationAuthoring.Rename(Blueprint.Presentation.Relics, oldId, id.Trim()),
+            },
+        });
+    }
+
+    private Task SetRelicPresentation(string id, EntityPresentation? presentation) =>
+        BlueprintChanged.InvokeAsync(Blueprint with
+        {
+            Presentation = Blueprint.Presentation with
+            {
+                Relics = PresentationAuthoring.With(Blueprint.Presentation.Relics, id, presentation),
+            },
+        });
 
     private Task SetRelicName(int relicIndex, string name) =>
         EditRelic(relicIndex, r => r with { DisplayName = name });

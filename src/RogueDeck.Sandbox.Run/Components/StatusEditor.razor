@@ -33,7 +33,7 @@
             <div class="run-bar">
                 <label>Status id
                     <input value="@status.Id" style="width:9rem"
-                           @onchange="e => Edit(index, s => s with { Id = AsString(e.Value).Trim() })" />
+                           @onchange="e => SetStatusId(index, AsString(e.Value))" />
                 </label>
                 <label>Name
                     <input value="@status.NameKey" style="width:10rem"
@@ -42,6 +42,8 @@
                 <button class="mini" title="duplicate this status" @onclick="() => Duplicate(index)">⧉</button>
                 <button class="mini" @onclick="() => Remove(index)">✕ remove</button>
             </div>
+            <PresentationEditor Value="PresentationAuthoring.Get(Blueprint.Presentation.Statuses, status.Id)"
+                                ValueChanged="p => SetPresentation(status.Id, p)" />
             <div class="run-bar">
                 <label>Polarity @EnumSelect(status.Polarity, p => Edit(index, s => s with { Polarity = p }))</label>
                 <label>Stacking @EnumSelect(status.StackingBehavior, b => Edit(index, s => s with { StackingBehavior = b }))</label>
@@ -175,6 +177,33 @@
     }
 
     private Task Remove(int index) => Save(Blueprint.Statuses.Where((_, i) => i != index).ToList());
+
+    // A rename carries the status's authored look along instead of orphaning it — one document write.
+    private Task SetStatusId(int index, string id)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return Task.CompletedTask;
+        var oldId = Blueprint.Statuses[index].Id;
+        var list = Blueprint.Statuses.ToList();
+        list[index] = list[index] with { Id = id.Trim() };
+        return BlueprintChanged.InvokeAsync(Blueprint with
+        {
+            Statuses = list,
+            Presentation = Blueprint.Presentation with
+            {
+                Statuses = PresentationAuthoring.Rename(Blueprint.Presentation.Statuses, oldId, id.Trim()),
+            },
+        });
+    }
+
+    private Task SetPresentation(string id, EntityPresentation? presentation) =>
+        BlueprintChanged.InvokeAsync(Blueprint with
+        {
+            Presentation = Blueprint.Presentation with
+            {
+                Statuses = PresentationAuthoring.With(Blueprint.Presentation.Statuses, id, presentation),
+            },
+        });
 
     private Task Duplicate(int index)
     {

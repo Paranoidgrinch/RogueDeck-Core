@@ -47,6 +47,8 @@
                 <button class="mini" title="duplicate this event" @onclick="() => DuplicateEvent(eventKey)">⧉</button>
                 <button class="mini" @onclick="() => RemoveEvent(eventKey)">✕ remove</button>
             </div>
+            <PresentationEditor Value="PresentationAuthoring.Get(Blueprint.Presentation.Events, eventKey)"
+                                ValueChanged="p => SetEventPresentation(eventKey, p)" />
 
             @foreach (var situation in situations)
             {
@@ -186,6 +188,7 @@
         return ReplaceEvents(events);
     }
 
+    // A rename carries the event's authored look along instead of orphaning it — one document write.
     private Task RenameEvent(string key, string newKey)
     {
         newKey = newKey.Trim();
@@ -194,8 +197,24 @@
         var events = new Dictionary<string, EventScript>();
         foreach (var (k, v) in Blueprint.Events)
             events[k == key ? newKey : k] = v;
-        return ReplaceEvents(events);
+        return BlueprintChanged.InvokeAsync(Blueprint with
+        {
+            Events = events,
+            Presentation = Blueprint.Presentation with
+            {
+                Events = PresentationAuthoring.Rename(Blueprint.Presentation.Events, key, newKey),
+            },
+        });
     }
+
+    private Task SetEventPresentation(string key, EntityPresentation? presentation) =>
+        BlueprintChanged.InvokeAsync(Blueprint with
+        {
+            Presentation = Blueprint.Presentation with
+            {
+                Events = PresentationAuthoring.With(Blueprint.Presentation.Events, key, presentation),
+            },
+        });
 
     private Task SetStart(string key, string start) =>
         Blueprint.Events.TryGetValue(key, out var script)

@@ -207,6 +207,15 @@
             <p class="error">The run JSON does not parse — fix it to validate the document.</p>
         }
 
+        <h2>Game presentation</h2>
+        <p class="muted">The game-wide look an exported frontend reads (title art, theme hints) — the one
+            presentation entry that is not per-entity. Cards, relics, enemies etc. carry theirs on their own tabs.</p>
+        @if (TryBlueprint(out var presentationBp))
+        {
+            <PresentationEditor Value="presentationBp.Presentation.Game"
+                                ValueChanged="p => SetGamePresentation(p)" />
+        }
+
         <h2>Export for Godot</h2>
         <p class="muted">One file is the whole game — gameplay and presentation, stamped with schema version
             @RunBlueprintSchema.CurrentVersion. Export runs the stricter export gate (everything Validation checks,
@@ -445,6 +454,16 @@
     {
         _jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./_content/RogueDeck.Sandbox.Run/runSandbox.js");
         await _jsModule.InvokeVoidAsync("download", "run-blueprint.json", _json);
+    }
+
+    private void SetGamePresentation(EntityPresentation? presentation)
+    {
+        if (!TryBlueprint(out var blueprint))
+            return;
+        _json = RunJson.ToJson(blueprint with
+        {
+            Presentation = blueprint.Presentation with { Game = presentation },
+        }, _options);
     }
 
     // Export the document for a playable frontend (Godot bridge 3c): the stricter export gate must pass, then

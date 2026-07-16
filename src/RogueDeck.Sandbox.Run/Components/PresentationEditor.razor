@@ -1,0 +1,60 @@
+@* One entity's presentation (its LOOK, Godot bridge variant B): art id, flavor text, visual tags, freeform
+   extra hints. Pure metadata for a playable frontend — the engine never reads it, so nothing here can change
+   gameplay. Emits null when every field is cleared, so the parent removes the manifest entry entirely. *@
+<div class="run-bar">
+    <span class="muted" title="How this entity LOOKS in an exported game (art, flavor, visual tags). The engine ignores these; a Godot frontend maps the art id onto its own assets.">look:</span>
+    <span class="muted">art</span>
+    <input value="@(Value?.Art ?? "")" style="width:11rem" placeholder="e.g. cards/smite.png"
+           title="asset id / relative path in the exported game's own asset scheme"
+           @onchange="e => Set(v => v with { Art = Trimmed(e) })" />
+    <span class="muted">flavor</span>
+    <input value="@(Value?.FlavorText ?? "")" style="width:13rem" placeholder="flavor line"
+           title="flavor text shown alongside the entity (rules text comes from the definition itself)"
+           @onchange="e => Set(v => v with { FlavorText = Trimmed(e) })" />
+    <span class="muted">tags</span>
+    <input value="@string.Join(", ", Value?.Tags ?? [])" style="width:8rem" placeholder="rare, fire"
+           title="freeform visual labels, comma-separated — a frontend can key treatments off them"
+           @onchange="e => Set(v => v with { Tags = ParseTags(e) })" />
+    <span class="muted">extra</span>
+    <input value="@JoinExtra(Value)" style="width:11rem" placeholder="frame=gold; vfx=holy"
+           title="freeform key=value hints, semicolon-separated, for anything the named fields don't cover"
+           @onchange="e => Set(v => v with { Extra = ParseExtra(e) })" />
+</div>
+
+@code {
+    [Parameter] public EntityPresentation? Value { get; set; }
+    [Parameter] public EventCallback<EntityPresentation?> ValueChanged { get; set; }
+
+    private Task Set(Func<EntityPresentation, EntityPresentation> edit)
+    {
+        var updated = edit(Value ?? new EntityPresentation());
+        return ValueChanged.InvokeAsync(PresentationAuthoring.IsEmpty(updated) ? null : updated);
+    }
+
+    private static string? Trimmed(ChangeEventArgs e)
+    {
+        var text = e.Value?.ToString()?.Trim();
+        return string.IsNullOrEmpty(text) ? null : text;
+    }
+
+    private static IReadOnlyList<string> ParseTags(ChangeEventArgs e) =>
+        (e.Value?.ToString() ?? "")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+
+    private static string JoinExtra(EntityPresentation? value) =>
+        string.Join("; ", (value?.Extra ?? new Dictionary<string, string>()).Select(kv => $"{kv.Key}={kv.Value}"));
+
+    private static IReadOnlyDictionary<string, string> ParseExtra(ChangeEventArgs e)
+    {
+        var extra = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var pair in (e.Value?.ToString() ?? "")
+                     .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var eq = pair.IndexOf('=');
+            if (eq > 0)
+                extra[pair[..eq].Trim()] = pair[(eq + 1)..].Trim();
+        }
+        return extra;
+    }
+}
