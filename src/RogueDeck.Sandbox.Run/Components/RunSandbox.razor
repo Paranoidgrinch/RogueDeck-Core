@@ -78,7 +78,7 @@
                            @onpointerdown:preventDefault>
                             <rect x="@px" y="@py" width="@MapGraphLayout.NodeWidth" height="@MapGraphLayout.NodeHeight"
                                   rx="6"
-                                  class="@($"map-node {(mapNode.Type == StandardRunIds.CombatNode ? "map-node-combat" : mapNode.Type == StandardRunIds.ShopNode ? "map-node-shop" : "map-node-event")}{(isEntry ? " entry" : "")}")" />
+                                  class="@($"map-node {(mapNode.Type == StandardRunIds.CombatNode ? "map-node-combat" : mapNode.Type == StandardRunIds.ShopNode || mapNode.Type == RogueDeck.ShredEngine.ShredEngineIds.WorkbenchNode ? "map-node-shop" : "map-node-event")}{(isEntry ? " entry" : "")}")" />
                             <text x="@(px + 8)" y="@(py + 18)" class="map-node-title">@mapNode.Id.Value</text>
                             <text x="@(px + 8)" y="@(py + 34)" class="map-node-sub">@NodeKind(mapNode): @NodeTarget(mapNode)</text>
                         </g>
@@ -112,12 +112,20 @@
                     <option value="event" title="A story event with choices, defined on the Events tab.">Story event (event)</option>
                     <option value="combat" title="A fight against an encounter, defined on the Encounters tab.">Fight (combat)</option>
                     <option value="shop" title="A shop with purchasable stock, defined on the Shops tab.">Shop</option>
+                    <option value="workbench" title="A crafting station where shreds are assembled into cards, defined on the Workbenches tab.">Workbench</option>
                 </select>
                 <select @bind="_newNodeTarget">
                     <option value="">— target —</option>
                     @if (_newNodeType == "shop")
                     {
                         @foreach (var key in bp.Shops.Keys)
+                        {
+                            <option value="@key">@key</option>
+                        }
+                    }
+                    else if (_newNodeType == "workbench")
+                    {
+                        @foreach (var key in bp.Workbenches.Keys)
                         {
                             <option value="@key">@key</option>
                         }
@@ -314,6 +322,8 @@
         {
             "combat" => (StandardRunIds.CombatNode, (IRunNodePayload)new EncounterRef(new EncounterId(_newNodeTarget))),
             "shop" => (StandardRunIds.ShopNode, new ShopRef(new ShopId(_newNodeTarget))),
+            "workbench" => (RogueDeck.ShredEngine.ShredEngineIds.WorkbenchNode,
+                new RogueDeck.ShredEngine.WorkbenchRef(new RogueDeck.ShredEngine.WorkbenchId(_newNodeTarget))),
             _ => (StandardRunIds.EventNode, new EventRef(new EventId(_newNodeTarget))),
         };
         var node = new Node(new NodeId($"n{_nodeSeq++}"), type, payload);
@@ -427,6 +437,7 @@
     private static string NodeKind(Node node) =>
         node.Type == StandardRunIds.CombatNode ? "combat"
         : node.Type == StandardRunIds.ShopNode ? "shop"
+        : node.Type == RogueDeck.ShredEngine.ShredEngineIds.WorkbenchNode ? "workbench"
         : "event";
 
     private static string NodeTarget(Node node) => node.Payload switch
@@ -434,7 +445,9 @@
         EventRef e => e.Id.Value,
         EncounterRef en => en.Id.Value,
         ShopRef sh => sh.Id.Value,
+        RogueDeck.ShredEngine.WorkbenchRef wb => wb.Id.Value,
         ShopDefinition => "(inline)",
+        RogueDeck.ShredEngine.WorkbenchDefinition => "(inline)",
         _ => "?",
     };
 

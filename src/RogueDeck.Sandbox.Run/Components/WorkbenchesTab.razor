@@ -1,0 +1,105 @@
+@inject RunDocument Doc
+@inject ProjectDraft Draft
+@implements IDisposable
+@using RogueDeck.ShredEngine
+
+@* The Workbenches tab: authors RunBlueprint.Workbenches — the crafting stations a map's workbench nodes
+   reference by id (the shop pattern). A station is deliberately thin today (an optional intro text); its
+   behaviour — assemble shreds, finish cards, build discovered recipes — is generic. *@
+<section style="padding:1rem; max-width:56rem">
+    <TabIntro Title="Workbenches (crafting stations)"
+              Text="A workbench is where the player assembles collected shreds into cards: add parts in order, finish the card (or hit a recipe), build already-discovered recipes directly."
+              Connects="Place one on the map as a workbench node (Run tab); the parts come from the Shreds tab, the discovered combinations from the Recipes tab." />
+    <IdDatalists Blueprint="_blueprint" />
+
+    <h2>Workbenches (@_blueprint.Workbenches.Count)</h2>
+    @if (_blueprint.Workbenches.Count == 0)
+    {
+        <EmptyHint Title="No workbenches yet."
+                   Text="Add one below, then place it on the map as a workbench node — that is where the player crafts." />
+    }
+    @foreach (var (id, workbench) in _blueprint.Workbenches)
+    {
+        var benchId = id;
+        <div class="fx-block">
+            <div class="run-bar">
+                <strong>Workbench "@benchId"</strong>
+                <span class="muted">intro text</span>
+                <input value="@(workbench.TextKey ?? "")" style="width:22rem" placeholder="(optional flavor shown on arrival)"
+                       @onchange="e => SetText(benchId, AsString(e.Value))" />
+                <button class="mini" @onclick="() => Remove(benchId)">✕ remove</button>
+            </div>
+        </div>
+    }
+    <div class="run-bar">
+        <input placeholder="new workbench id" @bind="_newId" style="width:11rem" />
+        <button class="play" @onclick="Add" disabled="@string.IsNullOrWhiteSpace(_newId)">Add workbench</button>
+    </div>
+</section>
+
+@code {
+    private RunBlueprint _blueprint = default!;
+    private string _newId = "";
+
+    protected override void OnInitialized()
+    {
+        _blueprint = Doc.Load();
+        Draft.Changed += OnDraftChanged;
+    }
+
+    // Reload when the document changes elsewhere in this circuit (the nav's global Undo) so the tab never shows
+    // a stale copy. Self-echoes (our own Save) reload the data we just wrote — harmless.
+    private void OnDraftChanged() => _ = InvokeAsync(() =>
+    {
+        try
+        {
+            _blueprint = Doc.Load();
+        }
+        catch (Exception)
+        {
+            return; // mid-edit the Run-tab JSON may not parse; keep the last good copy
+        }
+        StateHasChanged();
+    });
+
+    public void Dispose() => Draft.Changed -= OnDraftChanged;
+
+    private static string AsString(object? v) => v?.ToString() ?? "";
+
+    private void EditWorkbenches(Func<Dictionary<string, WorkbenchDefinition>, Dictionary<string, WorkbenchDefinition>> edit)
+    {
+        _blueprint = _blueprint with
+        {
+            Workbenches = edit(new Dictionary<string, WorkbenchDefinition>(_blueprint.Workbenches)),
+        };
+        Doc.Save(_blueprint);
+    }
+
+    private void SetText(string id, string text) =>
+        EditWorkbenches(benches =>
+        {
+            if (benches.ContainsKey(id))
+                benches[id] = new WorkbenchDefinition(string.IsNullOrWhiteSpace(text) ? null : text);
+            return benches;
+        });
+
+    private void Remove(string id) =>
+        EditWorkbenches(benches =>
+        {
+            benches.Remove(id);
+            return benches;
+        });
+
+    private void Add()
+    {
+        var id = _newId.Trim();
+        if (id.Length == 0 || _blueprint.Workbenches.ContainsKey(id))
+            return;
+        EditWorkbenches(benches =>
+        {
+            benches[id] = new WorkbenchDefinition();
+            return benches;
+        });
+        _newId = "";
+    }
+}

@@ -39,6 +39,9 @@ public class SampleProjectTests
         Assert.NotEmpty(sample.Characters);
         Assert.NotEmpty(sample.MetaRules);
         Assert.NotEmpty(sample.Map.Edges);
+        Assert.NotEmpty(sample.Shreds);
+        Assert.NotEmpty(sample.Recipes);
+        Assert.NotEmpty(sample.Workbenches);
         // The elite enemy actually carries the state-conditional intent rule the Help example describes.
         var enrager = sample.Encounters.Single(e => e.Id.Value == "enrager-fight").Enemies.Single();
         Assert.NotNull(enrager.IntentRules);

@@ -1,0 +1,365 @@
+@inject RunDocument Doc
+@inject ProjectDraft Draft
+@implements IDisposable
+@using RogueDeck.ShredEngine
+
+@* The Shreds tab: authors the run's card parts (RunBlueprint.Shreds) and the per-game composition rules
+   (RunBlueprint.ShredRules) on the shared document. A shred = size (1-6 of a card's 6 spaces) + cost
+   contribution + an effect-program fragment (the same visual CombatProgramEditor cards use) + optional
+   sibling modifiers ("half the cost of the shreds below"). Recipes that combine shreds live on the
+   Recipes tab; workbenches that craft them on the Workbenches tab. *@
+<section style="padding:1rem; max-width:72rem">
+    <TabIntro Title="Shreds (card parts)"
+              Text="Shreds are the pieces cards are built from at a workbench: each fills 1-6 of a card's 6 spaces, contributes cost, and runs its effect at its position (top part first). A shred can also modify its neighbours' costs."
+              Connects="Grant shreds from Events, Shops or rewards; combine them at a Workbench map node (Run tab); curated combinations are authored on the Recipes tab." />
+    <IdDatalists Blueprint="_blueprint" />
+
+    @{ var issues = RunDocumentValidator.ForTab(_blueprint, RunDocumentValidator.ShredsTab); }
+    @if (issues.Count > 0)
+    {
+        <ul class="log">
+            @foreach (var issue in issues)
+            {
+                <li><span class="line-kind">⚠</span> @issue</li>
+            }
+        </ul>
+    }
+
+    <h2>Composition rules</h2>
+    <div class="run-bar">
+        <label title="How many of a card's 6 spaces must at least be filled to finish it at a workbench (6 = only complete cards).">
+            Minimum filled spaces
+            <input type="number" min="1" max="6" value="@_blueprint.ShredRules.MinFilledSpaces" style="width:4rem"
+                   @onchange="e => SetRules(r => r with { MinFilledSpaces = AsInt(e.Value, r.MinFilledSpaces) })" />
+        </label>
+        <label title="The maximum number of parts a single card may be built from.">
+            Maximum parts
+            <input type="number" min="1" max="6" value="@_blueprint.ShredRules.MaxParts" style="width:4rem"
+                   @onchange="e => SetRules(r => r with { MaxParts = AsInt(e.Value, r.MaxParts) })" />
+        </label>
+    </div>
+
+    <h2>Shreds (@Shreds.Count)</h2>
+    @if (Shreds.Count == 0)
+    {
+        <EmptyHint Title="No shreds yet."
+                   Text="Type an id below (like ember) and press Add shred — a new part starts with 2 spaces, 1 energy and a simple deal-damage fragment you can reshape." />
+    }
+    @if (Shreds.Count >= StudioFilter.ShowThreshold)
+    {
+        <FilterBox @bind-Value="_filter" Total="Shreds.Count"
+                   Shown="Shreds.Count(s => StudioFilter.Matches(_filter, s.Id, s.NameKey))" />
+    }
+    @for (var i = 0; i < Shreds.Count; i++)
+    {
+        var si = i;
+        var shred = Shreds[si];
+        if (!StudioFilter.Matches(_filter, shred.Id, shred.NameKey))
+        {
+            continue;
+        }
+        var shredIssues = issues.Where(m => m.Contains($"'{shred.Id}'")).ToList();
+        <div class="fx-block @(shredIssues.Count > 0 ? "invalid" : "")">
+            <div class="run-bar">
+                <span class="muted">id</span>
+                <input value="@shred.Id" style="width:9rem" @onchange="e => SetShredId(si, AsString(e.Value))" />
+                <span class="muted">name</span>
+                <input value="@shred.NameKey" style="width:10rem"
+                       @onchange="e => EditShred(si, s => s with { NameKey = AsString(e.Value) })" />
+                <label title="How many of the card's 6 spaces this part fills.">size
+                    <select value="@shred.Size" @onchange="e => EditShred(si, s => s with { Size = AsInt(e.Value, s.Size) })">
+                        @for (var size = 1; size <= 6; size++)
+                        {
+                            <option value="@size">@size / 6</option>
+                        }
+                    </select>
+                </label>
+                <span class="muted" title="the spaces this part fills">@(new string('■', Math.Clamp(shred.Size, 0, 6)))@(new string('□', Math.Clamp(6 - shred.Size, 0, 6)))</span>
+                <span class="muted">energy</span>
+                <input type="number" value="@EnergyCost(shred)" style="width:4rem"
+                       @onchange="e => SetEnergy(si, AsInt(e.Value, EnergyCost(shred)))" />
+                @foreach (var (cost, costIndex) in CustomCosts(shred))
+                {
+                    var costI = costIndex;
+                    <input value="@cost.ResourceId.value" list="rd-resource-ids" style="width:7rem"
+                           title="a custom combat resource this part contributes to the card's cost"
+                           @onchange="e => SetCostResource(si, costI, AsString(e.Value))" />
+                    <input type="number" value="@cost.Amount" style="width:3.5rem"
+                           @onchange="e => SetCostAmount(si, costI, AsInt(e.Value, cost.Amount))" />
+                    <button class="mini" title="remove this cost" @onclick="() => RemoveCost(si, costI)">✕</button>
+                }
+                <button class="mini" title="add a custom-resource cost" @onclick="() => AddCost(si)">+ cost</button>
+                <span class="muted">tags</span>
+                <input value="@string.Join(", ", shred.Tags)" style="width:8rem" placeholder="block, iron"
+                       title="freeform labels, unioned onto the built card"
+                       @onchange="e => EditShred(si, s => s with { Tags = ParseTags(AsString(e.Value)) })" />
+                <button class="mini" title="duplicate this shred" @onclick="() => DuplicateShred(si)">⧉</button>
+                <button class="mini" @onclick="() => RemoveShred(si)">✕ shred</button>
+            </div>
+            @foreach (var issue in shredIssues)
+            {
+                <p class="error">⚠ @issue</p>
+            }
+
+            <div class="fx-body">
+                <span class="muted" title="What this part does when the built card is played — parts run top to bottom.">fragment:</span>
+                @{ var model = ModelOf(shred); }
+                @if (model is { } node)
+                {
+                    <CombatProgramEditor Node="node" NodeChanged="n => SetShredProgram(si, n)" />
+                }
+                else if (shred.Program is null)
+                {
+                    <button class="mini" @onclick="() => AddShredProgram(si)">+ fragment</button>
+                    <span class="muted"> (no fragment = a cost/modifier-only part)</span>
+                }
+                else
+                {
+                    <span class="muted"> advanced fragment (outside the visual subset) — edit in the Run tab JSON</span>
+                }
+            </div>
+
+            <div class="fx-body">
+                <span class="muted" title="How this part changes its SIBLINGS' cost contribution when the card is built (applied at build time, top part's modifiers first).">modifiers:</span>
+                @for (var mi = 0; mi < shred.Modifiers.Count; mi++)
+                {
+                    var modI = mi;
+                    var modifier = shred.Modifiers[mi];
+                    <div class="run-bar">
+                        <select value="@modifier.Scope"
+                                @onchange="e => EditModifier(si, modI, m => m with { Scope = ParseScope(AsString(e.Value)) })">
+                            @foreach (var scope in Enum.GetValues<ShredModifierScope>())
+                            {
+                                <option value="@scope" title="@ScopeHelp(scope)">@ScopeLabel(scope)</option>
+                            }
+                        </select>
+                        <select value="@modifier.Op"
+                                @onchange="e => EditModifier(si, modI, m => m with { Op = ParseOp(AsString(e.Value)) })">
+                            <option value="@ShredModifierOp.CostFactorPercent" title="multiply the targets' cost by this percent, rounded down (50 = halve)">cost × percent</option>
+                            <option value="@ShredModifierOp.CostDelta" title="add this to the targets' cost (negative = discount); never below 0">cost + amount</option>
+                        </select>
+                        <input type="number" value="@modifier.Amount" style="width:4.5rem"
+                               @onchange="e => EditModifier(si, modI, m => m with { Amount = AsInt(e.Value, m.Amount) })" />
+                        <span class="muted">resource</span>
+                        <input value="@(modifier.Resource ?? "")" list="rd-resource-ids" style="width:8rem"
+                               placeholder="(all resources)"
+                               title="narrow the effect to one cost resource; blank = all"
+                               @onchange="e => EditModifier(si, modI, m => m with { Resource = NullIfBlank(AsString(e.Value)) })" />
+                        <button class="mini" @onclick="() => RemoveModifier(si, modI)">✕</button>
+                    </div>
+                }
+                <button class="mini" @onclick="() => AddModifier(si)">+ modifier</button>
+            </div>
+        </div>
+    }
+    <div class="run-bar">
+        <input placeholder="new shred id" @bind="_newShredId" style="width:11rem" />
+        <button class="play" @onclick="AddShred">Add shred</button>
+    </div>
+</section>
+
+@code {
+    private RunBlueprint _blueprint = default!;
+    private string _filter = "";
+    private string _newShredId = "";
+
+    protected override void OnInitialized()
+    {
+        _blueprint = Doc.Load();
+        Draft.Changed += OnDraftChanged;
+    }
+
+    // Reload when the document changes elsewhere in this circuit (the nav's global Undo) so the tab never shows
+    // a stale copy. Self-echoes (our own Save) reload the data we just wrote — harmless.
+    private void OnDraftChanged() => _ = InvokeAsync(() =>
+    {
+        try
+        {
+            _blueprint = Doc.Load();
+        }
+        catch (Exception)
+        {
+            return; // mid-edit the Run-tab JSON may not parse; keep the last good copy
+        }
+        StateHasChanged();
+    });
+
+    public void Dispose() => Draft.Changed -= OnDraftChanged;
+
+    private IReadOnlyList<ShredData> Shreds => _blueprint.Shreds;
+
+    private void Save() => Doc.Save(_blueprint);
+    private static string AsString(object? v) => v?.ToString() ?? "";
+    private static int AsInt(object? v, int fallback) => int.TryParse(v?.ToString(), out var n) ? n : fallback;
+    private static string? NullIfBlank(string s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+
+    private static IReadOnlyList<string> ParseTags(string text) =>
+        text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+    private static CombatNodeModel? ModelOf(ShredData shred) =>
+        shred.Program is { } program ? CombatProgramModel.Classify(program) : null;
+
+    private static int EnergyCost(ShredData shred) =>
+        shred.Costs.Where(c => c.ResourceId == StandardCombatIds.EnergyResource).Sum(c => c.Amount);
+
+    private static ShredModifierScope ParseScope(string s) =>
+        Enum.TryParse<ShredModifierScope>(s, out var scope) ? scope : ShredModifierScope.Below;
+
+    private static ShredModifierOp ParseOp(string s) =>
+        Enum.TryParse<ShredModifierOp>(s, out var op) ? op : ShredModifierOp.CostDelta;
+
+    private static string ScopeLabel(ShredModifierScope scope) => scope switch
+    {
+        ShredModifierScope.Below => "the parts below",
+        ShredModifierScope.Above => "the parts above",
+        ShredModifierScope.Others => "every other part",
+        ShredModifierScope.All => "every part (incl. this)",
+        _ => scope.ToString(),
+    };
+
+    private static string ScopeHelp(ShredModifierScope scope) => scope switch
+    {
+        ShredModifierScope.Below => "parts placed after this one (reading order)",
+        ShredModifierScope.Above => "parts placed before this one",
+        ShredModifierScope.Others => "every part except this one",
+        ShredModifierScope.All => "every part, this one included",
+        _ => "",
+    };
+
+    // ── rules ────────────────────────────────────────────────────────────────────
+    private void SetRules(Func<ShredRules, ShredRules> edit)
+    {
+        _blueprint = _blueprint with { ShredRules = edit(_blueprint.ShredRules) };
+        Save();
+    }
+
+    // ── shreds ───────────────────────────────────────────────────────────────────
+    private void EditShreds(Func<List<ShredData>, List<ShredData>> edit)
+    {
+        _blueprint = _blueprint with { Shreds = edit(Shreds.ToList()) };
+        Save();
+    }
+
+    private void EditShred(int index, Func<ShredData, ShredData> edit) =>
+        EditShreds(list =>
+        {
+            if (index >= 0 && index < list.Count)
+                list[index] = edit(list[index]);
+            return list;
+        });
+
+    private void SetShredId(int index, string id)
+    {
+        if (!string.IsNullOrWhiteSpace(id))
+            EditShred(index, s => s with { Id = id.Trim() });
+    }
+
+    private void SetShredProgram(int index, CombatNodeModel node) =>
+        EditShred(index, s => s with { Program = CombatProgramModel.Build<CardPlayContext>(node) });
+
+    private void AddShredProgram(int index) => SetShredProgram(index, CombatProgramModel.NewNode("dealDamage"));
+
+    private void SetEnergy(int index, int energy) =>
+        EditShred(index, s => s with { Costs = WithEnergy(s.Costs, energy) });
+
+    private static IReadOnlyList<ResourceCost> WithEnergy(IReadOnlyList<ResourceCost> costs, int energy)
+    {
+        var list = costs.Where(c => c.ResourceId != StandardCombatIds.EnergyResource).ToList();
+        if (energy > 0)
+            list.Add(new ResourceCost(StandardCombatIds.EnergyResource, energy));
+        return list;
+    }
+
+    private static IEnumerable<(ResourceCost Cost, int Index)> CustomCosts(ShredData shred) =>
+        shred.Costs.Select((cost, index) => (cost, index))
+            .Where(x => x.cost.ResourceId != StandardCombatIds.EnergyResource);
+
+    private void EditCost(int shredIndex, int costIndex, Func<ResourceCost, ResourceCost?> edit) =>
+        EditShred(shredIndex, s =>
+        {
+            if (costIndex < 0 || costIndex >= s.Costs.Count)
+                return s;
+            var list = s.Costs.ToList();
+            if (edit(list[costIndex]) is { } updated)
+                list[costIndex] = updated;
+            else
+                list.RemoveAt(costIndex);
+            return s with { Costs = list };
+        });
+
+    private void SetCostResource(int shredIndex, int costIndex, string resourceId)
+    {
+        if (!string.IsNullOrWhiteSpace(resourceId))
+            EditCost(shredIndex, costIndex, cost => cost with { ResourceId = new ResourceId(resourceId.Trim()) });
+    }
+
+    private void SetCostAmount(int shredIndex, int costIndex, int amount) =>
+        EditCost(shredIndex, costIndex, cost => cost with { Amount = Math.Max(0, amount) });
+
+    private void RemoveCost(int shredIndex, int costIndex) => EditCost(shredIndex, costIndex, _ => null);
+
+    private void AddCost(int shredIndex)
+    {
+        var defaultResource = _blueprint.CombatResources.FirstOrDefault()?.Id ?? "resource";
+        EditShred(shredIndex, s => s with
+        {
+            Costs = s.Costs.Append(new ResourceCost(new ResourceId(defaultResource), 1)).ToList(),
+        });
+    }
+
+    // ── modifiers ────────────────────────────────────────────────────────────────
+    private void EditModifier(int shredIndex, int modIndex, Func<ShredModifier, ShredModifier> edit) =>
+        EditShred(shredIndex, s =>
+        {
+            if (modIndex < 0 || modIndex >= s.Modifiers.Count)
+                return s;
+            var list = s.Modifiers.ToList();
+            list[modIndex] = edit(list[modIndex]);
+            return s with { Modifiers = list };
+        });
+
+    private void AddModifier(int shredIndex) =>
+        EditShred(shredIndex, s => s with
+        {
+            Modifiers = s.Modifiers
+                .Append(new ShredModifier(ShredModifierScope.Below, ShredModifierOp.CostFactorPercent, 50))
+                .ToList(),
+        });
+
+    private void RemoveModifier(int shredIndex, int modIndex) =>
+        EditShred(shredIndex, s => s with { Modifiers = s.Modifiers.Where((_, i) => i != modIndex).ToList() });
+
+    private void DuplicateShred(int index) =>
+        EditShreds(list =>
+        {
+            if (index >= 0 && index < list.Count)
+                list.Insert(index + 1, list[index] with
+                {
+                    Id = StudioIds.Copy(list[index].Id, id => list.Any(s => s.Id == id)),
+                });
+            return list;
+        });
+
+    private void RemoveShred(int index) =>
+        EditShreds(list =>
+        {
+            if (index >= 0 && index < list.Count)
+                list.RemoveAt(index);
+            return list;
+        });
+
+    private void AddShred()
+    {
+        if (string.IsNullOrWhiteSpace(_newShredId))
+            return;
+        var id = _newShredId.Trim();
+        EditShreds(list =>
+        {
+            list.Add(new ShredData(id, id, Size: 2,
+                Costs: new[] { new ResourceCost(StandardCombatIds.EnergyResource, 1) },
+                Program: CombatProgramModel.Build<CardPlayContext>(CombatProgramModel.NewNode("dealDamage"))));
+            return list;
+        });
+        _newShredId = "";
+    }
+}

@@ -27,6 +27,24 @@
         <option value="@consumable.Id"></option>
     }
 </datalist>
+<datalist id="rd-shred-ids">
+    @foreach (var shred in Blueprint.Shreds)
+    {
+        <option value="@shred.Id"></option>
+    }
+</datalist>
+<datalist id="rd-recipe-ids">
+    @foreach (var recipe in Blueprint.Recipes)
+    {
+        <option value="@recipe.Id"></option>
+    }
+</datalist>
+<datalist id="rd-workbench-ids">
+    @foreach (var key in Blueprint.Workbenches.Keys)
+    {
+        <option value="@key"></option>
+    }
+</datalist>
 <datalist id="rd-resource-ids">
     @foreach (var id in ResourceIds())
     {

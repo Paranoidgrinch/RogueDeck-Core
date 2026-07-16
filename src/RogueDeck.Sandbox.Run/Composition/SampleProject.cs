@@ -155,6 +155,38 @@ public static class SampleProject
             },
         };
 
+        // ── shreds (card parts) + a recipe — the workbench's raw material and its curated discovery ────────────
+        var ironCore = new ShredEngine.ShredData("iron-core", "Iron Core", Size: 2,
+            Costs: new[] { new ResourceCost(StandardCombatIds.EnergyResource, 1) },
+            Program: CombatProgramModel.Build<CardPlayContext>(
+                new CombatNodeModel("gainBlock", "source", CombatAmountSpec.FromConst(4))))
+        { Tags = new[] { "block" } };
+        var emberShred = new ShredEngine.ShredData("ember", "Ember", Size: 2,
+            Costs: Array.Empty<ResourceCost>(),
+            Program: CombatProgramModel.Build<CardPlayContext>(
+                new CombatNodeModel("dealDamage", "eventTarget", CombatAmountSpec.FromConst(3))))
+        { Tags = new[] { "fire" } };
+        // A cost/modifier-only part: no effect of its own, it halves the cost of everything below it.
+        var focusLens = new ShredEngine.ShredData("focus-lens", "Focus Lens", Size: 2,
+            Costs: Array.Empty<ResourceCost>())
+        {
+            Modifiers = new[]
+            {
+                new ShredEngine.ShredModifier(
+                    ShredEngine.ShredModifierScope.Below, ShredEngine.ShredModifierOp.CostFactorPercent, 50),
+            },
+        };
+        var expertParry = new CardData
+        {
+            Id = "expert-parry",
+            NameKey = "Expert Parry",
+            Costs = new[] { new ResourceCost(StandardCombatIds.EnergyResource, 1) },
+            Program = CombatProgramModel.Build<CardPlayContext>(
+                new CombatNodeModel("gainBlock", "source", CombatAmountSpec.FromConst(12))),
+        };
+        var expertParryRecipe = new ShredEngine.RecipeData(
+            "expert-parry", new[] { "iron-core", "iron-core", "ember" }, "expert-parry", "Expert Parry");
+
         // ── event (Help: "The Shrine") — heal, or gold with a cursed follow-up ─────────────────────────────────
         var shrine = new EventScript("start", new[]
         {
@@ -164,6 +196,11 @@ public static class SampleProject
                     TextKey: "Pray (heal 15)"),
                 new EventChoice("desecrate", new IRunEffectRequest[] { new ChangeResourceRunEffect(gold, 80) },
                     NextSituationId: "curse", TextKey: "Smash it (gain 80 gold…)"),
+                new EventChoice("scavenge", new IRunEffectRequest[]
+                {
+                    new ShredEngine.AddShredRunEffect("iron-core", 2),
+                    new ShredEngine.AddShredRunEffect("ember"),
+                }, TextKey: "Scavenge the rubble (card parts for the forge)"),
                 new EventChoice("leave", Array.Empty<IRunEffectRequest>(), TextKey: "Leave"),
             }),
             new EventSituation("curse", "The shrine's spirit brands you.", new[]
@@ -198,6 +235,8 @@ public static class SampleProject
             new Node(new NodeId("shrine"), StandardRunIds.EventNode, new EventRef(new EventId("shrine"))),
             new Node(new NodeId("elite"), StandardRunIds.CombatNode, new EncounterRef(new EncounterId("enrager-fight"))),
             new Node(new NodeId("market"), StandardRunIds.ShopNode, new ShopRef(new ShopId("black-market"))),
+            new Node(new NodeId("forge"), ShredEngine.ShredEngineIds.WorkbenchNode,
+                new ShredEngine.WorkbenchRef(new ShredEngine.WorkbenchId("forge"))),
             new Node(new NodeId("boss"), StandardRunIds.CombatNode, new EncounterRef(new EncounterId("boss-fight"))),
         };
         var map = new RunMap(nodes)
@@ -208,7 +247,8 @@ public static class SampleProject
                 new MapEdge(new NodeId("fight-1"), new NodeId("elite")),
                 new MapEdge(new NodeId("shrine"), new NodeId("market")),
                 new MapEdge(new NodeId("elite"), new NodeId("market")),
-                new MapEdge(new NodeId("market"), new NodeId("boss")),
+                new MapEdge(new NodeId("market"), new NodeId("forge")),
+                new MapEdge(new NodeId("forge"), new NodeId("boss")),
             },
             EntryNodeIds = new[] { new NodeId("fight-1") },
             Layout = new[]
@@ -217,7 +257,8 @@ public static class SampleProject
                 new NodeLayout(new NodeId("shrine"), 40, 110),
                 new NodeLayout(new NodeId("elite"), 280, 110),
                 new NodeLayout(new NodeId("market"), 160, 208),
-                new NodeLayout(new NodeId("boss"), 160, 306),
+                new NodeLayout(new NodeId("forge"), 160, 306),
+                new NodeLayout(new NodeId("boss"), 160, 404),
             },
         };
 
@@ -228,7 +269,7 @@ public static class SampleProject
             deck,
             new Dictionary<string, EventScript> { ["shrine"] = shrine },
             new[] { goblins, enrager, boss },
-            new[] { strike, defend, rampage },
+            new[] { strike, defend, rampage, expertParry },
             new[] { claw, chill, frenzy },
             map)
         {
@@ -236,6 +277,12 @@ public static class SampleProject
             Relics = new[] { bloodpact },
             Consumables = new[] { battleBrew },
             Shops = new Dictionary<string, ShopDefinition> { ["black-market"] = blackMarket },
+            Shreds = new[] { ironCore, emberShred, focusLens },
+            Recipes = new[] { expertParryRecipe },
+            Workbenches = new Dictionary<string, ShredEngine.WorkbenchDefinition>
+            {
+                ["forge"] = new("Sparks drift over the anvil — shreds become cards here."),
+            },
             CombatResources = new[]
             {
                 new CombatResourceData { Id = "rage", DisplayName = "Rage", StartingAmount = 0, Max = 10, RefillEachTurn = false },

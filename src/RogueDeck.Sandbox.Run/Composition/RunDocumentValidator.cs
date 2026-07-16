@@ -1,4 +1,5 @@
 using RogueDeck.Run;
+using RogueDeck.ShredEngine;
 
 namespace RogueDeck.Sandbox.Composition;
 
@@ -14,6 +15,8 @@ public static class RunDocumentValidator
     public const string RunTab = "Run";
     public const string HeroTab = "Hero";
     public const string CharactersTab = "Characters";
+    public const string ShredsTab = "Shreds";
+    public const string RecipesTab = "Recipes";
 
     // Relics that are always available even without an authored definition (the built-in samples).
     private static readonly string[] BuiltInRelics = { "bloodstone", "leech" };
@@ -25,8 +28,56 @@ public static class RunDocumentValidator
 
         var cardIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var card in blueprint.Cards)
+        {
             if (!cardIds.Add(card.Id))
                 problems.Add($"{CardsTab}: duplicate card id '{card.Id}'.");
+            // "shred:" is the reserved namespace of SYNTHESIZED composition ids — an authored card there
+            // would collide with (or shadow) a built card's per-fight definition.
+            if (card.Id.StartsWith(ShredEngineIds.ComposedCardIdPrefix, StringComparison.Ordinal))
+                problems.Add($"{CardsTab}: card id '{card.Id}' uses the reserved '{ShredEngineIds.ComposedCardIdPrefix}' prefix (synthesized composition ids).");
+        }
+
+        // ── Shred Engine sections ────────────────────────────────────────────────────
+        var shredIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var shred in blueprint.Shreds)
+        {
+            if (!shredIds.Add(shred.Id))
+                problems.Add($"{ShredsTab}: duplicate shred id '{shred.Id}'.");
+            if (shred.Size is < 1 or > ShredRules.CardSpaces)
+                problems.Add($"{ShredsTab}: shred '{shred.Id}' has size {shred.Size} — must be 1..{ShredRules.CardSpaces} spaces.");
+        }
+
+        if (blueprint.ShredRules.MinFilledSpaces is < 1 or > ShredRules.CardSpaces)
+            problems.Add($"{ShredsTab}: MinFilledSpaces must be 1..{ShredRules.CardSpaces}.");
+        if (blueprint.ShredRules.MaxParts is < 1 or > ShredRules.CardSpaces)
+            problems.Add($"{ShredsTab}: MaxParts must be 1..{ShredRules.CardSpaces}.");
+
+        var recipeIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var recipe in blueprint.Recipes)
+        {
+            if (!recipeIds.Add(recipe.Id))
+                problems.Add($"{RecipesTab}: duplicate recipe id '{recipe.Id}'.");
+            if (recipe.Ingredients.Count == 0)
+                problems.Add($"{RecipesTab}: recipe '{recipe.Id}' has no ingredients.");
+            foreach (var ingredient in recipe.Ingredients.Distinct(StringComparer.Ordinal))
+                if (!shredIds.Contains(ingredient))
+                    problems.Add($"{RecipesTab}: recipe '{recipe.Id}' uses shred '{ingredient}', which has no definition.");
+            if (!cardIds.Contains(recipe.ResultCardId))
+                problems.Add($"{RecipesTab}: recipe '{recipe.Id}' yields card '{recipe.ResultCardId}', which has no definition.");
+
+            // A recipe must be assemblable on a real bench: its parts must fit the card and the rules.
+            var known = recipe.Ingredients.Where(shredIds.Contains).ToList();
+            if (known.Count == recipe.Ingredients.Count)
+            {
+                var size = known.Sum(id => blueprint.Shreds.First(s => s.Id == id).Size);
+                if (size > ShredRules.CardSpaces)
+                    problems.Add($"{RecipesTab}: recipe '{recipe.Id}' needs {size} spaces — more than a card's {ShredRules.CardSpaces}.");
+                else if (size < blueprint.ShredRules.MinFilledSpaces)
+                    problems.Add($"{RecipesTab}: recipe '{recipe.Id}' fills only {size} spaces — below the rules' minimum of {blueprint.ShredRules.MinFilledSpaces}.");
+                if (recipe.Ingredients.Count > blueprint.ShredRules.MaxParts)
+                    problems.Add($"{RecipesTab}: recipe '{recipe.Id}' has {recipe.Ingredients.Count} parts — more than the rules' maximum of {blueprint.ShredRules.MaxParts}.");
+            }
+        }
 
         var actionIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var action in blueprint.EnemyActions)
@@ -105,6 +156,9 @@ public static class RunDocumentValidator
                     break;
                 case ShopRef reference when !blueprint.Shops.ContainsKey(reference.Id.Value):
                     problems.Add($"{RunTab}: map node '{node.Id.Value}' points at unknown shop '{reference.Id.Value}'.");
+                    break;
+                case WorkbenchRef reference when !blueprint.Workbenches.ContainsKey(reference.Id.Value):
+                    problems.Add($"{RunTab}: map node '{node.Id.Value}' points at unknown workbench '{reference.Id.Value}'.");
                     break;
             }
         }

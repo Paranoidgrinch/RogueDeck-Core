@@ -1,0 +1,200 @@
+@inject RunDocument Doc
+@inject ProjectDraft Draft
+@implements IDisposable
+@using RogueDeck.ShredEngine
+
+@* The Recipes tab: authors RunBlueprint.Recipes — the curated shred combinations. Building EXACTLY a
+   recipe's ingredient multiset at a workbench (order-blind, duplicates meaningful) yields its result card
+   instead of a raw composition, and unlocks the recipe for direct building. *@
+<section style="padding:1rem; max-width:60rem">
+    <TabIntro Title="Recipes (discovered combinations)"
+              Text="A recipe names a set of shreds that, built together at a workbench, yield a curated card (authored on the Cards tab) instead of the raw combination — and unlock the recipe permanently once discovered."
+              Connects="Ingredients come from the Shreds tab; the result card from the Cards tab; the crafting happens at a Workbench node on the map." />
+    <IdDatalists Blueprint="_blueprint" />
+
+    @{ var issues = RunDocumentValidator.ForTab(_blueprint, RunDocumentValidator.RecipesTab); }
+    @if (issues.Count > 0)
+    {
+        <ul class="log">
+            @foreach (var issue in issues)
+            {
+                <li><span class="line-kind">⚠</span> @issue</li>
+            }
+        </ul>
+    }
+
+    <h2>Recipes (@Recipes.Count)</h2>
+    @if (Recipes.Count == 0)
+    {
+        <EmptyHint Title="No recipes yet."
+                   Text="A recipe rewards experimentation: the first time a player happens to combine its exact parts, they get the curated card and keep the recipe forever. Author shreds and a result card first, then add one below." />
+    }
+    @for (var i = 0; i < Recipes.Count; i++)
+    {
+        var ri = i;
+        var recipe = Recipes[ri];
+        var recipeIssues = issues.Where(m => m.Contains($"'{recipe.Id}'")).ToList();
+        <div class="fx-block @(recipeIssues.Count > 0 ? "invalid" : "")">
+            <div class="run-bar">
+                <span class="muted">id</span>
+                <input value="@recipe.Id" style="width:10rem"
+                       @onchange="e => Edit(ri, r => r with { Id = AsString(e.Value).Trim() })" />
+                <span class="muted">name</span>
+                <input value="@(recipe.NameKey ?? "")" style="width:11rem" placeholder="(shown at the bench)"
+                       @onchange="e => Edit(ri, r => r with { NameKey = NullIfBlank(AsString(e.Value)) })" />
+                <span class="muted" title="the curated card this combination yields (Cards tab)">result</span>
+                <select value="@recipe.ResultCardId"
+                        @onchange="e => Edit(ri, r => r with { ResultCardId = AsString(e.Value) })">
+                    @if (_blueprint.Cards.Count == 0)
+                    {
+                        <option value="@recipe.ResultCardId">@recipe.ResultCardId</option>
+                    }
+                    @foreach (var card in _blueprint.Cards)
+                    {
+                        <option value="@card.Id">@(card.NameKey ?? card.Id)</option>
+                    }
+                </select>
+                <button class="mini" title="duplicate this recipe" @onclick="() => Duplicate(ri)">⧉</button>
+                <button class="mini" @onclick="() => Remove(ri)">✕ recipe</button>
+            </div>
+            @foreach (var issue in recipeIssues)
+            {
+                <p class="error">⚠ @issue</p>
+            }
+            <div class="fx-body">
+                <span class="muted" title="the exact multiset of parts — order does not matter, duplicates do">ingredients:</span>
+                @for (var gi = 0; gi < recipe.Ingredients.Count; gi++)
+                {
+                    var ingI = gi;
+                    <select value="@recipe.Ingredients[gi]"
+                            @onchange="e => SetIngredient(ri, ingI, AsString(e.Value))">
+                        @if (_blueprint.Shreds.Count == 0)
+                        {
+                            <option value="@recipe.Ingredients[ingI]">@recipe.Ingredients[ingI]</option>
+                        }
+                        @foreach (var shred in _blueprint.Shreds)
+                        {
+                            <option value="@shred.Id">@shred.NameKey (@shred.Size sp)</option>
+                        }
+                    </select>
+                    <button class="mini" @onclick="() => RemoveIngredient(ri, ingI)">✕</button>
+                }
+                <button class="mini" @onclick="() => AddIngredient(ri)">+ ingredient</button>
+                <span class="muted">— @TotalSpaces(recipe)/6 spaces</span>
+            </div>
+        </div>
+    }
+    <div class="run-bar">
+        <input placeholder="new recipe id" @bind="_newRecipeId" style="width:11rem" />
+        <button class="play" @onclick="Add" disabled="@(string.IsNullOrWhiteSpace(_newRecipeId) || _blueprint.Shreds.Count == 0 || _blueprint.Cards.Count == 0)">Add recipe</button>
+        @if (_blueprint.Shreds.Count == 0 || _blueprint.Cards.Count == 0)
+        {
+            <span class="muted">(author at least one shred and one card first)</span>
+        }
+    </div>
+</section>
+
+@code {
+    private RunBlueprint _blueprint = default!;
+    private string _newRecipeId = "";
+
+    protected override void OnInitialized()
+    {
+        _blueprint = Doc.Load();
+        Draft.Changed += OnDraftChanged;
+    }
+
+    // Reload when the document changes elsewhere in this circuit (the nav's global Undo) so the tab never shows
+    // a stale copy. Self-echoes (our own Save) reload the data we just wrote — harmless.
+    private void OnDraftChanged() => _ = InvokeAsync(() =>
+    {
+        try
+        {
+            _blueprint = Doc.Load();
+        }
+        catch (Exception)
+        {
+            return; // mid-edit the Run-tab JSON may not parse; keep the last good copy
+        }
+        StateHasChanged();
+    });
+
+    public void Dispose() => Draft.Changed -= OnDraftChanged;
+
+    private IReadOnlyList<RecipeData> Recipes => _blueprint.Recipes;
+
+    private void Save() => Doc.Save(_blueprint);
+    private static string AsString(object? v) => v?.ToString() ?? "";
+    private static string? NullIfBlank(string s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+
+    private int TotalSpaces(RecipeData recipe) =>
+        recipe.Ingredients.Sum(id => _blueprint.Shreds.FirstOrDefault(s => s.Id == id)?.Size ?? 0);
+
+    private void EditRecipes(Func<List<RecipeData>, List<RecipeData>> edit)
+    {
+        _blueprint = _blueprint with { Recipes = edit(Recipes.ToList()) };
+        Save();
+    }
+
+    private void Edit(int index, Func<RecipeData, RecipeData> edit) =>
+        EditRecipes(list =>
+        {
+            if (index >= 0 && index < list.Count)
+                list[index] = edit(list[index]);
+            return list;
+        });
+
+    private void SetIngredient(int recipeIndex, int ingredientIndex, string shredId) =>
+        Edit(recipeIndex, r =>
+        {
+            if (ingredientIndex < 0 || ingredientIndex >= r.Ingredients.Count || string.IsNullOrWhiteSpace(shredId))
+                return r;
+            var list = r.Ingredients.ToList();
+            list[ingredientIndex] = shredId;
+            return r with { Ingredients = list };
+        });
+
+    private void AddIngredient(int recipeIndex) =>
+        Edit(recipeIndex, r =>
+        {
+            var first = _blueprint.Shreds.FirstOrDefault()?.Id;
+            return first is null ? r : r with { Ingredients = r.Ingredients.Append(first).ToList() };
+        });
+
+    private void RemoveIngredient(int recipeIndex, int ingredientIndex) =>
+        Edit(recipeIndex, r => r with { Ingredients = r.Ingredients.Where((_, i) => i != ingredientIndex).ToList() });
+
+    private void Duplicate(int index) =>
+        EditRecipes(list =>
+        {
+            if (index >= 0 && index < list.Count)
+                list.Insert(index + 1, list[index] with
+                {
+                    Id = StudioIds.Copy(list[index].Id, id => list.Any(r => r.Id == id)),
+                });
+            return list;
+        });
+
+    private void Remove(int index) =>
+        EditRecipes(list =>
+        {
+            if (index >= 0 && index < list.Count)
+                list.RemoveAt(index);
+            return list;
+        });
+
+    private void Add()
+    {
+        var id = _newRecipeId.Trim();
+        var firstShred = _blueprint.Shreds.FirstOrDefault()?.Id;
+        var firstCard = _blueprint.Cards.FirstOrDefault()?.Id;
+        if (id.Length == 0 || firstShred is null || firstCard is null)
+            return;
+        EditRecipes(list =>
+        {
+            list.Add(new RecipeData(id, new[] { firstShred }, firstCard));
+            return list;
+        });
+        _newRecipeId = "";
+    }
+}
