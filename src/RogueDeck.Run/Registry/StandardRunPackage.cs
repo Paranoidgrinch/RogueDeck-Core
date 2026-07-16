@@ -71,6 +71,7 @@ public sealed class StandardRunPackage : IRunPackage
             .RegisterResolver(new CombatNodeResolver(_combatDriver, encounters: _content?.Encounters,
                 projectionModifiers: new IRunCombatModifier[] { new ShredEngine.ShredCombatInjection() }))
             .RegisterResolver(new EventNodeResolver(_content))
-            .RegisterResolver(new ShopNodeResolver(_content));
+            .RegisterResolver(new ShopNodeResolver(_content))
+            .RegisterResolver(new ShredEngine.WorkbenchNodeResolver(_content));
     }
 }

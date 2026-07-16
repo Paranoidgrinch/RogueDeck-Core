@@ -271,7 +271,9 @@ public static class RunJson
         r.Register("node.event", typeof(EventRef))
          .Register("node.encounter", typeof(EncounterRef))
          .Register("node.shop", typeof(ShopDefinition))
-         .Register("node.shopRef", typeof(ShopRef));
+         .Register("node.shopRef", typeof(ShopRef))
+         .Register("node.workbench", typeof(ShredEngine.WorkbenchDefinition))
+         .Register("node.workbenchRef", typeof(ShredEngine.WorkbenchRef));
     }
 }
 

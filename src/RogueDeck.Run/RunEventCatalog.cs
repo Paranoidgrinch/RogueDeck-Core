@@ -82,6 +82,8 @@ public static class RunEventCatalog
 
         new("shredGained", typeof(ShredEngine.ShredGainedRunEvent), "a shred is gained",
             "Fires when the player gains a card part (a shred) for the workbench."),
+        new("workbenchCrafted", typeof(ShredEngine.WorkbenchCraftedRunEvent), "a card is crafted",
+            "Fires when the player builds a card at a workbench (a raw composition or a recipe)."),
     ];
 
     private static readonly IReadOnlyDictionary<string, RunEventKind> ByKeyMap =
