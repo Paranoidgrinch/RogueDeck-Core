@@ -260,7 +260,7 @@
     // ── Visual map builder (edits the parsed blueprint, then writes it back to the JSON) ──
     private bool TryBlueprint(out RunBlueprint blueprint)
     {
-        try { blueprint = RunJson.FromJson<RunBlueprint>(_json, _options); return true; }
+        try { blueprint = RunJson.BlueprintFromJson(_json, _options); return true; }
         catch { blueprint = null!; return false; }
     }
 
@@ -483,7 +483,7 @@
         _simSummary = null;
         try
         {
-            var blueprint = RunJson.FromJson<RunBlueprint>(_json, _options);
+            var blueprint = RunJson.BlueprintFromJson(_json, _options);
             var content = RunPlayback.BuildContent(blueprint);
             var defs = new RunDefinitionRegistryBuilder();
             new StandardRunPackage(new AutoPlayCombatDriver(), content).RegisterDefinitions(defs);

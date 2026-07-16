@@ -122,6 +122,12 @@ public static class RunJson
         JsonSerializer.Deserialize<T>(json, options)
         ?? throw new JsonException($"Deserialized null for '{typeof(T).Name}'.");
 
+    // The blueprint-DOCUMENT entry point: upgrades the raw JSON to the current schema first (older versions
+    // migrate, newer ones fail clearly — see RunBlueprintSchema), then deserializes. Every consumer of a stored
+    // or imported blueprint should come through here; plain FromJson is for documents known to be current.
+    public static RunBlueprint BlueprintFromJson(string json, JsonSerializerOptions options) =>
+        FromJson<RunBlueprint>(RunBlueprintSchema.Upgrade(json), options);
+
     // State-conditional enemy-AI intent conditions (#1). Data predicates over the live CombatState, carried by
     // an encounter's EnemyIntentRules and evaluated at intent-selection time.
     private static void RegisterIntentConditions(RunJsonRegistry r) =>

@@ -16,6 +16,11 @@ public sealed record RunBlueprint(
     IReadOnlyList<EnemyActionData> EnemyActions,
     RunMap Map)
 {
+    // The document's schema version (see RunBlueprintSchema). New blueprints are stamped with the current
+    // version; loading goes through RunJson.BlueprintFromJson, which upgrades older documents and rejects newer
+    // ones — so a Godot game (or the Studio) built against version N reads any document ≤ N safely.
+    public int SchemaVersion { get; init; } = RunBlueprintSchema.CurrentVersion;
+
     // Custom status definitions the run's cards / actions reference (e.g. a card that applies an authored status).
     // Registered into every combat's content so the status resolves; without it the engine can't find the id and
     // the card is unplayable. An init property (not a positional field) so existing constructions stay unchanged.

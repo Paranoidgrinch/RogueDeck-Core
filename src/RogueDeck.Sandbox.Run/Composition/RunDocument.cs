@@ -16,6 +16,9 @@ public sealed class RunDocument(ProjectDraft draft)
     public RunBlueprint Load()
     {
         draft.RunJson ??= RunJson.ToJson(Empty(), Options);
+        // Upgrade older documents to the current schema in place (a no-op — the same string — for current ones,
+        // so this does not push spurious undo snapshots; see RunBlueprintSchema).
+        draft.RunJson = RunBlueprintSchema.Upgrade(draft.RunJson);
         return RunJson.FromJson<RunBlueprint>(draft.RunJson, Options);
     }
 
