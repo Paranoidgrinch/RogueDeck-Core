@@ -33,6 +33,33 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
     // parts' names in the session view.
     public IReadOnlyDictionary<string, string> ShredNames { get; private set; } = new Dictionary<string, string>();
 
+    private IReadOnlyList<ShredEngine.ShredData> _shreds = [];
+    private readonly Dictionary<string, IReadOnlyList<ResourceCost>?> _composedCosts = new(StringComparer.Ordinal);
+
+    // The REAL cost list of a composed card (its derived "shred:…" id), synthesized exactly like the fight
+    // does — so the session view's cost labels and affordability greying tell the truth for built cards, not
+    // the energy-0 fallback. Null when the id is not a resolvable composition. Cached per id.
+    public IReadOnlyList<ResourceCost>? ComposedCostsFor(string definitionId)
+    {
+        if (!definitionId.StartsWith(ShredEngine.ShredEngineIds.ComposedCardIdPrefix, StringComparison.Ordinal))
+            return null;
+        if (_composedCosts.TryGetValue(definitionId, out var cached))
+            return cached;
+
+        var partIds = definitionId[ShredEngine.ShredEngineIds.ComposedCardIdPrefix.Length..].Split('+');
+        var parts = new List<ShredEngine.ShredData>(partIds.Length);
+        foreach (var partId in partIds)
+        {
+            if (_shreds.FirstOrDefault(s => s.Id == partId) is not { } shred)
+                return _composedCosts[definitionId] = null;
+            parts.Add(shred);
+        }
+        var costs = ShredEngine.ShredCardSynthesizer.TrySynthesize(parts, out var card, out _)
+            ? card.Costs
+            : null;
+        return _composedCosts[definitionId] = costs;
+    }
+
     // Start (or restart) a run from the blueprint. interactive=true hands each fight to the player via an
     // InteractiveCombatDriver (surfaced through CombatDriver); false auto-resolves fights headlessly.
     public void Start(RunBlueprint blueprint, int seed, bool interactive) =>
@@ -74,6 +101,8 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
                 r => r.Id, r => string.IsNullOrWhiteSpace(r.DisplayName) ? r.Id : r.DisplayName);
             ShredNames = blueprint.Shreds.ToDictionary(
                 s => s.Id, s => string.IsNullOrWhiteSpace(s.NameKey) ? s.Id : s.NameKey);
+            _shreds = blueprint.Shreds;
+            _composedCosts.Clear();
 
             // A party run (party deckbuilding C2) uses the simultaneous team phase. Interactive party fights are
             // driven per member by the PartyInteractiveCombatDriver; a non-interactive party run auto-resolves them
@@ -224,6 +253,18 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
             builder.RegisterEvent(new EventId(id), script);
         foreach (var (id, shop) in blueprint.Shops)
             builder.RegisterShop(new ShopId(id), shop);
+
+        // The Shred Engine's content: the workbench resolver offers registered shreds/recipes, and the
+        // per-fight injection resolves a composed card's parts from here — an unregistered shred would make
+        // every fight carrying that card fail to build.
+        foreach (var shred in blueprint.Shreds)
+            builder.RegisterShred(shred);
+        foreach (var recipe in blueprint.Recipes)
+            builder.RegisterRecipe(recipe);
+        builder.SetShredRules(blueprint.ShredRules);
+        foreach (var (id, workbench) in blueprint.Workbenches)
+            builder.RegisterWorkbench(new ShredEngine.WorkbenchId(id), workbench);
+
         return builder.Build();
     }
 

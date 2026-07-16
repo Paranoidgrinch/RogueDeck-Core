@@ -347,10 +347,18 @@
     [Parameter] public IReadOnlyDictionary<string, IReadOnlyList<ResourceCost>>? CardFullCosts { get; set; }
     [Parameter] public IReadOnlyDictionary<string, string> ResourceNames { get; set; } = new Dictionary<string, string>();
 
-    private IReadOnlyList<ResourceCost> FullCosts(string definitionId) =>
-        CardFullCosts is not null && CardFullCosts.TryGetValue(definitionId, out var costs)
-            ? costs
-            : new[] { new ResourceCost(StandardCombatIds.EnergyResource, CardEnergyCost(definitionId)) };
+    // Composed (shred:) cards never appear in the authored cost dicts — their definitions are synthesized
+    // per fight; a host that can resolve them supplies this (RunPlayback.ComposedCostsFor).
+    [Parameter] public Func<string, IReadOnlyList<ResourceCost>?>? ResolveComposedCosts { get; set; }
+
+    private IReadOnlyList<ResourceCost> FullCosts(string definitionId)
+    {
+        if (CardFullCosts is not null && CardFullCosts.TryGetValue(definitionId, out var costs))
+            return costs;
+        if (ResolveComposedCosts?.Invoke(definitionId) is { } composed)
+            return composed;
+        return new[] { new ResourceCost(StandardCombatIds.EnergyResource, CardEnergyCost(definitionId)) };
+    }
 
     private string ResourceLabel(ResourceId id) =>
         id == StandardCombatIds.EnergyResource ? "⚡"

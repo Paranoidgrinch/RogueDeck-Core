@@ -319,6 +319,32 @@ public static class TortureRun
             UseEffects = new IRunEffectRequest[] { new HealRunEffect(12) },
         };
 
+        // ── shreds (card parts): plain damage/block parts, an EMBER-costing part (custom resources must
+        //    survive composition), and a cost-halving modifier-only part; plus the Twin Cinder recipe ─────────────
+        var cinderCore = new ShredEngine.ShredData("cinder-core", "Cinder Core", Size: 2,
+            Costs: new[] { new ResourceCost(StandardCombatIds.EnergyResource, 1) },
+            Program: CombatProgramModel.Build<CardPlayContext>(
+                new CombatNodeModel("dealDamage", "eventTarget", CombatAmountSpec.FromConst(4))));
+        var guardPlate = new ShredEngine.ShredData("guard-plate", "Guard Plate", Size: 2,
+            Costs: new[] { new ResourceCost(StandardCombatIds.EnergyResource, 1) },
+            Program: CombatProgramModel.Build<CardPlayContext>(
+                new CombatNodeModel("gainBlock", "source", CombatAmountSpec.FromConst(4))));
+        var emberVent = new ShredEngine.ShredData("ember-vent", "Ember Vent", Size: 2,
+            Costs: new[] { new ResourceCost(new ResourceId(Embers), 2) },
+            Program: CombatProgramModel.Build<CardPlayContext>(
+                new CombatNodeModel("dealDamage", "eventTarget", CombatAmountSpec.FromConst(7))));
+        var focusPrism = new ShredEngine.ShredData("focus-prism", "Focus Prism", Size: 2,
+            Costs: Array.Empty<ResourceCost>())
+        {
+            Modifiers = new[]
+            {
+                new ShredEngine.ShredModifier(
+                    ShredEngine.ShredModifierScope.Below, ShredEngine.ShredModifierOp.CostFactorPercent, 50),
+            },
+        };
+        var twinCinder = new ShredEngine.RecipeData(
+            "twin-cinder", new[] { "cinder-core", "cinder-core" }, "ember-bolt", "Twin Cinder");
+
         // ── event: a chained altar with sacrifice → reward, and a player-chosen card purge ──────────────────────
         var altar = new EventScript("start", new[]
         {
@@ -330,6 +356,11 @@ public static class TortureRun
                 {
                     new RemoveCardsRunEffect(RunSelectors.DeckCards.ChooseByPlayer(1, "purge a card from your deck")),
                 }, TextKey: "Burn a card from your deck"),
+                new EventChoice("scavenge", new IRunEffectRequest[]
+                {
+                    new ShredEngine.AddShredRunEffect("cinder-core", 2),
+                    new ShredEngine.AddShredRunEffect("focus-prism"),
+                }, TextKey: "Sift the ashes for card parts"),
                 new EventChoice("pray", new IRunEffectRequest[] { new HealRunEffect(10) }, TextKey: "Pray (heal 10)"),
             }),
             new EventSituation("reward", "The altar accepts. Take your prize.", new[]
@@ -357,6 +388,8 @@ public static class TortureRun
                 {
                     new AddConsumableRunEffect(new ConsumableId("ember-flask"), emberFlask.UseEffects, emberFlask.CombatUse),
                 }, "Ember Flask"),
+            new ShopEntry("buy-guard-plates", Gold, 30,
+                new IRunEffectRequest[] { new ShredEngine.AddShredRunEffect("guard-plate", 2) }, "2x Guard Plate"),
         }, OfferCount: 3, Reroll: new ShopReroll(Gold, 20), Services: new[] { ShopService.RemoveCard(Gold, 60) });
 
         // ── the branching map ───────────────────────────────────────────────────────────────────────────────────
@@ -366,6 +399,8 @@ public static class TortureRun
             new Node(new NodeId("altar"), StandardRunIds.EventNode, new EventRef(new EventId("ashen-altar"))),
             new Node(new NodeId("den"), StandardRunIds.CombatNode, new EncounterRef(new EncounterId("summoner-den"))),
             new Node(new NodeId("market"), StandardRunIds.ShopNode, new ShopRef(new ShopId("war-market"))),
+            new Node(new NodeId("smithy"), ShredEngine.ShredEngineIds.WorkbenchNode,
+                new ShredEngine.WorkbenchRef(new ShredEngine.WorkbenchId("ash-smithy"))),
             new Node(new NodeId("court"), StandardRunIds.CombatNode, new EncounterRef(new EncounterId("bone-court"))),
             new Node(new NodeId("throne"), StandardRunIds.CombatNode, new EncounterRef(new EncounterId("aschen-thron"))),
         };
@@ -377,7 +412,8 @@ public static class TortureRun
                 new MapEdge(new NodeId("vanguard"), new NodeId("den")),
                 new MapEdge(new NodeId("altar"), new NodeId("market")),
                 new MapEdge(new NodeId("den"), new NodeId("market")),
-                new MapEdge(new NodeId("market"), new NodeId("court")),
+                new MapEdge(new NodeId("market"), new NodeId("smithy")),
+                new MapEdge(new NodeId("smithy"), new NodeId("court")),
                 new MapEdge(new NodeId("court"), new NodeId("throne")),
             },
             EntryNodeIds = new[] { new NodeId("vanguard") },
@@ -387,8 +423,9 @@ public static class TortureRun
                 new NodeLayout(new NodeId("altar"), 40, 110),
                 new NodeLayout(new NodeId("den"), 280, 110),
                 new NodeLayout(new NodeId("market"), 160, 208),
-                new NodeLayout(new NodeId("court"), 160, 306),
-                new NodeLayout(new NodeId("throne"), 160, 404),
+                new NodeLayout(new NodeId("smithy"), 160, 306),
+                new NodeLayout(new NodeId("court"), 160, 404),
+                new NodeLayout(new NodeId("throne"), 160, 502),
             },
         };
 
@@ -407,6 +444,12 @@ public static class TortureRun
             Relics = new[] { emberHeart, bloodChalice, ashenCrown },
             Consumables = new[] { emberFlask, healingDraught },
             Shops = new Dictionary<string, ShopDefinition> { ["war-market"] = warMarket },
+            Shreds = new[] { cinderCore, guardPlate, emberVent, focusPrism },
+            Recipes = new[] { twinCinder },
+            Workbenches = new Dictionary<string, ShredEngine.WorkbenchDefinition>
+            {
+                ["ash-smithy"] = new("Soot-black anvils; parts become cards here."),
+            },
             CombatResources = new[]
             {
                 new CombatResourceData { Id = Embers, DisplayName = "Embers", StartingAmount = 1, Max = 10, RefillEachTurn = false },
