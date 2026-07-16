@@ -13,6 +13,18 @@ public sealed record EntityPresentation
     // Flavor line shown alongside the entity (rules text comes from the entity's own definition).
     public string? FlavorText { get; init; }
 
+    // The entity's SMALL form (a status icon, a map marker, a shop thumbnail) when it differs from Art.
+    public string? Icon { get; init; }
+
+    // Common named hints most card games want — freeform strings, each game defines the vocabulary. Named here
+    // (instead of living in Extra) so authors across games spell them the same way and frontends can rely on the
+    // slot. Unused ones stay null and cost nothing.
+    public string? Rarity { get; init; }   // "common", "rare", …
+    public string? Frame { get; init; }    // card-frame / border style
+    public string? Color { get; init; }    // accent color ("#8b0000" or a palette key)
+    public string? Sound { get; init; }    // audio cue when played / used / entered
+    public string? Vfx { get; init; }      // visual-effect id on resolve
+
     // Freeform labels a frontend can key visual treatments off ("rare", "fire", "boss").
     public IReadOnlyList<string> Tags { get; init; } = [];
 

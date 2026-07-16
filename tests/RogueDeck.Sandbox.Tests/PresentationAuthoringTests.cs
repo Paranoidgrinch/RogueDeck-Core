@@ -29,6 +29,10 @@ public class PresentationAuthoringTests
         // null and all-empty both remove — clearing the UI fields cleans the document.
         Assert.Empty(PresentationAuthoring.With(section, "smite", null));
         Assert.Empty(PresentationAuthoring.With(section, "smite", new EntityPresentation()));
+
+        // ...but any single named hint keeps the entry alive.
+        Assert.Single(PresentationAuthoring.With(section, "smite", new EntityPresentation { Rarity = "rare" }));
+        Assert.Single(PresentationAuthoring.With(section, "smite", new EntityPresentation { Sound = "sfx/x" }));
     }
 
     [Fact]

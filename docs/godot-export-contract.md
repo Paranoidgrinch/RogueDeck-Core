@@ -87,7 +87,8 @@ gameplay. Shape:
 
 ```json
 "Presentation": {
-  "Cards":       { "smite":       { "Art": "cards/smite.png", "FlavorText": "…", "Tags": ["rare"], "Extra": { "frame": "gold" } } },
+  "Cards":       { "smite":       { "Art": "cards/smite.png", "FlavorText": "…", "Rarity": "rare", "Frame": "gold",
+                                    "Tags": ["holy"], "Extra": { "foil": "true" } } },
   "Relics":      { "windfall":    { "Art": "relics/windfall.png" } },
   "Consumables": { … }, "Statuses": { … }, "Enemies": { … }, "Encounters": { … },
   "Characters":  { … }, "Events": { … }, "Shops": { … },
@@ -100,10 +101,13 @@ Per section, entity id → `EntityPresentation`:
 - `Art` — an asset id/relative path **in the frontend's own asset scheme**. The contract deliberately does not say
   what an art id means; the consuming game maps it (a Godot project typically resolves it under its own
   `res://assets/` root).
+- `Icon` — the entity's small form (a status icon, a map marker, a thumbnail) when it differs from `Art`.
 - `FlavorText` — flavor only; rules text derives from the entity's definition.
+- `Rarity`, `Frame`, `Color`, `Sound`, `Vfx` — common named hints, all freeform strings whose vocabulary the
+  consuming game defines (a rarity key, a card-frame style, an accent color, an audio cue, a resolve effect).
+  Named so authors spell them the same way across games; unused ones are `null` and mean "frontend default".
 - `Tags` — freeform labels to key visual treatments off ("rare", "fire", "boss").
-- `Extra` — arbitrary per-game key→value hints for anything the named fields don't cover (frame styles, VFX ids,
-  sound cues).
+- `Extra` — arbitrary per-game key→value hints for anything the named fields don't cover.
 
 Semantics: an entity **without** an entry gets the frontend's default look; an entry pointing at a non-existent
 entity is flagged by validation and cannot pass the export gate. `Enemies` is keyed by the enemy definition id used

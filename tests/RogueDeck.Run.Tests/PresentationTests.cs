@@ -35,9 +35,15 @@ public class PresentationTests
                     ["smite"] = new()
                     {
                         Art = "cards/smite.png",
+                        Icon = "icons/smite.png",
                         FlavorText = "The light is not gentle.",
+                        Rarity = "rare",
+                        Frame = "gold",
+                        Color = "#e8c060",
+                        Sound = "sfx/holy-strike",
+                        Vfx = "vfx/light-burst",
                         Tags = ["rare", "holy"],
-                        Extra = new Dictionary<string, string> { ["frame"] = "gold" },
+                        Extra = new Dictionary<string, string> { ["foil"] = "true" },
                     },
                 },
                 Relics = new Dictionary<string, EntityPresentation> { ["windfall"] = new() { Art = "relics/windfall.png" } },
@@ -58,9 +64,15 @@ public class PresentationTests
         Assert.Equal(json, RunJson.ToJson(back, Options));
         var smite = back.Presentation.Cards["smite"];
         Assert.Equal("cards/smite.png", smite.Art);
+        Assert.Equal("icons/smite.png", smite.Icon);
         Assert.Equal("The light is not gentle.", smite.FlavorText);
+        Assert.Equal("rare", smite.Rarity);
+        Assert.Equal("gold", smite.Frame);
+        Assert.Equal("#e8c060", smite.Color);
+        Assert.Equal("sfx/holy-strike", smite.Sound);
+        Assert.Equal("vfx/light-burst", smite.Vfx);
         Assert.Equal(["rare", "holy"], smite.Tags);
-        Assert.Equal("gold", smite.Extra["frame"]);
+        Assert.Equal("true", smite.Extra["foil"]);
         Assert.Equal("backdrops/cave.png", back.Presentation.Encounters["goblin-fight"].Art);
         Assert.Equal("dark", back.Presentation.Game!.Extra["theme"]);
     }

@@ -2,11 +2,15 @@
    extra hints. Pure metadata for a playable frontend — the engine never reads it, so nothing here can change
    gameplay. Emits null when every field is cleared, so the parent removes the manifest entry entirely. *@
 <div class="run-bar">
-    <span class="muted" title="How this entity LOOKS in an exported game (art, flavor, visual tags). The engine ignores these; a Godot frontend maps the art id onto its own assets.">look:</span>
+    <span class="muted" title="How this entity LOOKS in an exported game (art, flavor, visual hints). The engine ignores these; a Godot frontend maps the ids onto its own assets.">look:</span>
     <span class="muted">art</span>
     <input value="@(Value?.Art ?? "")" style="width:11rem" placeholder="e.g. cards/smite.png"
            title="asset id / relative path in the exported game's own asset scheme"
            @onchange="e => Set(v => v with { Art = Trimmed(e) })" />
+    <span class="muted">icon</span>
+    <input value="@(Value?.Icon ?? "")" style="width:8rem" placeholder="small form"
+           title="the entity's SMALL form (status icon, map marker, thumbnail) when it differs from the art"
+           @onchange="e => Set(v => v with { Icon = Trimmed(e) })" />
     <span class="muted">flavor</span>
     <input value="@(Value?.FlavorText ?? "")" style="width:13rem" placeholder="flavor line"
            title="flavor text shown alongside the entity (rules text comes from the definition itself)"
@@ -15,8 +19,31 @@
     <input value="@string.Join(", ", Value?.Tags ?? [])" style="width:8rem" placeholder="rare, fire"
            title="freeform visual labels, comma-separated — a frontend can key treatments off them"
            @onchange="e => Set(v => v with { Tags = ParseTags(e) })" />
+</div>
+<div class="run-bar">
+    <span class="muted" title="Common named hints (each game defines the vocabulary); unused ones stay empty and cost nothing.">&nbsp;</span>
+    <span class="muted">rarity</span>
+    <input value="@(Value?.Rarity ?? "")" style="width:6rem" placeholder="rare"
+           title="rarity key — the frontend decides what it means visually"
+           @onchange="e => Set(v => v with { Rarity = Trimmed(e) })" />
+    <span class="muted">frame</span>
+    <input value="@(Value?.Frame ?? "")" style="width:6rem" placeholder="gold"
+           title="card-frame / border style key"
+           @onchange="e => Set(v => v with { Frame = Trimmed(e) })" />
+    <span class="muted">color</span>
+    <input value="@(Value?.Color ?? "")" style="width:6rem" placeholder="#8b0000"
+           title="accent color (hex or a palette key)"
+           @onchange="e => Set(v => v with { Color = Trimmed(e) })" />
+    <span class="muted">sound</span>
+    <input value="@(Value?.Sound ?? "")" style="width:7rem" placeholder="sfx id"
+           title="audio cue when this is played / used / entered"
+           @onchange="e => Set(v => v with { Sound = Trimmed(e) })" />
+    <span class="muted">vfx</span>
+    <input value="@(Value?.Vfx ?? "")" style="width:7rem" placeholder="vfx id"
+           title="visual-effect id on resolve"
+           @onchange="e => Set(v => v with { Vfx = Trimmed(e) })" />
     <span class="muted">extra</span>
-    <input value="@JoinExtra(Value)" style="width:11rem" placeholder="frame=gold; vfx=holy"
+    <input value="@JoinExtra(Value)" style="width:10rem" placeholder="glow=pulse; foil=true"
            title="freeform key=value hints, semicolon-separated, for anything the named fields don't cover"
            @onchange="e => Set(v => v with { Extra = ParseExtra(e) })" />
 </div>

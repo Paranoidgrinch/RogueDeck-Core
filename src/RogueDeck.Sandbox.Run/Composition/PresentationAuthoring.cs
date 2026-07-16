@@ -33,5 +33,8 @@ public static class PresentationAuthoring
 
     public static bool IsEmpty(EntityPresentation p) =>
         string.IsNullOrWhiteSpace(p.Art) && string.IsNullOrWhiteSpace(p.FlavorText)
+        && string.IsNullOrWhiteSpace(p.Icon) && string.IsNullOrWhiteSpace(p.Rarity)
+        && string.IsNullOrWhiteSpace(p.Frame) && string.IsNullOrWhiteSpace(p.Color)
+        && string.IsNullOrWhiteSpace(p.Sound) && string.IsNullOrWhiteSpace(p.Vfx)
         && p.Tags.Count == 0 && p.Extra.Count == 0;
 }
