@@ -1,5 +1,6 @@
 using RogueDeck.Core.Combat;
 using RogueDeck.Scenario.Authoring;
+using RogueDeck.ShredEngine;
 
 namespace RogueDeck.Run;
 
@@ -58,6 +59,16 @@ public sealed record RunBlueprint(
     // RunRunner alongside the persistent MetaState; they fold a finished run into the profile. Empty (the default) ⇒
     // no meta progression. The rules are content — the engine only evaluates them. Round-trips via RunJson.
     public IReadOnlyList<MetaRule> MetaRules { get; init; } = [];
+
+    // ── Shred Engine sections (card composition; see src/RogueDeck.Run/ShredEngine/) ──────────────────
+    // The card parts the run can grant, the authored recipes (shred combinations → curated cards), the
+    // per-game composition rules, and the workbench stations map nodes reference by id. All empty by
+    // default — a game without composition carries nothing.
+    public IReadOnlyList<ShredData> Shreds { get; init; } = [];
+    public IReadOnlyList<RecipeData> Recipes { get; init; } = [];
+    public ShredRules ShredRules { get; init; } = new();
+    public IReadOnlyDictionary<string, WorkbenchDefinition> Workbenches { get; init; }
+        = new Dictionary<string, WorkbenchDefinition>();
 
     // The presentation manifest (Godot bridge, variant B): per entity id, how it LOOKS — art ids, flavor text,
     // visual tags. The engine ignores it entirely; a playable frontend (Godot) reads it to map ids onto its own
