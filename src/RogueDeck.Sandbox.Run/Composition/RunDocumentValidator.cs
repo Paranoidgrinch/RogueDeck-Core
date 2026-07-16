@@ -181,6 +181,7 @@ public static class RunDocumentValidator
             new HashSet<string>(blueprint.Events.Keys, StringComparer.Ordinal));
         CheckPresentation(problems, RunTab, "shop", presentation.Shops,
             new HashSet<string>(blueprint.Shops.Keys, StringComparer.Ordinal));
+        CheckPresentation(problems, ShredsTab, "shred", presentation.Shreds, shredIds);
 
         // Sanity: a run with no map has nothing to play.
         if (blueprint.Map.Nodes.Count == 0)

@@ -164,6 +164,31 @@ public class ShredAuthoringTests
     }
 
     [Fact]
+    public void Flags_a_presentation_entry_for_an_unknown_shred()
+    {
+        var bp = Base() with
+        {
+            Presentation = new PresentationManifest
+            {
+                Shreds = new Dictionary<string, EntityPresentation> { ["ghost"] = new() { Art = "x.png" } },
+            },
+        };
+        Assert.Contains(RunDocumentValidator.Validate(bp),
+            p => p.Contains("shred 'ghost'") && p.StartsWith("Shreds:"));
+    }
+
+    [Fact]
+    public async Task GlossaryTab_explains_the_shred_concepts()
+    {
+        await using var provider = Provider(Base());
+        var html = await RenderAsync<GlossaryTab>(provider);
+
+        Assert.Contains("Shred (card part)", html);
+        Assert.Contains("Workbench", html);
+        Assert.Contains("Recipe", html);
+    }
+
+    [Fact]
     public void A_studio_authored_document_round_trips()
     {
         var options = RunJson.CreateOptions();

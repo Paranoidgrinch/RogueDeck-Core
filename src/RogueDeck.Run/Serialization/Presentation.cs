@@ -47,6 +47,7 @@ public sealed record PresentationManifest
     public IReadOnlyDictionary<string, EntityPresentation> Characters { get; init; } = Empty;
     public IReadOnlyDictionary<string, EntityPresentation> Events { get; init; } = Empty;
     public IReadOnlyDictionary<string, EntityPresentation> Shops { get; init; } = Empty;
+    public IReadOnlyDictionary<string, EntityPresentation> Shreds { get; init; } = Empty;
 
     // Game-wide presentation (title art, theme hints) — the one entry that is not per-entity.
     public EntityPresentation? Game { get; init; }

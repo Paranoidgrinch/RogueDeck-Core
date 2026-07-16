@@ -69,6 +69,10 @@ Top level: a single JSON object, **PascalCase** property names, enums as **strin
 | `Start` | hero name, HP, starting deck/relics/consumables/resources, board units, party |
 | `Characters` | selectable roster (each with a full `Start`, optional `UnlockFlag`) |
 | `MetaRules` | run-end meta progression rules |
+| `Shreds` | card parts (Shred Engine): id, name, size 1–6 spaces, cost contribution, effect fragment, sibling cost modifiers, tags |
+| `Recipes` | curated shred combinations: unordered ingredient multiset → result card id (must exist in `Cards`) |
+| `ShredRules` | per-game composition rules: `MinFilledSpaces` (6 = only complete cards), `MaxParts` |
+| `Workbenches` | id → crafting-station definition, referenced by `workbench` map nodes (`node.workbenchRef`) |
 | `Presentation` | the look manifest — see below |
 
 Polymorphic nodes (effects, expressions, selectors, rewards, payloads, …) always use the envelope
@@ -91,10 +95,13 @@ gameplay. Shape:
                                     "Tags": ["holy"], "Extra": { "foil": "true" } } },
   "Relics":      { "windfall":    { "Art": "relics/windfall.png" } },
   "Consumables": { … }, "Statuses": { … }, "Enemies": { … }, "Encounters": { … },
-  "Characters":  { … }, "Events": { … }, "Shops": { … },
+  "Characters":  { … }, "Events": { … }, "Shops": { … }, "Shreds": { … },
   "Game": { "Art": "title.png", "Extra": { "theme": "dark" } }
 }
 ```
+
+A composed card has no presentation entry of its own (its id is synthesized); frontends typically render it
+from its parts' `Shreds` presentations.
 
 Per section, entity id → `EntityPresentation`:
 
@@ -113,6 +120,30 @@ Semantics: an entity **without** an entry gets the frontend's default look; an e
 entity is flagged by validation and cannot pass the export gate. `Enemies` is keyed by the enemy definition id used
 inside encounters — the same id means the same look everywhere. `Game` is the one non-per-entity slot (title art,
 global theme hints).
+
+## The Shred Engine (card composition)
+
+A game using shreds needs nothing beyond the engine assemblies — the whole layer lives inside
+RogueDeck.Run.dll (`RogueDeck.ShredEngine` namespace). The contract points a frontend must know:
+
+- **A composed card persists as nothing but its ordered part list.** `RunCardInstance.Composition` (and the
+  save's `Composition` field) carries the shred ids; the definition id is derived as `shred:<a>+<b>+…`
+  (order-sensitive) and the actual `CardBlueprint` is **re-synthesized deterministically every fight** and
+  injected before compilation. The `shred:` prefix is reserved — authored cards may not use it (validated).
+- **Display names**: a composed card's `NameKey` is deterministic ("Iron Core + Ember" — the parts' names
+  joined with " + "). A frontend may render that as-is or resolve the parts itself from the id.
+- **The workbench node** (`"workbench"` node type; payload `node.workbench` inline or `node.workbenchRef`)
+  is an ordinary multi-round choice interaction, served through the same `IRunChoiceProvider` as events and
+  shops: choices are `leave` / `finish` / `recipe:<id>` / `add:<shredId>` / `clear`, and the add order across
+  rounds is the card's arrangement. Any frontend that renders event choices renders workbenches.
+- **Recipe unlocks are meta flags**: the first build stamps the run flag `recipe.<id>`; an any-outcome meta
+  rule (hosts add one implicitly per recipe via `ShredMeta.ImplicitRecipeRules`) promotes it into the
+  profile; at run start the runner mirrors every profile flag back as a `meta.<flag>` run flag. A frontend
+  that owns a `MetaState` (persist it however you like; `MetaJson` serializes it) gets permanent,
+  Necrosmith-style discoveries; one that doesn't still gets per-run discoveries.
+- New effect kinds `fx.addShred` / `fx.removeShred` / `fx.addComposedCard`, run events
+  `shredGained` / `workbenchCrafted`, meta effect `meta.promoteFlag`, and per-member save fields
+  `Shreds` (kind → count) and per-card `Composition` — all additive; documents and saves without them load.
 
 ## What the export gate guarantees
 

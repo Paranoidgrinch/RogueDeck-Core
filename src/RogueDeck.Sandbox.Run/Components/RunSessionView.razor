@@ -333,6 +333,11 @@
     // cards and show human-readable names. Keyed by the raw definition/enemy id.
     [Parameter] public IReadOnlyDictionary<string, int> CardCosts { get; set; } = new Dictionary<string, int>();
     [Parameter] public IReadOnlyDictionary<string, string> CardNames { get; set; } = new Dictionary<string, string>();
+
+    // Shred display names (id → name), so a composed card's derived "shred:a+b" id renders as its parts'
+    // names ("Iron Core + Ember") — composed definitions are synthesized per fight and never appear in
+    // CardNames, which only knows the authored cards.
+    [Parameter] public IReadOnlyDictionary<string, string> ShredNames { get; set; } = new Dictionary<string, string>();
     [Parameter] public IReadOnlyDictionary<string, string> EnemyNames { get; set; } = new Dictionary<string, string>();
     [Parameter] public string? HeroName { get; set; }
 
@@ -520,7 +525,15 @@
 
     private int CardEnergyCost(string definitionId) => CardCosts.TryGetValue(definitionId, out var cost) ? cost : 0;
 
-    private string CardName(string definitionId) => CardNames.TryGetValue(definitionId, out var name) ? name : definitionId;
+    private string CardName(string definitionId)
+    {
+        if (CardNames.TryGetValue(definitionId, out var name))
+            return name;
+        if (definitionId.StartsWith("shred:", StringComparison.Ordinal))
+            return string.Join(" + ", definitionId["shred:".Length..].Split('+')
+                .Select(part => ShredNames.TryGetValue(part, out var partName) ? partName : part));
+        return definitionId;
+    }
 
     private string EnemyName(CombatantId id) => EnemyNames.TryGetValue(id.value, out var name) ? name : id.value;
 

@@ -54,6 +54,7 @@ public class PresentationTests
                 Characters = new Dictionary<string, EntityPresentation> { ["ironclad"] = new() { Art = "heroes/ironclad.png" } },
                 Events = new Dictionary<string, EntityPresentation> { ["shrine"] = new() { Art = "scenes/shrine.png" } },
                 Shops = new Dictionary<string, EntityPresentation> { ["smithy"] = new() { Art = "scenes/smithy.png" } },
+                Shreds = new Dictionary<string, EntityPresentation> { ["ember"] = new() { Art = "shreds/ember.png" } },
                 Game = new EntityPresentation { Art = "title.png", Extra = new Dictionary<string, string> { ["theme"] = "dark" } },
             },
         };
@@ -74,6 +75,7 @@ public class PresentationTests
         Assert.Equal(["rare", "holy"], smite.Tags);
         Assert.Equal("true", smite.Extra["foil"]);
         Assert.Equal("backdrops/cave.png", back.Presentation.Encounters["goblin-fight"].Art);
+        Assert.Equal("shreds/ember.png", back.Presentation.Shreds["ember"].Art);
         Assert.Equal("dark", back.Presentation.Game!.Extra["theme"]);
     }
 

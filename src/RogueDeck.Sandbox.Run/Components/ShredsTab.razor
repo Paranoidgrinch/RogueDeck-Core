@@ -150,6 +150,8 @@
                 }
                 <button class="mini" @onclick="() => AddModifier(si)">+ modifier</button>
             </div>
+            <PresentationEditor Value="PresentationAuthoring.Get(_blueprint.Presentation.Shreds, shred.Id)"
+                                ValueChanged="p => SetPresentation(shred.Id, p)" />
         </div>
     }
     <div class="run-bar">
@@ -248,10 +250,35 @@
             return list;
         });
 
+    // A rename carries the shred's authored look along instead of orphaning it — one document write.
     private void SetShredId(int index, string id)
     {
-        if (!string.IsNullOrWhiteSpace(id))
-            EditShred(index, s => s with { Id = id.Trim() });
+        if (string.IsNullOrWhiteSpace(id) || index < 0 || index >= Shreds.Count)
+            return;
+        var oldId = Shreds[index].Id;
+        var list = Shreds.ToList();
+        list[index] = list[index] with { Id = id.Trim() };
+        _blueprint = _blueprint with
+        {
+            Shreds = list,
+            Presentation = _blueprint.Presentation with
+            {
+                Shreds = PresentationAuthoring.Rename(_blueprint.Presentation.Shreds, oldId, id.Trim()),
+            },
+        };
+        Save();
+    }
+
+    private void SetPresentation(string id, EntityPresentation? presentation)
+    {
+        _blueprint = _blueprint with
+        {
+            Presentation = _blueprint.Presentation with
+            {
+                Shreds = PresentationAuthoring.With(_blueprint.Presentation.Shreds, id, presentation),
+            },
+        };
+        Save();
     }
 
     private void SetShredProgram(int index, CombatNodeModel node) =>

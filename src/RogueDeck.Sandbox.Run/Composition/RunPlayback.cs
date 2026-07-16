@@ -29,6 +29,10 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
         new Dictionary<string, IReadOnlyList<ResourceCost>>();
     public IReadOnlyDictionary<string, string> ResourceNames { get; private set; } = new Dictionary<string, string>();
 
+    // Shred display names (id → name), for resolving a composed card's derived "shred:…" id into its
+    // parts' names in the session view.
+    public IReadOnlyDictionary<string, string> ShredNames { get; private set; } = new Dictionary<string, string>();
+
     // Start (or restart) a run from the blueprint. interactive=true hands each fight to the player via an
     // InteractiveCombatDriver (surfaced through CombatDriver); false auto-resolves fights headlessly.
     public void Start(RunBlueprint blueprint, int seed, bool interactive) =>
@@ -68,6 +72,8 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
             CardFullCosts = blueprint.Cards.ToDictionary(card => card.Id, card => card.Costs);
             ResourceNames = blueprint.CombatResources.ToDictionary(
                 r => r.Id, r => string.IsNullOrWhiteSpace(r.DisplayName) ? r.Id : r.DisplayName);
+            ShredNames = blueprint.Shreds.ToDictionary(
+                s => s.Id, s => string.IsNullOrWhiteSpace(s.NameKey) ? s.Id : s.NameKey);
 
             // A party run (party deckbuilding C2) uses the simultaneous team phase. Interactive party fights are
             // driven per member by the PartyInteractiveCombatDriver; a non-interactive party run auto-resolves them
