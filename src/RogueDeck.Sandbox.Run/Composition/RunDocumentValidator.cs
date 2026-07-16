@@ -109,6 +109,25 @@ public static class RunDocumentValidator
             }
         }
 
+        // Presentation manifest (Godot bridge, variant B): every entry must point at an entity that exists — a
+        // dangling entry means the entity was renamed/deleted after its look was authored. Prefixed with the tab
+        // that owns the entity, since that is where both the entity and its presentation are edited.
+        var statusIds = new HashSet<string>(blueprint.Statuses.Select(s => s.Id), StringComparer.Ordinal);
+        var enemyIds = new HashSet<string>(
+            blueprint.Encounters.SelectMany(e => e.Enemies).Select(e => e.Id), StringComparer.Ordinal);
+        var presentation = blueprint.Presentation;
+        CheckPresentation(problems, CardsTab, "card", presentation.Cards, cardIds);
+        CheckPresentation(problems, HeroTab, "relic", presentation.Relics, relicIds);
+        CheckPresentation(problems, HeroTab, "consumable", presentation.Consumables, consumableIds);
+        CheckPresentation(problems, CardsTab, "status", presentation.Statuses, statusIds);
+        CheckPresentation(problems, EncountersTab, "enemy", presentation.Enemies, enemyIds);
+        CheckPresentation(problems, EncountersTab, "encounter", presentation.Encounters, encounterIds);
+        CheckPresentation(problems, CharactersTab, "character", presentation.Characters, seenCharacterIds);
+        CheckPresentation(problems, RunTab, "event", presentation.Events,
+            new HashSet<string>(blueprint.Events.Keys, StringComparer.Ordinal));
+        CheckPresentation(problems, RunTab, "shop", presentation.Shops,
+            new HashSet<string>(blueprint.Shops.Keys, StringComparer.Ordinal));
+
         // Sanity: a run with no map has nothing to play.
         if (blueprint.Map.Nodes.Count == 0)
             problems.Add($"{RunTab}: the map is empty — add at least one node to play the run.");
@@ -122,6 +141,15 @@ public static class RunDocumentValidator
         }
 
         return problems;
+    }
+
+    private static void CheckPresentation(
+        List<string> problems, string tab, string kind,
+        IReadOnlyDictionary<string, EntityPresentation> section, HashSet<string> knownIds)
+    {
+        foreach (var id in section.Keys)
+            if (!knownIds.Contains(id))
+                problems.Add($"{tab}: presentation entry for {kind} '{id}' points at nothing — no such {kind} is defined.");
     }
 
     // The problems owned by one tab (by the prefix Validate stamps), so a tab can show only its own.

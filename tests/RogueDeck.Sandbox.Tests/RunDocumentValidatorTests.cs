@@ -71,6 +71,40 @@ public class RunDocumentValidatorTests
     }
 
     [Fact]
+    public void A_presentation_entry_for_a_defined_entity_is_fine()
+    {
+        var bp = Valid() with
+        {
+            Presentation = new PresentationManifest
+            {
+                Cards = new Dictionary<string, EntityPresentation> { ["strike"] = new() { Art = "strike.png" } },
+                Enemies = new Dictionary<string, EntityPresentation> { ["goblin"] = new() { Art = "goblin.png" } },
+                Encounters = new Dictionary<string, EntityPresentation> { ["fight"] = new() { Art = "cave.png" } },
+                Game = new EntityPresentation { Art = "title.png" },
+            },
+        };
+        Assert.Empty(RunDocumentValidator.Validate(bp));
+    }
+
+    [Fact]
+    public void Flags_a_presentation_entry_whose_entity_does_not_exist()
+    {
+        var bp = Valid() with
+        {
+            Presentation = new PresentationManifest
+            {
+                Cards = new Dictionary<string, EntityPresentation> { ["ghost"] = new() { Art = "ghost.png" } },
+                Relics = new Dictionary<string, EntityPresentation> { ["missing-relic"] = new() },
+                Events = new Dictionary<string, EntityPresentation> { ["no-such-event"] = new() },
+            },
+        };
+        var problems = RunDocumentValidator.Validate(bp);
+        Assert.Contains(problems, p => p.Contains("card 'ghost'") && p.StartsWith("Cards:"));
+        Assert.Contains(problems, p => p.Contains("relic 'missing-relic'") && p.StartsWith("Hero:"));
+        Assert.Contains(problems, p => p.Contains("event 'no-such-event'") && p.StartsWith("Run:"));
+    }
+
+    [Fact]
     public void A_valid_party_member_has_no_problems()
     {
         // The member's deck references the defined "strike" card and it starts with the built-in bloodstone relic.

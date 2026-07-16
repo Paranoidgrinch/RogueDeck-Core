@@ -59,6 +59,11 @@ public sealed record RunBlueprint(
     // no meta progression. The rules are content — the engine only evaluates them. Round-trips via RunJson.
     public IReadOnlyList<MetaRule> MetaRules { get; init; } = [];
 
+    // The presentation manifest (Godot bridge, variant B): per entity id, how it LOOKS — art ids, flavor text,
+    // visual tags. The engine ignores it entirely; a playable frontend (Godot) reads it to map ids onto its own
+    // assets. Lives in the blueprint so one exported document carries the whole game, gameplay AND look.
+    public PresentationManifest Presentation { get; init; } = new();
+
     // The effective starting config for a run: the chosen roster character, else the first roster character (a
     // deterministic default / an unknown id falls back here), else the single Start when there is no roster.
     public RunStart ResolveStart(string? characterId = null)
