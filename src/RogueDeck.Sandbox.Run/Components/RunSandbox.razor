@@ -207,6 +207,29 @@
             <p class="error">The run JSON does not parse — fix it to validate the document.</p>
         }
 
+        <h2>Export for Godot</h2>
+        <p class="muted">One file is the whole game — gameplay and presentation, stamped with schema version
+            @RunBlueprintSchema.CurrentVersion. Export runs the stricter export gate (everything Validation checks,
+            plus what a shipped game must have: a non-empty starting deck, card costs that resolve); a clean document
+            downloads as <code>game.roguedeck.json</code> for a Godot (or any other) frontend to consume.</p>
+        <div class="run-bar">
+            <button class="play" @onclick="ExportForGodot">Export for Godot</button>
+            @if (_exportProblems is { Count: 0 })
+            {
+                <span class="muted">✓ Exported.</span>
+            }
+        </div>
+        @if (_exportProblems is { Count: > 0 })
+        {
+            <p class="error">The export gate found @_exportProblems.Count problem(s) — fix them to export:</p>
+            <ul class="log">
+                @foreach (var problem in _exportProblems)
+                {
+                    <li><span class="line-kind">⚠</span> @problem</li>
+                }
+            </ul>
+        }
+
         <h2>Headless balancing</h2>
         <p class="muted">Auto-play the blueprint over many seeds (choices auto-pick the first option) and tally outcomes.</p>
         <div class="run-bar">
@@ -422,6 +445,27 @@
     {
         _jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./_content/RogueDeck.Sandbox.Run/runSandbox.js");
         await _jsModule.InvokeVoidAsync("download", "run-blueprint.json", _json);
+    }
+
+    // Export the document for a playable frontend (Godot bridge 3c): the stricter export gate must pass, then
+    // the blueprint re-serializes (normal form, current schema stamp — regardless of what was pasted into the
+    // textarea) and downloads. The exported file is the same RunBlueprint JSON the Studio edits; the contract
+    // is documented in docs/godot-export-contract.md.
+    private IReadOnlyList<string>? _exportProblems;
+
+    private async Task ExportForGodot()
+    {
+        if (!TryBlueprint(out var blueprint))
+        {
+            _error = "Fix the run JSON before exporting.";
+            return;
+        }
+        _error = null;
+        _exportProblems = RunDocumentValidator.ValidateForExport(blueprint);
+        if (_exportProblems.Count > 0)
+            return;
+        _jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./_content/RogueDeck.Sandbox.Run/runSandbox.js");
+        await _jsModule.InvokeVoidAsync("download", "game.roguedeck.json", RunJson.ToJson(blueprint, _options));
     }
 
     // Load a blueprint JSON from an uploaded file into the editor.
