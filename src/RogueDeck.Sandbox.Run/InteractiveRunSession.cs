@@ -18,6 +18,7 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
     private readonly RunEffectProcessor _processor = new();
     private readonly MetaState? _meta;
     private readonly IReadOnlyList<MetaRule>? _metaRules;
+    private readonly RunEntityLabeler? _labeler;
     private RunState _run;
     private bool _disposed;
 
@@ -51,7 +52,8 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
         ReplayScript? script = null,
         IReadOnlyList<IReplayResettable>? resettables = null,
         MetaState? meta = null,
-        IReadOnlyList<MetaRule>? metaRules = null)
+        IReadOnlyList<MetaRule>? metaRules = null,
+        RunEntityLabeler? labeler = null)
     {
         ArgumentNullException.ThrowIfNull(makeRun);
         ArgumentNullException.ThrowIfNull(registry);
@@ -63,6 +65,7 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
         _resettables = resettables ?? Array.Empty<IReplayResettable>();
         _meta = meta;
         _metaRules = metaRules;
+        _labeler = labeler;
         _run = makeRun(); // so Run is never null before Start
     }
 
@@ -222,12 +225,15 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
         _script.Advance(new EntityPicksEntry(indices));
     }
 
-    private static string Display(object? candidate) => candidate switch
+    // Readable name for a picked entity — a reward offer described by what it grants, a deck card / relic
+    // by its display name. Falls back to raw ids only when no labeler was supplied (older test rigs).
+    private string Display(object? candidate) => candidate switch
     {
-        RunCardInstance card => card.UpgradeLevel > 0
-            ? $"{card.DefinitionId} +{card.UpgradeLevel}"
-            : card.DefinitionId.ToString(),
-        RelicInstance relic => relic.Id.ToString(),
+        RewardOffer offer => _labeler?.Offer(offer) ?? offer.Id,
+        RunCardInstance card => _labeler is { } labeler
+            ? labeler.Card(card.DefinitionId, card.UpgradeLevel)
+            : card.UpgradeLevel > 0 ? $"{card.DefinitionId} +{card.UpgradeLevel}" : card.DefinitionId.ToString(),
+        RelicInstance relic => _labeler?.Relic(relic.Id) ?? relic.Id.ToString(),
         _ => candidate?.ToString() ?? "?",
     };
 

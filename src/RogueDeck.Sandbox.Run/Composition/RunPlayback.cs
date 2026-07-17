@@ -33,6 +33,9 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
     // parts' names in the session view.
     public IReadOnlyDictionary<string, string> ShredNames { get; private set; } = new Dictionary<string, string>();
 
+    // Relic display names (id → name), for the entity labeler that makes reward/relic picks readable.
+    public IReadOnlyDictionary<string, string> RelicNames { get; private set; } = new Dictionary<string, string>();
+
     private IReadOnlyList<ShredEngine.ShredData> _shreds = [];
     private readonly Dictionary<string, IReadOnlyList<ResourceCost>?> _composedCosts = new(StringComparer.Ordinal);
 
@@ -115,6 +118,8 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
                 r => r.Id, r => string.IsNullOrWhiteSpace(r.DisplayName) ? r.Id : r.DisplayName);
             ShredNames = blueprint.Shreds.ToDictionary(
                 s => s.Id, s => string.IsNullOrWhiteSpace(s.NameKey) ? s.Id : s.NameKey);
+            RelicNames = blueprint.Relics.ToDictionary(
+                r => r.Id, r => string.IsNullOrWhiteSpace(r.DisplayName) ? r.Id : r.DisplayName);
             _shreds = blueprint.Shreds;
             _composedCosts.Clear();
 
@@ -163,8 +168,9 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
                 ? null
                 : blueprint.MetaRules.Concat(ShredEngine.ShredMeta.ImplicitRecipeRules(blueprint)).ToList();
 
+            var labeler = new RogueDeck.Sandbox.Run.RunEntityLabeler(CardNames, RelicNames, ResourceNames, ShredNames);
             var session = new InteractiveRunSession(
-                () => makeRun(content), registry, content, script, resettables, meta, metaRules);
+                () => makeRun(content), registry, content, script, resettables, meta, metaRules, labeler);
             session.Changed += onChanged;
             if (metaStore is { } store && meta is { } profile)
                 session.Changed += () =>
