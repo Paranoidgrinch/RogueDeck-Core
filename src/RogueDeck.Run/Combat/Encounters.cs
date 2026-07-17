@@ -79,20 +79,27 @@ public sealed class EncounterDefinition
     // Optional human-readable name for the hero in this fight (UIs/logs); the combat identity stays "hero".
     public string? HeroDisplayName { get; }
 
+    // Cards each player-side combatant draws at its turn start in this fight; null = the engine default (5).
+    public int? CardsDrawnPerTurn { get; }
+
     public EncounterDefinition(
         EncounterId id,
         IReadOnlyList<EncounterEnemy> enemies,
         IReadOnlyList<ResourceSpec>? heroResources = null,
         IReadOnlyList<StartingStatusSpec>? heroStartingStatuses = null,
-        string? heroDisplayName = null)
+        string? heroDisplayName = null,
+        int? cardsDrawnPerTurn = null)
     {
         if (enemies is null || enemies.Count == 0)
             throw new ArgumentException("An encounter needs at least one enemy.", nameof(enemies));
+        if (cardsDrawnPerTurn is < 0)
+            throw new ArgumentOutOfRangeException(nameof(cardsDrawnPerTurn), "Cards drawn per turn cannot be negative.");
         Id = id;
         Enemies = enemies;
         HeroResources = heroResources ?? Array.Empty<ResourceSpec>();
         HeroStartingStatuses = heroStartingStatuses ?? Array.Empty<StartingStatusSpec>();
         HeroDisplayName = heroDisplayName;
+        CardsDrawnPerTurn = cardsDrawnPerTurn;
     }
 }
 
@@ -128,6 +135,9 @@ public sealed class EncounterCatalog
             throw new InvalidOperationException($"No encounter registered with id '{id}'.");
 
         var blueprint = new ScenarioBlueprint();
+        // The encounter's authored per-turn draw count (null keeps the blueprint's engine default).
+        if (encounter.CardsDrawnPerTurn is { } cardsDrawnPerTurn)
+            blueprint.CardsDrawnPerTurn = cardsDrawnPerTurn;
         // Shared definitions (read-only during Compile, so sharing the instances across fights is safe).
         foreach (var card in _library.Cards) blueprint.Cards.Add(card);
         foreach (var action in _library.EnemyActions) blueprint.EnemyActions.Add(action);

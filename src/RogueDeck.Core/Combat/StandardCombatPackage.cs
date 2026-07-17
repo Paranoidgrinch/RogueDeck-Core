@@ -108,8 +108,10 @@ public sealed class StandardCombatPackage : ICombatPackage
         registry.RegisterEffectRequestHandler(new InstallTemporaryRuleEffectHandler());
         registry.RegisterEffectRequestHandler(new RemoveTemporaryRuleEffectHandler());
         registry.RegisterCombatEventHandler(new ResetCardPlayTurnStatsOnTurnStartedHandler());
-        registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.TurnStarted.CreateHandler());
+        // Refill BEFORE the turn-start triggers, so a triggered program that spends/steals the refilled
+        // resource (fatigue: "lose 1 energy at turn start") isn't silently topped back up to max.
         registry.RegisterCombatEventHandler(new RefillResourceOnTurnStartedHandler(StandardCombatIds.EnergyResource, defaultMax: 3));
+        registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.TurnStarted.CreateHandler());
 
         registry.RegisterCombatEventHandler(new DrawCardsOnTurnStartedHandler(_cardsDrawnPerTurn));
         registry.RegisterCombatEventHandler(new ClearBlockOnTurnStartedHandler());

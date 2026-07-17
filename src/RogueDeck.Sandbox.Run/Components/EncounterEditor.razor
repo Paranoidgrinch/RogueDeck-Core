@@ -33,6 +33,11 @@
                 </label>
                 <button class="mini" title="duplicate this encounter" @onclick="() => DuplicateEncounter(encId)">⧉</button>
                 <button class="mini" @onclick="() => RemoveEncounter(encId)">✕ remove</button>
+                <label title="How many cards each player-side combatant draws at its turn start in this fight. Leave blank for the default (5).">
+                    Cards drawn per turn
+                    <input type="number" min="0" placeholder="5" value="@(encounter.CardsDrawnPerTurn?.ToString() ?? "")"
+                           @onchange="e => SetCardsDrawn(encId, AsString(e.Value))" style="width:4.5rem" />
+                </label>
             </div>
             @* The encounter's own look = the fight's backdrop/scene; each enemy row below carries the enemy's. *@
             <PresentationEditor Value="PresentationAuthoring.Get(Blueprint.Presentation.Encounters, encId)"
@@ -126,8 +131,14 @@
 
     // EncounterDefinition is a class (no `with`) — reconstruct it, carrying over anything not being changed.
     private static EncounterDefinition Rebuild(
-        EncounterDefinition enc, EncounterId? id = null, IReadOnlyList<EncounterEnemy>? enemies = null) =>
-        new(id ?? enc.Id, enemies ?? enc.Enemies, enc.HeroResources, enc.HeroStartingStatuses);
+        EncounterDefinition enc, EncounterId? id = null, IReadOnlyList<EncounterEnemy>? enemies = null,
+        int? cardsDrawnPerTurn = null, bool setCardsDrawn = false) =>
+        new(id ?? enc.Id, enemies ?? enc.Enemies, enc.HeroResources, enc.HeroStartingStatuses,
+            enc.HeroDisplayName, setCardsDrawn ? cardsDrawnPerTurn : enc.CardsDrawnPerTurn);
+
+    private Task SetCardsDrawn(string encId, string raw) =>
+        Edit(encId, enc => Rebuild(enc,
+            cardsDrawnPerTurn: int.TryParse(raw, out var n) && n >= 0 ? n : null, setCardsDrawn: true));
 
     // Rebuild the encounter list, replacing the one with `id` via `edit` (drop it if edit returns null).
     private Task Edit(string id, Func<EncounterDefinition, EncounterDefinition?> edit)

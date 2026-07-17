@@ -20,9 +20,19 @@ public sealed class DrawCardsOnTurnStartedHandler : CombatEventHandler<TurnStart
         if (_cardsToDraw == 0)
             return;
 
+        // Statuses on the drawing combatant shape the count via the TurnStartDraw pipeline (a panic-style
+        // "draw fewer" debuff is AddPerStack -1); the fold clamps at zero.
+        var cardsToDraw = _cardsToDraw;
+        if (combat.TryGetCombatant(combatEvent.CombatantId, out var combatant) && combatant is not null)
+            cardsToDraw = DeclarativePassiveModifierEngine.Apply(
+                combat, registry, combatant, PassiveModifierPipeline.TurnStartDraw,
+                damageKind: null, cardsToDraw);
+        if (cardsToDraw <= 0)
+            return;
+
         combat.EnqueueEffect(new DrawCardsEffectRequest(
             combatEvent.CombatantId,
-            _cardsToDraw));
+            cardsToDraw));
     }
 }
 

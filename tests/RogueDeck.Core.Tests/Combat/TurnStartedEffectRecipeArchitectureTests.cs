@@ -4,8 +4,13 @@ namespace RogueDeck.Core.Tests;
 
 public class TurnStartedEffectRecipeArchitectureTests
 {
+    // The turn-start recipe: resources refill FIRST, then authored TurnStarted triggers, then the standard
+    // automation (draw, clear block, damage over time). Refill-before-triggers is deliberate: a triggered
+    // program that spends or steals the refilled resource (fatigue: "lose 1 energy at turn start") must not
+    // be silently topped back up to max; triggers-before-draw keeps a trigger's cards/statuses visible to
+    // the draw it shapes (TurnStartDraw pipeline).
     [Fact]
-    public void TurnStartedTriggeredEffectsRemainBeforeStandardTurnStartAutomation()
+    public void TurnStartedTriggeredEffectsRunAfterRefillAndBeforeStandardTurnStartAutomation()
     {
         var repoRoot = FindRepositoryRoot();
         var packagePath = Path.Combine(
@@ -32,8 +37,8 @@ public class TurnStartedEffectRecipeArchitectureTests
             "new DamageOverTimeOnTurnStartedHandler()",
             StringComparison.Ordinal);
 
-        Assert.True(triggeredIndex >= 0);
-        Assert.True(refillIndex > triggeredIndex);
+        Assert.True(refillIndex >= 0);
+        Assert.True(triggeredIndex > refillIndex);
         Assert.True(drawIndex > triggeredIndex);
         Assert.True(clearBlockIndex > triggeredIndex);
         Assert.True(damageOverTimeIndex > triggeredIndex);

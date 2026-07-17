@@ -22,7 +22,11 @@ public enum PassiveModifierPipeline
 
     // Stacks of an outgoing status application, read from the *applying* (source) combatant.
     // Honours the spec's AppliesToStatusId filter so e.g. Catalyst can double only Poison applications.
-    OutgoingStatusApplicationStacks
+    OutgoingStatusApplicationStacks,
+
+    // Cards drawn at the wearer's own turn start, read from the drawing combatant. AddPerStack -1 is the
+    // classic "panicked: draw fewer cards" debuff; the result is clamped at zero, never negative.
+    TurnStartDraw
 }
 
 // How a spec transforms the running amount.
