@@ -8,11 +8,21 @@
         title="loads the built-in sample game (the Help page's worked examples, playable) and opens the Run tab">
     Start with the sample project →
 </button>
+<button class="play hero-cta" @onclick="LoadBureaucratsAndGo"
+        title="loads the full demo game — Bureaucrats &amp; Broomsticks, Act I: 62 cards, a whole act map with shop and boss — and opens the Run tab">
+    Play a full demo game: Bureaucrats &amp; Broomsticks →
+</button>
 
 @code {
     private void LoadSampleAndGo()
     {
         Draft.RunJson = RunJson.ToJson(SampleProject.Build(), RunJson.CreateOptions());
+        Nav.NavigateTo("run");
+    }
+
+    private void LoadBureaucratsAndGo()
+    {
+        Draft.RunJson = BureaucratsSample.Json();
         Nav.NavigateTo("run");
     }
 }

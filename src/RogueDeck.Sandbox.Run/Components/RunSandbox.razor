@@ -28,6 +28,8 @@
             <label class="play" title="resume a saved run against this blueprint">Load run<InputFile OnChange="LoadRun" style="display:none" /></label>
             <button class="mini" @onclick="LoadSample"
                     title="REPLACES the current project with the built-in sample game (the Help page's worked examples, playable)">Load sample project</button>
+            <button class="mini" @onclick="LoadBureaucratsSample"
+                    title="REPLACES the current project with the full demo game: Bureaucrats &amp; Broomsticks — Act I (62 cards, a whole act map, shop, boss)">Load demo game: Bureaucrats &amp; Broomsticks</button>
         </div>
         <div class="run-bar">
             <label title="on: play each fight yourself (cards + end turn); off: fights auto-resolve headlessly">
@@ -315,6 +317,9 @@
     // Replace the project with the built-in sample game (Help page's worked examples). Destructive by design —
     // the tooltip warns; Download offers a backup first.
     private void LoadSample() => _json = RunJson.ToJson(SampleProject.Build(), _options);
+
+    // The second sample: the complete Bureaucrats & Broomsticks Act-I demo game (already-normalized JSON).
+    private void LoadBureaucratsSample() => _json = BureaucratsSample.Json();
 
     private void AddNode()
     {
