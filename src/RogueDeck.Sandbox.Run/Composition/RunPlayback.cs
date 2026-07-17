@@ -62,13 +62,22 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
 
     // Start (or restart) a run from the blueprint. interactive=true hands each fight to the player via an
     // InteractiveCombatDriver (surfaced through CombatDriver); false auto-resolves fights headlessly.
-    public void Start(RunBlueprint blueprint, int seed, bool interactive) =>
-        StartSession(blueprint, interactive, _ => blueprint.CreateInitialRun(new RunId("play"), seed));
+    // characterId picks a starting character from Blueprint.Characters (a host's character-select screen
+    // passes the chosen id; gate the roster with MetaProgression.AvailableCharacters); null keeps the
+    // blueprint's default start, so existing callers are unchanged.
+    public void Start(RunBlueprint blueprint, int seed, bool interactive, string? characterId = null) =>
+        StartSession(blueprint, interactive,
+            _ => blueprint.CreateInitialRun(new RunId("play"), seed, characterId),
+            characterId);
 
     // Resume a SAVED run against its blueprint (the map + content are content, supplied here; the live progress comes
     // from the save). The runner continues from the saved position (RunRunner resume support) instead of re-walking.
     public void Resume(RunBlueprint blueprint, RunSaveData save, bool interactive) =>
-        StartSession(blueprint, interactive, content => RunState.Restore(save, blueprint.Map, content));
+        StartSession(blueprint, interactive,
+            content => RunState.Restore(save, blueprint.Map, content),
+            // The save knows the real party shape (the run may have been started as a roster character
+            // with its own party) — don't guess from the blueprint's default start.
+            partyOverride: save.Party.Count > 1);
 
     // Serialize the live run to a save file. Only valid at a quiescent point (an interlude / event choice / the run's
     // end), where the run thread is parked — RunState.Snapshot throws otherwise; the caller surfaces that. Null when
@@ -88,14 +97,19 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
         }
     }
 
-    private void StartSession(RunBlueprint blueprint, bool interactive, Func<RunContentRegistry, RunState> makeRun)
+    private void StartSession(
+        RunBlueprint blueprint, bool interactive, Func<RunContentRegistry, RunState> makeRun,
+        string? characterId = null, bool? partyOverride = null)
     {
         Error = null;
         Dispose();
         try
         {
             var content = BuildContent(blueprint);
-            (CardCosts, CardNames, EnemyNames, HeroName) = DisplayNames(blueprint);
+            // The CHOSEN character's start decides the display name and the party shape below — not the
+            // blueprint's default Start (a roster character may bring its own name and party).
+            var start = blueprint.ResolveStart(characterId);
+            (CardCosts, CardNames, EnemyNames, HeroName) = DisplayNames(blueprint, start);
             CardFullCosts = blueprint.Cards.ToDictionary(card => card.Id, card => card.Costs);
             ResourceNames = blueprint.CombatResources.ToDictionary(
                 r => r.Id, r => string.IsNullOrWhiteSpace(r.DisplayName) ? r.Id : r.DisplayName);
@@ -109,7 +123,7 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
             // (PartyAutoPlayCombatDriver). Single-hero runs keep the hero-centric interactive / auto drivers.
             // The interactive session and drivers share ONE replay script (see ReplayScript): every player answer
             // is recorded there and the run re-executes deterministically to the next prompt.
-            var isParty = blueprint.Start.StartingParty.Count > 0;
+            var isParty = partyOverride ?? start.StartingParty.Count > 0;
             var script = new ReplayScript();
             var resettables = new List<IReplayResettable>();
 
@@ -207,7 +221,7 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
     // Energy cost + display name per card id, enemy display names per enemy id, and the single hero name (authored,
     // else the first encounter's hero name), so the fight view can grey out unaffordable cards and show readable names.
     private static (Dictionary<string, int>, Dictionary<string, string>, Dictionary<string, string>, string?) DisplayNames(
-        RunBlueprint blueprint)
+        RunBlueprint blueprint, RunStart start)
     {
         var cardCosts = blueprint.Cards.ToDictionary(
             card => card.Id,
@@ -217,8 +231,8 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
             .SelectMany(encounter => encounter.Enemies)
             .GroupBy(enemy => enemy.Id)
             .ToDictionary(g => g.Key, g => g.First().DisplayName ?? g.Key);
-        var heroName = !string.IsNullOrWhiteSpace(blueprint.Start.HeroName)
-            ? blueprint.Start.HeroName
+        var heroName = !string.IsNullOrWhiteSpace(start.HeroName)
+            ? start.HeroName
             : blueprint.Encounters
                 .Select(encounter => encounter.HeroDisplayName)
                 .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name));
