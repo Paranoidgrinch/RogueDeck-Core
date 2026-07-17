@@ -11,7 +11,14 @@ namespace RogueDeck.Run;
 // + run projection (deck/relics/modifiers), so the run designer composes fights from ids, not code.
 
 // A combat node payload that references an encounter by id (resolved via the resolver's EncounterCatalog).
-public sealed record EncounterRef(EncounterId Id) : IRunNodePayload;
+// Optionally carries the fight's victory reward AS DATA (reward.fixed / reward.pool) — offered by the
+// combat resolver on a win exactly like CombatNodePayload's, so data-authored games get post-fight
+// gold/card/relic rewards without a code payload.
+public sealed record EncounterRef(
+    EncounterId Id,
+    IRewardSource? VictoryReward = null,
+    RewardId? VictoryRewardId = null,
+    int VictoryRewardPickCount = 1) : IRunNodePayload;
 
 // The shared, authored-once combat content: the definitions every encounter draws its cards / enemy actions /
 // statuses from. This is the one place combat behaviour (EffectPrograms) is authored; encounters reference it.

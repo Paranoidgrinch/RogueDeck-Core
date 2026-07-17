@@ -280,12 +280,21 @@ public sealed class CombatNodeResolver : INodeResolver
 
         // Post-combat reward: on a victory, offer the node's reward (if any). Enqueued AFTER the resolved-event so a
         // relic reacting to the win queues first; the player then picks via the run's entity chooser (headless takes
-        // the first offers), exactly like a shop/smith. Only CombatNodePayload carries a reward today; a data
-        // (EncounterRef) reward is a follow-up.
-        if (result.Result == CombatResult.Victory
-            && node.Payload is CombatNodePayload { VictoryReward: { } reward } payload)
+        // the first offers), exactly like a shop/smith. Both payload kinds carry it: the code payload and the
+        // data EncounterRef.
+        if (result.Result == CombatResult.Victory)
         {
-            run.EnqueueEffect(new OfferRewardRunEffect(payload.VictoryRewardId, reward, payload.VictoryRewardPickCount));
+            switch (node.Payload)
+            {
+                case CombatNodePayload { VictoryReward: { } reward } payload:
+                    run.EnqueueEffect(new OfferRewardRunEffect(
+                        payload.VictoryRewardId, reward, payload.VictoryRewardPickCount));
+                    break;
+                case EncounterRef { VictoryReward: { } reward } reference:
+                    run.EnqueueEffect(new OfferRewardRunEffect(
+                        reference.VictoryRewardId ?? new RewardId("combat"), reward, reference.VictoryRewardPickCount));
+                    break;
+            }
         }
 
         return new NodeOutcome($"combat resolved ({result.Result}).");
