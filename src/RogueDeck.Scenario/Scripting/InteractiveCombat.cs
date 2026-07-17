@@ -86,6 +86,19 @@ public sealed class InteractiveCombat
     public int HeroEnergy => ResourceCurrent(StandardCombatIds.EnergyResource);
     public int HeroEnergyMax => ResourceMax(StandardCombatIds.EnergyResource);
 
+    // The enemy's telegraph: the action it would take when the CURRENT round reaches it (enemies act
+    // after the hero within the same round), as its authored intent (label + kind). Null for the hero,
+    // an unknown/actionless combatant, or a finished fight — a frontend renders it as the pre-turn
+    // intent icon next to each enemy.
+    public ActionIntent? UpcomingIntentFor(CombatantId combatant)
+    {
+        if (IsOver || combatant == _heroId)
+            return null;
+        return _enemyIntent(_combat, combatant, _combat.CurrentRound) is { } actionId
+            ? _compiled.IntentFor(actionId)
+            : null;
+    }
+
     public ScenarioReport ToReport() => new(_steps.ToList(), _combat.Result, _combat);
 
     public string RenderLog() => new NarrativeLogRenderer().Render(ToReport());
