@@ -64,6 +64,20 @@ public static class RunDeckMappers
         card => card.UpgradeLevel > 0 && card.Composition.Count == 0
             ? new CardDefinitionId(card.DefinitionId + suffix)
             : card.DefinitionId;
+
+    // UpgradeSuffix, but only when the upgraded definition actually exists — content that never authored
+    // "<id>+" variants keeps its runs playable (the upgrade stays a run-side fact the fight ignores).
+    public static Func<RunCardInstance, CardDefinitionId> UpgradeSuffixWhenDefined(
+        Func<CardDefinitionId, bool> isDefined, string suffix = "+")
+    {
+        ArgumentNullException.ThrowIfNull(isDefined);
+        var map = UpgradeSuffix(suffix);
+        return card =>
+        {
+            var mapped = map(card);
+            return mapped == card.DefinitionId || isDefined(mapped) ? mapped : card.DefinitionId;
+        };
+    }
 }
 
 // Queue a combat modifier from the normal effect flow (an event choice, a relic, a scheduled consequence).

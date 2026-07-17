@@ -68,7 +68,13 @@ public sealed class StandardRunPackage : IRunPackage
             .RegisterEffectHandler(new ShredEngine.AddComposedCardRunEffectHandler());
 
         builder
-            .RegisterResolver(new CombatNodeResolver(_combatDriver, encounters: _content?.Encounters,
+            .RegisterResolver(new CombatNodeResolver(_combatDriver,
+                // Upgraded copies fight as their "<id>+" definition when the content authored one — checked
+                // against the catalog so content without "+" variants keeps its runs playable.
+                deckMapper: _content?.Encounters is { } catalog
+                    ? RunDeckMappers.UpgradeSuffixWhenDefined(catalog.HasCard)
+                    : null,
+                encounters: _content?.Encounters,
                 projectionModifiers: new IRunCombatModifier[] { new ShredEngine.ShredCombatInjection() }))
             .RegisterResolver(new EventNodeResolver(_content))
             .RegisterResolver(new ShopNodeResolver(_content))

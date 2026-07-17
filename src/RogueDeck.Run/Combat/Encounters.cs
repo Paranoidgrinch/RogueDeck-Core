@@ -103,6 +103,7 @@ public sealed class EncounterCatalog
 {
     private readonly CombatContentLibrary _library;
     private readonly IReadOnlyDictionary<EncounterId, EncounterDefinition> _encounters;
+    private readonly HashSet<CardDefinitionId> _cardIds;
 
     public EncounterCatalog(CombatContentLibrary library, IEnumerable<EncounterDefinition> encounters)
     {
@@ -110,9 +111,14 @@ public sealed class EncounterCatalog
         ArgumentNullException.ThrowIfNull(encounters);
         _library = library;
         _encounters = encounters.ToDictionary(encounter => encounter.Id);
+        _cardIds = library.Cards.Select(card => new CardDefinitionId(card.Id)).ToHashSet();
     }
 
     public bool Contains(EncounterId id) => _encounters.ContainsKey(id);
+
+    // Whether the shared library defines this card — the deck projection asks this to decide if an upgraded
+    // copy has a real "<id>+" combat definition to fight as.
+    public bool HasCard(CardDefinitionId id) => _cardIds.Contains(id);
 
     public IEnumerable<EncounterId> Ids => _encounters.Keys;
 
