@@ -53,6 +53,11 @@
         <dt>Meta-progression</dt>
         <dd>Permanent progress between runs, written to the saved profile when a run ends — unlock flags and
             meta-currency counters.</dd>
+        <dt>Resource max adjustment</dt>
+        <dd>The reserved counter namespace <code>resourceMax.&lt;resource id&gt;</code>: setting or incrementing
+            such a counter (an event choice, a relic reaction) raises/lowers that combat resource's maximum —
+            and its starting fill — in every later fight. "+1 max energy" is
+            <code>increment counter resourceMax.standard.energy by 1</code>.</dd>
         <dt>Effect program</dt>
         <dd>A small visual script: steps (deal damage, apply status…), each with a target and an amount, plus
             control flow (sequences, loops, ifs). Cards, enemy actions, relic rules, status triggers and

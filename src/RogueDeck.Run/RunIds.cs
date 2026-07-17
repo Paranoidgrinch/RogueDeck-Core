@@ -144,6 +144,12 @@ public static class StandardRunIds
     public static readonly NodeType CombatNode = new("combat");
     public static readonly NodeType EventNode = new("event");
     public static readonly NodeType ShopNode = new("shop");
+
+    // Reserved counter namespace: "resourceMax.<combat resource id>" adjusts that resource's max (and its
+    // starting fill) by the counter's value in every spawned fight — the data path for "+1 max energy"
+    // relics/events via the ordinary counter effects (fx.incrementCounter / fx.setCounter). Consumed by
+    // CombatNodeResolver.ApplyRunProjection; pools the fight doesn't define are unaffected.
+    public const string ResourceMaxCounterPrefix = "resourceMax.";
 }
 
 public static class StandardRunLogTypes

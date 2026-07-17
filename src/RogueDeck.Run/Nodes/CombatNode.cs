@@ -372,6 +372,20 @@ public sealed class CombatNodeResolver : INodeResolver
             }
         }
 
+        // Resource-max adjustments: the reserved counter namespace "resourceMax.<resource id>" (see
+        // StandardRunIds) shifts that resource's max AND its starting fill on every player-side pool the
+        // fight defines — the data path for "+1 max energy" relics. The per-turn refill fills to the pool's
+        // own max, so the adjustment holds for the whole fight. Pools stay non-negative.
+        foreach (var (counter, delta) in run.Counters)
+        {
+            if (delta == 0 || !counter.Value.StartsWith(StandardRunIds.ResourceMaxCounterPrefix, StringComparison.Ordinal))
+                continue;
+            var resource = new ResourceId(counter.Value[StandardRunIds.ResourceMaxCounterPrefix.Length..]);
+            AdjustResourceMax(blueprint.Hero?.Resources, resource, delta);
+            foreach (var ally in blueprint.Allies)
+                AdjustResourceMax(ally.Resources, resource, delta);
+        }
+
         // Standing projection modifiers apply to EVERY fight (e.g. the Shred Engine synthesizing composed
         // card definitions the projected decks reference) — before the one-shot pending modifiers, so a
         // "next fight" consequence still has the last word.
@@ -382,6 +396,23 @@ public sealed class CombatNodeResolver : INodeResolver
         // are consumed here so each affects exactly one fight.
         foreach (var modifier in run.ConsumePendingCombatModifiers())
             modifier.Apply(blueprint, run);
+    }
+
+    private static void AdjustResourceMax(List<ResourceSpec>? resources, ResourceId resource, int delta)
+    {
+        if (resources is null)
+            return;
+        for (var i = 0; i < resources.Count; i++)
+        {
+            var spec = resources[i];
+            if (spec.Resource != resource)
+                continue;
+            resources[i] = spec with
+            {
+                Current = Math.Max(0, spec.Current + delta),
+                Max = Math.Max(0, spec.Max + delta),
+            };
+        }
     }
 
     // Reconcile the party after the fight (party deckbuilding B2): each additional member (projected as an ally)
