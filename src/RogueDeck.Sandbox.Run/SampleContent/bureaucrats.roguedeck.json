@@ -21334,7 +21334,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Call the Next Number"
+        "Label": "Call the Next Number \u00B7 Panic \u002B1"
       },
       "Program": {
         "Id": {
@@ -21376,7 +21376,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Desk Jab (8)"
+        "Label": "Desk Jab \u00B7 8 dmg"
       },
       "Program": {
         "Id": {
@@ -21415,7 +21415,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "You Are Not Being Served (5)"
+        "Label": "You Are Not Being Served \u00B7 5 dmg, Panic \u002B1"
       },
       "Program": {
         "Id": {
@@ -21486,7 +21486,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Rubber Stamp Rush (5)"
+        "Label": "Rubber Stamp Rush \u00B7 5 dmg"
       },
       "Program": {
         "Id": {
@@ -21525,7 +21525,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Stamped in Triplicate (4)"
+        "Label": "Stamped in Triplicate \u00B7 4 dmg, 4 block, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -21616,7 +21616,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Buff",
-        "Label": "Official Emboldening"
+        "Label": "Official Emboldening \u00B7 Strength \u002B1, 3 block"
       },
       "Program": {
         "Id": {
@@ -21685,7 +21685,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Misfiled Request"
+        "Label": "Misfiled Request \u00B7 Paperwork \u002B2"
       },
       "Program": {
         "Id": {
@@ -21727,7 +21727,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Eager Correction (6)"
+        "Label": "Eager Correction \u00B7 6 dmg, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -21798,7 +21798,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Buff",
-        "Label": "Freshly Learned Protocol"
+        "Label": "Freshly Learned Protocol \u00B7 6 block"
       },
       "Program": {
         "Id": {
@@ -21835,7 +21835,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Misdelivered Notice (5)"
+        "Label": "Misdelivered Notice \u00B7 5 dmg, Panic \u002B1"
       },
       "Program": {
         "Id": {
@@ -21906,7 +21906,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Peck and Scatter (7)"
+        "Label": "Peck and Scatter \u00B7 7 dmg"
       },
       "Program": {
         "Id": {
@@ -21945,7 +21945,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Drop the Wrong Parcel (5)"
+        "Label": "Drop the Wrong Parcel \u00B7 5 dmg, Panic \u002B1"
       },
       "Program": {
         "Id": {
@@ -22016,7 +22016,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Correct the Record"
+        "Label": "Correct the Record \u00B7 6 block, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -22085,7 +22085,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Ink Flick (4)"
+        "Label": "Ink Flick \u00B7 4 dmg, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -22156,7 +22156,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Waxen Protection"
+        "Label": "Waxen Protection \u00B7 4 block"
       },
       "Program": {
         "Id": {
@@ -22190,7 +22190,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Buff",
-        "Label": "Croak of Approval"
+        "Label": "Croak of Approval \u00B7 Strength \u002B1, 3 block"
       },
       "Program": {
         "Id": {
@@ -22259,7 +22259,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Sticky Stamp (3)"
+        "Label": "Sticky Stamp \u00B7 3 dmg, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -22330,7 +22330,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Stonewall Ordinance"
+        "Label": "Stonewall Ordinance \u00B7 14 block"
       },
       "Program": {
         "Id": {
@@ -22367,7 +22367,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Falling Masonry (13)"
+        "Label": "Falling Masonry \u00B7 13 dmg"
       },
       "Program": {
         "Id": {
@@ -22406,7 +22406,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Unmoving Precedent"
+        "Label": "Unmoving Precedent \u00B7 8 block, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -22475,7 +22475,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Binding Clause (8)"
+        "Label": "Binding Clause \u00B7 8 dmg, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -22546,7 +22546,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Coil of Procedure"
+        "Label": "Coil of Procedure \u00B7 9 block, Paperwork \u002B2"
       },
       "Program": {
         "Id": {
@@ -22615,7 +22615,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Buff",
-        "Label": "Tighten the Clause"
+        "Label": "Tighten the Clause \u00B7 Strength \u002B1"
       },
       "Program": {
         "Id": {
@@ -22657,7 +22657,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "First Toll (4)"
+        "Label": "First Toll \u00B7 4 dmg, Panic \u002B1"
       },
       "Program": {
         "Id": {
@@ -22728,7 +22728,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Buff",
-        "Label": "Gather Momentum"
+        "Label": "Gather Momentum \u00B7 Strength \u002B1, 4 block"
       },
       "Program": {
         "Id": {
@@ -22797,7 +22797,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Deadline Toll (10)"
+        "Label": "Deadline Toll \u00B7 10 dmg"
       },
       "Program": {
         "Id": {
@@ -22836,7 +22836,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Crawl into the Folder"
+        "Label": "Crawl into the Folder \u00B7 Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -22878,7 +22878,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Mandible Clip (12)"
+        "Label": "Mandible Clip \u00B7 12 dmg"
       },
       "Program": {
         "Id": {
@@ -22917,7 +22917,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Misfile the Request (6)"
+        "Label": "Misfile the Request \u00B7 6 dmg, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -22988,7 +22988,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Rectify Records"
+        "Label": "Rectify Records \u00B7 9 block, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -23057,7 +23057,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Expedited Rejection (11)"
+        "Label": "Expedited Rejection \u00B7 11 dmg, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -23128,7 +23128,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Buff",
-        "Label": "Staff Meeting"
+        "Label": "Staff Meeting \u00B7 Strength \u002B1, 6 block"
       },
       "Program": {
         "Id": {
@@ -23197,7 +23197,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Procedural Mass"
+        "Label": "Procedural Mass \u00B7 14 block"
       },
       "Program": {
         "Id": {
@@ -23234,7 +23234,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Binding Slam (12)"
+        "Label": "Binding Slam \u00B7 12 dmg, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -23305,7 +23305,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Regulation Tightens"
+        "Label": "Regulation Tightens \u00B7 Strength \u002B1, 8 block"
       },
       "Program": {
         "Id": {
@@ -23374,7 +23374,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Red Tape Snare (8)"
+        "Label": "Red Tape Snare \u00B7 8 dmg, Paperwork \u002B2"
       },
       "Program": {
         "Id": {
@@ -23445,7 +23445,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Adjourn the Matter (7)"
+        "Label": "Adjourn the Matter \u00B7 7 dmg, Fatigue \u002B1"
       },
       "Program": {
         "Id": {
@@ -23516,7 +23516,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Circulate the Memo"
+        "Label": "Circulate the Memo \u00B7 12 block"
       },
       "Program": {
         "Id": {
@@ -23553,7 +23553,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Come Back Later"
+        "Label": "Come Back Later \u00B7 Fatigue \u002B2"
       },
       "Program": {
         "Id": {
@@ -23595,7 +23595,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Delay Has Costs"
+        "Label": "Delay Has Costs \u00B7 3\u00D7 per Fatigue"
       },
       "Program": {
         "Id": {
@@ -23654,7 +23654,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Deputy\u0027s Decision (14)"
+        "Label": "Deputy\u0027s Decision \u00B7 14 dmg, Fatigue \u002B1"
       },
       "Program": {
         "Id": {
@@ -23725,7 +23725,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Nibble the Margins (6)"
+        "Label": "Nibble the Margins \u00B7 6 dmg"
       },
       "Program": {
         "Id": {
@@ -23793,7 +23793,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Scatter Forms"
+        "Label": "Scatter Forms \u00B7 3 block, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -23859,7 +23859,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Please Sign Here"
+        "Label": "Please Sign Here \u00B7 Paperwork \u002B2"
       },
       "Program": {
         "Id": {
@@ -23901,7 +23901,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Desperate Appeal"
+        "Label": "Desperate Appeal \u00B7 6 block, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -23970,7 +23970,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Pocket Stamp (5)"
+        "Label": "Pocket Stamp \u00B7 5 dmg"
       },
       "Program": {
         "Id": {
@@ -24009,7 +24009,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Exact Change (5)"
+        "Label": "Exact Change \u00B7 5 dmg"
       },
       "Program": {
         "Id": {
@@ -24048,7 +24048,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Administrative Toll (3)"
+        "Label": "Administrative Toll \u00B7 3 dmg, Paperwork \u002B2"
       },
       "Program": {
         "Id": {
@@ -24119,7 +24119,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Gatehouse Giggle"
+        "Label": "Gatehouse Giggle \u00B7 Panic \u002B1"
       },
       "Program": {
         "Id": {
@@ -24161,7 +24161,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Obscure Clause"
+        "Label": "Obscure Clause \u00B7 Doubt \u002B2"
       },
       "Program": {
         "Id": {
@@ -24203,7 +24203,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Public Notice"
+        "Label": "Public Notice \u00B7 Panic \u002B1, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -24277,7 +24277,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Flicker of Enforcement (6)"
+        "Label": "Flicker of Enforcement \u00B7 6 dmg"
       },
       "Program": {
         "Id": {
@@ -24316,7 +24316,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Eat the Index"
+        "Label": "Eat the Index \u00B7 Panic \u002B2"
       },
       "Program": {
         "Id": {
@@ -24358,7 +24358,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Dust Cloud"
+        "Label": "Dust Cloud \u00B7 5 block, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -24427,7 +24427,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Paper-Wing Cut (5)"
+        "Label": "Paper-Wing Cut \u00B7 5 dmg"
       },
       "Program": {
         "Id": {
@@ -24466,7 +24466,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Flutter About (4)"
+        "Label": "Flutter About \u00B7 4 dmg"
       },
       "Program": {
         "Id": {
@@ -24505,7 +24505,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Deadline Burst (3)"
+        "Label": "Deadline Burst \u00B7 3 dmg, Paperwork \u002B2"
       },
       "Program": {
         "Id": {
@@ -24576,7 +24576,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Drain the Morning"
+        "Label": "Drain the Morning \u00B7 Panic \u002B2"
       },
       "Program": {
         "Id": {
@@ -24618,7 +24618,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Suck the Schedule Dry (6)"
+        "Label": "Suck the Schedule Dry \u00B7 6 dmg, Panic \u002B1"
       },
       "Program": {
         "Id": {
@@ -24689,7 +24689,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Calendar Cling"
+        "Label": "Calendar Cling \u00B7 8 block"
       },
       "Program": {
         "Id": {
@@ -24726,7 +24726,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Assess Liability"
+        "Label": "Assess Liability \u00B7 Paperwork \u002B2"
       },
       "Program": {
         "Id": {
@@ -24768,7 +24768,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Buff",
-        "Label": "Compound Interest"
+        "Label": "Compound Interest \u00B7 Strength \u002B1, 5 block"
       },
       "Program": {
         "Id": {
@@ -24837,7 +24837,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Small-Print Bite (6)"
+        "Label": "Small-Print Bite \u00B7 6 dmg"
       },
       "Program": {
         "Id": {
@@ -24876,7 +24876,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Serve the Writ (6)"
+        "Label": "Serve the Writ \u00B7 6 dmg, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -24947,7 +24947,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Hold the Line"
+        "Label": "Hold the Line \u00B7 8 block, Strength \u002B1"
       },
       "Program": {
         "Id": {
@@ -25016,7 +25016,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Paving-Stone Bludgeon (8)"
+        "Label": "Paving-Stone Bludgeon \u00B7 8 dmg"
       },
       "Program": {
         "Id": {
@@ -25055,7 +25055,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Inspect the Flame"
+        "Label": "Inspect the Flame \u00B7 Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -25097,7 +25097,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Issue Citation (6)"
+        "Label": "Issue Citation \u00B7 6 dmg, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -25168,7 +25168,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Adjust the Wick"
+        "Label": "Adjust the Wick \u00B7 Strength \u002B1, 4 block"
       },
       "Program": {
         "Id": {
@@ -25237,7 +25237,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Application Denied"
+        "Label": "Application Denied \u00B7 7 block, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -25306,7 +25306,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Return to Previous Window (6)"
+        "Label": "Return to Previous Window \u00B7 6 dmg, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -25377,7 +25377,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Please Wait"
+        "Label": "Please Wait \u00B7 Panic \u002B1"
       },
       "Program": {
         "Id": {
@@ -25419,7 +25419,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Queue Reset"
+        "Label": "Queue Reset \u00B7 4 block, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -25485,7 +25485,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Certified Strike (9)"
+        "Label": "Certified Strike \u00B7 9 dmg"
       },
       "Program": {
         "Id": {
@@ -25524,7 +25524,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Buff",
-        "Label": "Seal the Team"
+        "Label": "Seal the Team \u00B7 Strength \u002B1, 3 block"
       },
       "Program": {
         "Id": {
@@ -25587,7 +25587,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Scent of Overdue Ink (10)"
+        "Label": "Scent of Overdue Ink \u00B7 10 dmg, Panic \u002B1"
       },
       "Program": {
         "Id": {
@@ -25658,7 +25658,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Guard the Stacks"
+        "Label": "Guard the Stacks \u00B7 11 block, Strength \u002B1"
       },
       "Program": {
         "Id": {
@@ -25727,7 +25727,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Tear the Index (10)"
+        "Label": "Tear the Index \u00B7 10 dmg"
       },
       "Program": {
         "Id": {
@@ -25795,7 +25795,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Howl of Missing References"
+        "Label": "Howl of Missing References \u00B7 Panic \u002B1, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -25869,7 +25869,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Stampede (9)"
+        "Label": "Stampede \u00B7 9 dmg"
       },
       "Program": {
         "Id": {
@@ -25959,7 +25959,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Inked Hooves (6)"
+        "Label": "Inked Hooves \u00B7 6 dmg, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -26030,7 +26030,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Buff",
-        "Label": "All Marks Approved"
+        "Label": "All Marks Approved \u00B7 Strength \u002B1, 6 block"
       },
       "Program": {
         "Id": {
@@ -26099,7 +26099,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Serve Writs (8)"
+        "Label": "Serve Writs \u00B7 8 dmg, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -26170,7 +26170,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Enforce the Margin (12)"
+        "Label": "Enforce the Margin \u00B7 12 dmg"
       },
       "Program": {
         "Id": {
@@ -26209,7 +26209,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Iron Procedure"
+        "Label": "Iron Procedure \u00B7 9 block"
       },
       "Program": {
         "Id": {
@@ -26246,7 +26246,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Produce Warrant"
+        "Label": "Produce Warrant \u00B7 4 block, Strength \u002B1"
       },
       "Program": {
         "Id": {
@@ -26309,7 +26309,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Authorized Blow (10)"
+        "Label": "Authorized Blow \u00B7 10 dmg"
       },
       "Program": {
         "Id": {
@@ -26348,7 +26348,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Legal Confusion"
+        "Label": "Legal Confusion \u00B7 Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -26390,7 +26390,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Audit Hex"
+        "Label": "Audit Hex \u00B7 Doubt \u002B1, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -26464,7 +26464,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Redacted Bolt (10)"
+        "Label": "Redacted Bolt \u00B7 10 dmg, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -26535,7 +26535,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Black Ledger Ritual"
+        "Label": "Black Ledger Ritual \u00B7 Strength \u002B1, 8 block"
       },
       "Program": {
         "Id": {
@@ -26604,7 +26604,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Ink Barrier"
+        "Label": "Ink Barrier \u00B7 14 block"
       },
       "Program": {
         "Id": {
@@ -26641,7 +26641,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Lion-Seal Pounce (12)"
+        "Label": "Lion-Seal Pounce \u00B7 12 dmg"
       },
       "Program": {
         "Id": {
@@ -26680,7 +26680,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Goat-Clause Murmur"
+        "Label": "Goat-Clause Murmur \u00B7 8 block, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -26749,7 +26749,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Serpent Signature"
+        "Label": "Serpent Signature \u00B7 Doubt \u002B1, Panic \u002B1"
       },
       "Program": {
         "Id": {
@@ -26823,7 +26823,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Threefold Authority (8)"
+        "Label": "Threefold Authority \u00B7 8 dmg, Strength \u002B1, 8 block"
       },
       "Program": {
         "Id": {
@@ -26914,7 +26914,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Call the Wrong Number (8)"
+        "Label": "Call the Wrong Number \u00B7 8 dmg, Panic \u002B1"
       },
       "Program": {
         "Id": {
@@ -26985,7 +26985,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Reorder the Line"
+        "Label": "Reorder the Line \u00B7 10 block"
       },
       "Program": {
         "Id": {
@@ -27022,7 +27022,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Now Serving Nobody (5)"
+        "Label": "Now Serving Nobody \u00B7 5 dmg, Panic \u002B1, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -27118,7 +27118,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Crowd Pressure"
+        "Label": "Crowd Pressure \u00B7 3\u00D7 per Panic"
       },
       "Program": {
         "Id": {
@@ -27177,7 +27177,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Close the Counter (15)"
+        "Label": "Close the Counter \u00B7 15 dmg"
       },
       "Program": {
         "Id": {
@@ -27216,7 +27216,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Press the Great Seal (9)"
+        "Label": "Press the Great Seal \u00B7 9 dmg, 7 block"
       },
       "Program": {
         "Id": {
@@ -27282,7 +27282,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Waxen Authority"
+        "Label": "Waxen Authority \u00B7 18 block"
       },
       "Program": {
         "Id": {
@@ -27319,7 +27319,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Seal the Record"
+        "Label": "Seal the Record \u00B7 Paperwork \u002B1, 12 block"
       },
       "Program": {
         "Id": {
@@ -27388,7 +27388,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Mallet of Validity (13)"
+        "Label": "Mallet of Validity \u00B7 13 dmg"
       },
       "Program": {
         "Id": {
@@ -27427,7 +27427,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Unbreakable Certification"
+        "Label": "Unbreakable Certification \u00B7 22 block"
       },
       "Program": {
         "Id": {
@@ -27464,7 +27464,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Civic Claw (10)"
+        "Label": "Civic Claw \u00B7 10 dmg"
       },
       "Program": {
         "Id": {
@@ -27503,7 +27503,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Hoard of Permits"
+        "Label": "Hoard of Permits \u00B7 Strength \u002B1, 8 block"
       },
       "Program": {
         "Id": {
@@ -27572,7 +27572,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Ordinance Breath (8)"
+        "Label": "Ordinance Breath \u00B7 8 dmg, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -27643,7 +27643,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Buff",
-        "Label": "Old City Hunger"
+        "Label": "Old City Hunger \u00B7 Strength \u002B2"
       },
       "Program": {
         "Id": {
@@ -27685,7 +27685,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Dragon\u0027s Assessment (17)"
+        "Label": "Dragon\u0027s Assessment \u00B7 17 dmg"
       },
       "Program": {
         "Id": {
@@ -27724,7 +27724,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Article Writes Itself (6)"
+        "Label": "Article Writes Itself \u00B7 6 dmg, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -27795,7 +27795,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Ambiguous Clause"
+        "Label": "Ambiguous Clause \u00B7 Doubt \u002B1, 10 block"
       },
       "Program": {
         "Id": {
@@ -27864,7 +27864,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Amend the Player"
+        "Label": "Amend the Player \u00B7 Paperwork \u002B1, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -27938,7 +27938,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Read Against You"
+        "Label": "Read Against You \u00B7 3\u00D7 per Paperwork"
       },
       "Program": {
         "Id": {
@@ -27997,7 +27997,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Contradictory Rights (12)"
+        "Label": "Contradictory Rights \u00B7 12 dmg, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -28068,7 +28068,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Lid Snap (8)"
+        "Label": "Lid Snap \u00B7 8 dmg"
       },
       "Program": {
         "Id": {
@@ -28107,7 +28107,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "False Bottom"
+        "Label": "False Bottom \u00B7 6 block, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -28176,7 +28176,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Bite the Hand (6)"
+        "Label": "Bite the Hand \u00B7 6 dmg, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -28247,7 +28247,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Now Serving 808"
+        "Label": "Now Serving 808 \u00B7 Panic \u002B1"
       },
       "Program": {
         "Id": {
@@ -28289,7 +28289,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Flicker Past (8)"
+        "Label": "Flicker Past \u00B7 8 dmg"
       },
       "Program": {
         "Id": {
@@ -28328,7 +28328,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Lost Your Place"
+        "Label": "Lost Your Place \u00B7 Panic \u002B2"
       },
       "Program": {
         "Id": {
@@ -28370,7 +28370,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Ask for a Form You Do Not Have"
+        "Label": "Ask for a Form You Do Not Have \u00B7 Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -28412,7 +28412,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Tap the Counter (12)"
+        "Label": "Tap the Counter \u00B7 12 dmg"
       },
       "Program": {
         "Id": {
@@ -28451,7 +28451,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Send You Next Door (7)"
+        "Label": "Send You Next Door \u00B7 7 dmg, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -28522,7 +28522,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Declare It Not My Desk"
+        "Label": "Declare It Not My Desk \u00B7 Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -28564,7 +28564,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Retreat Under the Counter"
+        "Label": "Retreat Under the Counter \u00B7 12 block"
       },
       "Program": {
         "Id": {
@@ -28601,7 +28601,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Slow Rubber Stamp (9)"
+        "Label": "Slow Rubber Stamp \u00B7 9 dmg, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -28672,7 +28672,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Check the Wrong Ledger"
+        "Label": "Check the Wrong Ledger \u00B7 Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -28714,7 +28714,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Paper Cuts (12)"
+        "Label": "Paper Cuts \u00B7 12 dmg"
       },
       "Program": {
         "Id": {
@@ -28782,7 +28782,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Provisional Refusal"
+        "Label": "Provisional Refusal \u00B7 8 block, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -28851,7 +28851,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Float Back Unfinished"
+        "Label": "Float Back Unfinished \u00B7 Paperwork \u002B3"
       },
       "Program": {
         "Id": {
@@ -28893,7 +28893,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Edge of the Page (6)"
+        "Label": "Edge of the Page \u00B7 6 dmg"
       },
       "Program": {
         "Id": {
@@ -28932,7 +28932,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Missing Signature (4)"
+        "Label": "Missing Signature \u00B7 4 dmg, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -29003,7 +29003,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Add a Correction"
+        "Label": "Add a Correction \u00B7 Paperwork \u002B3"
       },
       "Program": {
         "Id": {
@@ -29045,7 +29045,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Chew the Blank Space (7)"
+        "Label": "Chew the Blank Space \u00B7 7 dmg"
       },
       "Program": {
         "Id": {
@@ -29084,7 +29084,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Illegible Annotation"
+        "Label": "Illegible Annotation \u00B7 Paperwork \u002B1, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -29158,7 +29158,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Attach Itself"
+        "Label": "Attach Itself \u00B7 Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -29200,7 +29200,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Papercut (12)"
+        "Label": "Papercut \u00B7 12 dmg"
       },
       "Program": {
         "Id": {
@@ -29239,7 +29239,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Wrong Folder (6)"
+        "Label": "Wrong Folder \u00B7 6 dmg, Paperwork \u002B2"
       },
       "Program": {
         "Id": {
@@ -29310,7 +29310,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Drip Hot Wax (6)"
+        "Label": "Drip Hot Wax \u00B7 6 dmg, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -29381,7 +29381,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Harden the Seal"
+        "Label": "Harden the Seal \u00B7 10 block"
       },
       "Program": {
         "Id": {
@@ -29418,7 +29418,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Seal the Copy (4)"
+        "Label": "Seal the Copy \u00B7 4 dmg, 6 block"
       },
       "Program": {
         "Id": {
@@ -29484,7 +29484,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Attest the Damage (5)"
+        "Label": "Attest the Damage \u00B7 5 dmg, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -29555,7 +29555,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Protected Testimony"
+        "Label": "Protected Testimony \u00B7 9 block"
       },
       "Program": {
         "Id": {
@@ -29592,7 +29592,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Signed Testimony"
+        "Label": "Signed Testimony \u00B7 Paperwork \u002B2"
       },
       "Program": {
         "Id": {
@@ -29634,7 +29634,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Etched Subsection (7)"
+        "Label": "Etched Subsection \u00B7 7 dmg, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -29705,7 +29705,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Stone Precedent"
+        "Label": "Stone Precedent \u00B7 10 block"
       },
       "Program": {
         "Id": {
@@ -29742,7 +29742,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Cited in Full"
+        "Label": "Cited in Full \u00B7 Paperwork \u002B1, 6 block"
       },
       "Program": {
         "Id": {
@@ -29811,7 +29811,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Rooftop Bylaw (12)"
+        "Label": "Rooftop Bylaw \u00B7 12 dmg"
       },
       "Program": {
         "Id": {
@@ -29850,7 +29850,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Unmoving Precedent"
+        "Label": "Unmoving Precedent \u00B7 8 block, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -29919,7 +29919,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Cite Subclause (6)"
+        "Label": "Cite Subclause \u00B7 6 dmg, Paperwork \u002B1, 4 block"
       },
       "Program": {
         "Id": {
@@ -30010,7 +30010,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Cobbles Cite You (6)"
+        "Label": "Cobbles Cite You \u00B7 6 dmg, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -30081,7 +30081,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Local Exception"
+        "Label": "Local Exception \u00B7 Paperwork \u002B1, 6 block"
       },
       "Program": {
         "Id": {
@@ -30150,7 +30150,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Corner Clause (9)"
+        "Label": "Corner Clause \u00B7 9 dmg"
       },
       "Program": {
         "Id": {
@@ -30189,7 +30189,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Premature Closing (6)"
+        "Label": "Premature Closing \u00B7 6 dmg, Fatigue \u002B1"
       },
       "Program": {
         "Id": {
@@ -30260,7 +30260,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Second Toll (9)"
+        "Label": "Second Toll \u00B7 9 dmg"
       },
       "Program": {
         "Id": {
@@ -30299,7 +30299,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "After-Hours Echo"
+        "Label": "After-Hours Echo \u00B7 5 block, Fatigue \u002B1"
       },
       "Program": {
         "Id": {
@@ -30368,7 +30368,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Splintered Sit (7)"
+        "Label": "Splintered Sit \u00B7 7 dmg"
       },
       "Program": {
         "Id": {
@@ -30407,7 +30407,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Settle In"
+        "Label": "Settle In \u00B7 Fatigue \u002B1, 6 block"
       },
       "Program": {
         "Id": {
@@ -30476,7 +30476,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Numb the Legs (5)"
+        "Label": "Numb the Legs \u00B7 5 dmg, Fatigue \u002B1"
       },
       "Program": {
         "Id": {
@@ -30547,7 +30547,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Shutters Down (5)"
+        "Label": "Shutters Down \u00B7 5 dmg, Fatigue \u002B1"
       },
       "Program": {
         "Id": {
@@ -30618,7 +30618,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Come Back Later"
+        "Label": "Come Back Later \u00B7 Fatigue \u002B2"
       },
       "Program": {
         "Id": {
@@ -30660,7 +30660,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Closing Stamp (8)"
+        "Label": "Closing Stamp \u00B7 8 dmg"
       },
       "Program": {
         "Id": {
@@ -30699,7 +30699,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Accepted Complaint (6)"
+        "Label": "Accepted Complaint \u00B7 6 dmg, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -30770,7 +30770,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Escalate Case"
+        "Label": "Escalate Case \u00B7 Strength \u002B1"
       },
       "Program": {
         "Id": {
@@ -30812,7 +30812,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Return with Notes (5)"
+        "Label": "Return with Notes \u00B7 5 dmg, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -30883,7 +30883,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Sharp Objection (5)"
+        "Label": "Sharp Objection \u00B7 5 dmg, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -30954,7 +30954,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Louder Objection"
+        "Label": "Louder Objection \u00B7 Strength \u002B1, 4 block"
       },
       "Program": {
         "Id": {
@@ -31023,7 +31023,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Interrupting Cut (8)"
+        "Label": "Interrupting Cut \u00B7 8 dmg"
       },
       "Program": {
         "Id": {
@@ -31062,7 +31062,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Argue Procedure (7)"
+        "Label": "Argue Procedure \u00B7 7 dmg, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -31133,7 +31133,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Raise the Stakes"
+        "Label": "Raise the Stakes \u00B7 Strength \u002B1"
       },
       "Program": {
         "Id": {
@@ -31175,7 +31175,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Cross-Motion (6)"
+        "Label": "Cross-Motion \u00B7 6 dmg, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -31246,7 +31246,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Serve Warrant (8)"
+        "Label": "Serve Warrant \u00B7 8 dmg"
       },
       "Program": {
         "Id": {
@@ -31285,7 +31285,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Official Stance"
+        "Label": "Official Stance \u00B7 8 block, Strength \u002B1"
       },
       "Program": {
         "Id": {
@@ -31354,7 +31354,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Iron Notice (6)"
+        "Label": "Iron Notice \u00B7 6 dmg, 5 block"
       },
       "Program": {
         "Id": {
@@ -31420,7 +31420,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Levy Due (7)"
+        "Label": "Levy Due \u00B7 7 dmg, Strength \u002B1"
       },
       "Program": {
         "Id": {
@@ -31491,7 +31491,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Seized Goods"
+        "Label": "Seized Goods \u00B7 9 block"
       },
       "Program": {
         "Id": {
@@ -31528,7 +31528,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Double Assessment (10)"
+        "Label": "Double Assessment \u00B7 10 dmg"
       },
       "Program": {
         "Id": {
@@ -31596,7 +31596,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Gatehouse Blow (9)"
+        "Label": "Gatehouse Blow \u00B7 9 dmg"
       },
       "Program": {
         "Id": {
@@ -31635,7 +31635,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Bar the Gate"
+        "Label": "Bar the Gate \u00B7 12 block"
       },
       "Program": {
         "Id": {
@@ -31672,7 +31672,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Authorized Force"
+        "Label": "Authorized Force \u00B7 Strength \u002B1, 6 block"
       },
       "Program": {
         "Id": {
@@ -31741,7 +31741,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Cut Ahead (12)"
+        "Label": "Cut Ahead \u00B7 12 dmg, Panic \u002B1"
       },
       "Program": {
         "Id": {
@@ -31812,7 +31812,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Hiss at the Queue"
+        "Label": "Hiss at the Queue \u00B7 Panic \u002B1"
       },
       "Program": {
         "Id": {
@@ -31854,7 +31854,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Guard the Gap (4)"
+        "Label": "Guard the Gap \u00B7 4 dmg, 5 block"
       },
       "Program": {
         "Id": {
@@ -31920,7 +31920,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Shift the Barrier"
+        "Label": "Shift the Barrier \u00B7 Panic \u002B1"
       },
       "Program": {
         "Id": {
@@ -31962,7 +31962,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Snap Back (9)"
+        "Label": "Snap Back \u00B7 9 dmg"
       },
       "Program": {
         "Id": {
@@ -32001,7 +32001,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Hold the Line"
+        "Label": "Hold the Line \u00B7 6 block, Panic \u002B1"
       },
       "Program": {
         "Id": {
@@ -32070,7 +32070,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Last Call"
+        "Label": "Last Call \u00B7 Panic \u002B1"
       },
       "Program": {
         "Id": {
@@ -32112,7 +32112,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Ring for Closure (8)"
+        "Label": "Ring for Closure \u00B7 8 dmg, Panic \u002B1"
       },
       "Program": {
         "Id": {
@@ -32183,7 +32183,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Too Late Today"
+        "Label": "Too Late Today \u00B7 Panic \u002B1"
       },
       "Program": {
         "Id": {
@@ -32225,7 +32225,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Rustle Under the Bench"
+        "Label": "Rustle Under the Bench \u00B7 Panic \u002B1"
       },
       "Program": {
         "Id": {
@@ -32267,7 +32267,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Ankle Nip (8)"
+        "Label": "Ankle Nip \u00B7 8 dmg, Panic \u002B1"
       },
       "Program": {
         "Id": {
@@ -32338,7 +32338,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Scatter the Tickets (6)"
+        "Label": "Scatter the Tickets \u00B7 6 dmg, Panic \u002B1"
       },
       "Program": {
         "Id": {
@@ -32409,7 +32409,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Recite the Waiting Order (6)"
+        "Label": "Recite the Waiting Order \u00B7 6 dmg, Panic \u002B1"
       },
       "Program": {
         "Id": {
@@ -32480,7 +32480,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Monotone Rebuke (6)"
+        "Label": "Monotone Rebuke \u00B7 6 dmg, Panic \u002B1"
       },
       "Program": {
         "Id": {
@@ -32551,7 +32551,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Monotone Rebuke (6)"
+        "Label": "Monotone Rebuke \u00B7 6 dmg, Panic \u002B1"
       },
       "Program": {
         "Id": {
@@ -32622,7 +32622,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Deny the Premise"
+        "Label": "Deny the Premise \u00B7 Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -32664,7 +32664,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Slam the Hatch (10)"
+        "Label": "Slam the Hatch \u00B7 10 dmg"
       },
       "Program": {
         "Id": {
@@ -32703,7 +32703,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Not Admissible (4)"
+        "Label": "Not Admissible \u00B7 4 dmg, 4 block, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -32794,7 +32794,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Issue a Blue Slip"
+        "Label": "Issue a Blue Slip \u00B7 Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -32836,7 +32836,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Flutter into Your Face (6)"
+        "Label": "Flutter into Your Face \u00B7 6 dmg, 6 block"
       },
       "Program": {
         "Id": {
@@ -32902,7 +32902,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Wrong Department Mark"
+        "Label": "Wrong Department Mark \u00B7 Doubt \u002B2"
       },
       "Program": {
         "Id": {
@@ -32944,7 +32944,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Ring for the Wrong Person"
+        "Label": "Ring for the Wrong Person \u00B7 Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -32986,7 +32986,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Tongue Stamp (12)"
+        "Label": "Tongue Stamp \u00B7 12 dmg"
       },
       "Program": {
         "Id": {
@@ -33025,7 +33025,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Declare the Bell Binding (6)"
+        "Label": "Declare the Bell Binding \u00B7 6 dmg, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -33096,7 +33096,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Ask for Proof of Arrival"
+        "Label": "Ask for Proof of Arrival \u00B7 Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -33138,7 +33138,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Receipt Lash (13)"
+        "Label": "Receipt Lash \u00B7 13 dmg"
       },
       "Program": {
         "Id": {
@@ -33177,7 +33177,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Question the Date (7)"
+        "Label": "Question the Date \u00B7 7 dmg, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -33248,7 +33248,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Compare the Copies"
+        "Label": "Compare the Copies \u00B7 Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -33290,7 +33290,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Stamp Discrepancy (9)"
+        "Label": "Stamp Discrepancy \u00B7 9 dmg"
       },
       "Program": {
         "Id": {
@@ -33380,7 +33380,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Third Copy Contradicts You (3)"
+        "Label": "Third Copy Contradicts You \u00B7 3 dmg, 3 block, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -33471,7 +33471,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Gnaw the Margins"
+        "Label": "Gnaw the Margins \u00B7 Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -33513,7 +33513,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Many Small Bites (5)"
+        "Label": "Many Small Bites \u00B7 5 dmg"
       },
       "Program": {
         "Id": {
@@ -33647,7 +33647,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Scatter the Pages (1)"
+        "Label": "Scatter the Pages \u00B7 1 dmg, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -33718,7 +33718,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Many Small Bites (5)"
+        "Label": "Many Small Bites \u00B7 5 dmg"
       },
       "Program": {
         "Id": {
@@ -33852,7 +33852,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Scatter the Pages (1)"
+        "Label": "Scatter the Pages \u00B7 1 dmg, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -33923,7 +33923,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Gnaw the Margins"
+        "Label": "Gnaw the Margins \u00B7 Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -33965,7 +33965,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Scatter the Pages (1)"
+        "Label": "Scatter the Pages \u00B7 1 dmg, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -34036,7 +34036,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Gnaw the Margins"
+        "Label": "Gnaw the Margins \u00B7 Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -34078,7 +34078,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Many Small Bites (5)"
+        "Label": "Many Small Bites \u00B7 5 dmg"
       },
       "Program": {
         "Id": {
@@ -34212,7 +34212,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Make Another Copy"
+        "Label": "Make Another Copy \u00B7 Paperwork \u002B2"
       },
       "Program": {
         "Id": {
@@ -34254,7 +34254,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Carbon Bite (5)"
+        "Label": "Carbon Bite \u00B7 5 dmg"
       },
       "Program": {
         "Id": {
@@ -34293,7 +34293,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Copy Filed Twice"
+        "Label": "Copy Filed Twice \u00B7 Paperwork \u002B2"
       },
       "Program": {
         "Id": {
@@ -34335,7 +34335,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Leave It Blank"
+        "Label": "Leave It Blank \u00B7 Paperwork \u002B2"
       },
       "Program": {
         "Id": {
@@ -34377,7 +34377,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Ink-Sucker Bite (6)"
+        "Label": "Ink-Sucker Bite \u00B7 6 dmg, Panic \u002B1"
       },
       "Program": {
         "Id": {
@@ -34448,7 +34448,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Required Field (6)"
+        "Label": "Required Field \u00B7 6 dmg, Paperwork \u002B2"
       },
       "Program": {
         "Id": {
@@ -34519,7 +34519,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Unfold the Statement (8)"
+        "Label": "Unfold the Statement \u00B7 8 dmg, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -34590,7 +34590,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Wing of Fine Print"
+        "Label": "Wing of Fine Print \u00B7 Paperwork \u002B3, Panic \u002B1"
       },
       "Program": {
         "Id": {
@@ -34664,7 +34664,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Clause in the Crease (6)"
+        "Label": "Clause in the Crease \u00B7 6 dmg, Paperwork \u002B2"
       },
       "Program": {
         "Id": {
@@ -34735,7 +34735,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Barred Slam (7)"
+        "Label": "Barred Slam \u00B7 7 dmg"
       },
       "Program": {
         "Id": {
@@ -34774,7 +34774,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Seven Wax Seals"
+        "Label": "Seven Wax Seals \u00B7 13 block"
       },
       "Program": {
         "Id": {
@@ -34811,7 +34811,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Sealed Threshold"
+        "Label": "Sealed Threshold \u00B7 Paperwork \u002B1, 7 block"
       },
       "Program": {
         "Id": {
@@ -34880,7 +34880,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Ceremonial Clink (6)"
+        "Label": "Ceremonial Clink \u00B7 6 dmg, 4 block"
       },
       "Program": {
         "Id": {
@@ -34946,7 +34946,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Formal Authority"
+        "Label": "Formal Authority \u00B7 Paperwork \u002B1, 8 block"
       },
       "Program": {
         "Id": {
@@ -35015,7 +35015,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Chain Snap (9)"
+        "Label": "Chain Snap \u00B7 9 dmg"
       },
       "Program": {
         "Id": {
@@ -35054,7 +35054,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Seal-Staff Strike (8)"
+        "Label": "Seal-Staff Strike \u00B7 8 dmg"
       },
       "Program": {
         "Id": {
@@ -35093,7 +35093,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Stand over the Ledger"
+        "Label": "Stand over the Ledger \u00B7 8 block, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -35162,7 +35162,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Waxen Shove (5)"
+        "Label": "Waxen Shove \u00B7 5 dmg, 6 block"
       },
       "Program": {
         "Id": {
@@ -35228,7 +35228,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Paper-Cut Clause (5)"
+        "Label": "Paper-Cut Clause \u00B7 5 dmg, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -35299,7 +35299,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Fold into Validity"
+        "Label": "Fold into Validity \u00B7 7 block"
       },
       "Program": {
         "Id": {
@@ -35336,7 +35336,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Append the Clause"
+        "Label": "Append the Clause \u00B7 Paperwork \u002B2, 3 block"
       },
       "Program": {
         "Id": {
@@ -35405,7 +35405,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Heavy Impression (6)"
+        "Label": "Heavy Impression \u00B7 6 dmg"
       },
       "Program": {
         "Id": {
@@ -35444,7 +35444,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Raised Relief"
+        "Label": "Raised Relief \u00B7 4 block"
       },
       "Program": {
         "Id": {
@@ -35478,7 +35478,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Press into the Record (3)"
+        "Label": "Press into the Record \u00B7 3 dmg, Paperwork \u002B1, 5 block"
       },
       "Program": {
         "Id": {
@@ -35569,7 +35569,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Blue-Flame Prick (4)"
+        "Label": "Blue-Flame Prick \u00B7 4 dmg"
       },
       "Program": {
         "Id": {
@@ -35608,7 +35608,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Hold the Oath"
+        "Label": "Hold the Oath \u00B7 5 block"
       },
       "Program": {
         "Id": {
@@ -35642,7 +35642,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Smoke-Written Oath (3)"
+        "Label": "Smoke-Written Oath \u00B7 3 dmg, Paperwork \u002B1, 2 block"
       },
       "Program": {
         "Id": {
@@ -35733,7 +35733,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Mandatory Left (6)"
+        "Label": "Mandatory Left \u00B7 6 dmg, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -35804,7 +35804,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Mandatory Right"
+        "Label": "Mandatory Right \u00B7 Paperwork \u002B1, 6 block"
       },
       "Program": {
         "Id": {
@@ -35873,7 +35873,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Compulsory Detour (9)"
+        "Label": "Compulsory Detour \u00B7 9 dmg"
       },
       "Program": {
         "Id": {
@@ -35912,7 +35912,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Conflicting Heads (8)"
+        "Label": "Conflicting Heads \u00B7 8 dmg"
       },
       "Program": {
         "Id": {
@@ -35980,7 +35980,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Exception Clause"
+        "Label": "Exception Clause \u00B7 Doubt \u002B1, Paperwork \u002B1, 5 block"
       },
       "Program": {
         "Id": {
@@ -36074,7 +36074,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Reread the Head (7)"
+        "Label": "Reread the Head \u00B7 7 dmg, 5 block"
       },
       "Program": {
         "Id": {
@@ -36140,7 +36140,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Stone Lettering (10)"
+        "Label": "Stone Lettering \u00B7 10 dmg"
       },
       "Program": {
         "Id": {
@@ -36179,7 +36179,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Load-Bearing Clause"
+        "Label": "Load-Bearing Clause \u00B7 8 block, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -36248,7 +36248,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Addendum Crack"
+        "Label": "Addendum Crack \u00B7 Paperwork \u002B1, 5 block"
       },
       "Program": {
         "Id": {
@@ -36317,7 +36317,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Loophole Prick (6)"
+        "Label": "Loophole Prick \u00B7 6 dmg, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -36388,7 +36388,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Duck Behind Subsection"
+        "Label": "Duck Behind Subsection \u00B7 5 block, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -36457,7 +36457,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Technicality (8)"
+        "Label": "Technicality \u00B7 8 dmg"
       },
       "Program": {
         "Id": {
@@ -36496,7 +36496,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "See Below"
+        "Label": "See Below \u00B7 Doubt \u002B1, 4 block"
       },
       "Program": {
         "Id": {
@@ -36565,7 +36565,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Supporting Note"
+        "Label": "Supporting Note \u00B7 4 block, 2 block"
       },
       "Program": {
         "Id": {
@@ -36626,7 +36626,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Marginal Scratch (3)"
+        "Label": "Marginal Scratch \u00B7 3 dmg, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -36697,7 +36697,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Ancient Penalty (7)"
+        "Label": "Ancient Penalty \u00B7 7 dmg, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -36768,7 +36768,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Still in Force"
+        "Label": "Still in Force \u00B7 Doubt \u002B1, 8 block"
       },
       "Program": {
         "Id": {
@@ -36837,7 +36837,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Repealed Never (11)"
+        "Label": "Repealed Never \u00B7 11 dmg"
       },
       "Program": {
         "Id": {
@@ -36876,7 +36876,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Overrule Text"
+        "Label": "Overrule Text \u00B7 Doubt \u002B1, 5 block"
       },
       "Program": {
         "Id": {
@@ -36945,7 +36945,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Narrow Interpretation"
+        "Label": "Narrow Interpretation \u00B7 Paperwork \u002B1, 3 block"
       },
       "Program": {
         "Id": {
@@ -37014,7 +37014,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Marginal Cut (5)"
+        "Label": "Marginal Cut \u00B7 5 dmg"
       },
       "Program": {
         "Id": {
@@ -37053,7 +37053,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Upward Sand (6)"
+        "Label": "Upward Sand \u00B7 6 dmg, Fatigue \u002B1"
       },
       "Program": {
         "Id": {
@@ -37124,7 +37124,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Glass Stillness"
+        "Label": "Glass Stillness \u00B7 10 block"
       },
       "Program": {
         "Id": {
@@ -37161,7 +37161,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Stolen Minute (4)"
+        "Label": "Stolen Minute \u00B7 4 dmg, Fatigue \u002B1, 4 block"
       },
       "Program": {
         "Id": {
@@ -37252,7 +37252,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Number Fades (5)"
+        "Label": "Number Fades \u00B7 5 dmg, Fatigue \u002B1"
       },
       "Program": {
         "Id": {
@@ -37323,7 +37323,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Sharp-Edge Token (7)"
+        "Label": "Sharp-Edge Token \u00B7 7 dmg"
       },
       "Program": {
         "Id": {
@@ -37362,7 +37362,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Unreadable Digit"
+        "Label": "Unreadable Digit \u00B7 Fatigue \u002B1, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -37436,7 +37436,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Rope Slackens (8)"
+        "Label": "Rope Slackens \u00B7 8 dmg"
       },
       "Program": {
         "Id": {
@@ -37475,7 +37475,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Not Yet"
+        "Label": "Not Yet \u00B7 Fatigue \u002B1, 7 block"
       },
       "Program": {
         "Id": {
@@ -37544,7 +37544,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Marked Still (6)"
+        "Label": "Marked Still \u00B7 6 dmg, Fatigue \u002B1"
       },
       "Program": {
         "Id": {
@@ -37615,7 +37615,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Nibble the Minute (4)"
+        "Label": "Nibble the Minute \u00B7 4 dmg, Fatigue \u002B1"
       },
       "Program": {
         "Id": {
@@ -37686,7 +37686,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Dusty Wings (6)"
+        "Label": "Dusty Wings \u00B7 6 dmg"
       },
       "Program": {
         "Id": {
@@ -37725,7 +37725,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Land on the Clock"
+        "Label": "Land on the Clock \u00B7 4 block, Fatigue \u002B1"
       },
       "Program": {
         "Id": {
@@ -37794,7 +37794,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Minute-Hand Jab (5)"
+        "Label": "Minute-Hand Jab \u00B7 5 dmg"
       },
       "Program": {
         "Id": {
@@ -37833,7 +37833,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Fixed Hour"
+        "Label": "Fixed Hour \u00B7 Fatigue \u002B1, 5 block"
       },
       "Program": {
         "Id": {
@@ -37902,7 +37902,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Chime Late (7)"
+        "Label": "Chime Late \u00B7 7 dmg"
       },
       "Program": {
         "Id": {
@@ -37941,7 +37941,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Called Too Early (4)"
+        "Label": "Called Too Early \u00B7 4 dmg, Fatigue \u002B1"
       },
       "Program": {
         "Id": {
@@ -38012,7 +38012,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Please Wait Here"
+        "Label": "Please Wait Here \u00B7 6 block"
       },
       "Program": {
         "Id": {
@@ -38049,7 +38049,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Wrong Slot"
+        "Label": "Wrong Slot \u00B7 Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -38091,7 +38091,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Paperless Summons (6)"
+        "Label": "Paperless Summons \u00B7 6 dmg"
       },
       "Program": {
         "Id": {
@@ -38130,7 +38130,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Late Notice (5)"
+        "Label": "Late Notice \u00B7 5 dmg"
       },
       "Program": {
         "Id": {
@@ -38169,7 +38169,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "All Slots Delayed"
+        "Label": "All Slots Delayed \u00B7 Fatigue \u002B1, 3 block"
       },
       "Program": {
         "Id": {
@@ -38235,7 +38235,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Rescheduled Cut (7)"
+        "Label": "Rescheduled Cut \u00B7 7 dmg"
       },
       "Program": {
         "Id": {
@@ -38274,7 +38274,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Another Wait"
+        "Label": "Another Wait \u00B7 Fatigue \u002B1"
       },
       "Program": {
         "Id": {
@@ -38316,7 +38316,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Last Call (6)"
+        "Label": "Last Call \u00B7 6 dmg, Fatigue \u002B1"
       },
       "Program": {
         "Id": {
@@ -38387,7 +38387,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Closed-Door Pause"
+        "Label": "Closed-Door Pause \u00B7 8 block"
       },
       "Program": {
         "Id": {
@@ -38424,7 +38424,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Appointment Strike (9)"
+        "Label": "Appointment Strike \u00B7 9 dmg"
       },
       "Program": {
         "Id": {
@@ -38463,7 +38463,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Postponed Again"
+        "Label": "Postponed Again \u00B7 Fatigue \u002B1, 4 block"
       },
       "Program": {
         "Id": {
@@ -38532,7 +38532,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Shortly Reopens (8)"
+        "Label": "Shortly Reopens \u00B7 8 dmg, Fatigue \u002B1"
       },
       "Program": {
         "Id": {
@@ -38603,7 +38603,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Stone Hours"
+        "Label": "Stone Hours \u00B7 14 block"
       },
       "Program": {
         "Id": {
@@ -38640,7 +38640,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Return Tomorrow"
+        "Label": "Return Tomorrow \u00B7 Fatigue \u002B2"
       },
       "Program": {
         "Id": {
@@ -38682,7 +38682,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "New Notice Posted (5)"
+        "Label": "New Notice Posted \u00B7 5 dmg, 10 block"
       },
       "Program": {
         "Id": {
@@ -38748,7 +38748,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Closing Slab (12)"
+        "Label": "Closing Slab \u00B7 12 dmg"
       },
       "Program": {
         "Id": {
@@ -38787,7 +38787,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Chairs Creep Closer (8)"
+        "Label": "Chairs Creep Closer \u00B7 8 dmg, Fatigue \u002B1"
       },
       "Program": {
         "Id": {
@@ -38858,7 +38858,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Walls Hold Still"
+        "Label": "Walls Hold Still \u00B7 12 block"
       },
       "Program": {
         "Id": {
@@ -38895,7 +38895,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Lose the Day"
+        "Label": "Lose the Day \u00B7 Fatigue \u002B2"
       },
       "Program": {
         "Id": {
@@ -38937,7 +38937,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Time Eats Back"
+        "Label": "Time Eats Back \u00B7 3\u00D7 per Fatigue"
       },
       "Program": {
         "Id": {
@@ -38996,7 +38996,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Carpet Grips Your Feet (10)"
+        "Label": "Carpet Grips Your Feet \u00B7 10 dmg, 6 block"
       },
       "Program": {
         "Id": {
@@ -39062,7 +39062,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Nibble the Hour (4)"
+        "Label": "Nibble the Hour \u00B7 4 dmg, Fatigue \u002B1"
       },
       "Program": {
         "Id": {
@@ -39133,7 +39133,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Dust over the Chairs"
+        "Label": "Dust over the Chairs \u00B7 4 block"
       },
       "Program": {
         "Id": {
@@ -39167,7 +39167,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Wingbeat Delay (6)"
+        "Label": "Wingbeat Delay \u00B7 6 dmg"
       },
       "Program": {
         "Id": {
@@ -39206,7 +39206,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Settle on the Clock"
+        "Label": "Settle on the Clock \u00B7 Fatigue \u002B1"
       },
       "Program": {
         "Id": {
@@ -39248,7 +39248,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Red-Ink Claim (6)"
+        "Label": "Red-Ink Claim \u00B7 6 dmg, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -39319,7 +39319,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Spiteful Escalation"
+        "Label": "Spiteful Escalation \u00B7 Strength \u002B1"
       },
       "Program": {
         "Id": {
@@ -39361,7 +39361,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Double Counterclaim (8)"
+        "Label": "Double Counterclaim \u00B7 8 dmg"
       },
       "Program": {
         "Id": {
@@ -39429,7 +39429,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Rewrite Statement (7)"
+        "Label": "Rewrite Statement \u00B7 7 dmg, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -39500,7 +39500,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Correct Against You"
+        "Label": "Correct Against You \u00B7 Strength \u002B1, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -39574,7 +39574,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Record Snap (10)"
+        "Label": "Record Snap \u00B7 10 dmg"
       },
       "Program": {
         "Id": {
@@ -39613,7 +39613,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Reconsideration Cut (6)"
+        "Label": "Reconsideration Cut \u00B7 6 dmg, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -39684,7 +39684,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Renewed Motion"
+        "Label": "Renewed Motion \u00B7 Strength \u002B1, 5 block"
       },
       "Program": {
         "Id": {
@@ -39753,7 +39753,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Filed Again (9)"
+        "Label": "Filed Again \u00B7 9 dmg"
       },
       "Program": {
         "Id": {
@@ -39792,7 +39792,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Sustained Strike (7)"
+        "Label": "Sustained Strike \u00B7 7 dmg"
       },
       "Program": {
         "Id": {
@@ -39831,7 +39831,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Order in the Motion"
+        "Label": "Order in the Motion \u00B7 3 block"
       },
       "Program": {
         "Id": {
@@ -39865,7 +39865,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Sustain the Objection"
+        "Label": "Sustain the Objection \u00B7 Paperwork \u002B1, Strength \u002B1"
       },
       "Program": {
         "Id": {
@@ -39939,7 +39939,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "First Ground (5)"
+        "Label": "First Ground \u00B7 5 dmg, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -40010,7 +40010,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Buff",
-        "Label": "Case Climbs"
+        "Label": "Case Climbs \u00B7 Strength \u002B1"
       },
       "Program": {
         "Id": {
@@ -40052,7 +40052,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Stone-Step Cut (6)"
+        "Label": "Stone-Step Cut \u00B7 6 dmg"
       },
       "Program": {
         "Id": {
@@ -40091,7 +40091,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Filed Upward"
+        "Label": "Filed Upward \u00B7 Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -40133,7 +40133,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Higher Paperwork (6)"
+        "Label": "Higher Paperwork \u00B7 6 dmg, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -40204,7 +40204,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Procedural Landing"
+        "Label": "Procedural Landing \u00B7 3 block"
       },
       "Program": {
         "Id": {
@@ -40238,7 +40238,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Buff",
-        "Label": "Raised Instance"
+        "Label": "Raised Instance \u00B7 Strength \u002B1"
       },
       "Program": {
         "Id": {
@@ -40280,7 +40280,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Staircase Strike (8)"
+        "Label": "Staircase Strike \u00B7 8 dmg"
       },
       "Program": {
         "Id": {
@@ -40319,7 +40319,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "High Objection (7)"
+        "Label": "High Objection \u00B7 7 dmg, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -40390,7 +40390,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Precedent Above"
+        "Label": "Precedent Above \u00B7 Strength \u002B1, 5 block"
       },
       "Program": {
         "Id": {
@@ -40459,7 +40459,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Final Step Falls (10)"
+        "Label": "Final Step Falls \u00B7 10 dmg"
       },
       "Program": {
         "Id": {
@@ -40498,7 +40498,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Escalated Filing"
+        "Label": "Escalated Filing \u00B7 Paperwork \u002B1, Strength \u002B1"
       },
       "Program": {
         "Id": {
@@ -40572,7 +40572,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Many Signatures Speak (8)"
+        "Label": "Many Signatures Speak \u00B7 8 dmg, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -40643,7 +40643,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Buff",
-        "Label": "Voices Grow Louder"
+        "Label": "Voices Grow Louder \u00B7 Strength \u002B1"
       },
       "Program": {
         "Id": {
@@ -40685,7 +40685,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Amended Aloud"
+        "Label": "Amended Aloud \u00B7 Paperwork \u002B1, 8 block"
       },
       "Program": {
         "Id": {
@@ -40754,7 +40754,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Chorus Cut (10)"
+        "Label": "Chorus Cut \u00B7 10 dmg"
       },
       "Program": {
         "Id": {
@@ -40793,7 +40793,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Repeat the Prayer"
+        "Label": "Repeat the Prayer \u00B7 Strength \u002B1, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -40867,7 +40867,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Returned Decision (8)"
+        "Label": "Returned Decision \u00B7 8 dmg, Paperwork \u002B1"
       },
       "Program": {
         "Id": {
@@ -40938,7 +40938,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Buff",
-        "Label": "Comes Back Stronger"
+        "Label": "Comes Back Stronger \u00B7 Strength \u002B1"
       },
       "Program": {
         "Id": {
@@ -40980,7 +40980,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Old Ruling Strike (12)"
+        "Label": "Old Ruling Strike \u00B7 12 dmg"
       },
       "Program": {
         "Id": {
@@ -41019,7 +41019,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Uncertain Remand"
+        "Label": "Uncertain Remand \u00B7 Doubt \u002B1, 6 block"
       },
       "Program": {
         "Id": {
@@ -41088,7 +41088,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Doubt Collects Interest"
+        "Label": "Doubt Collects Interest \u00B7 3\u00D7 per Doubt"
       },
       "Program": {
         "Id": {
@@ -41147,7 +41147,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Writ Rises (5)"
+        "Label": "Writ Rises \u00B7 5 dmg, Doubt \u002B1"
       },
       "Program": {
         "Id": {
@@ -41218,7 +41218,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Higher Seal"
+        "Label": "Higher Seal \u00B7 4 block"
       },
       "Program": {
         "Id": {
@@ -41252,7 +41252,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Buff",
-        "Label": "Pull the Case Upward"
+        "Label": "Pull the Case Upward \u00B7 Strength \u002B1"
       },
       "Program": {
         "Id": {
@@ -41294,7 +41294,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Paper Edge (7)"
+        "Label": "Paper Edge \u00B7 7 dmg"
       },
       "Program": {
         "Id": {
@@ -41333,7 +41333,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Chain Drag (7)"
+        "Label": "Chain Drag \u00B7 7 dmg, 4 block"
       },
       "Program": {
         "Id": {
@@ -41399,7 +41399,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Buff",
-        "Label": "Tighten Compliance"
+        "Label": "Tighten Compliance \u00B7 Strength \u002B1"
       },
       "Program": {
         "Id": {
@@ -41441,7 +41441,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Iron Follow-Up (10)"
+        "Label": "Iron Follow-Up \u00B7 10 dmg"
       },
       "Program": {
         "Id": {
@@ -41480,7 +41480,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Seize at Threshold (8)"
+        "Label": "Seize at Threshold \u00B7 8 dmg, 5 block"
       },
       "Program": {
         "Id": {
@@ -41546,7 +41546,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Lawful Hold"
+        "Label": "Lawful Hold \u00B7 10 block, Strength \u002B1"
       },
       "Program": {
         "Id": {
@@ -41615,7 +41615,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Threshold Slam (12)"
+        "Label": "Threshold Slam \u00B7 12 dmg"
       },
       "Program": {
         "Id": {
@@ -41654,7 +41654,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Advance under Warrant"
+        "Label": "Advance under Warrant \u00B7 Strength \u002B1, 8 block"
       },
       "Program": {
         "Id": {
@@ -41723,7 +41723,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Ram the Case (10)"
+        "Label": "Ram the Case \u00B7 10 dmg"
       },
       "Program": {
         "Id": {
@@ -41762,7 +41762,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Second Impact (13)"
+        "Label": "Second Impact \u00B7 13 dmg"
       },
       "Program": {
         "Id": {
@@ -41801,7 +41801,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Warrant Ignites (10)"
+        "Label": "Warrant Ignites \u00B7 10 dmg, Strength \u002B1"
       },
       "Program": {
         "Id": {
@@ -41872,7 +41872,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Iron Authority"
+        "Label": "Iron Authority \u00B7 14 block"
       },
       "Program": {
         "Id": {
@@ -41909,7 +41909,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Served in Steel (8)"
+        "Label": "Served in Steel \u00B7 8 dmg, 8 block"
       },
       "Program": {
         "Id": {
@@ -41975,7 +41975,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Buff",
-        "Label": "Binding Order"
+        "Label": "Binding Order \u00B7 Strength \u002B2"
       },
       "Program": {
         "Id": {
@@ -42017,7 +42017,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Final Service (16)"
+        "Label": "Final Service \u00B7 16 dmg"
       },
       "Program": {
         "Id": {
@@ -42056,7 +42056,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Enter the Premises (8)"
+        "Label": "Enter the Premises \u00B7 8 dmg"
       },
       "Program": {
         "Id": {
@@ -42095,7 +42095,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Marshal the Inventory"
+        "Label": "Marshal the Inventory \u00B7 Strength \u002B1, 6 block"
       },
       "Program": {
         "Id": {
@@ -42164,7 +42164,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Lawful Strike (11)"
+        "Label": "Lawful Strike \u00B7 11 dmg"
       },
       "Program": {
         "Id": {
@@ -42203,7 +42203,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Guard the List (5)"
+        "Label": "Guard the List \u00B7 5 dmg, 5 block"
       },
       "Program": {
         "Id": {
@@ -42269,7 +42269,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Mark the Goods"
+        "Label": "Mark the Goods \u00B7 4 block, 2 block"
       },
       "Program": {
         "Id": {
@@ -42330,7 +42330,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Bright Authority (4)"
+        "Label": "Bright Authority \u00B7 4 dmg, Strength \u002B1"
       },
       "Program": {
         "Id": {
@@ -42401,7 +42401,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Lantern-Glass Cut (6)"
+        "Label": "Lantern-Glass Cut \u00B7 6 dmg"
       },
       "Program": {
         "Id": {
@@ -42440,7 +42440,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Seal the Room"
+        "Label": "Seal the Room \u00B7 3 block, 3 block"
       },
       "Program": {
         "Id": {
@@ -42501,7 +42501,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Cartwheel Crush (7)"
+        "Label": "Cartwheel Crush \u00B7 7 dmg"
       },
       "Program": {
         "Id": {
@@ -42540,7 +42540,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Iron Storage"
+        "Label": "Iron Storage \u00B7 9 block"
       },
       "Program": {
         "Id": {
@@ -42577,7 +42577,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Buff",
-        "Label": "Lock the Load"
+        "Label": "Lock the Load \u00B7 Strength \u002B1"
       },
       "Program": {
         "Id": {
@@ -42619,7 +42619,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Roll over Claims (10)"
+        "Label": "Roll over Claims \u00B7 10 dmg"
       },
       "Program": {
         "Id": {
@@ -42658,7 +42658,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Raise, Then Drop"
+        "Label": "Raise, Then Drop \u00B7 12 block, Strength \u002B1"
       },
       "Program": {
         "Id": {
@@ -42727,7 +42727,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Barred Judgment (11)"
+        "Label": "Barred Judgment \u00B7 11 dmg"
       },
       "Program": {
         "Id": {
@@ -42766,7 +42766,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Iron Grid (8)"
+        "Label": "Iron Grid \u00B7 8 dmg, 8 block"
       },
       "Program": {
         "Id": {
@@ -42832,7 +42832,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Falling Teeth (14)"
+        "Label": "Falling Teeth \u00B7 14 dmg"
       },
       "Program": {
         "Id": {
@@ -42871,7 +42871,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "No-Exit Order"
+        "Label": "No-Exit Order \u00B7 Strength \u002B2, 6 block"
       },
       "Program": {
         "Id": {
@@ -42940,7 +42940,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Notice Charge (9)"
+        "Label": "Notice Charge \u00B7 9 dmg, Strength \u002B1"
       },
       "Program": {
         "Id": {
@@ -43011,7 +43011,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Shielded Service"
+        "Label": "Shielded Service \u00B7 10 block"
       },
       "Program": {
         "Id": {
@@ -43048,7 +43048,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Deadline Cut (12)"
+        "Label": "Deadline Cut \u00B7 12 dmg"
       },
       "Program": {
         "Id": {
@@ -43087,7 +43087,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Armored Delivery (6)"
+        "Label": "Armored Delivery \u00B7 6 dmg, 6 block"
       },
       "Program": {
         "Id": {
@@ -43153,7 +43153,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Buff",
-        "Label": "Last Warning"
+        "Label": "Last Warning \u00B7 Strength \u002B2"
       },
       "Program": {
         "Id": {
@@ -43195,7 +43195,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Sealed Thrust (7)"
+        "Label": "Sealed Thrust \u00B7 7 dmg"
       },
       "Program": {
         "Id": {
@@ -43234,7 +43234,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Defend",
-        "Label": "Guard the Notice"
+        "Label": "Guard the Notice \u00B7 4 block, 2 block"
       },
       "Program": {
         "Id": {
@@ -43295,7 +43295,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Special",
-        "Label": "Authorized Pierce (5)"
+        "Label": "Authorized Pierce \u00B7 5 dmg, Strength \u002B1"
       },
       "Program": {
         "Id": {
@@ -43366,7 +43366,7 @@
       "DescriptionKey": null,
       "Intent": {
         "Kind": "Attack",
-        "Label": "Long Reach (9)"
+        "Label": "Long Reach \u00B7 9 dmg"
       },
       "Program": {
         "Id": {

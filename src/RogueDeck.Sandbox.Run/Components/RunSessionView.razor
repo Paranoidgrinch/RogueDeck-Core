@@ -84,6 +84,11 @@
                     {
                         <span class="muted">· @CombatStatusLine(c)</span>
                     }
+                    @* Telegraph: what this enemy is ABOUT to do next round (kind glyph + the authored label). *@
+                    @if (c.IsAlive && combat.UpcomingIntentFor(c.Id) is { } intent)
+                    {
+                        <span class="intent" title="@IntentDisplay.KindWord(intent.Kind)">↷ @IntentDisplay.Full(intent)</span>
+                    }
                 </div>
             }
             @if (ActiveCardChoice is { } cardChoice)
