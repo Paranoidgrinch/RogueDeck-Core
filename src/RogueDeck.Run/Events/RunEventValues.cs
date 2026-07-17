@@ -33,6 +33,7 @@ public static class RunEventFields
     public const string ResourceDelta = "resource.delta";
     public const string CounterNewValue = "counter.newValue";
     public const string CounterDelta = "counter.delta";
+    public const string NodeIsCombat = "node.isCombat";
 
     private static readonly Dictionary<string, Func<IRunEvent, int?>> IntReaders = new();
     private static readonly Dictionary<string, Func<IRunEvent, bool?>> BoolReaders = new();
@@ -49,6 +50,10 @@ public static class RunEventFields
         RegisterInt(ResourceDelta, e => e is ResourceChangedRunEvent r ? r.Delta : null);
         RegisterInt(CounterNewValue, e => e is RunCounterChangedRunEvent c ? c.NewValue : null);
         RegisterInt(CounterDelta, e => e is RunCounterChangedRunEvent c ? c.Delta : null);
+        // Gates a nodeEntered reaction to combat nodes — THE data path for "at the start of each combat"
+        // relics: When<NodeEnteredRunEvent>(node.isCombat, installNextCombatOpening(rule)). The entered
+        // combat node consumes the pending opening itself, so nothing stacks across other node kinds.
+        RegisterBool(NodeIsCombat, e => e is NodeEnteredRunEvent n ? n.NodeType == StandardRunIds.CombatNode : null);
     }
 
     public static void RegisterInt(string key, Func<IRunEvent, int?> reader) => IntReaders[key] = reader;
