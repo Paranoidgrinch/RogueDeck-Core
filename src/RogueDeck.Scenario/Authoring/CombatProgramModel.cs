@@ -162,6 +162,11 @@ public sealed record CombatNodeModel(
     // share ToDefinition; canonically "" for kinds that don't use it so build↔classify round-trips exactly.
     CombatCardSpec? Card = null,
     string ToDefinition = "",
+    // forEachCardInZone: optional tag filter (only cards whose definition carries the tag; "" = no tag filter)
+    // and an optional "only the first N matching cards in zone order" limit (null = all matches). Canonical
+    // defaults for kinds that don't use them so build↔classify round-trips exactly.
+    string ToTag = "",
+    int? TakeFirst = null,
     // moveCardToZone: where the card lands in the destination zone (Top = a tutor / put-on-top; Bottom = default).
     // Canonically Bottom for other kinds so build↔classify round-trips exactly.
     ZonePlacement Placement = ZonePlacement.Bottom,
@@ -241,9 +246,12 @@ public sealed record CombatNodeModel(
     public static CombatNodeModel ForEach(string selectorKey, CombatNodeModel body) =>
         new("forEachTarget", SelectorKey: selectorKey, Children: new[] { body });
 
-    // for each card in the owner's zone (optional definition filter in ToDefinition) → run the body once per card.
-    public static CombatNodeModel ForEachCard(string selectorKey, CardZone zone, CombatNodeModel body, string filter = "") =>
-        new("forEachCardInZone", SelectorKey: selectorKey, Children: new[] { body }, FromZone: zone, ToDefinition: filter);
+    // for each card in the owner's zone (optional definition filter in ToDefinition, optional tag filter in
+    // ToTag, optional first-N limit in TakeFirst) → run the body once per card.
+    public static CombatNodeModel ForEachCard(string selectorKey, CardZone zone, CombatNodeModel body,
+        string filter = "", string tag = "", int? takeFirst = null) =>
+        new("forEachCardInZone", SelectorKey: selectorKey, Children: new[] { body }, FromZone: zone,
+            ToDefinition: filter, ToTag: tag, TakeFirst: takeFirst);
 
     public static CombatNodeModel Repeat(CombatAmountSpec count, CombatNodeModel body) =>
         new("repeat", Amount: count, Children: new[] { body });
@@ -999,7 +1007,9 @@ public static class CombatProgramModel
             case "forEachCardInZone":
                 return new ForEachCardInZoneNode<TContext>(
                     SelectorFor(model.PrimarySelector), model.FromZone, BuildBody<TContext>(model),
-                    definitionFilter: string.IsNullOrEmpty(model.ToDefinition) ? null : new CardDefinitionId(model.ToDefinition));
+                    definitionFilter: string.IsNullOrEmpty(model.ToDefinition) ? null : new CardDefinitionId(model.ToDefinition),
+                    tagFilter: string.IsNullOrEmpty(model.ToTag) ? null : new TagId(model.ToTag),
+                    takeFirst: model.TakeFirst);
             case "repeat":
                 return new RepeatEffectNode<TContext>(BuildAmount<TContext>(model.AmountOrDefault), BuildBody<TContext>(model));
             case "repeatUntil":
@@ -1257,7 +1267,8 @@ public static class CombatProgramModel
             case ForEachCardInZoneNode<TContext> fc
                 when fc.MaxIterations == ForEachCardInZoneNode<TContext>.DefaultMaxIterations:
                 return ClassifyNode<TContext>(fc.Body) is { } fcBody
-                    ? WithSelector(fc.OwnerSelector, CombatNodeModel.ForEachCard("source", fc.Zone, fcBody, fc.DefinitionFilter?.value ?? ""))
+                    ? WithSelector(fc.OwnerSelector, CombatNodeModel.ForEachCard("source", fc.Zone, fcBody,
+                        fc.DefinitionFilter?.value ?? "", fc.TagFilter?.value ?? "", fc.TakeFirst))
                     : null;
             case RepeatEffectNode<TContext> r
                 when r.MaxCount == RepeatEffectNode<TContext>.DefaultMaxCount:

@@ -25,6 +25,12 @@
                 <span class="muted">only</span>
                 <input value="@Node.ToDefinition" style="width:7rem" placeholder="any card" list="rd-card-ids"
                        @onchange="e => Set(Node with { ToDefinition = AsString(e.Value) })" />
+                <span class="muted" title="only cards whose definition carries this tag (blank = any tag)">tagged</span>
+                <input value="@Node.ToTag" style="width:6rem" placeholder="any tag"
+                       @onchange="e => Set(Node with { ToTag = AsString(e.Value) })" />
+                <span class="muted" title="only the first N matching cards in zone order (blank = all matches)">first</span>
+                <input type="number" min="1" value="@(Node.TakeFirst?.ToString() ?? "")" style="width:3.5rem" placeholder="all"
+                       @onchange="e => Set(Node with { TakeFirst = int.TryParse(AsString(e.Value), out var n) && n > 0 ? n : null })" />
             }
             else if (Node.Kind == "repeat")
             {

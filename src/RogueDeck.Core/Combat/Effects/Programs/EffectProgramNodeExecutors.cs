@@ -430,12 +430,20 @@ internal sealed class ForEachCardInZoneNodeExecutor : IEffectNodeExecutor
 
         // Snapshot the (optionally filtered) card ids up front so the body moving/transforming a card mid-walk
         // doesn't disturb the iteration — a moved card's id still resolves for that pass.
-        var cards = combat.GetCardZones(owner).GetCardsInZone(typed.Zone);
-        var ids = (typed.DefinitionFilter is { } filter
-                ? cards.Where(c => c.DefinitionId == filter)
-                : cards)
-            .Select(c => c.Id)
-            .ToArray();
+        IEnumerable<CardInstance> cards = combat.GetCardZones(owner).GetCardsInZone(typed.Zone);
+        if (typed.DefinitionFilter is { } filter)
+            cards = cards.Where(c => c.DefinitionId == filter);
+        if (typed.TagFilter is { } tag)
+        {
+            // A card's tags live on its definition; an instance whose definition isn't registered has none.
+            var definitions = combat.DefinitionRegistry.CardDefinitions;
+            cards = cards.Where(c => definitions.TryGetValue(c.DefinitionId, out var definition)
+                && definition.Tags.Contains(tag));
+        }
+        var matches = cards.Select(c => c.Id);
+        if (typed.TakeFirst is { } takeFirst)
+            matches = matches.Take(takeFirst);
+        var ids = matches.ToArray();
 
         if (ids.Length > typed.MaxIterations)
             throw new InvalidOperationException(
