@@ -90,6 +90,30 @@ public sealed class SetCardMemoryRunEffectHandler : RunEffectHandler<SetCardMemo
     }
 }
 
+// Add a fresh copy of each selected card to the deck — "duplicate a card" as data. The copy carries the
+// original's definition, upgrade level, run tags and shred composition (it IS that card again), but is a
+// new instance with its own id.
+public sealed record DuplicateCardsRunEffect(IRunSelector<RunCardInstance> Selector) : IRunEffectRequest;
+
+public sealed class DuplicateCardsRunEffectHandler : RunEffectHandler<DuplicateCardsRunEffect>
+{
+    protected override void Resolve(RunState run, RunDefinitionRegistry registry, DuplicateCardsRunEffect request)
+    {
+        foreach (var card in request.Selector.Select(run.SelectorContext).ToArray())
+        {
+            var copy = run.AddDeckCardTo(run.ActiveMember, card.DefinitionId,
+                card.Composition.Count > 0 ? card.Composition : null);
+            if (card.UpgradeLevel > 0)
+                copy.Upgrade(card.UpgradeLevel);
+            foreach (var tag in card.Tags)
+                copy.AddTag(tag);
+            run.AddLog(StandardRunLogTypes.CardAdded,
+                $"Duplicated card '{card.DefinitionId}' ({card.Id}) -> ({copy.Id}).");
+            run.RaiseEvent(new CardAddedToDeckRunEvent(copy.Id, copy.DefinitionId));
+        }
+    }
+}
+
 // Transform each selected card into a fresh copy whose kind is drawn from a pool (a fixed kind = a
 // single-entry pool). The old copy is removed and a new instance is added, so per-copy state does not carry
 // over — a transform makes a new card.

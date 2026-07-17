@@ -239,6 +239,7 @@ public static class RunJson
          .Register("fx.addConsumableById", typeof(AddConsumableByIdRunEffect))
          .Register("fx.installNextCombatOpening", typeof(InstallNextCombatOpeningRunEffect))
          .Register("fx.removeCards", typeof(RemoveCardsRunEffect))
+         .Register("fx.duplicateCards", typeof(DuplicateCardsRunEffect))
          .Register("fx.upgradeCards", typeof(UpgradeCardsRunEffect))
          .Register("fx.tagCards", typeof(TagCardsRunEffect))
          .Register("fx.setCardMemory", typeof(SetCardMemoryRunEffect))
