@@ -355,7 +355,9 @@ public sealed class ModifyResourceEffectHandler : EffectRequestHandler<ModifyRes
 
             if (request.Min.HasValue) raw = Math.Max(raw, request.Min.Value);
             if (request.Max.HasValue) raw = Math.Min(raw, request.Max.Value);
-            else if (pool.Max.HasValue) raw = Math.Min(raw, pool.Max.Value);
+            // The pool's OWN max is always the hard ceiling — a request.Max override is a clamp, it does NOT
+            // raise the pool's cap, so the result can never exceed pool.Max (setting current above it throws).
+            if (pool.Max.HasValue) raw = Math.Min(raw, pool.Max.Value);
 
             raw = Math.Max(raw, 0);
 

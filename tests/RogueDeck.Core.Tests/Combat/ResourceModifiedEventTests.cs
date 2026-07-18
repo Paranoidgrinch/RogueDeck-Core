@@ -8,6 +8,24 @@ public class ResourceModifiedEventTests
     private static readonly CombatantId HeroId = new("hero_001");
     private static readonly ResourceId Energy = StandardCombatIds.EnergyResource;
 
+    // Regression: a modifyResource whose Max override EXCEEDS the pool's own max must clamp to the pool's
+    // max, not push current above it — setting a pool above its max throws ("Pool value cannot exceed max"),
+    // which crashed a run when a "gain energy at combat start"-style opening fired (Max override > cap).
+    [Fact]
+    public void ModifyResource_WithMaxOverrideAbovePoolMax_ClampsToPoolMax_DoesNotThrow()
+    {
+        var registry = CombatTestFactory.CreateStandardRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        combat.GetCombatant(HeroId).AddResource(Energy, new ValuePoolState(current: 3, max: 3));
+
+        // +2 with a Max override of 99 — the override is a clamp, it must NOT raise the pool's cap of 3.
+        combat.EnqueueEffect(new ModifyResourceEffectRequest(HeroId, Energy, Delta: 2, Max: 99));
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+
+        Assert.Equal(3, combat.GetCombatant(HeroId).Resources[Energy].Current);
+        Assert.Equal(3, combat.GetCombatant(HeroId).Resources[Energy].Max);
+    }
+
     [Fact]
     public void ModifyResource_EmitsResourceModified_NotResourceGained()
     {
