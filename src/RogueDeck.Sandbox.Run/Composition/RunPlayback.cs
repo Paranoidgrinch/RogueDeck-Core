@@ -36,6 +36,11 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
     // Relic display names (id → name), for the entity labeler that makes reward/relic picks readable.
     public IReadOnlyDictionary<string, string> RelicNames { get; private set; } = new Dictionary<string, string>();
 
+    // Per card id: whether playing it requires the player to CHOOSE an enemy target (its program aims at
+    // the chosen "eventTarget"). Cards that only affect the source (gain block, draw, self-buff) or a fixed
+    // selector (all enemies) need no target, so a frontend can play them on click without a target step.
+    public IReadOnlyDictionary<string, bool> CardNeedsTarget { get; private set; } = new Dictionary<string, bool>();
+
     private IReadOnlyList<ShredEngine.ShredData> _shreds = [];
     private readonly Dictionary<string, IReadOnlyList<ResourceCost>?> _composedCosts = new(StringComparer.Ordinal);
 
@@ -120,6 +125,14 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
                 s => s.Id, s => string.IsNullOrWhiteSpace(s.NameKey) ? s.Id : s.NameKey);
             RelicNames = blueprint.Relics.ToDictionary(
                 r => r.Id, r => string.IsNullOrWhiteSpace(r.DisplayName) ? r.Id : r.DisplayName);
+            // A card needs a chosen target iff its play program aims at the "eventTarget" selector — detected
+            // by serializing the program and looking for that selector kind (robust across nesting).
+            var cardPlayJson = CombatJson.CreateOptions<CardPlayContext>();
+            CardNeedsTarget = blueprint.Cards.ToDictionary(
+                card => card.Id,
+                card => card.Program is { } program
+                    && System.Text.Json.JsonSerializer.Serialize(program, cardPlayJson)
+                        .Contains("sel.eventTarget", StringComparison.Ordinal));
             _shreds = blueprint.Shreds;
             _composedCosts.Clear();
 

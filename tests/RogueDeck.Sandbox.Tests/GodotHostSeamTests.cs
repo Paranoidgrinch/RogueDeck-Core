@@ -67,6 +67,29 @@ public class GodotHostSeamTests
     }
 
     [Fact]
+    public void CardNeedsTarget_distinguishes_targeted_from_self_only_cards()
+    {
+        var blueprint = TwoCharacterDuel();
+        var guard = new CardData
+        {
+            Id = "guard",
+            NameKey = "Guard",
+            Costs = [new ResourceCost(StandardCombatIds.EnergyResource, 1)],
+            Program = CombatProgramModel.Build<CardPlayContext>(
+                new CombatNodeModel("gainBlock", "source", CombatAmountSpec.FromConst(5))),
+        };
+        blueprint = blueprint with { Cards = blueprint.Cards.Append(guard).ToList() };
+
+        var play = new RunPlayback(() => { });
+        play.Start(blueprint, seed: 1, interactive: true);
+        using (play)
+        {
+            Assert.False(play.CardNeedsTarget["guard"]); // gainBlock source → no target needed
+            Assert.True(play.CardNeedsTarget["jab"]);    // dealDamage eventTarget → target needed
+        }
+    }
+
+    [Fact]
     public void Starting_as_a_roster_character_uses_that_characters_start()
     {
         var play = new RunPlayback(() => { });
