@@ -1,0 +1,389 @@
+@inject RunDocument Doc
+@inject ProjectDraft Draft
+@implements IDisposable
+
+@* The Map Rules tab: authors RunBlueprint.MapGeneration — the rules a run's map is generated from, per run, at
+   start. Per-path minimums are guaranteed by construction; combat nodes draw a balanced encounter (see Balance
+   tab). When generation is off the authored Run-tab map is used as-is. *@
+<section style="padding:1rem; max-width:64rem">
+    <TabIntro Title="Map Rules (procedural generation)"
+              Text="Generate the run's map from rules instead of hand-authoring it. Guarantee per-path minimums (e.g. 2 elites, 2 shops), a minimum enemy count, and let each fight's difficulty be drawn to match the deck. Off means the Run-tab map is used unchanged."
+              Connects="Uses the Encounters, Shops, Events, Workbenches and Balance tabs' content." />
+
+    <label class="chk"><input type="checkbox" checked="@Enabled" @onchange="ToggleEnabled" />
+        Generate the map per run</label>
+
+    @if (_blueprint.MapGeneration is { } spec)
+    {
+        <div class="editor-card" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:1rem; margin:.75rem 0">
+            <strong>Shape</strong>
+            <div class="run-bar" style="gap:1rem; flex-wrap:wrap; margin-top:.4rem">
+                <label>Rows <input type="number" value="@spec.Rows" style="width:5rem"
+                                   @onchange="e => Save(spec with { Rows = AsInt(e.Value) })" /></label>
+                <label>Min width <input type="number" value="@spec.MinWidth" style="width:5rem"
+                                        @onchange="e => Save(spec with { MinWidth = AsInt(e.Value) })" /></label>
+                <label>Max width <input type="number" value="@spec.MaxWidth" style="width:5rem"
+                                        @onchange="e => Save(spec with { MaxWidth = AsInt(e.Value) })" /></label>
+                <label>Min enemies / path <input type="number" value="@spec.MinEnemiesPerPath" style="width:5rem"
+                                                 @onchange="e => Save(spec with { MinEnemiesPerPath = AsInt(e.Value) })" /></label>
+            </div>
+            <p class="@(spec.IsFeasible() ? "muted" : "")" style="margin-top:.5rem; @(spec.IsFeasible() ? "" : "color:#c0392b")">
+                @if (spec.IsFeasible())
+                {
+                    <text>Feasible: @spec.RequiredMiddleRows() of @spec.AvailableMiddleRows() middle rows reserved for the minimums.</text>
+                }
+                else
+                {
+                    <text>Infeasible: the minimums need @spec.RequiredMiddleRows() reserved rows but only @spec.AvailableMiddleRows() are available. Raise Rows.</text>
+                }
+            </p>
+        </div>
+
+        <div class="editor-card" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:1rem; margin:.75rem 0">
+            <strong>Per-path minimums</strong>
+            <span class="muted"> — every entry→boss path is guaranteed at least this many (each reserves a full row)</span>
+            <div class="run-bar" style="gap:1rem; flex-wrap:wrap; margin-top:.4rem">
+                @foreach (var kind in Reservable)
+                {
+                    var k = kind;
+                    <label>@k <input type="number" min="0" value="@Get(spec.PerPathMinimums, k)" style="width:4.5rem"
+                                     @onchange="e => Save(spec with { PerPathMinimums = WithKind(spec.PerPathMinimums, k, AsInt(e.Value)) })" /></label>
+                }
+            </div>
+        </div>
+
+        <div class="editor-card" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:1rem; margin:.75rem 0">
+            <strong>Varied-row kind weights</strong>
+            <span class="muted"> — how the non-reserved rows fill their columns (variety above the floor)</span>
+            <div class="run-bar" style="gap:1rem; flex-wrap:wrap; margin-top:.4rem">
+                @foreach (var kind in Reservable)
+                {
+                    var k = kind;
+                    <label>@k <input type="number" min="0" value="@Get(spec.KindWeights, k)" style="width:4.5rem"
+                                     @onchange="e => Save(spec with { KindWeights = WithKind(spec.KindWeights, k, AsInt(e.Value)) })" /></label>
+                }
+            </div>
+        </div>
+
+        <div class="editor-card" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:1rem; margin:.75rem 0">
+            <strong>Map-wide minimums</strong>
+            <span class="muted"> — totals across the whole graph (optional)</span>
+            <div class="run-bar" style="gap:1rem; flex-wrap:wrap; margin-top:.4rem">
+                @foreach (var kind in Reservable)
+                {
+                    var k = kind;
+                    <label>@k <input type="number" min="0" value="@Get(spec.MapWideMinimums, k)" style="width:4.5rem"
+                                     @onchange="e => Save(spec with { MapWideMinimums = WithKind(spec.MapWideMinimums, k, AsInt(e.Value)) })" /></label>
+                }
+            </div>
+        </div>
+
+        <div class="editor-card" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:1rem; margin:.75rem 0">
+            <strong>Encounter pools</strong>
+            <span class="muted"> — which fights each combat role draws (weighted; narrowed to the balance band)</span>
+            @foreach (var role in CombatRoles)
+            {
+                var r = role;
+                <div style="margin:.5rem 0">
+                    <em>@r</em>
+                    @{
+                        var entries = spec.Encounters.For(r);
+                    }
+                    @if (entries.Count == 0)
+                    {
+                        <span class="muted"> — none yet</span>
+                    }
+                    <table style="border-collapse:collapse; margin:.25rem 0">
+                        <tbody>
+                            @for (var i = 0; i < entries.Count; i++)
+                            {
+                                var index = i;
+                                var entry = entries[index];
+                                <tr>
+                                    <td style="padding:.1rem .5rem .1rem 0"><code>@entry.Encounter.Value</code></td>
+                                    <td style="padding:.1rem .5rem">weight
+                                        <input type="number" min="1" value="@entry.Weight" style="width:5rem"
+                                               @onchange="e => Save(SetEntry(spec, r, index, entry with { Weight = Math.Max(1, AsInt(e.Value)) }))" /></td>
+                                    <td><button class="mini" @onclick="() => Save(RemoveEntry(spec, r, index))">✕</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    <div class="run-bar" style="gap:.4rem">
+                        <input list="encounter-ids" placeholder="encounter id" @bind="_newEncounter[r]" @bind:event="oninput" style="width:14rem" />
+                        <button class="mini" disabled="@string.IsNullOrWhiteSpace(_newEncounter[r])"
+                                @onclick="() => AddEntry(spec, r)">+ encounter</button>
+                    </div>
+                </div>
+            }
+            <datalist id="encounter-ids">
+                @foreach (var id in EncounterIds) { <option value="@id" /> }
+            </datalist>
+        </div>
+
+        <div class="editor-card" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:1rem; margin:.75rem 0">
+            <strong>Non-combat node references</strong>
+            <span class="muted"> — which authored content a Shop / Workbench / Event-family node points at</span>
+            <div style="margin-top:.4rem">
+                @foreach (var (kind, listId) in NonCombatRefs)
+                {
+                    var k = kind;
+                    <div class="run-bar" style="gap:.5rem; margin:.2rem 0">
+                        <span style="min-width:6rem">@k</span>
+                        <input list="@listId" value="@GetRef(spec, k)" placeholder="id" style="width:14rem"
+                               @onchange="e => Save(spec with { NodeRefs = WithRef(spec.NodeRefs, k, e.Value?.ToString()) })" />
+                    </div>
+                }
+            </div>
+            <datalist id="event-ids">@foreach (var id in _blueprint.Events.Keys) { <option value="@id" /> }</datalist>
+            <datalist id="shop-ids">@foreach (var id in _blueprint.Shops.Keys) { <option value="@id" /> }</datalist>
+            <datalist id="workbench-ids">@foreach (var id in _blueprint.Workbenches.Keys) { <option value="@id" /> }</datalist>
+        </div>
+
+        <div class="editor-card" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:1rem; margin:.75rem 0">
+            <strong>Difficulty band</strong>
+            <span class="muted"> — the net (loadout + threat) each fight aims for, and how it deepens</span>
+            <div class="run-bar" style="gap:1rem; flex-wrap:wrap; margin-top:.4rem">
+                <label>Start net <input type="number" value="@spec.BalanceTargets.StartNet" style="width:5.5rem"
+                                        @onchange="e => Save(spec with { BalanceTargets = spec.BalanceTargets with { StartNet = AsInt(e.Value) } })" /></label>
+                <label>Net drop / row <input type="number" value="@spec.BalanceTargets.NetDropPerRow" style="width:5.5rem"
+                                             @onchange="e => Save(spec with { BalanceTargets = spec.BalanceTargets with { NetDropPerRow = AsInt(e.Value) } })" /></label>
+                <label>Loadout growth / row <input type="number" value="@spec.BalanceTargets.LoadoutGrowthPerRow" style="width:5.5rem"
+                                                   @onchange="e => Save(spec with { BalanceTargets = spec.BalanceTargets with { LoadoutGrowthPerRow = AsInt(e.Value) } })" /></label>
+                <label>Tolerance <input type="number" min="0" value="@spec.BalanceTargets.Tolerance" style="width:5.5rem"
+                                        @onchange="e => Save(spec with { BalanceTargets = spec.BalanceTargets with { Tolerance = AsInt(e.Value) } })" /></label>
+            </div>
+        </div>
+
+        @if (MapRulesProblems.Count > 0)
+        {
+            <div class="editor-card" style="border:1px solid #c0392b; border-radius:6px; padding:1rem; margin:.75rem 0">
+                <strong style="color:#c0392b">Problems</strong>
+                <ul style="margin:.4rem 0">
+                    @foreach (var problem in MapRulesProblems) { <li>@Strip(problem)</li> }
+                </ul>
+            </div>
+        }
+        <div class="editor-card" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:1rem; margin:.75rem 0">
+            <div class="run-bar" style="gap:.5rem">
+                <strong>Preview</strong>
+                <span class="muted">seed</span>
+                <input type="number" @bind="_previewSeed" style="width:6rem" />
+                <button class="play" @onclick="() => GeneratePreview(spec)">Generate preview</button>
+            </div>
+
+            @if (_previewError is { } error)
+            {
+                <p style="color:#c0392b; margin-top:.5rem">Cannot generate: @error</p>
+            }
+            else if (_preview is { } preview)
+            {
+                var constraintProblems = MapConstraintValidator.Validate(preview, spec);
+                <p style="margin-top:.5rem; @(constraintProblems.Count == 0 ? "color:#2e7d32" : "color:#c0392b")">
+                    @(constraintProblems.Count == 0
+                        ? $"All constraints satisfied ({preview.Map.Nodes.Count} nodes)."
+                        : $"{constraintProblems.Count} constraint problem(s):")
+                </p>
+                @if (constraintProblems.Count > 0)
+                {
+                    <ul>@foreach (var p in constraintProblems) { <li>@p</li> }</ul>
+                }
+
+                <div style="overflow:auto; border:1px solid #0002; border-radius:4px; margin:.5rem 0">
+                    <svg width="@_previewSize.Width" height="@_previewSize.Height"
+                         style="min-width:@(_previewSize.Width)px; background:#0001">
+                        @foreach (var edge in preview.Map.Edges)
+                        {
+                            var a = Center(edge.From);
+                            var b = Center(edge.To);
+                            <line x1="@a.X" y1="@a.Y" x2="@b.X" y2="@b.Y" stroke="#8888" stroke-width="1.5" />
+                        }
+                        @foreach (var node in preview.Map.Nodes)
+                        {
+                            var pos = _previewPositions[node.Id];
+                            var role = preview.Roles.GetValueOrDefault(node.Id);
+                            <g>
+                                <rect x="@pos.X" y="@pos.Y" width="@MapGraphLayout.NodeWidth" height="@MapGraphLayout.NodeHeight"
+                                      rx="6" fill="@RoleColor(role)" stroke="#0004" />
+                                <text x="@(pos.X + MapGraphLayout.NodeWidth / 2)" y="@(pos.Y + 20)"
+                                      text-anchor="middle" font-size="12" fill="#111">@role</text>
+                                <text x="@(pos.X + MapGraphLayout.NodeWidth / 2)" y="@(pos.Y + 36)"
+                                      text-anchor="middle" font-size="10" fill="#333">@node.Id.Value</text>
+                            </g>
+                        }
+                    </svg>
+                </div>
+
+                <details>
+                    <summary class="muted">Difficulty band per row (assumed loadout @_previewLoadout)</summary>
+                    <table style="border-collapse:collapse; margin:.4rem 0">
+                        <thead><tr><th style="text-align:left; padding-right:1rem">Row</th><th style="text-align:left; padding-right:1rem">Assumed loadout</th><th style="text-align:left">Target net</th></tr></thead>
+                        <tbody>
+                            @for (var r = 0; r <= spec.Rows; r++)
+                            {
+                                <tr>
+                                    <td style="padding-right:1rem">@r@(r == spec.Rows ? " (boss)" : "")</td>
+                                    <td style="padding-right:1rem">@spec.BalanceTargets.AssumedLoadout(_previewLoadout, r)</td>
+                                    <td>@spec.BalanceTargets.TargetNet(r)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </details>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    private RunBlueprint _blueprint = default!;
+    private readonly Dictionary<MapNodeKind, string> _newEncounter = new();
+
+    private int _previewSeed = 1;
+    private GeneratedMap? _preview;
+    private IReadOnlyDictionary<NodeId, (int X, int Y)> _previewPositions = new Dictionary<NodeId, (int, int)>();
+    private (int Width, int Height) _previewSize;
+    private int _previewLoadout;
+    private string? _previewError;
+
+    private static readonly MapNodeKind[] Reservable = MapGenerationSpec.ReservableKinds.ToArray();
+    private static readonly MapNodeKind[] CombatRoles =
+        { MapNodeKind.Combat, MapNodeKind.Elite, MapNodeKind.Boss };
+    private static readonly (MapNodeKind, string)[] NonCombatRefs =
+    {
+        (MapNodeKind.Event, "event-ids"), (MapNodeKind.Shop, "shop-ids"), (MapNodeKind.Rest, "event-ids"),
+        (MapNodeKind.Treasure, "event-ids"), (MapNodeKind.Workbench, "workbench-ids"),
+    };
+
+    protected override void OnInitialized()
+    {
+        _blueprint = Doc.Load();
+        foreach (var role in CombatRoles) _newEncounter[role] = "";
+        Draft.Changed += OnDraftChanged;
+    }
+
+    private void OnDraftChanged() => _ = InvokeAsync(() =>
+    {
+        try { _blueprint = Doc.Load(); }
+        catch (Exception) { return; }
+        StateHasChanged();
+    });
+
+    public void Dispose() => Draft.Changed -= OnDraftChanged;
+
+    private bool Enabled => _blueprint.MapGeneration is not null;
+    private IEnumerable<string> EncounterIds => _blueprint.Encounters.Select(e => e.Id.Value);
+    private IReadOnlyList<string> MapRulesProblems =>
+        RunDocumentValidator.ForTab(_blueprint, RunDocumentValidator.MapRulesTab);
+
+    private static string Strip(string problem)
+    {
+        const string prefix = "Map Rules:";
+        return (problem.StartsWith(prefix, StringComparison.Ordinal) ? problem[prefix.Length..] : problem).Trim();
+    }
+
+    private static int AsInt(object? v) => int.TryParse(v?.ToString(), out var n) ? n : 0;
+    private static int Get(IReadOnlyDictionary<MapNodeKind, int> d, MapNodeKind k) => d.TryGetValue(k, out var v) ? v : 0;
+    private static string GetRef(MapGenerationSpec spec, MapNodeKind k) => spec.NodeRefs.TryGetValue(k, out var v) ? v : "";
+
+    private void ToggleEnabled(ChangeEventArgs e)
+    {
+        var on = e.Value is bool b && b;
+        Save(on ? new MapGenerationSpec { Rows = 5 } : null);
+    }
+
+    private void Save(MapGenerationSpec? spec)
+    {
+        _blueprint = _blueprint with { MapGeneration = spec };
+        Doc.Save(_blueprint);
+    }
+
+    private static IReadOnlyDictionary<MapNodeKind, int> WithKind(
+        IReadOnlyDictionary<MapNodeKind, int> d, MapNodeKind k, int v)
+    {
+        var next = new Dictionary<MapNodeKind, int>(d);
+        if (v <= 0) next.Remove(k); else next[k] = v;
+        return next;
+    }
+
+    private static IReadOnlyDictionary<MapNodeKind, string> WithRef(
+        IReadOnlyDictionary<MapNodeKind, string> d, MapNodeKind k, string? v)
+    {
+        var next = new Dictionary<MapNodeKind, string>(d);
+        if (string.IsNullOrWhiteSpace(v)) next.Remove(k); else next[k] = v.Trim();
+        return next;
+    }
+
+    // ── Encounter-pool edits (rebuild the role's list) ──
+    private static MapGenerationSpec WithEntries(
+        MapGenerationSpec spec, MapNodeKind role, IReadOnlyList<EncounterPoolEntry> entries)
+    {
+        var byRole = new Dictionary<MapNodeKind, IReadOnlyList<EncounterPoolEntry>>(spec.Encounters.ByRole);
+        if (entries.Count == 0) byRole.Remove(role); else byRole[role] = entries;
+        return spec with { Encounters = spec.Encounters with { ByRole = byRole } };
+    }
+
+    private static MapGenerationSpec SetEntry(MapGenerationSpec spec, MapNodeKind role, int index, EncounterPoolEntry entry)
+    {
+        var list = spec.Encounters.For(role).ToList();
+        if (index >= 0 && index < list.Count) list[index] = entry;
+        return WithEntries(spec, role, list);
+    }
+
+    private static MapGenerationSpec RemoveEntry(MapGenerationSpec spec, MapNodeKind role, int index)
+    {
+        var list = spec.Encounters.For(role).Where((_, i) => i != index).ToList();
+        return WithEntries(spec, role, list);
+    }
+
+    private void AddEntry(MapGenerationSpec spec, MapNodeKind role)
+    {
+        var id = _newEncounter[role].Trim();
+        if (id.Length == 0) return;
+        var list = spec.Encounters.For(role).ToList();
+        list.Add(new EncounterPoolEntry(new EncounterId(id)));
+        _newEncounter[role] = "";
+        Save(WithEntries(spec, role, list));
+    }
+
+    // ── Preview: generate a sample map from the current spec + seed and render it, without touching the doc ──
+    private void GeneratePreview(MapGenerationSpec spec)
+    {
+        try
+        {
+            var start = _blueprint.ResolveStart(null);
+            var balance = new BalanceCalculator(_blueprint.Balance, _blueprint.Encounters);
+            _previewLoadout = balance.LoadoutStrength(start, _blueprint.Deck);
+            _preview = RuleBasedMapGenerator.Generate(
+                spec, _previewSeed, _previewLoadout, balance,
+                (kind, _, encounter) => MapNodeRealizer.Realize(spec, kind, encounter));
+            _previewPositions = MapGraphLayout.Resolve(_preview.Map);
+            _previewSize = MapGraphLayout.CanvasSize(_previewPositions);
+            _previewError = null;
+        }
+        catch (Exception ex)
+        {
+            _preview = null;
+            _previewError = ex.Message;
+        }
+    }
+
+    private (int X, int Y) Center(NodeId id)
+    {
+        var pos = _previewPositions[id];
+        return (pos.X + MapGraphLayout.NodeWidth / 2, pos.Y + MapGraphLayout.NodeHeight / 2);
+    }
+
+    private static string RoleColor(MapNodeKind kind) => kind switch
+    {
+        MapNodeKind.Combat => "#c9c2b6",
+        MapNodeKind.Elite => "#e0917a",
+        MapNodeKind.Boss => "#c0392b",
+        MapNodeKind.Shop => "#e6c86e",
+        MapNodeKind.Event => "#8fb8de",
+        MapNodeKind.Rest => "#9ccc9c",
+        MapNodeKind.Treasure => "#c9a0dc",
+        MapNodeKind.Workbench => "#c8a27a",
+        _ => "#dddddd",
+    };
+}

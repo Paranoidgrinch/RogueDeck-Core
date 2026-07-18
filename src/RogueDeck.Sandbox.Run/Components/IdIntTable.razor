@@ -1,0 +1,83 @@
+@* A small editor for an id → integer map (a balance section, an encounter-weight table): rows of (id, value)
+   with per-row edit + remove, and an add row whose id field suggests KnownIds. Immediate — every change raises
+   ValueChanged with a fresh dictionary for the parent tab to Save. Renaming a key is remove-then-add (kept simple
+   so editing a value never has to reconcile a changing key). *@
+
+@if (Value.Count == 0)
+{
+    <p class="muted" style="margin:.25rem 0">None yet.</p>
+}
+else
+{
+    <table style="border-collapse:collapse; margin:.25rem 0">
+        <tbody>
+            @foreach (var kv in Value.OrderBy(k => k.Key, StringComparer.Ordinal))
+            {
+                var key = kv.Key;
+                <tr>
+                    <td style="padding:.1rem .5rem .1rem 0"><code>@key</code></td>
+                    <td style="padding:.1rem .5rem">
+                        <input type="number" value="@kv.Value" style="width:6rem"
+                               @onchange="e => SetValue(key, e.Value)" />
+                    </td>
+                    <td><button class="mini" title="remove" @onclick="() => Remove(key)">✕</button></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<div class="run-bar" style="gap:.4rem">
+    <input list="@_listId" placeholder="@IdPlaceholder" @bind="_newKey" @bind:event="oninput" style="width:12rem" />
+    <input type="number" @bind="_newValue" style="width:6rem" />
+    <button class="mini" @onclick="Add" disabled="@string.IsNullOrWhiteSpace(_newKey)">+ @ValueLabel</button>
+</div>
+@if (KnownIds.Any())
+{
+    <datalist id="@_listId">
+        @foreach (var id in KnownIds.Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal))
+        {
+            <option value="@id" />
+        }
+    </datalist>
+}
+
+@code {
+    [Parameter] public IReadOnlyDictionary<string, int> Value { get; set; } = new Dictionary<string, int>();
+    [Parameter] public EventCallback<IReadOnlyDictionary<string, int>> ValueChanged { get; set; }
+    [Parameter] public IEnumerable<string> KnownIds { get; set; } = Array.Empty<string>();
+    [Parameter] public string ValueLabel { get; set; } = "add";
+    [Parameter] public string IdPlaceholder { get; set; } = "id";
+
+    private readonly string _listId = "ids-" + Guid.NewGuid().ToString("N");
+    private string _newKey = "";
+    private int _newValue;
+
+    private Task Emit(Dictionary<string, int> next) => ValueChanged.InvokeAsync(next);
+
+    private Task SetValue(string key, object? raw)
+    {
+        var next = new Dictionary<string, int>(Value);
+        if (int.TryParse(raw?.ToString(), out var value))
+            next[key] = value;
+        return Emit(next);
+    }
+
+    private Task Remove(string key)
+    {
+        var next = new Dictionary<string, int>(Value);
+        next.Remove(key);
+        return Emit(next);
+    }
+
+    private Task Add()
+    {
+        var key = _newKey.Trim();
+        if (key.Length == 0)
+            return Task.CompletedTask;
+        var next = new Dictionary<string, int>(Value) { [key] = _newValue };
+        _newKey = "";
+        _newValue = 0;
+        return Emit(next);
+    }
+}

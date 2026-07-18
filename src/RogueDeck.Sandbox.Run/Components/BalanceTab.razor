@@ -1,0 +1,112 @@
+@inject RunDocument Doc
+@inject ProjectDraft Draft
+@implements IDisposable
+
+@* The Balance tab: authors RunBlueprint.Balance — the numeric strength/threat values that steer rule-based map
+   generation (Map Rules tab). Convention: enemy / encounter threats are NEGATIVE (a mob −10..−49, an elite ≈ −50,
+   a boss ≈ −100); loadout pieces (cards / relics / consumables / a character's base) are POSITIVE. The generator
+   keeps each fight's net difficulty (loadout + threat) inside a target band, so a run is never trivial nor
+   impossible. Ids that name nothing are flagged by the validator. *@
+<section style="padding:1rem; max-width:60rem">
+    <TabIntro Title="Balance (strengths & threats)"
+              Text="Numbers that steer map generation. Enemies and encounters get NEGATIVE threat (a boss around −100); a deck card, relic, consumable, or character base gets POSITIVE strength. The generator picks fights so loadout + threat stays in a fair band."
+              Connects="Read by the Map Rules tab when it generates a map; unused ids are flagged here." />
+
+    <div class="editor-card" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:1rem; margin:.75rem 0; background:var(--surface,#0002)">
+        <strong>Starting loadout strength</strong>
+        <p class="muted" style="margin:.25rem 0">The sum the generator balances the first fights against.</p>
+        @foreach (var (label, value) in LoadoutReadouts())
+        {
+            <div class="run-bar"><span class="muted" style="min-width:12rem">@label</span> <strong>@value</strong></div>
+        }
+    </div>
+
+    <h3>Enemy threat <span class="muted">(negative)</span></h3>
+    <IdIntTable Value="_blueprint.Balance.Enemies" KnownIds="EnemyIds" ValueLabel="enemy threat"
+                ValueChanged="d => SaveBalance(_blueprint.Balance with { Enemies = d })" />
+
+    <h3>Encounter threat override <span class="muted">(negative; replaces the enemy sum)</span></h3>
+    <IdIntTable Value="_blueprint.Balance.Encounters" KnownIds="EncounterIds" ValueLabel="encounter threat"
+                ValueChanged="d => SaveBalance(_blueprint.Balance with { Encounters = d })" />
+
+    <h3>Card strength <span class="muted">(positive)</span></h3>
+    <IdIntTable Value="_blueprint.Balance.Cards" KnownIds="CardIds" ValueLabel="card strength"
+                ValueChanged="d => SaveBalance(_blueprint.Balance with { Cards = d })" />
+
+    <h3>Relic strength <span class="muted">(positive)</span></h3>
+    <IdIntTable Value="_blueprint.Balance.Relics" KnownIds="RelicIds" ValueLabel="relic strength"
+                ValueChanged="d => SaveBalance(_blueprint.Balance with { Relics = d })" />
+
+    <h3>Consumable strength <span class="muted">(positive)</span></h3>
+    <IdIntTable Value="_blueprint.Balance.Consumables" KnownIds="ConsumableIds" ValueLabel="consumable strength"
+                ValueChanged="d => SaveBalance(_blueprint.Balance with { Consumables = d })" />
+
+    <h3>Character base strength <span class="muted">(positive)</span></h3>
+    <IdIntTable Value="_blueprint.Balance.Characters" KnownIds="CharacterIds" ValueLabel="character base"
+                ValueChanged="d => SaveBalance(_blueprint.Balance with { Characters = d })" />
+
+    <h3>Defaults <span class="muted">(applied to ids with no explicit value)</span></h3>
+    <div class="run-bar" style="gap:1rem; flex-wrap:wrap">
+        <label>Enemy <input type="number" value="@_blueprint.Balance.Defaults.Enemy" style="width:6rem"
+                            @onchange="e => SaveDefaults(_blueprint.Balance.Defaults with { Enemy = AsInt(e.Value) })" /></label>
+        <label>Card <input type="number" value="@_blueprint.Balance.Defaults.Card" style="width:6rem"
+                           @onchange="e => SaveDefaults(_blueprint.Balance.Defaults with { Card = AsInt(e.Value) })" /></label>
+        <label>Relic <input type="number" value="@_blueprint.Balance.Defaults.Relic" style="width:6rem"
+                            @onchange="e => SaveDefaults(_blueprint.Balance.Defaults with { Relic = AsInt(e.Value) })" /></label>
+        <label>Consumable <input type="number" value="@_blueprint.Balance.Defaults.Consumable" style="width:6rem"
+                                 @onchange="e => SaveDefaults(_blueprint.Balance.Defaults with { Consumable = AsInt(e.Value) })" /></label>
+    </div>
+</section>
+
+@code {
+    private RunBlueprint _blueprint = default!;
+
+    protected override void OnInitialized()
+    {
+        _blueprint = Doc.Load();
+        Draft.Changed += OnDraftChanged;
+    }
+
+    private void OnDraftChanged() => _ = InvokeAsync(() =>
+    {
+        try { _blueprint = Doc.Load(); }
+        catch (Exception) { return; }
+        StateHasChanged();
+    });
+
+    public void Dispose() => Draft.Changed -= OnDraftChanged;
+
+    private IEnumerable<string> EnemyIds =>
+        _blueprint.Encounters.SelectMany(e => e.Enemies).Select(e => e.Id);
+    private IEnumerable<string> EncounterIds => _blueprint.Encounters.Select(e => e.Id.Value);
+    private IEnumerable<string> CardIds => _blueprint.Cards.Select(c => c.Id);
+    private IEnumerable<string> RelicIds => _blueprint.Relics.Select(r => r.Id);
+    private IEnumerable<string> ConsumableIds => _blueprint.Consumables.Select(c => c.Id);
+    private IEnumerable<string> CharacterIds => _blueprint.Characters.Select(c => c.Id);
+
+    private static int AsInt(object? v) => int.TryParse(v?.ToString(), out var n) ? n : 0;
+
+    private IEnumerable<(string, int)> LoadoutReadouts()
+    {
+        var calc = new BalanceCalculator(_blueprint.Balance, _blueprint.Encounters);
+        if (_blueprint.Characters.Count == 0)
+        {
+            yield return ("Default start", calc.LoadoutStrength(_blueprint.Start, _blueprint.Deck));
+        }
+        else
+        {
+            foreach (var character in _blueprint.Characters)
+                yield return ($"Character '{character.Id}'",
+                    calc.LoadoutStrength(character.Start, _blueprint.Deck, character.Id));
+        }
+    }
+
+    private void SaveBalance(BalanceManifest balance)
+    {
+        _blueprint = _blueprint with { Balance = balance };
+        Doc.Save(_blueprint);
+    }
+
+    private void SaveDefaults(BalanceDefaults defaults) =>
+        SaveBalance(_blueprint.Balance with { Defaults = defaults });
+}
