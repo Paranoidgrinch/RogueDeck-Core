@@ -408,6 +408,47 @@ public class RunBlueprintTests
     }
 
     [Fact]
+    public void Map_generation_spec_round_trips_with_enum_keyed_sections()
+    {
+        var blueprint = Demo() with
+        {
+            MapGeneration = new MapGenerationSpec
+            {
+                Rows = 8,
+                PerPathMinimums = new Dictionary<MapNodeKind, int>
+                {
+                    [MapNodeKind.Elite] = 2,
+                    [MapNodeKind.Shop] = 1,
+                },
+                MinEnemiesPerPath = 5,
+                MapWideMinimums = new Dictionary<MapNodeKind, int> { [MapNodeKind.Treasure] = 3 },
+                KindWeights = new Dictionary<MapNodeKind, int> { [MapNodeKind.Combat] = 7, [MapNodeKind.Event] = 3 },
+                Encounters = new EncounterDistribution
+                {
+                    ByRole = new Dictionary<MapNodeKind, IReadOnlyList<EncounterPoolEntry>>
+                    {
+                        [MapNodeKind.Combat] = new[] { new EncounterPoolEntry(GoblinFight, 5) },
+                        [MapNodeKind.Boss] = new[] { new EncounterPoolEntry(GoblinFight, 1) },
+                    },
+                },
+                BalanceTargets = new BalanceTargets { StartNet = 50, NetDropPerRow = 5, Tolerance = 12 },
+            },
+        };
+
+        var back = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(blueprint, Options), Options);
+
+        var spec = Assert.IsType<MapGenerationSpec>(back.MapGeneration);
+        Assert.Equal(8, spec.Rows);
+        Assert.Equal(2, spec.PerPathMinimums[MapNodeKind.Elite]);
+        Assert.Equal(5, spec.MinEnemiesPerPath);
+        Assert.Equal(3, spec.MapWideMinimums[MapNodeKind.Treasure]);
+        Assert.Equal(7, spec.KindWeights[MapNodeKind.Combat]);
+        Assert.Equal(GoblinFight, spec.Encounters.For(MapNodeKind.Combat)[0].Encounter);
+        Assert.Equal(5, spec.Encounters.For(MapNodeKind.Combat)[0].Weight);
+        Assert.Equal(50, spec.BalanceTargets.StartNet);
+    }
+
+    [Fact]
     public void Encounter_enemy_grid_position_round_trips()
     {
         var encounter = new EncounterDefinition(

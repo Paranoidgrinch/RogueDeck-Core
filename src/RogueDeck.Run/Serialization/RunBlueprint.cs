@@ -81,6 +81,12 @@ public sealed record RunBlueprint(
     // unweighted map is unaffected. Round-trips via RunJson; old documents deserialize with the empty default.
     public BalanceManifest Balance { get; init; } = new();
 
+    // The rules a run's map is generated from, per run, at run start (RuleBasedMapGenerator). Null (the default) ⇒
+    // no procedural generation: the authored Map above is used as-is, exactly as before. When set, CreateInitialRun
+    // builds the map from these rules + the run seed + the starting loadout strength (see Balance), guaranteeing the
+    // per-path minimums and balancing each fight. Round-trips via RunJson.
+    public MapGenerationSpec? MapGeneration { get; init; }
+
     // The effective starting config for a run: the chosen roster character, else the first roster character (a
     // deterministic default / an unknown id falls back here), else the single Start when there is no roster.
     public RunStart ResolveStart(string? characterId = null)

@@ -1,5 +1,3 @@
-using RogueDeck.Core.Combat;
-
 namespace RogueDeck.Run;
 
 // The role a generated map node plays — decoupled from NodeType so the generator owns topology + distribution and
@@ -12,6 +10,12 @@ public enum MapNodeKind
     Shop,
     Rest,
     Boss,
+
+    // Added for rule-based generation (RuleBasedMapGenerator): a reward/treasure node and a crafting workbench
+    // node. Appended (not inserted) so the existing members keep their ordinal values. The content delegate maps
+    // each role to a concrete NodeType + payload — Workbench → WorkbenchRef, Treasure → the game's reward node.
+    Treasure,
+    Workbench,
 }
 
 // A node's grid position in a layered act: Row 0 is the entry row, the last row is the boss.
@@ -50,7 +54,7 @@ public static class LayeredMapGenerator
         ArgumentNullException.ThrowIfNull(content);
         spec.Validate();
 
-        var rng = new SeededRng(seed);
+        var rng = new MapGenRandom(seed);
 
         // Row widths: rows 0..Rows-1 are branching rows; row `Rows` is the single boss node.
         var widths = new int[spec.Rows + 1];
@@ -65,21 +69,21 @@ public static class LayeredMapGenerator
                 var coord = new MapCoord(r, c);
                 var kind = KindFor(coord, spec, rng);
                 var realized = content(kind, coord);
-                builder.AddNode(new NodeId(Id(r, c)), realized.Type, realized.Payload);
+                builder.AddNode(new NodeId(MapWiring.Id(r, c)), realized.Type, realized.Payload);
             }
 
         for (var c = 0; c < widths[0]; c++)
-            builder.Entry(Id(0, c)); // the player picks a starting column
+            builder.Entry(MapWiring.Id(0, c)); // the player picks a starting column
 
         for (var r = 0; r < spec.Rows; r++)
-            WireRows(builder, r, widths[r], widths[r + 1], rng);
+            MapWiring.WireRows(builder, r, widths[r], widths[r + 1], rng);
 
         return builder.Build();
     }
 
     // Distribute node kinds: entry row is Combat, the row just below the boss is Rest (a campfire before the fight),
     // the top row is the Boss, and middle rows draw a weighted kind (Elite only from row 2 on).
-    private static MapNodeKind KindFor(MapCoord coord, LayeredMapSpec spec, SeededRng rng)
+    private static MapNodeKind KindFor(MapCoord coord, LayeredMapSpec spec, MapGenRandom rng)
     {
         if (coord.Row == spec.Rows)
             return MapNodeKind.Boss;
@@ -90,7 +94,7 @@ public static class LayeredMapGenerator
         return WeightedMiddleKind(coord.Row, rng);
     }
 
-    private static MapNodeKind WeightedMiddleKind(int row, SeededRng rng)
+    private static MapNodeKind WeightedMiddleKind(int row, MapGenRandom rng)
     {
         // Combat is the backbone; the rest sprinkle in variety. Elites are gated out of the earliest rows.
         var pick = rng.Next(100);
@@ -103,57 +107,5 @@ public static class LayeredMapGenerator
         if (pick < 93)
             return MapNodeKind.Shop;
         return MapNodeKind.Rest;
-    }
-
-    // Wire row r (width w) into row r+1 (width w2): each node connects to its nearest column in the next row plus
-    // an occasional adjacent column (branching), then a fix-up guarantees every next-row node has an incoming edge
-    // (so nothing is unreachable). Forward-only, so the whole graph stays acyclic.
-    private static void WireRows(RunMapBuilder builder, int r, int w, int w2, SeededRng rng)
-    {
-        var incoming = new bool[w2];
-
-        for (var i = 0; i < w; i++)
-        {
-            var mid = Nearest(i, w, w2);
-            Connect(builder, r, i, mid, incoming);
-
-            // Occasionally branch to an adjacent column for a real fork (never off the ends).
-            if (w2 > 1 && rng.Next(3) == 0)
-            {
-                var side = rng.Next(2) == 0 ? mid - 1 : mid + 1;
-                if (side >= 0 && side < w2)
-                    Connect(builder, r, i, side, incoming);
-            }
-        }
-
-        // Any next-row node still unreached gets an edge from its nearest current-row node.
-        for (var j = 0; j < w2; j++)
-            if (!incoming[j])
-                Connect(builder, r, Nearest(j, w2, w), j, incoming);
-    }
-
-    private static void Connect(RunMapBuilder builder, int r, int from, int to, bool[] incoming)
-    {
-        builder.Connect(Id(r, from), Id(r + 1, to));
-        incoming[to] = true;
-    }
-
-    // The column in a row of width `toWidth` that lines up with column `i` of a row of width `fromWidth`.
-    private static int Nearest(int i, int fromWidth, int toWidth) =>
-        toWidth == 1 ? 0 : (int)Math.Round(i * (double)(toWidth - 1) / Math.Max(1, fromWidth - 1));
-
-    private static string Id(int row, int col) => $"r{row}c{col}";
-
-    // A tiny deterministic RNG over CombatRandom (the same hashing the run/combat layers use), so a seed reproduces
-    // a map. Each draw advances a local step, mirroring RunState.NextRandom.
-    private sealed class SeededRng
-    {
-        private readonly int _seed;
-        private int _step;
-
-        public SeededRng(int seed) => _seed = seed;
-
-        public int Next(int maxExclusive) =>
-            maxExclusive <= 1 ? 0 : CombatRandom.CreateShuffledIndexes(maxExclusive, _seed, _step++)[0];
     }
 }
