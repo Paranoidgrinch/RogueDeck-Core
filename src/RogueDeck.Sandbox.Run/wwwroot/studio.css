@@ -124,6 +124,26 @@ h2 {
     white-space: nowrap;
 }
 
+/* A reward/entity option: the name on top, its ability text beneath, so a card pick shows what it does. */
+.entity-option {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    text-align: left;
+    height: auto;
+}
+
+.entity-name {
+    font-weight: 600;
+}
+
+.entity-desc {
+    color: var(--text-muted);
+    font-size: 0.88em;
+    font-weight: 400;
+}
+
 .run-bar,
 .row {
     display: flex;

@@ -168,7 +168,17 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
                 ? null
                 : blueprint.MetaRules.Concat(ShredEngine.ShredMeta.ImplicitRecipeRules(blueprint)).ToList();
 
-            var labeler = new RogueDeck.Sandbox.Run.RunEntityLabeler(CardNames, RelicNames, ResourceNames, ShredNames);
+            // Ability/rules text per card/relic from the presentation manifest, so reward picks show what
+            // a card DOES, not just its title. (The engine has no rules-text renderer; the description is
+            // authored/presentation content — a game's card "text".)
+            var cardDescriptions = blueprint.Presentation.Cards
+                .Where(p => !string.IsNullOrWhiteSpace(p.Value.FlavorText))
+                .ToDictionary(p => p.Key, p => p.Value.FlavorText!);
+            var relicDescriptions = blueprint.Presentation.Relics
+                .Where(p => !string.IsNullOrWhiteSpace(p.Value.FlavorText))
+                .ToDictionary(p => p.Key, p => p.Value.FlavorText!);
+            var labeler = new RogueDeck.Sandbox.Run.RunEntityLabeler(
+                CardNames, RelicNames, ResourceNames, ShredNames, cardDescriptions, relicDescriptions);
             var session = new InteractiveRunSession(
                 () => makeRun(content), registry, content, script, resettables, meta, metaRules, labeler);
             session.Changed += onChanged;

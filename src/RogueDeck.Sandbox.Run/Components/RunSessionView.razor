@@ -30,9 +30,14 @@
                 @for (var i = 0; i < request.Displays.Count; i++)
                 {
                     var index = i;
-                    <button class="play @(_selected.Contains(index) ? "active" : "")"
+                    var description = index < request.Descriptions.Count ? request.Descriptions[index] : "";
+                    <button class="play entity-option @(_selected.Contains(index) ? "active" : "")"
                             @onclick="() => ToggleEntity(index)">
-                        @request.Displays[index]
+                        <span class="entity-name">@request.Displays[index]</span>
+                        @if (!string.IsNullOrWhiteSpace(description))
+                        {
+                            <span class="entity-desc">@description</span>
+                        }
                     </button>
                 }
             </div>

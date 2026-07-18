@@ -61,6 +61,15 @@ public class RewardLabelingTortureTests
                 StartingHealth = 30,
                 Resources = new Dictionary<string, int> { [StandardRunIds.Gold.Value] = 0 },
             },
+            // The ability text a reward pick should show (a card's "text") lives in the presentation.
+            Presentation = new PresentationManifest
+            {
+                Cards = new Dictionary<string, EntityPresentation>
+                {
+                    ["paper-cut"] = new() { FlavorText = "Deal 6 damage." },
+                    ["strong-binder"] = new() { FlavorText = "Gain 7 Block. Apply 1 Doubt." },
+                },
+            },
         };
     }
 
@@ -86,12 +95,18 @@ public class RewardLabelingTortureTests
             session.PickEntities([0]);
             Assert.Null(session.Error);
 
-            // The card pick shows the cards' DISPLAY NAMES, not their ids.
+            // The card pick shows the cards' DISPLAY NAMES, not their ids…
             Assert.True(session.IsAwaitingEntities);
-            var cardDisplays = session.PendingEntities!.Displays;
-            Assert.Contains("Paper Cut", cardDisplays);
-            Assert.Contains("Strong Binder", cardDisplays);
-            Assert.DoesNotContain(cardDisplays, d => d.Contains("paper-cut")); // no raw ids
+            var pick = session.PendingEntities!;
+            Assert.Contains("Paper Cut", pick.Displays);
+            Assert.Contains("Strong Binder", pick.Displays);
+            Assert.DoesNotContain(pick.Displays, d => d.Contains("paper-cut")); // no raw ids
+
+            // …AND each card's ability text, so the player knows what the card DOES.
+            var paperCutIndex = pick.Displays.ToList().IndexOf("Paper Cut");
+            Assert.Equal("Deal 6 damage.", pick.Descriptions[paperCutIndex]);
+            var binderIndex = pick.Displays.ToList().IndexOf("Strong Binder");
+            Assert.Equal("Gain 7 Block. Apply 1 Doubt.", pick.Descriptions[binderIndex]);
         }
     }
 }

@@ -13,18 +13,46 @@ public sealed class RunEntityLabeler
     private readonly IReadOnlyDictionary<string, string> _relics;
     private readonly IReadOnlyDictionary<string, string> _resources;
     private readonly IReadOnlyDictionary<string, string> _shreds;
+    private readonly IReadOnlyDictionary<string, string> _cardDescriptions;
+    private readonly IReadOnlyDictionary<string, string> _relicDescriptions;
 
     public RunEntityLabeler(
         IReadOnlyDictionary<string, string> cards,
         IReadOnlyDictionary<string, string> relics,
         IReadOnlyDictionary<string, string> resources,
-        IReadOnlyDictionary<string, string> shreds)
+        IReadOnlyDictionary<string, string> shreds,
+        IReadOnlyDictionary<string, string>? cardDescriptions = null,
+        IReadOnlyDictionary<string, string>? relicDescriptions = null)
     {
         _cards = cards;
         _relics = relics;
         _resources = resources;
         _shreds = shreds;
+        _cardDescriptions = cardDescriptions ?? new Dictionary<string, string>();
+        _relicDescriptions = relicDescriptions ?? new Dictionary<string, string>();
     }
+
+    // The ability / rules text for a picked entity, so a reward pick shows WHAT a card does, not just
+    // its title. Sourced from the presentation manifest (a card's description text); empty when unknown.
+    public string Description(object? candidate) => candidate switch
+    {
+        RewardOffer offer => string.Join("  ·  ",
+            offer.Grant.Select(DescribeGrant).Where(s => s.Length > 0)),
+        RunCardInstance card => CardDescription(card.DefinitionId.value),
+        RelicInstance relic => _relicDescriptions.GetValueOrDefault(relic.Id.Value, string.Empty),
+        _ => string.Empty,
+    };
+
+    private string DescribeGrant(IRunEffectRequest effect) => effect switch
+    {
+        AddCardToDeckRunEffect card => CardDescription(card.Card.value),
+        AddRelicByIdRunEffect relic => _relicDescriptions.GetValueOrDefault(relic.Relic.Value, string.Empty),
+        AddRelicRunEffect relic => _relicDescriptions.GetValueOrDefault(relic.Relic.Id.Value, string.Empty),
+        _ => string.Empty,
+    };
+
+    private string CardDescription(string definitionId) =>
+        _cardDescriptions.GetValueOrDefault(definitionId, string.Empty);
 
     public string Card(CardDefinitionId card, int upgradeLevel = 0) =>
         CardName(card.value) + new string('+', upgradeLevel);

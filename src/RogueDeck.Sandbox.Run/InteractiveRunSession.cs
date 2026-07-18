@@ -213,7 +213,9 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
 
         _script.ThrowIfMismatched(nameof(ChooseEntities));
         PendingEntities = new EntitySelectionRequest(
-            purpose, Math.Min(count, candidates.Count), candidates.Select(c => Display(c)).ToArray());
+            purpose, Math.Min(count, candidates.Count),
+            candidates.Select(c => Display(c)).ToArray(),
+            candidates.Select(c => _labeler?.Description(c) ?? string.Empty).ToArray());
         throw new ReplayParkedException();
     }
 
@@ -244,5 +246,13 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
     }
 }
 
-// A pending entity selection surfaced to the UI: what for, how many to pick, and the display strings.
-public sealed record EntitySelectionRequest(string Purpose, int Count, IReadOnlyList<string> Displays);
+// A pending entity selection surfaced to the UI: what for, how many to pick, the display names, and a
+// parallel list of ability/rules descriptions (empty string when an option has none) so a reward pick
+// can show WHAT each card does, not just its title.
+public sealed record EntitySelectionRequest(
+    string Purpose, int Count, IReadOnlyList<string> Displays, IReadOnlyList<string> Descriptions)
+{
+    // Back-compat ctor: no descriptions (all empty).
+    public EntitySelectionRequest(string purpose, int count, IReadOnlyList<string> displays)
+        : this(purpose, count, displays, displays.Select(_ => string.Empty).ToArray()) { }
+}
