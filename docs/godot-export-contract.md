@@ -73,6 +73,8 @@ Top level: a single JSON object, **PascalCase** property names, enums as **strin
 | `Recipes` | curated shred combinations: unordered ingredient multiset → result card id (must exist in `Cards`) |
 | `ShredRules` | per-game composition rules: `MinFilledSpaces` (6 = only complete cards), `MaxParts` |
 | `Workbenches` | id → crafting-station definition, referenced by `workbench` map nodes (`node.workbenchRef`) |
+| `Balance` | strength/threat values per entity that steer map generation — see below (empty when unused) |
+| `MapGeneration` | procedural map rules, or `null` for a hand-authored `Map` — see below |
 | `Presentation` | the look manifest — see below |
 
 Polymorphic nodes (effects, expressions, selectors, rewards, payloads, …) always use the envelope
@@ -145,6 +147,35 @@ RogueDeck.Run.dll (`RogueDeck.ShredEngine` namespace). The contract points a fro
   `shredGained` / `workbenchCrafted`, meta effect `meta.promoteFlag`, and per-member save fields
   `Shreds` (kind → count) and per-card `Composition` — all additive; documents and saves without them load.
 
+## Procedural map generation
+
+When `MapGeneration` is `null` (the default) the frontend plays the hand-authored `Map` exactly as before —
+nothing changes. When it is present, the `Map` is authored empty and **the engine generates a fresh map per run at
+run start**. Because the frontend embeds the engine assemblies (it does not re-implement them), this happens for
+free inside the same `CreateInitialRun` the reference host already calls — a Godot host reuses `RunPlayback`'s seam
+and needs no map-generation code of its own.
+
+What the generator guarantees (see `RuleBasedMapGenerator`):
+
+- A layered act of `Rows` pre-boss rows plus a single boss row; every entry→boss path visits one node per row.
+- **Per-path minimums** (`PerPathMinimums`: e.g. 2 elites, 2 shops) and a **minimum enemy count**
+  (`MinEnemiesPerPath`) hold on *every* path — guaranteed by construction (a reserved full row gives every path one
+  of that kind), not by rejection sampling. Non-reserved rows add per-column variety.
+- Combat / elite / boss nodes draw their encounter from `Encounters` (per-role weighted pools), narrowed to a
+  **difficulty band**: the fight's net = the run's loadout strength + the encounter's (negative) threat is kept near
+  a per-row target (`BalanceTargets`), so a run is never trivial nor impossible. Non-combat roles resolve through
+  `NodeRefs` (role → a shop / workbench / event id).
+
+`Balance` is the input to that band. Its sections are id-keyed integer maps — `Enemies` and `Encounters` (negative
+threats), `Cards` / `Relics` / `Consumables` / `Characters` (positive strengths), and `Defaults` for unlisted ids.
+The engine reads it only during generation; it never affects combat math.
+
+**Determinism & resume**: the map's structure is a pure function of the rules + the run seed, and its encounter
+choices also depend on the starting loadout strength. That loadout is persisted in the save
+(`RunSaveData.MapGenerationLoadout`), so resuming rebuilds the identical map — the frontend does nothing special;
+`RunPlayback.Resume` already passes it. (As with authored maps, runtime map mutations are not re-persisted across a
+save — restore rebuilds from the rules, the same limitation authored maps have always had.)
+
 ## What the export gate guarantees
 
 An exported document passed `RunDocumentValidator.ValidateForExport`, so a frontend may assume:
@@ -153,7 +184,10 @@ An exported document passed `RunDocumentValidator.ValidateForExport`, so a front
   decks/relics/consumables→definitions, presentation entries→entities; no duplicate ids;
 - the map is non-empty and, when it declares edges, a forward-only DAG with valid endpoints and reachable nodes;
 - every way the run can start yields a non-empty deck;
-- every card cost names a resource that some combat resource or encounter actually defines.
+- every card cost names a resource that some combat resource or encounter actually defines;
+- every `Balance` value points at a real entity;
+- when `MapGeneration` is set: the row budget is feasible for the per-path minimums, every role that can appear has
+  resolvable content (an encounter pool or a `NodeRefs` id), and a map actually generates from a sample seed.
 
 Defensive loading is still correct engineering, but these classes of error are authoring errors the Studio keeps,
 not runtime conditions the frontend must design UI for.

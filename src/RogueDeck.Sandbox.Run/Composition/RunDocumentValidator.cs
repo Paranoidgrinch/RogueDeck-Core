@@ -255,6 +255,24 @@ public static class RunDocumentValidator
                     problems.Add(
                         $"{CardsTab}: export — card '{card.Id}' costs resource '{cost.ResourceId.value}', which no combat resource or encounter defines.");
 
+        // A generation-based game must actually produce a map. When the rules look clean (no Map Rules problem
+        // above), generate one from a fixed seed to catch any residual runtime gap the static checks miss. A shipped
+        // game whose map cannot be built is unplayable.
+        if (blueprint.MapGeneration is not null
+            && !problems.Any(p => p.StartsWith(MapRulesTab + ":", StringComparison.Ordinal)))
+        {
+            try
+            {
+                var loadout = new BalanceCalculator(blueprint.Balance, blueprint.Encounters)
+                    .LoadoutStrength(blueprint.ResolveStart(null), blueprint.Deck);
+                _ = blueprint.BuildRunMap(1, loadout);
+            }
+            catch (Exception ex)
+            {
+                problems.Add($"{MapRulesTab}: export — the map cannot be generated: {ex.Message}");
+            }
+        }
+
         return problems;
     }
 

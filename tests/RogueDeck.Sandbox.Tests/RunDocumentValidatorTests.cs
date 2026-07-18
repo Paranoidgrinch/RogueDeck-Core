@@ -442,6 +442,30 @@ public class RunDocumentValidatorTests
     }
 
     [Fact]
+    public void A_valid_generated_blueprint_passes_the_export_gate()
+    {
+        // Generated() has a non-empty deck and a feasible, content-resolving spec.
+        Assert.Empty(RunDocumentValidator.ValidateForExport(Generated()));
+    }
+
+    [Fact]
+    public void The_export_gate_blocks_an_infeasible_generation_spec()
+    {
+        var bp = Generated();
+        bp = bp with
+        {
+            MapGeneration = bp.MapGeneration! with
+            {
+                Rows = 2,
+                PerPathMinimums = new Dictionary<MapNodeKind, int> { [MapNodeKind.Elite] = 3 },
+            },
+        };
+        Assert.Contains(
+            RunDocumentValidator.ValidateForExport(bp),
+            p => p.StartsWith("Map Rules:", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Flags_a_non_combat_role_without_a_node_ref()
     {
         var bp = Generated();
