@@ -822,6 +822,15 @@
                                         "Value": "emergency_inkwell"
                                       }
                                     }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
+                                    }
                                   }
                                 ]
                               },
@@ -886,6 +895,15 @@
                                         "Value": "counterfeit_priority_pass"
                                       }
                                     }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
+                                    }
                                   }
                                 ]
                               },
@@ -917,6 +935,15 @@
                                       "Relic": {
                                         "Value": "overtime_chit"
                                       }
+                                    }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
                                     }
                                   }
                                 ]
@@ -1184,6 +1211,15 @@
                                       "Relic": {
                                         "Value": "red_tape_dispenser"
                                       }
+                                    }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
                                     }
                                   }
                                 ]
@@ -2887,6 +2923,15 @@
                                         "Value": "emergency_inkwell"
                                       }
                                     }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
+                                    }
                                   }
                                 ]
                               },
@@ -2951,6 +2996,15 @@
                                         "Value": "counterfeit_priority_pass"
                                       }
                                     }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
+                                    }
                                   }
                                 ]
                               },
@@ -2982,6 +3036,15 @@
                                       "Relic": {
                                         "Value": "overtime_chit"
                                       }
+                                    }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
                                     }
                                   }
                                 ]
@@ -3249,6 +3312,15 @@
                                       "Relic": {
                                         "Value": "red_tape_dispenser"
                                       }
+                                    }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
                                     }
                                   }
                                 ]
@@ -4351,6 +4423,15 @@
                                         "Value": "emergency_inkwell"
                                       }
                                     }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
+                                    }
                                   }
                                 ]
                               },
@@ -4415,6 +4496,15 @@
                                         "Value": "counterfeit_priority_pass"
                                       }
                                     }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
+                                    }
                                   }
                                 ]
                               },
@@ -4446,6 +4536,15 @@
                                       "Relic": {
                                         "Value": "overtime_chit"
                                       }
+                                    }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
                                     }
                                   }
                                 ]
@@ -4713,6 +4812,15 @@
                                       "Relic": {
                                         "Value": "red_tape_dispenser"
                                       }
+                                    }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
                                     }
                                   }
                                 ]
@@ -5542,6 +5650,15 @@
                                         "Value": "emergency_inkwell"
                                       }
                                     }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
+                                    }
                                   }
                                 ]
                               },
@@ -5606,6 +5723,15 @@
                                         "Value": "counterfeit_priority_pass"
                                       }
                                     }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
+                                    }
                                   }
                                 ]
                               },
@@ -5637,6 +5763,15 @@
                                       "Relic": {
                                         "Value": "overtime_chit"
                                       }
+                                    }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
                                     }
                                   }
                                 ]
@@ -5904,6 +6039,15 @@
                                       "Relic": {
                                         "Value": "red_tape_dispenser"
                                       }
+                                    }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
                                     }
                                   }
                                 ]
@@ -6996,6 +7140,15 @@
                                         "Value": "emergency_inkwell"
                                       }
                                     }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
+                                    }
                                   }
                                 ]
                               },
@@ -7060,6 +7213,15 @@
                                         "Value": "counterfeit_priority_pass"
                                       }
                                     }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
+                                    }
                                   }
                                 ]
                               },
@@ -7091,6 +7253,15 @@
                                       "Relic": {
                                         "Value": "overtime_chit"
                                       }
+                                    }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
                                     }
                                   }
                                 ]
@@ -7358,6 +7529,15 @@
                                       "Relic": {
                                         "Value": "red_tape_dispenser"
                                       }
+                                    }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
                                     }
                                   }
                                 ]
@@ -9387,6 +9567,15 @@
                                         "Value": "emergency_inkwell"
                                       }
                                     }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
+                                    }
                                   }
                                 ]
                               },
@@ -9451,6 +9640,15 @@
                                         "Value": "counterfeit_priority_pass"
                                       }
                                     }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
+                                    }
                                   }
                                 ]
                               },
@@ -9482,6 +9680,15 @@
                                       "Relic": {
                                         "Value": "overtime_chit"
                                       }
+                                    }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
                                     }
                                   }
                                 ]
@@ -9749,6 +9956,15 @@
                                       "Relic": {
                                         "Value": "red_tape_dispenser"
                                       }
+                                    }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
                                     }
                                   }
                                 ]
@@ -10334,6 +10550,15 @@
                                         "Value": "emergency_inkwell"
                                       }
                                     }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
+                                    }
                                   }
                                 ]
                               },
@@ -10398,6 +10623,15 @@
                                         "Value": "counterfeit_priority_pass"
                                       }
                                     }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
+                                    }
                                   }
                                 ]
                               },
@@ -10429,6 +10663,15 @@
                                       "Relic": {
                                         "Value": "overtime_chit"
                                       }
+                                    }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
                                     }
                                   }
                                 ]
@@ -10696,6 +10939,15 @@
                                       "Relic": {
                                         "Value": "red_tape_dispenser"
                                       }
+                                    }
+                                  },
+                                  {
+                                    "kind": "fx.incrementCounter",
+                                    "value": {
+                                      "Counter": {
+                                        "Value": "resourceMax.standard.energy"
+                                      },
+                                      "Delta": 1
                                     }
                                   }
                                 ]
@@ -50744,6 +50996,15 @@
                                               "Value": "emergency_inkwell"
                                             }
                                           }
+                                        },
+                                        {
+                                          "kind": "fx.incrementCounter",
+                                          "value": {
+                                            "Counter": {
+                                              "Value": "resourceMax.standard.energy"
+                                            },
+                                            "Delta": 1
+                                          }
                                         }
                                       ]
                                     },
@@ -50808,6 +51069,15 @@
                                               "Value": "counterfeit_priority_pass"
                                             }
                                           }
+                                        },
+                                        {
+                                          "kind": "fx.incrementCounter",
+                                          "value": {
+                                            "Counter": {
+                                              "Value": "resourceMax.standard.energy"
+                                            },
+                                            "Delta": 1
+                                          }
                                         }
                                       ]
                                     },
@@ -50839,6 +51109,15 @@
                                             "Relic": {
                                               "Value": "overtime_chit"
                                             }
+                                          }
+                                        },
+                                        {
+                                          "kind": "fx.incrementCounter",
+                                          "value": {
+                                            "Counter": {
+                                              "Value": "resourceMax.standard.energy"
+                                            },
+                                            "Delta": 1
                                           }
                                         }
                                       ]
@@ -51106,6 +51385,15 @@
                                             "Relic": {
                                               "Value": "red_tape_dispenser"
                                             }
+                                          }
+                                        },
+                                        {
+                                          "kind": "fx.incrementCounter",
+                                          "value": {
+                                            "Counter": {
+                                              "Value": "resourceMax.standard.energy"
+                                            },
+                                            "Delta": 1
                                           }
                                         }
                                       ]
@@ -53899,6 +54187,15 @@
                                               "Value": "emergency_inkwell"
                                             }
                                           }
+                                        },
+                                        {
+                                          "kind": "fx.incrementCounter",
+                                          "value": {
+                                            "Counter": {
+                                              "Value": "resourceMax.standard.energy"
+                                            },
+                                            "Delta": 1
+                                          }
                                         }
                                       ]
                                     },
@@ -53963,6 +54260,15 @@
                                               "Value": "counterfeit_priority_pass"
                                             }
                                           }
+                                        },
+                                        {
+                                          "kind": "fx.incrementCounter",
+                                          "value": {
+                                            "Counter": {
+                                              "Value": "resourceMax.standard.energy"
+                                            },
+                                            "Delta": 1
+                                          }
                                         }
                                       ]
                                     },
@@ -53994,6 +54300,15 @@
                                             "Relic": {
                                               "Value": "overtime_chit"
                                             }
+                                          }
+                                        },
+                                        {
+                                          "kind": "fx.incrementCounter",
+                                          "value": {
+                                            "Counter": {
+                                              "Value": "resourceMax.standard.energy"
+                                            },
+                                            "Delta": 1
                                           }
                                         }
                                       ]
@@ -54261,6 +54576,15 @@
                                             "Relic": {
                                               "Value": "red_tape_dispenser"
                                             }
+                                          }
+                                        },
+                                        {
+                                          "kind": "fx.incrementCounter",
+                                          "value": {
+                                            "Counter": {
+                                              "Value": "resourceMax.standard.energy"
+                                            },
+                                            "Delta": 1
                                           }
                                         }
                                       ]
@@ -56190,6 +56514,15 @@
                                               "Value": "emergency_inkwell"
                                             }
                                           }
+                                        },
+                                        {
+                                          "kind": "fx.incrementCounter",
+                                          "value": {
+                                            "Counter": {
+                                              "Value": "resourceMax.standard.energy"
+                                            },
+                                            "Delta": 1
+                                          }
                                         }
                                       ]
                                     },
@@ -56254,6 +56587,15 @@
                                               "Value": "counterfeit_priority_pass"
                                             }
                                           }
+                                        },
+                                        {
+                                          "kind": "fx.incrementCounter",
+                                          "value": {
+                                            "Counter": {
+                                              "Value": "resourceMax.standard.energy"
+                                            },
+                                            "Delta": 1
+                                          }
                                         }
                                       ]
                                     },
@@ -56285,6 +56627,15 @@
                                             "Relic": {
                                               "Value": "overtime_chit"
                                             }
+                                          }
+                                        },
+                                        {
+                                          "kind": "fx.incrementCounter",
+                                          "value": {
+                                            "Counter": {
+                                              "Value": "resourceMax.standard.energy"
+                                            },
+                                            "Delta": 1
                                           }
                                         }
                                       ]
@@ -56552,6 +56903,15 @@
                                             "Relic": {
                                               "Value": "red_tape_dispenser"
                                             }
+                                          }
+                                        },
+                                        {
+                                          "kind": "fx.incrementCounter",
+                                          "value": {
+                                            "Counter": {
+                                              "Value": "resourceMax.standard.energy"
+                                            },
+                                            "Delta": 1
                                           }
                                         }
                                       ]
@@ -58729,65 +59089,7 @@
     {
       "Id": "emergency_inkwell",
       "DisplayName": "Emergency Inkwell",
-      "RunPrograms": [
-        {
-          "event": "nodeEntered",
-          "condition": {
-            "kind": "event.bool",
-            "value": {
-              "FieldKey": "node.isCombat"
-            }
-          },
-          "templates": [
-            {
-              "kind": "tpl.literal",
-              "value": {
-                "Effect": {
-                  "kind": "fx.installNextCombatOpening",
-                  "value": {
-                    "Rule": {
-                      "trigger": "turnStarted",
-                      "priority": 0,
-                      "program": {
-                        "Id": {
-                          "Value": "(unnamed)"
-                        },
-                        "Root": {
-                          "kind": "node.modifyResource",
-                          "value": {
-                            "TargetSelector": {
-                              "kind": "sel.source",
-                              "value": {
-                                "Cardinality": "ZeroOrOne",
-                                "RequiredContextCapabilities": "Source"
-                              }
-                            },
-                            "ResourceId": {
-                              "value": "standard.energy"
-                            },
-                            "Delta": {
-                              "kind": "const",
-                              "value": {
-                                "Value": 1
-                              }
-                            },
-                            "Min": null,
-                            "Max": 99,
-                            "ResultKey": null,
-                            "Children": []
-                          }
-                        },
-                        "MaxNodeDepth": 64,
-                        "MaxProgramSteps": 1024
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          ]
-        }
-      ],
+      "RunPrograms": [],
       "CombatRules": []
     },
     {
@@ -59036,60 +59338,28 @@
                           "Value": "(unnamed)"
                         },
                         "Root": {
-                          "kind": "node.sequence",
+                          "kind": "node.applyStatus",
                           "value": {
-                            "Children": [
-                              {
-                                "kind": "node.modifyResource",
-                                "value": {
-                                  "TargetSelector": {
-                                    "kind": "sel.source",
-                                    "value": {
-                                      "Cardinality": "ZeroOrOne",
-                                      "RequiredContextCapabilities": "Source"
-                                    }
-                                  },
-                                  "ResourceId": {
-                                    "value": "standard.energy"
-                                  },
-                                  "Delta": {
-                                    "kind": "const",
-                                    "value": {
-                                      "Value": 1
-                                    }
-                                  },
-                                  "Min": null,
-                                  "Max": 99,
-                                  "ResultKey": null,
-                                  "Children": []
-                                }
-                              },
-                              {
-                                "kind": "node.applyStatus",
-                                "value": {
-                                  "TargetSelector": {
-                                    "kind": "sel.source",
-                                    "value": {
-                                      "Cardinality": "ZeroOrOne",
-                                      "RequiredContextCapabilities": "Source"
-                                    }
-                                  },
-                                  "StatusDefinitionId": {
-                                    "value": "doubt"
-                                  },
-                                  "Stacks": {
-                                    "kind": "const",
-                                    "value": {
-                                      "Value": 1
-                                    }
-                                  },
-                                  "DurationTurns": 0,
-                                  "Charges": 0,
-                                  "ResultKey": null,
-                                  "Children": []
-                                }
+                            "TargetSelector": {
+                              "kind": "sel.source",
+                              "value": {
+                                "Cardinality": "ZeroOrOne",
+                                "RequiredContextCapabilities": "Source"
                               }
-                            ]
+                            },
+                            "StatusDefinitionId": {
+                              "value": "doubt"
+                            },
+                            "Stacks": {
+                              "kind": "const",
+                              "value": {
+                                "Value": 1
+                              }
+                            },
+                            "DurationTurns": 0,
+                            "Charges": 0,
+                            "ResultKey": null,
+                            "Children": []
                           }
                         },
                         "MaxNodeDepth": 64,
@@ -59218,55 +59488,23 @@
                           "Value": "(unnamed)"
                         },
                         "Root": {
-                          "kind": "node.sequence",
+                          "kind": "node.gainBlock",
                           "value": {
-                            "Children": [
-                              {
-                                "kind": "node.modifyResource",
-                                "value": {
-                                  "TargetSelector": {
-                                    "kind": "sel.source",
-                                    "value": {
-                                      "Cardinality": "ZeroOrOne",
-                                      "RequiredContextCapabilities": "Source"
-                                    }
-                                  },
-                                  "ResourceId": {
-                                    "value": "standard.energy"
-                                  },
-                                  "Delta": {
-                                    "kind": "const",
-                                    "value": {
-                                      "Value": 1
-                                    }
-                                  },
-                                  "Min": null,
-                                  "Max": 99,
-                                  "ResultKey": null,
-                                  "Children": []
-                                }
-                              },
-                              {
-                                "kind": "node.gainBlock",
-                                "value": {
-                                  "TargetSelector": {
-                                    "kind": "sel.source",
-                                    "value": {
-                                      "Cardinality": "ZeroOrOne",
-                                      "RequiredContextCapabilities": "Source"
-                                    }
-                                  },
-                                  "Amount": {
-                                    "kind": "const",
-                                    "value": {
-                                      "Value": 4
-                                    }
-                                  },
-                                  "ResultKey": null,
-                                  "Children": []
-                                }
+                            "TargetSelector": {
+                              "kind": "sel.source",
+                              "value": {
+                                "Cardinality": "ZeroOrOne",
+                                "RequiredContextCapabilities": "Source"
                               }
-                            ]
+                            },
+                            "Amount": {
+                              "kind": "const",
+                              "value": {
+                                "Value": 4
+                              }
+                            },
+                            "ResultKey": null,
+                            "Children": []
                           }
                         },
                         "MaxNodeDepth": 64,
@@ -60084,59 +60322,27 @@
                           "Value": "(unnamed)"
                         },
                         "Root": {
-                          "kind": "node.sequence",
+                          "kind": "node.createCardInstance",
                           "value": {
-                            "Children": [
-                              {
-                                "kind": "node.modifyResource",
-                                "value": {
-                                  "TargetSelector": {
-                                    "kind": "sel.source",
-                                    "value": {
-                                      "Cardinality": "ZeroOrOne",
-                                      "RequiredContextCapabilities": "Source"
-                                    }
-                                  },
-                                  "ResourceId": {
-                                    "value": "standard.energy"
-                                  },
-                                  "Delta": {
-                                    "kind": "const",
-                                    "value": {
-                                      "Value": 1
-                                    }
-                                  },
-                                  "Min": null,
-                                  "Max": 99,
-                                  "ResultKey": null,
-                                  "Children": []
-                                }
-                              },
-                              {
-                                "kind": "node.createCardInstance",
-                                "value": {
-                                  "TargetSelector": {
-                                    "kind": "sel.source",
-                                    "value": {
-                                      "Cardinality": "ZeroOrOne",
-                                      "RequiredContextCapabilities": "Source"
-                                    }
-                                  },
-                                  "CardDefinitionId": {
-                                    "value": "red_tape"
-                                  },
-                                  "ToZone": "Hand",
-                                  "Count": {
-                                    "kind": "const",
-                                    "value": {
-                                      "Value": 1
-                                    }
-                                  },
-                                  "ResultKey": null,
-                                  "Children": []
-                                }
+                            "TargetSelector": {
+                              "kind": "sel.source",
+                              "value": {
+                                "Cardinality": "ZeroOrOne",
+                                "RequiredContextCapabilities": "Source"
                               }
-                            ]
+                            },
+                            "CardDefinitionId": {
+                              "value": "red_tape"
+                            },
+                            "ToZone": "Hand",
+                            "Count": {
+                              "kind": "const",
+                              "value": {
+                                "Value": 1
+                              }
+                            },
+                            "ResultKey": null,
+                            "Children": []
                           }
                         },
                         "MaxNodeDepth": 64,
