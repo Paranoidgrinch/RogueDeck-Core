@@ -199,6 +199,32 @@ public sealed class CombatantCardZones
         return movedCards;
     }
 
+    // Reorder the draw pile by a permutation of its current indexes (index i of the new order names the
+    // draw-pile position of the card that should land at position i). Used to shuffle the opening draw
+    // pile at combat start; the permutation must be a bijection over the pile.
+    public IReadOnlyList<CardInstance> ReorderDrawPile(IReadOnlyList<int> drawPileIndexesInNewOrder)
+    {
+        ArgumentNullException.ThrowIfNull(drawPileIndexesInNewOrder);
+        if (drawPileIndexesInNewOrder.Count != _drawPile.Count)
+            throw new InvalidOperationException(
+                "The reorder must contain exactly one index for each card in the draw pile.");
+
+        var current = _drawPile.ToArray();
+        var seen = new HashSet<int>();
+        foreach (var sourceIndex in drawPileIndexesInNewOrder)
+        {
+            if (sourceIndex < 0 || sourceIndex >= current.Length)
+                throw new InvalidOperationException($"Draw pile reorder index '{sourceIndex}' is out of range.");
+            if (!seen.Add(sourceIndex))
+                throw new InvalidOperationException($"Draw pile reorder index '{sourceIndex}' appears more than once.");
+        }
+
+        _drawPile.Clear();
+        foreach (var sourceIndex in drawPileIndexesInNewOrder)
+            _drawPile.Add(current[sourceIndex]);
+        return _drawPile;
+    }
+
     public void DiscardHand()
     {
         foreach (var card in _hand.ToArray())

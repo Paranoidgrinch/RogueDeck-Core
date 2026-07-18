@@ -48,6 +48,12 @@ public sealed class ScenarioBlueprint
     // false ⇒ round-robin, unchanged.
     public bool SimultaneousTeamTurns { get; set; }
 
+    // Opt-in: shuffle each player-team combatant's draw pile at combat start (deterministically, seeded by the
+    // combat's random seed) so the opening hand is randomized like a real deckbuilder — not the deck's authored
+    // order. Default false keeps scenario tests deterministic; the RUN layer turns it on for every real fight.
+    // Innate cards are still pulled to the top AFTER the shuffle, so they stay in the opening hand.
+    public bool ShuffleDrawPileOnStart { get; set; }
+
     public CompiledScenario Compile()
     {
         if (Hero is null)
@@ -89,7 +95,8 @@ public sealed class ScenarioBlueprint
 
         ValidateReferences(registry);
 
-        return new CompiledScenario(registry, intents, Hero, Enemies, Allies, CellExclusive, SimultaneousTeamTurns);
+        return new CompiledScenario(
+            registry, intents, Hero, Enemies, Allies, CellExclusive, SimultaneousTeamTurns, ShuffleDrawPileOnStart);
     }
 
     private void ValidateReferences(CombatDefinitionRegistry registry)
@@ -132,6 +139,9 @@ public sealed class CompiledScenario
     // Whether each team's members take their turn simultaneously (opt-in; default off ⇒ round-robin).
     public bool SimultaneousTeamTurns { get; }
 
+    // Whether to shuffle each player draw pile at combat start (opt-in; default off ⇒ authored deck order).
+    public bool ShuffleDrawPileOnStart { get; }
+
     internal CompiledScenario(
         CombatDefinitionRegistry registry,
         IReadOnlyDictionary<EnemyActionDefinitionId, ActionIntent> intents,
@@ -139,7 +149,8 @@ public sealed class CompiledScenario
         IReadOnlyList<EnemyBlueprint> enemies,
         IReadOnlyList<AllyBlueprint>? allies = null,
         bool cellExclusive = false,
-        bool simultaneousTeamTurns = false)
+        bool simultaneousTeamTurns = false,
+        bool shuffleDrawPileOnStart = false)
     {
         Registry = registry;
         Intents = intents;
@@ -148,6 +159,7 @@ public sealed class CompiledScenario
         Allies = allies ?? [];
         CellExclusive = cellExclusive;
         SimultaneousTeamTurns = simultaneousTeamTurns;
+        ShuffleDrawPileOnStart = shuffleDrawPileOnStart;
     }
 
     public ActionIntent? IntentFor(EnemyActionDefinitionId actionId) =>

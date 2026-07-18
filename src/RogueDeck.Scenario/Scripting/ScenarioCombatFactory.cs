@@ -32,8 +32,18 @@ internal static class ScenarioCombatFactory
         foreach (var ally in compiled.Allies)
             DealDeck(combat, ally);
 
-        // Innate cards start in the opening hand: pull them to the top of each player deck's draw pile (the opening
-        // draw is shuffle-free and takes from the top), preserving their relative order.
+        // Shuffle each player draw pile at combat start (opt-in; the run layer turns it on for real fights)
+        // so the opening hand is randomized like a real deckbuilder, not the authored deck order. Seeded by
+        // the combat's random seed, so replays reproduce the same shuffle.
+        if (compiled.ShuffleDrawPileOnStart)
+        {
+            ShuffleDrawPile(combat, compiled.Hero.CombatantId);
+            foreach (var ally in compiled.Allies)
+                ShuffleDrawPile(combat, ally.CombatantId);
+        }
+
+        // Innate cards start in the opening hand: pull them to the top of each player deck's draw pile (the
+        // opening draw takes from the top), preserving their relative order — AFTER any shuffle above.
         MoveInnateCardsToTop(combat, compiled.Registry, compiled.Hero.CombatantId);
         foreach (var ally in compiled.Allies)
             MoveInnateCardsToTop(combat, compiled.Registry, ally.CombatantId);
@@ -63,6 +73,18 @@ internal static class ScenarioCombatFactory
             for (var copy = 0; copy < entry.Count; copy++)
                 zones.AddCard(new CardInstance(
                     combat.CreateNextCardInstanceId(), entry.Card, blueprint.CombatantId, CardZone.DrawPile));
+    }
+
+    // Deterministically shuffle a combatant's draw pile (Fisher–Yates seeded by the combat's random seed),
+    // advancing the random step so later draws differ. No-op for a 0/1-card pile.
+    private static void ShuffleDrawPile(CombatState combat, CombatantId combatantId)
+    {
+        var zones = combat.GetCardZones(combatantId);
+        if (zones.DrawPile.Count <= 1)
+            return;
+        var order = CombatRandom.CreateShuffledIndexes(zones.DrawPile.Count, combat.RandomSeed, combat.RandomStep);
+        zones.ReorderDrawPile(order);
+        combat.AdvanceRandomStep();
     }
 
     // Reorder a combatant's draw pile so its innate-tagged cards sit on top, in their original relative order, so the

@@ -318,6 +318,11 @@ public sealed class CombatNodeResolver : INodeResolver
     {
         var blueprint = playthrough.Blueprint;
 
+        // Every real run fight shuffles the opening draw pile (deterministically, seeded by the run) — a
+        // deckbuilder deals a shuffled hand, not the authored deck order. Set here so it covers both data
+        // encounters and Func payloads; the shuffle itself happens at combat build (ScenarioCombatFactory).
+        blueprint.ShuffleDrawPileOnStart = true;
+
         // Deck projection: the fight's deck IS the run deck, mapped copy-by-copy. The bridge owns it, so it
         // replaces whatever the author left on the hero (authors should not populate the deck themselves).
         if (blueprint.Hero is { } hero)
