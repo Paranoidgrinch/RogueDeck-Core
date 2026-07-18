@@ -96,9 +96,10 @@ public sealed class OfferRewardRunEffectHandler : RunEffectHandler<OfferRewardRu
         run.RaiseEvent(new RewardOfferedRunEvent(request.Reward, offers.Select(o => o.Id).ToArray()));
 
         var pick = Math.Clamp(request.PickCount, 0, offers.Count);
-        // The chooser picks; with no chooser (non-interactive run) the first `pick` offers are taken.
+        // The chooser picks; with no chooser (non-interactive run) the first `pick` offers are taken. A
+        // reward is declinable — allowSkip lets an interactive player take nothing (skip a card reward).
         var chosen = run.EntityChooser is { } chooser
-            ? chooser.ChooseEntities(offers, pick, "reward")
+            ? chooser.ChooseEntities(offers, pick, "reward", allowSkip: true)
             : offers.Take(pick).ToList();
 
         foreach (var offer in chosen)

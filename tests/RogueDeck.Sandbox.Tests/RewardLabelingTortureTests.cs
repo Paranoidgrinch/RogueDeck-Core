@@ -107,6 +107,31 @@ public class RewardLabelingTortureTests
             Assert.Equal("Deal 6 damage.", pick.Descriptions[paperCutIndex]);
             var binderIndex = pick.Displays.ToList().IndexOf("Strong Binder");
             Assert.Equal("Gain 7 Block. Apply 1 Doubt.", pick.Descriptions[binderIndex]);
+
+            // A card reward is declinable — the pick allows a skip.
+            Assert.True(pick.AllowSkip);
+        }
+    }
+
+    [Fact]
+    public void A_card_reward_can_be_skipped_taking_no_card()
+    {
+        var play = new RunPlayback(() => { });
+        play.Start(SpoilsAtAnEvent(), seed: 1, interactive: true);
+        var session = play.Session!;
+        Assert.Null(play.Error);
+        using (play)
+        {
+            session.Pick("open");           // the event
+            session.PickEntities([0]);       // take the spoils (gold + card offer)
+            Assert.True(session.IsAwaitingEntities);
+            Assert.True(session.PendingEntities!.AllowSkip);
+
+            var deckBefore = session.Run.Deck.Count;
+            session.PickEntities(System.Array.Empty<int>()); // SKIP the card reward
+            Assert.Null(session.Error);
+            Assert.False(session.IsAwaitingEntities);
+            Assert.Equal(deckBefore, session.Run.Deck.Count); // no card added
         }
     }
 }

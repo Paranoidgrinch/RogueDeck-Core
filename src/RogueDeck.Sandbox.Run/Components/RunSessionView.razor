@@ -44,6 +44,10 @@
             <button class="play" disabled="@(_selected.Count != request.Count)" @onclick="ConfirmEntities">
                 Confirm (@_selected.Count/@request.Count)
             </button>
+            @if (request.AllowSkip)
+            {
+                <button class="mini" @onclick="SkipEntities" title="take none of these">Skip</button>
+            }
         }
         else if (session.IsAwaitingNodeChoice)
         {
@@ -425,6 +429,13 @@
         var indices = _selected.ToList();
         _selected.Clear();
         Session?.PickEntities(indices);
+    }
+
+    // Decline a skippable pick (a card reward): take nothing.
+    private void SkipEntities()
+    {
+        _selected.Clear();
+        Session?.PickEntities(Array.Empty<int>());
     }
 
     private void PlayCombatCard(CardInstanceId cardId)

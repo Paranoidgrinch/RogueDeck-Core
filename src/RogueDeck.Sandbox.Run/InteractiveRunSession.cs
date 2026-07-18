@@ -203,7 +203,11 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
     }
 
     // IRunEntityChooser — an unanswered entity selection (e.g. cards to remove) parks the replay.
-    public IReadOnlyList<T> ChooseEntities<T>(IReadOnlyList<T> candidates, int count, string purpose)
+    public IReadOnlyList<T> ChooseEntities<T>(IReadOnlyList<T> candidates, int count, string purpose) =>
+        ChooseEntities(candidates, count, purpose, allowSkip: false);
+
+    // Skippable variant (a declinable reward): the player may confirm with 0 picked, which grants nothing.
+    public IReadOnlyList<T> ChooseEntities<T>(IReadOnlyList<T> candidates, int count, string purpose, bool allowSkip)
     {
         if (candidates.Count == 0 || count <= 0)
             return Array.Empty<T>();
@@ -215,7 +219,8 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
         PendingEntities = new EntitySelectionRequest(
             purpose, Math.Min(count, candidates.Count),
             candidates.Select(c => Display(c)).ToArray(),
-            candidates.Select(c => _labeler?.Description(c) ?? string.Empty).ToArray());
+            candidates.Select(c => _labeler?.Description(c) ?? string.Empty).ToArray(),
+            allowSkip);
         throw new ReplayParkedException();
     }
 
@@ -246,11 +251,13 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
     }
 }
 
-// A pending entity selection surfaced to the UI: what for, how many to pick, the display names, and a
-// parallel list of ability/rules descriptions (empty string when an option has none) so a reward pick
-// can show WHAT each card does, not just its title.
+// A pending entity selection surfaced to the UI: what for, how many to pick, the display names, a parallel
+// list of ability/rules descriptions (empty string when an option has none) so a reward pick can show WHAT
+// each card does, and whether the pick is declinable (AllowSkip — the player may confirm 0, e.g. skip a
+// card reward).
 public sealed record EntitySelectionRequest(
-    string Purpose, int Count, IReadOnlyList<string> Displays, IReadOnlyList<string> Descriptions)
+    string Purpose, int Count, IReadOnlyList<string> Displays, IReadOnlyList<string> Descriptions,
+    bool AllowSkip = false)
 {
     // Back-compat ctor: no descriptions (all empty).
     public EntitySelectionRequest(string purpose, int count, IReadOnlyList<string> displays)

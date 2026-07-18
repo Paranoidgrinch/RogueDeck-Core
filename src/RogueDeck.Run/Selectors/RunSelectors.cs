@@ -16,6 +16,12 @@ public interface IRunEntityChooser
     // Pick up to `count` entities from the candidates (fewer if there are not enough). `purpose` is a hint
     // for the UI / logs. Must be deterministic for a given run so replays reproduce.
     IReadOnlyList<T> ChooseEntities<T>(IReadOnlyList<T> candidates, int count, string purpose);
+
+    // Optional-pick variant: when `allowSkip` the player may decline and pick 0 (e.g. skip a card reward).
+    // The default delegates to the mandatory version — headless / scripted choosers still take their N, so
+    // skipping is purely a UI affordance an interactive chooser opts into.
+    IReadOnlyList<T> ChooseEntities<T>(IReadOnlyList<T> candidates, int count, string purpose, bool allowSkip) =>
+        ChooseEntities(candidates, count, purpose);
 }
 
 public interface IRunSelector<out T>
