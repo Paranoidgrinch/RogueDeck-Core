@@ -355,4 +355,110 @@ public class RunDocumentValidatorTests
             RunDocumentValidator.Validate(bp),
             p => p.StartsWith("Run:", StringComparison.Ordinal) && p.Contains("unknown target node 'ghost'"));
     }
+
+    // ── Balance manifest + map-generation validation (map-generation arc, Phase 5) ────────────────────────
+
+    [Fact]
+    public void Flags_a_balance_value_pointing_at_no_entity()
+    {
+        var bp = Valid() with
+        {
+            Balance = new BalanceManifest { Cards = new Dictionary<string, int> { ["ghost"] = 5 } },
+        };
+        Assert.Contains(
+            RunDocumentValidator.Validate(bp),
+            p => p.StartsWith("Balance:", StringComparison.Ordinal) && p.Contains("card 'ghost'"));
+    }
+
+    // A blueprint whose map is generated: an empty authored map plus a feasible spec drawing the "fight" encounter.
+    private static RunBlueprint Generated() => Valid() with
+    {
+        Map = new RunMap(System.Array.Empty<Node>()),
+        MapGeneration = new MapGenerationSpec
+        {
+            Rows = 4,
+            KindWeights = new Dictionary<MapNodeKind, int> { [MapNodeKind.Combat] = 1 },
+            Encounters = new EncounterDistribution
+            {
+                ByRole = new Dictionary<MapNodeKind, IReadOnlyList<EncounterPoolEntry>>
+                {
+                    [MapNodeKind.Combat] = new[] { new EncounterPoolEntry(new EncounterId("fight")) },
+                    [MapNodeKind.Boss] = new[] { new EncounterPoolEntry(new EncounterId("fight")) },
+                },
+            },
+        },
+    };
+
+    [Fact]
+    public void A_generated_map_blueprint_is_clean_and_not_flagged_as_empty()
+    {
+        var problems = RunDocumentValidator.Validate(Generated());
+        Assert.DoesNotContain(problems, p => p.Contains("the map is empty"));
+        Assert.DoesNotContain(problems, p => p.StartsWith("Map Rules:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Flags_an_infeasible_generation_spec()
+    {
+        var bp = Generated();
+        bp = bp with
+        {
+            MapGeneration = bp.MapGeneration! with
+            {
+                Rows = 2,
+                PerPathMinimums = new Dictionary<MapNodeKind, int>
+                {
+                    [MapNodeKind.Shop] = 2,
+                    [MapNodeKind.Elite] = 2,
+                },
+            },
+        };
+        Assert.Contains(
+            RunDocumentValidator.Validate(bp),
+            p => p.StartsWith("Map Rules:", StringComparison.Ordinal) && p.Contains("reserved rows"));
+    }
+
+    [Fact]
+    public void Flags_a_generation_role_drawing_an_unknown_encounter()
+    {
+        var bp = Generated();
+        bp = bp with
+        {
+            MapGeneration = bp.MapGeneration! with
+            {
+                Encounters = new EncounterDistribution
+                {
+                    ByRole = new Dictionary<MapNodeKind, IReadOnlyList<EncounterPoolEntry>>
+                    {
+                        [MapNodeKind.Combat] = new[] { new EncounterPoolEntry(new EncounterId("phantom")) },
+                        [MapNodeKind.Boss] = new[] { new EncounterPoolEntry(new EncounterId("fight")) },
+                    },
+                },
+            },
+        };
+        Assert.Contains(
+            RunDocumentValidator.Validate(bp),
+            p => p.StartsWith("Map Rules:", StringComparison.Ordinal) && p.Contains("phantom"));
+    }
+
+    [Fact]
+    public void Flags_a_non_combat_role_without_a_node_ref()
+    {
+        var bp = Generated();
+        bp = bp with
+        {
+            MapGeneration = bp.MapGeneration! with
+            {
+                // A shop can now appear (weighted), but no NodeRefs entry realizes it.
+                KindWeights = new Dictionary<MapNodeKind, int>
+                {
+                    [MapNodeKind.Combat] = 5,
+                    [MapNodeKind.Shop] = 1,
+                },
+            },
+        };
+        Assert.Contains(
+            RunDocumentValidator.Validate(bp),
+            p => p.StartsWith("Map Rules:", StringComparison.Ordinal) && p.Contains("Shop") && p.Contains("NodeRefs"));
+    }
 }

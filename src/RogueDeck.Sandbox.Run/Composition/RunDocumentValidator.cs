@@ -17,6 +17,8 @@ public static class RunDocumentValidator
     public const string CharactersTab = "Characters";
     public const string ShredsTab = "Shreds";
     public const string RecipesTab = "Recipes";
+    public const string BalanceTab = "Balance";
+    public const string MapRulesTab = "Map Rules";
 
     // Relics that are always available even without an authored definition (the built-in samples).
     private static readonly string[] BuiltInRelics = { "bloodstone", "leech" };
@@ -183,8 +185,23 @@ public static class RunDocumentValidator
             new HashSet<string>(blueprint.Shops.Keys, StringComparer.Ordinal));
         CheckPresentation(problems, ShredsTab, "shred", presentation.Shreds, shredIds);
 
-        // Sanity: a run with no map has nothing to play.
-        if (blueprint.Map.Nodes.Count == 0)
+        // Balance manifest (map-generation input): every weighted id must point at a real entity, exactly like the
+        // presentation manifest — a dangling weight means the entity was renamed/deleted after it was valued.
+        var balance = blueprint.Balance;
+        CheckBalanceIds(problems, "enemy", balance.Enemies.Keys, enemyIds);
+        CheckBalanceIds(problems, "encounter", balance.Encounters.Keys, encounterIds);
+        CheckBalanceIds(problems, "card", balance.Cards.Keys, cardIds);
+        CheckBalanceIds(problems, "relic", balance.Relics.Keys, relicIds);
+        CheckBalanceIds(problems, "consumable", balance.Consumables.Keys, consumableIds);
+        CheckBalanceIds(problems, "character", balance.Characters.Keys, seenCharacterIds);
+
+        // Map generation rules: feasible row budget + every role that can appear has resolvable content.
+        if (blueprint.MapGeneration is { } spec)
+            CheckMapGeneration(problems, spec, encounterIds, blueprint);
+
+        // Sanity: a run with no map has nothing to play — unless the map is generated per run (then the authored
+        // Map is legitimately empty and MapGeneration provides the nodes).
+        if (blueprint.Map.Nodes.Count == 0 && blueprint.MapGeneration is null)
             problems.Add($"{RunTab}: the map is empty — add at least one node to play the run.");
 
         // Branching-map graph structure (forward-only DAG, valid edge endpoints, reachability). Only bites when
@@ -244,6 +261,69 @@ public static class RunDocumentValidator
     // The deck a RunStart actually begins with: its own, else the blueprint's shared deck.
     private static int EffectiveDeckSize(RunBlueprint blueprint, RunStart start) =>
         start.Deck.Count > 0 ? start.Deck.Count : blueprint.Deck.Count;
+
+    private static void CheckBalanceIds(
+        List<string> problems, string kind, IEnumerable<string> keys, HashSet<string> knownIds)
+    {
+        foreach (var id in keys)
+            if (!knownIds.Contains(id))
+                problems.Add($"{BalanceTab}: strength/threat value for {kind} '{id}' points at nothing — no such {kind} is defined.");
+    }
+
+    // Pre-flight for procedural generation: the row budget must fit the per-path minimums, and every role that CAN
+    // appear on the map (Combat + Boss always, plus any kind with a reserved row or a positive weight) must have
+    // content the generator can place — an encounter distribution for combat roles, a resolvable NodeRefs id otherwise.
+    private static void CheckMapGeneration(
+        List<string> problems, MapGenerationSpec spec, HashSet<string> encounterIds, RunBlueprint blueprint)
+    {
+        if (spec.Rows < 1)
+            problems.Add($"{MapRulesTab}: Rows must be at least 1.");
+        if (spec.MinWidth < 1 || spec.MaxWidth < spec.MinWidth)
+            problems.Add($"{MapRulesTab}: row widths are invalid — need 1 <= MinWidth <= MaxWidth.");
+        if (spec.Rows >= 1 && spec.MinWidth >= 1 && spec.MaxWidth >= spec.MinWidth && !spec.IsFeasible())
+            problems.Add(
+                $"{MapRulesTab}: the per-path minimums need {spec.RequiredMiddleRows()} reserved rows plus the entry "
+                + $"row, but Rows = {spec.Rows} leaves only {spec.AvailableMiddleRows()}. Increase Rows or lower the minimums.");
+
+        var reserved = spec.ReservedRows();
+        var appearing = new HashSet<MapNodeKind> { MapNodeKind.Combat, MapNodeKind.Boss };
+        foreach (var kind in MapGenerationSpec.ReservableKinds)
+            if (reserved[kind] > 0 || (spec.KindWeights.TryGetValue(kind, out var weight) && weight > 0))
+                appearing.Add(kind);
+
+        var eventKeys = new HashSet<string>(blueprint.Events.Keys, StringComparer.Ordinal);
+        var shopKeys = new HashSet<string>(blueprint.Shops.Keys, StringComparer.Ordinal);
+        var workbenchKeys = new HashSet<string>(blueprint.Workbenches.Keys, StringComparer.Ordinal);
+
+        foreach (var kind in appearing)
+        {
+            if (kind is MapNodeKind.Combat or MapNodeKind.Elite or MapNodeKind.Boss)
+            {
+                var candidates = spec.Encounters.For(kind);
+                if (candidates.Count == 0)
+                    problems.Add($"{MapRulesTab}: role {kind} can appear but has no encounter candidates — add some to the distribution.");
+                foreach (var entry in candidates)
+                    if (!encounterIds.Contains(entry.Encounter.Value))
+                        problems.Add($"{MapRulesTab}: role {kind} draws unknown encounter '{entry.Encounter.Value}'.");
+            }
+            else
+            {
+                if (!spec.NodeRefs.TryGetValue(kind, out var refId) || string.IsNullOrEmpty(refId))
+                {
+                    problems.Add($"{MapRulesTab}: role {kind} can appear but has no NodeRefs entry to realize it.");
+                    continue;
+                }
+                var (known, what) = kind switch
+                {
+                    MapNodeKind.Shop => (shopKeys.Contains(refId), "shop"),
+                    MapNodeKind.Workbench => (workbenchKeys.Contains(refId), "workbench"),
+                    _ => (eventKeys.Contains(refId), "event"),
+                };
+                if (!known)
+                    problems.Add($"{MapRulesTab}: role {kind} references {what} '{refId}', which has no definition.");
+            }
+        }
+    }
 
     private static void CheckPresentation(
         List<string> problems, string tab, string kind,
