@@ -75,6 +75,12 @@ public sealed record RunBlueprint(
     // assets. Lives in the blueprint so one exported document carries the whole game, gameplay AND look.
     public PresentationManifest Presentation { get; init; } = new();
 
+    // Numeric strength/threat values (enemies negative, loadout positive) that steer rule-based map generation
+    // (RuleBasedMapGenerator / MapGenerationSpec). Unlike Presentation the generator READS these to keep each
+    // encounter's net difficulty in a target band. Empty (the default) ⇒ no balancing input; a hand-authored or
+    // unweighted map is unaffected. Round-trips via RunJson; old documents deserialize with the empty default.
+    public BalanceManifest Balance { get; init; } = new();
+
     // The effective starting config for a run: the chosen roster character, else the first roster character (a
     // deterministic default / an unknown id falls back here), else the single Start when there is no roster.
     public RunStart ResolveStart(string? characterId = null)

@@ -384,6 +384,30 @@ public class RunBlueprintTests
     }
 
     [Fact]
+    public void Balance_manifest_round_trips_and_feeds_the_calculator()
+    {
+        var blueprint = Demo() with
+        {
+            Balance = new BalanceManifest
+            {
+                Enemies = new Dictionary<string, int> { ["goblin"] = -20 },
+                Cards = new Dictionary<string, int> { ["smite"] = 5 },
+                Defaults = new BalanceDefaults { Card = 1 },
+            },
+        };
+
+        var back = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(blueprint, Options), Options);
+
+        Assert.Equal(-20, back.Balance.Enemies["goblin"]);
+        Assert.Equal(5, back.Balance.Cards["smite"]);
+        Assert.Equal(1, back.Balance.Defaults.Card);
+
+        var calc = new BalanceCalculator(back.Balance, back.Encounters);
+        Assert.Equal(-20, calc.EncounterThreat(GoblinFight)); // the single-goblin encounter sums to -20
+        Assert.Equal(25, calc.LoadoutStrength(back.Start, back.Deck)); // 5 smites × 5
+    }
+
+    [Fact]
     public void Encounter_enemy_grid_position_round_trips()
     {
         var encounter = new EncounterDefinition(
