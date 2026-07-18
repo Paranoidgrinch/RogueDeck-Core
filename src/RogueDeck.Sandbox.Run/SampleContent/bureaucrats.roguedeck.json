@@ -67251,5 +67251,20 @@
       "Tags": [],
       "Extra": {}
     }
-  }
+  },
+  "Balance": {
+    "Enemies": {},
+    "Encounters": {},
+    "Cards": {},
+    "Relics": {},
+    "Consumables": {},
+    "Characters": {},
+    "Defaults": {
+      "Enemy": 0,
+      "Card": 0,
+      "Relic": 0,
+      "Consumable": 0
+    }
+  },
+  "MapGeneration": null
 }

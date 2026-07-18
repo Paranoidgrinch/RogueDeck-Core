@@ -75,6 +75,12 @@ public sealed class RunState
     public RunMap Map { get; private set; }
     public int Position { get; private set; } = -1;
 
+    // The starting loadout strength this run's map was generated against, when the map is procedural (MapGeneration).
+    // Persisted so Resume rebuilds the identical generated map (see RunSaveData.MapGenerationLoadout). Null for an
+    // authored map.
+    public int? GeneratedMapLoadout { get; private set; }
+    public void SetGeneratedMapLoadout(int loadout) => GeneratedMapLoadout = loadout;
+
     // Branching-map traversal (B1). CurrentNodeId is the node being/just walked; the visited set records every node
     // already walked so a graph walk never re-enters one. Both are unused by a linear map (which tracks Position).
     public NodeId? CurrentNodeId { get; private set; }
@@ -360,7 +366,8 @@ public sealed class RunState
                 u.Position, u.Statuses.ToArray(), u.PersistStatuses)).ToArray(),
             Programs: _installedPrograms
                 .Select(p => new RunProgramSaveData(p.Id.Value, p.SourceId!.Value.Value)).ToArray(),
-            NextProgramSeq: _nextProgramSeq);
+            NextProgramSeq: _nextProgramSeq)
+        { MapGenerationLoadout = GeneratedMapLoadout };
     }
 
     private static RunMemberSaveData SnapshotMember(PartyMember member) => new(
@@ -393,6 +400,8 @@ public sealed class RunState
             new RunId(data.RunId), new HealthState(primary.CurrentHealth, primary.MaxHealth), map, data.RandomSeed);
         run.SetContent(content);
         run._randomStep = data.RandomStep;
+        if (data.MapGenerationLoadout is { } loadout)
+            run.SetGeneratedMapLoadout(loadout); // so a resumed run re-saves with the same map identity
         run.Result = data.Result;
         run.Position = data.Position;
         if (data.CurrentNodeId is { } current)

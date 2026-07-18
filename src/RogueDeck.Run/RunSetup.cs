@@ -13,8 +13,18 @@ public static class RunSetup
     {
         ArgumentNullException.ThrowIfNull(blueprint);
         var start = blueprint.ResolveStart(characterId);
+
+        // When the blueprint declares generation rules, build a fresh map per run from those rules + the seed +
+        // the starting loadout strength (so difficulty tracks the deck); otherwise use the authored map. The loadout
+        // is persisted on the run so Resume rebuilds the identical map.
+        var startingLoadout = new BalanceCalculator(blueprint.Balance, blueprint.Encounters)
+            .LoadoutStrength(start, blueprint.Deck, characterId);
+        var map = blueprint.BuildRunMap(randomSeed, startingLoadout);
+
         var run = new RunState(
-            id, new Core.Combat.HealthState(start.StartingHealth, start.MaxHealth), blueprint.Map, randomSeed);
+            id, new Core.Combat.HealthState(start.StartingHealth, start.MaxHealth), map, randomSeed);
+        if (blueprint.MapGeneration is not null)
+            run.SetGeneratedMapLoadout(startingLoadout);
 
         // The chosen character's own deck, or the blueprint's shared deck when the character declares none.
         var deck = start.Deck.Count > 0 ? start.Deck : blueprint.Deck;
@@ -47,5 +57,22 @@ public static class RunSetup
         }
 
         return run;
+    }
+
+    // The map a run uses: a freshly generated one when the blueprint declares MapGeneration (per-run variety, its
+    // per-path minimums guaranteed and its fights balanced against `startingLoadout`), else the authored Map as-is.
+    // Deterministic from `seed` + `startingLoadout`, so Resume rebuilds the identical map (RunPlayback.Resume passes
+    // the saved seed + RunSaveData.MapGenerationLoadout). Non-combat nodes are realized from MapGenerationSpec.NodeRefs.
+    public static RunMap BuildRunMap(this RunBlueprint blueprint, int seed, int startingLoadout)
+    {
+        ArgumentNullException.ThrowIfNull(blueprint);
+        if (blueprint.MapGeneration is not { } spec)
+            return blueprint.Map;
+
+        var balance = new BalanceCalculator(blueprint.Balance, blueprint.Encounters);
+        var generated = RuleBasedMapGenerator.Generate(
+            spec, seed, startingLoadout, balance,
+            (kind, _, encounter) => MapNodeRealizer.Realize(spec, kind, encounter));
+        return generated.Map;
     }
 }

@@ -82,7 +82,10 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
     // from the save). The runner continues from the saved position (RunRunner resume support) instead of re-walking.
     public void Resume(RunBlueprint blueprint, RunSaveData save, bool interactive) =>
         StartSession(blueprint, interactive,
-            content => RunState.Restore(save, blueprint.Map, content),
+            // A procedurally generated map is rebuilt identically from the saved seed + starting loadout; an
+            // authored blueprint returns its Map unchanged.
+            content => RunState.Restore(
+                save, blueprint.BuildRunMap(save.RandomSeed, save.MapGenerationLoadout ?? 0), content),
             // The save knows the real party shape (the run may have been started as a roster character
             // with its own party) — don't guess from the blueprint's default start.
             partyOverride: save.Party.Count > 1);

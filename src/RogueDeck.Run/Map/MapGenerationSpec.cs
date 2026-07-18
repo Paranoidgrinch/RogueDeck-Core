@@ -47,6 +47,12 @@ public sealed record MapGenerationSpec
     public EncounterDistribution Encounters { get; init; } = new();
     public BalanceTargets BalanceTargets { get; init; } = new();
 
+    // Which authored content a NON-combat generated node references, by role → id: a Shop id, a Workbench id, or an
+    // Event id (Event / Rest / Treasure roles all resolve to an authored event by default). Combat / Elite / Boss
+    // nodes ignore this — their encounter is drawn from Encounters. A role that can appear (reserved or weighted)
+    // but has no ref here makes generation fail with a clear message (RunDocumentValidator flags it earlier).
+    public IReadOnlyDictionary<MapNodeKind, string> NodeRefs { get; init; } = new Dictionary<MapNodeKind, string>();
+
     // The placeable kinds a full row can be reserved for (to meet a per-path minimum). Boss is the fixed top row;
     // it is never reserved here.
     public static readonly IReadOnlyList<MapNodeKind> ReservableKinds = new[]

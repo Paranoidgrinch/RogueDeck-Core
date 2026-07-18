@@ -66,7 +66,14 @@ public sealed record RunSaveData(
     IReadOnlyList<RunMemberSaveData> Party,
     IReadOnlyList<RunUnitSaveData> Units,
     IReadOnlyList<RunProgramSaveData> Programs,
-    int NextProgramSeq);
+    int NextProgramSeq)
+{
+    // The starting loadout strength at run start, when the run's map was procedurally generated (MapGeneration).
+    // Resume rebuilds the SAME generated map from RandomSeed + this value (the map's structure is seed-deterministic
+    // but its encounter choices depend on the starting loadout). Null ⇒ an authored map, nothing to regenerate.
+    // An init property with a default, so older saves and authored-map runs load unchanged.
+    public int? MapGenerationLoadout { get; init; }
+}
 
 // Serialize a run save to/from JSON — the save file. Plain values only (ids / ints / strings / an enum), so no
 // RunJson polymorphic converters are needed.
