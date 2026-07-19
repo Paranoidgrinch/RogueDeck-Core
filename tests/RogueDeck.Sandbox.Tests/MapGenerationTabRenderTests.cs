@@ -75,6 +75,6 @@ public class MapGenerationTabRenderTests
         Assert.Contains("Per-path minimums", html);
         Assert.Contains("Encounter pools", html);
         Assert.Contains("Difficulty band", html);
-        Assert.Contains("Feasible", html); // the feasibility readout for the default spec
+        Assert.Contains("branch row", html); // the shape summary for the default spec
     }
 }

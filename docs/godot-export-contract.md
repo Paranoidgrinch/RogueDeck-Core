@@ -157,10 +157,14 @@ and needs no map-generation code of its own.
 
 What the generator guarantees (see `RuleBasedMapGenerator`):
 
-- A layered act of `Rows` pre-boss rows plus a single boss row; every entry→boss path visits one node per row.
+- A backbone of `Rows` WIDE "branch" rows (row 0 is the entry) plus a single boss row. Each branch node draws its
+  own kind from `KindWeights`, so a row's columns are heterogeneous and different paths meet kinds in different
+  orders — the map is not a stack of one-kind rows.
 - **Per-path minimums** (`PerPathMinimums`: e.g. 2 elites, 2 shops) and a **minimum enemy count**
-  (`MinEnemiesPerPath`) hold on *every* path — guaranteed by construction (a reserved full row gives every path one
-  of that kind), not by rejection sampling. Non-reserved rows add per-column variety.
+  (`MinEnemiesPerPath`) hold on *every* path. They are met by inserting width-1 **gate rows** — funnels every path
+  crosses — and only as many as the WORST path still needs after crediting what the branch rows already provide (a
+  reverse-topo DP), so a combat-rich backbone gets no pointless combat funnels. Every `Rows ≥ 1` spec builds; there
+  is no infeasibility.
 - Combat / elite / boss nodes draw their encounter from `Encounters` (per-role weighted pools), narrowed to a
   **difficulty band**: the fight's net = the run's loadout strength + the encounter's (negative) threat is kept near
   a per-row target (`BalanceTargets`), so a run is never trivial nor impossible. Non-combat roles resolve through
@@ -186,8 +190,8 @@ An exported document passed `RunDocumentValidator.ValidateForExport`, so a front
 - every way the run can start yields a non-empty deck;
 - every card cost names a resource that some combat resource or encounter actually defines;
 - every `Balance` value points at a real entity;
-- when `MapGeneration` is set: the row budget is feasible for the per-path minimums, every role that can appear has
-  resolvable content (an encounter pool or a `NodeRefs` id), and a map actually generates from a sample seed.
+- when `MapGeneration` is set: every role that can appear has resolvable content (an encounter pool or a `NodeRefs`
+  id), and a map actually generates from a sample seed.
 
 Defensive loading is still correct engineering, but these classes of error are authoring errors the Studio keeps,
 not runtime conditions the frontend must design UI for.

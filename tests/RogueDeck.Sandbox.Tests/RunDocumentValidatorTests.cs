@@ -398,27 +398,6 @@ public class RunDocumentValidatorTests
     }
 
     [Fact]
-    public void Flags_an_infeasible_generation_spec()
-    {
-        var bp = Generated();
-        bp = bp with
-        {
-            MapGeneration = bp.MapGeneration! with
-            {
-                Rows = 2,
-                PerPathMinimums = new Dictionary<MapNodeKind, int>
-                {
-                    [MapNodeKind.Shop] = 2,
-                    [MapNodeKind.Elite] = 2,
-                },
-            },
-        };
-        Assert.Contains(
-            RunDocumentValidator.Validate(bp),
-            p => p.StartsWith("Map Rules:", StringComparison.Ordinal) && p.Contains("reserved rows"));
-    }
-
-    [Fact]
     public void Flags_a_generation_role_drawing_an_unknown_encounter()
     {
         var bp = Generated();
@@ -449,15 +428,19 @@ public class RunDocumentValidatorTests
     }
 
     [Fact]
-    public void The_export_gate_blocks_an_infeasible_generation_spec()
+    public void The_export_gate_blocks_a_generation_role_with_no_resolvable_content()
     {
+        // A shop can appear (weighted) but no NodeRefs entry realizes it — generation would fail, so export is blocked.
         var bp = Generated();
         bp = bp with
         {
             MapGeneration = bp.MapGeneration! with
             {
-                Rows = 2,
-                PerPathMinimums = new Dictionary<MapNodeKind, int> { [MapNodeKind.Elite] = 3 },
+                KindWeights = new Dictionary<MapNodeKind, int>
+                {
+                    [MapNodeKind.Combat] = 5,
+                    [MapNodeKind.Shop] = 1,
+                },
             },
         };
         Assert.Contains(

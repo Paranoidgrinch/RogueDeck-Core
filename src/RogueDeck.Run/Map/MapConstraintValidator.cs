@@ -50,6 +50,20 @@ public static class MapConstraintValidator
         return problems;
     }
 
+    // The fewest `matches`-role nodes on any entry→boss path (the worst path). Public so the generator can size how
+    // many guarantee gates a kind still needs after crediting what the varied rows already provide.
+    public static int WorstPathCount(
+        RunMap map, IReadOnlyDictionary<NodeId, MapNodeKind> roles, Func<MapNodeKind, bool> matches)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        ArgumentNullException.ThrowIfNull(roles);
+        ArgumentNullException.ThrowIfNull(matches);
+        return MinCountOnAnyPath(map, TopologicalOrder(map), roles, matches);
+    }
+
+    // Whether a role counts as an enemy for the min-enemies constraint.
+    public static bool IsEnemyRole(MapNodeKind kind) => IsEnemy(kind);
+
     private static bool IsEnemy(MapNodeKind kind) => kind is MapNodeKind.Combat or MapNodeKind.Elite;
 
     // The fewest `matches` nodes on any entry→boss path. minPath(node) = self + min over successors; a leaf is just

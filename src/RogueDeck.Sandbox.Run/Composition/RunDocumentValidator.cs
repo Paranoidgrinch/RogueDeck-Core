@@ -288,9 +288,10 @@ public static class RunDocumentValidator
                 problems.Add($"{BalanceTab}: strength/threat value for {kind} '{id}' points at nothing — no such {kind} is defined.");
     }
 
-    // Pre-flight for procedural generation: the row budget must fit the per-path minimums, and every role that CAN
-    // appear on the map (Combat + Boss always, plus any kind with a reserved row or a positive weight) must have
-    // content the generator can place — an encounter distribution for combat roles, a resolvable NodeRefs id otherwise.
+    // Pre-flight for procedural generation: the shape is valid and every role that CAN appear on the map (Combat +
+    // Boss always, plus any kind with a per-path minimum or a positive branch weight) has content the generator can
+    // place — an encounter distribution for combat roles, a resolvable NodeRefs id otherwise. There is no
+    // feasibility check: gates are always insertable, so any Rows ≥ 1 spec builds.
     private static void CheckMapGeneration(
         List<string> problems, MapGenerationSpec spec, HashSet<string> encounterIds, RunBlueprint blueprint)
     {
@@ -298,16 +299,8 @@ public static class RunDocumentValidator
             problems.Add($"{MapRulesTab}: Rows must be at least 1.");
         if (spec.MinWidth < 1 || spec.MaxWidth < spec.MinWidth)
             problems.Add($"{MapRulesTab}: row widths are invalid — need 1 <= MinWidth <= MaxWidth.");
-        if (spec.Rows >= 1 && spec.MinWidth >= 1 && spec.MaxWidth >= spec.MinWidth && !spec.IsFeasible())
-            problems.Add(
-                $"{MapRulesTab}: the per-path minimums need {spec.RequiredMiddleRows()} reserved rows plus the entry "
-                + $"row, but Rows = {spec.Rows} leaves only {spec.AvailableMiddleRows()}. Increase Rows or lower the minimums.");
 
-        var reserved = spec.ReservedRows();
-        var appearing = new HashSet<MapNodeKind> { MapNodeKind.Combat, MapNodeKind.Boss };
-        foreach (var kind in MapGenerationSpec.ReservableKinds)
-            if (reserved[kind] > 0 || (spec.KindWeights.TryGetValue(kind, out var weight) && weight > 0))
-                appearing.Add(kind);
+        var appearing = spec.AppearingKinds();
 
         var eventKeys = new HashSet<string>(blueprint.Events.Keys, StringComparer.Ordinal);
         var shopKeys = new HashSet<string>(blueprint.Shops.Keys, StringComparer.Ordinal);

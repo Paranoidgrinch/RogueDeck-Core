@@ -86,21 +86,55 @@ public class RuleBasedMapGeneratorTests
         }
     }
 
-    [Fact]
-    public void An_infeasible_spec_is_rejected()
+    // Even when the minimums exceed the branch-row count, the map still builds (gate funnels are always insertable)
+    // and every path meets them — there is no infeasibility.
+    [Theory]
+    [InlineData(4)]
+    [InlineData(77)]
+    public void Tight_minimums_still_build_and_hold(int seed)
     {
         var spec = new MapGenerationSpec
         {
-            Rows = 2, // only one middle row available, but the minimums need several
+            Rows = 2, // fewer branch rows than the minimums — funnels fill the gap
             PerPathMinimums = new Dictionary<MapNodeKind, int>
             {
                 [MapNodeKind.Elite] = 2,
                 [MapNodeKind.Shop] = 2,
             },
         };
-        Assert.False(spec.IsFeasible());
-        Assert.Throws<InvalidOperationException>(
-            () => RuleBasedMapGenerator.Generate(spec, 1, 0, EmptyBalance(), Realize));
+        var generated = RuleBasedMapGenerator.Generate(spec, seed, 0, EmptyBalance(), Realize);
+        Assert.Empty(RunMapValidator.Validate(generated.Map));
+        Assert.Empty(MapConstraintValidator.Validate(generated, spec));
+    }
+
+    // The wide branch rows carry real variety: heterogeneous columns within a row, so the map is not a stack of
+    // one-kind rows. (With only Combat + Event weighted, at least one branch row mixes the two.)
+    [Fact]
+    public void Branch_rows_are_heterogeneous_not_one_kind_walls()
+    {
+        var spec = new MapGenerationSpec
+        {
+            Rows = 8,
+            MinWidth = 3,
+            MaxWidth = 4,
+            KindWeights = new Dictionary<MapNodeKind, int> { [MapNodeKind.Combat] = 1, [MapNodeKind.Event] = 1 },
+            Encounters = new EncounterDistribution
+            {
+                ByRole = new Dictionary<MapNodeKind, IReadOnlyList<EncounterPoolEntry>>
+                {
+                    [MapNodeKind.Boss] = new[] { new EncounterPoolEntry(new EncounterId("boss")) },
+                },
+            },
+        };
+
+        var generated = RuleBasedMapGenerator.Generate(spec, 5, 0, EmptyBalance(),
+            (kind, coord, enc) => new NodeContent(Mark, "p"));
+
+        // Group nodes by row; at least one wide row must contain more than one distinct role.
+        var byRow = generated.Roles
+            .GroupBy(kv => kv.Key.Value.Split('c')[0])
+            .Select(g => g.Select(kv => kv.Value).Distinct().Count());
+        Assert.Contains(byRow, distinct => distinct > 1);
     }
 
     // ── Determinism ──────────────────────────────────────────────────────────────

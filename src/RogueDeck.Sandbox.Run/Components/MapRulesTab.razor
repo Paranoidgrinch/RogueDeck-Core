@@ -27,21 +27,15 @@
                 <label>Min enemies / path <input type="number" value="@spec.MinEnemiesPerPath" style="width:5rem"
                                                  @onchange="e => Save(spec with { MinEnemiesPerPath = AsInt(e.Value) })" /></label>
             </div>
-            <p class="@(spec.IsFeasible() ? "muted" : "")" style="margin-top:.5rem; @(spec.IsFeasible() ? "" : "color:#c0392b")">
-                @if (spec.IsFeasible())
-                {
-                    <text>Feasible: @spec.RequiredMiddleRows() of @spec.AvailableMiddleRows() middle rows reserved for the minimums.</text>
-                }
-                else
-                {
-                    <text>Infeasible: the minimums need @spec.RequiredMiddleRows() reserved rows but only @spec.AvailableMiddleRows() are available. Raise Rows.</text>
-                }
+            <p class="muted" style="margin-top:.5rem">
+                @spec.Rows wide branch row(s) carry the variety; guaranteed minimums are met by narrow funnel rows
+                inserted between them (only as many as the worst path still needs), then a boss. Any Rows ≥ 1 builds.
             </p>
         </div>
 
         <div class="editor-card" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:1rem; margin:.75rem 0">
             <strong>Per-path minimums</strong>
-            <span class="muted"> — every entry→boss path is guaranteed at least this many (each reserves a full row)</span>
+            <span class="muted"> — every entry→boss path is guaranteed at least this many (met by funnel rows)</span>
             <div class="run-bar" style="gap:1rem; flex-wrap:wrap; margin-top:.4rem">
                 @foreach (var kind in Reservable)
                 {
@@ -54,7 +48,7 @@
 
         <div class="editor-card" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:1rem; margin:.75rem 0">
             <strong>Varied-row kind weights</strong>
-            <span class="muted"> — how the non-reserved rows fill their columns (variety above the floor)</span>
+            <span class="muted"> — how the wide branch rows fill their columns (the map's variety)</span>
             <div class="run-bar" style="gap:1rem; flex-wrap:wrap; margin-top:.4rem">
                 @foreach (var kind in Reservable)
                 {
@@ -246,7 +240,7 @@
     private int _previewLoadout;
     private string? _previewError;
 
-    private static readonly MapNodeKind[] Reservable = MapGenerationSpec.ReservableKinds.ToArray();
+    private static readonly MapNodeKind[] Reservable = MapGenerationSpec.GateKinds.ToArray();
     private static readonly MapNodeKind[] CombatRoles =
         { MapNodeKind.Combat, MapNodeKind.Elite, MapNodeKind.Boss };
     private static readonly (MapNodeKind, string)[] NonCombatRefs =

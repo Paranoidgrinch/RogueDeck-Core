@@ -17,31 +17,35 @@ public sealed record BalanceTargets
     public int TargetNet(int row) => StartNet - NetDropPerRow * row;
 }
 
-// The rules a run's map is generated from (RuleBasedMapGenerator). A layered act of `Rows` pre-boss rows (row 0 is
-// the entry, one node per column) plus a single boss row. Per-path minimums are GUARANTEED constructively: because
-// every entry→boss path visits exactly one node per row, reserving a whole row for a kind gives every path exactly
-// one of that kind — so `PerPathMinimums[Elite] = 2` reserves two full Elite rows, etc. Rows not reserved for a
-// minimum are "varied": each column draws a kind from `KindWeights`, so paths genuinely differ (fork/merge matters)
-// ABOVE the guaranteed floor. Encounters for combat/elite/boss nodes are drawn from `Encounters` and balanced via
-// `BalanceTargets`. A plain record, so it round-trips through RunJson.
+// The rules a run's map is generated from (RuleBasedMapGenerator). The act is a backbone of `Rows` WIDE "branch"
+// rows (row 0 is the entry) plus a single boss row, where each branch node draws its kind independently from
+// `KindWeights` — so both a row's columns and the paths through it genuinely differ. Per-path minimums and the
+// enemy floor are met by inserting narrow width-1 GATE rows (funnels every path crosses), and only as many as the
+// worst path still needs after crediting what the varied rows already provide (so a combat-rich backbone adds no
+// pointless combat funnels). Encounters for combat/elite/boss nodes are drawn from `Encounters` and balanced via
+// `BalanceTargets`. Always buildable (gates are always insertable — no infeasibility). A plain record, so it
+// round-trips through RunJson.
 public sealed record MapGenerationSpec
 {
+    // The branching backbone length: how many WIDE varied rows the act has (before any inserted gate funnels and the
+    // boss). More rows ⇒ a taller, branchier map.
     public int Rows { get; init; } = 5;
     public int MinWidth { get; init; } = 2;
     public int MaxWidth { get; init; } = 4;
 
-    // Guaranteed count of each kind on EVERY entry→boss path (reserved full rows). Kinds not listed default to 0.
+    // Guaranteed count of each kind on EVERY entry→boss path. Met by width-1 gate funnels, minus what the varied
+    // rows already guarantee on the worst path. Kinds not listed default to 0.
     public IReadOnlyDictionary<MapNodeKind, int> PerPathMinimums { get; init; } = EmptyCounts;
 
-    // Guaranteed enemies (Combat + Elite nodes) on every path. Met by reserving extra full Combat rows on top of
-    // the entry row and any reserved Elite rows.
+    // Guaranteed enemies (Combat + Elite nodes) on every path. Met by adding Combat gate funnels for whatever the
+    // varied rows and the elite gates don't already guarantee on the worst path.
     public int MinEnemiesPerPath { get; init; }
 
     // Optional whole-graph minimums (totals across all nodes, not per path) — validated by MapConstraintValidator.
     public IReadOnlyDictionary<MapNodeKind, int> MapWideMinimums { get; init; } = EmptyCounts;
 
-    // Per-column kind weights for varied rows. Default: Combat-heavy with a little Event. Boss/Combat handling for
-    // the entry and boss rows is fixed and not drawn from here.
+    // Per-column kind weights for the WIDE branch rows. Default: Combat-heavy with a little Event. The boss row is
+    // fixed and never drawn from here.
     public IReadOnlyDictionary<MapNodeKind, int> KindWeights { get; init; } = DefaultWeights;
 
     public EncounterDistribution Encounters { get; init; } = new();
@@ -49,54 +53,42 @@ public sealed record MapGenerationSpec
 
     // Which authored content a NON-combat generated node references, by role → id: a Shop id, a Workbench id, or an
     // Event id (Event / Rest / Treasure roles all resolve to an authored event by default). Combat / Elite / Boss
-    // nodes ignore this — their encounter is drawn from Encounters. A role that can appear (reserved or weighted)
-    // but has no ref here makes generation fail with a clear message (RunDocumentValidator flags it earlier).
+    // nodes ignore this — their encounter is drawn from Encounters. A role that can appear (a gate or a positive
+    // weight) but has no ref here makes generation fail with a clear message (RunDocumentValidator flags it earlier).
     public IReadOnlyDictionary<MapNodeKind, string> NodeRefs { get; init; } = new Dictionary<MapNodeKind, string>();
 
-    // The placeable kinds a full row can be reserved for (to meet a per-path minimum). Boss is the fixed top row;
-    // it is never reserved here.
-    public static readonly IReadOnlyList<MapNodeKind> ReservableKinds = new[]
+    // The kinds a gate funnel can be, in a fixed order (used to lay gates out and to iterate deterministically).
+    // Boss is the fixed top row and is never a per-path gate.
+    public static readonly IReadOnlyList<MapNodeKind> GateKinds = new[]
     {
         MapNodeKind.Combat, MapNodeKind.Elite, MapNodeKind.Event, MapNodeKind.Shop,
         MapNodeKind.Rest, MapNodeKind.Treasure, MapNodeKind.Workbench,
     };
 
-    // How many reserved FULL rows each placeable kind needs to meet the per-path minimums, including the extra
-    // Combat rows the enemy floor demands (the entry row and reserved Elite rows already count as enemies).
-    public IReadOnlyDictionary<MapNodeKind, int> ReservedRows()
+    // Every kind that can appear on a generated map: Combat + Boss always, plus any kind with a per-path minimum
+    // (a gate) or a positive branch weight. Used to check that each appearing kind has resolvable content.
+    public IReadOnlyCollection<MapNodeKind> AppearingKinds()
     {
-        var reserved = new Dictionary<MapNodeKind, int>();
-        foreach (var kind in ReservableKinds)
-            reserved[kind] = PerPathMinimums.TryGetValue(kind, out var min) ? Math.Max(0, min) : 0;
-
-        var guaranteedEnemies = 1 + reserved[MapNodeKind.Combat] + reserved[MapNodeKind.Elite];
-        if (guaranteedEnemies < MinEnemiesPerPath)
-            reserved[MapNodeKind.Combat] += MinEnemiesPerPath - guaranteedEnemies;
-
-        return reserved;
+        var kinds = new HashSet<MapNodeKind> { MapNodeKind.Combat, MapNodeKind.Boss };
+        foreach (var (kind, min) in PerPathMinimums)
+            if (min > 0)
+                kinds.Add(kind);
+        if (MinEnemiesPerPath > 0)
+            kinds.Add(MapNodeKind.Combat);
+        foreach (var (kind, weight) in KindWeights)
+            if (weight > 0)
+                kinds.Add(kind);
+        return kinds;
     }
-
-    // Total reserved full rows among the pre-boss rows 1..Rows-1 (row 0 is the fixed entry combat).
-    public int RequiredMiddleRows() => ReservedRows().Values.Sum();
-
-    // Pre-boss rows available for reservation (all rows except the fixed entry row 0).
-    public int AvailableMiddleRows() => Math.Max(0, Rows - 1);
-
-    public bool IsFeasible() => RequiredMiddleRows() <= AvailableMiddleRows();
 
     public void Validate()
     {
         if (Rows < 1)
-            throw new ArgumentOutOfRangeException(nameof(Rows), Rows, "An act needs at least one row before the boss.");
+            throw new ArgumentOutOfRangeException(nameof(Rows), Rows, "An act needs at least one branch row.");
         if (MinWidth < 1)
             throw new ArgumentOutOfRangeException(nameof(MinWidth), MinWidth, "Row width must be at least 1.");
         if (MaxWidth < MinWidth)
             throw new ArgumentOutOfRangeException(nameof(MaxWidth), MaxWidth, "MaxWidth must be >= MinWidth.");
-        if (!IsFeasible())
-            throw new InvalidOperationException(
-                $"Map spec is infeasible: the per-path minimums need {RequiredMiddleRows()} reserved rows plus the "
-                + $"entry row, but Rows = {Rows} leaves only {AvailableMiddleRows()} for reservation. "
-                + "Increase Rows or lower the minimums.");
     }
 
     private static readonly IReadOnlyDictionary<MapNodeKind, int> EmptyCounts = new Dictionary<MapNodeKind, int>();
