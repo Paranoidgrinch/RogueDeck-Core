@@ -1729,6 +1729,70 @@ public sealed class RandomCardInZoneExpression<TContext>
     }
 }
 
+// Selects a card by POSITION from a zone of a SELECTED owner (not necessarily the acting combatant). This is
+// what lets an ENEMY point at one of the PLAYER's cards — e.g. mark the top of the opponent's draw pile as
+// Misfiled, or Reference a card in the opponent's hand. Resolves the owner via a target selector (EventTarget
+// = the enemy's target = the hero), then indexes into that owner's zone. Null if the owner or index is absent.
+public sealed class CardInOwnerZoneExpression<TContext>
+    : ICardInstanceExpression<TContext>
+    where TContext : class
+{
+    public ICombatantTargetSelector OwnerSelector { get; }
+    public CardZone Zone { get; }
+    public int Index { get; }
+
+    public CardInOwnerZoneExpression(ICombatantTargetSelector ownerSelector, CardZone zone, int index = 0)
+    {
+        ArgumentNullException.ThrowIfNull(ownerSelector);
+        OwnerSelector = ScalarTargetExpression.RequireSingleSelector(ownerSelector);
+        Zone = zone;
+        Index = Math.Max(0, index);
+    }
+
+    public CardInstanceId? Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        var owners = OwnerSelector.ResolveTargets(context.GetTargetSelectionContext());
+        if (owners.Count == 0) return null;
+        var ownerId = ScalarTargetExpression.RequireSingle(owners);
+        if (!combat.CardZonesByCombatant.ContainsKey(ownerId)) return null;
+
+        var cards = combat.GetCardZones(ownerId).GetCardsInZone(Zone);
+        return Index < cards.Count ? cards[Index].Id : null;
+    }
+}
+
+// Random card from a zone of a SELECTED owner — the random counterpart of CardInOwnerZoneExpression, for
+// "mark a random card in the opponent's hand". Deterministic per combat (reads + advances the combat RNG).
+public sealed class RandomCardInOwnerZoneExpression<TContext>
+    : ICardInstanceExpression<TContext>
+    where TContext : class
+{
+    public ICombatantTargetSelector OwnerSelector { get; }
+    public CardZone Zone { get; }
+
+    public RandomCardInOwnerZoneExpression(ICombatantTargetSelector ownerSelector, CardZone zone)
+    {
+        ArgumentNullException.ThrowIfNull(ownerSelector);
+        OwnerSelector = ScalarTargetExpression.RequireSingleSelector(ownerSelector);
+        Zone = zone;
+    }
+
+    public CardInstanceId? Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        var owners = OwnerSelector.ResolveTargets(context.GetTargetSelectionContext());
+        if (owners.Count == 0) return null;
+        var ownerId = ScalarTargetExpression.RequireSingle(owners);
+        if (!combat.CardZonesByCombatant.ContainsKey(ownerId)) return null;
+
+        var cards = combat.GetCardZones(ownerId).GetCardsInZone(Zone);
+        if (cards.Count == 0) return null;
+
+        var index = CombatRandom.CreateShuffledIndexes(cards.Count, combat.RandomSeed, combat.RandomStep)[0];
+        combat.AdvanceRandomStep();
+        return cards[index].Id;
+    }
+}
+
 // The card the innermost open ForEachCardInZone loop is currently on. It reads the execution context's iteration
 // card (set by the ForEachCardInZone executor per card), so a card op in the loop body targets that card — the
 // card-domain analog of the iteration-target selector. Null outside a card loop, so a stray use is a clean no-op.
