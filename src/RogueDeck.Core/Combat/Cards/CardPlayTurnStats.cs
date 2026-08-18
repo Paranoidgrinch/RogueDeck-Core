@@ -5,11 +5,25 @@ public sealed class CombatantCardPlayTurnStats
     private readonly Dictionary<CardDefinitionId, int> _cardsPlayedByDefinitionThisTurn = new();
     private readonly Dictionary<TagId, int> _cardsPlayedByTagThisTurn = new();
 
+    // Card ORDERING within the turn: the tag set of the FIRST card played this turn (empty until one is
+    // played). Content reads it for "the opening card is an Attack" / "first non-Junk card type" mechanics.
+    private readonly HashSet<TagId> _firstCardPlayedTags = new();
+
+    // Previous turn's snapshot, retained across Reset so "again" / habit mechanics (Whispered Prediction,
+    // "the previous turn was Busy/Sparse", "you opened with Attack again") can compare against last turn.
+    private readonly Dictionary<TagId, int> _cardsPlayedByTagLastTurn = new();
+    private readonly HashSet<TagId> _firstCardPlayedTagsLastTurn = new();
+
     public int CardsPlayedThisTurn { get; private set; }
 
     public int DamageDealtThisTurn { get; private set; }
 
     public int ResourceGainedThisTurn { get; private set; }
+
+    // Definition of the first card played this turn, or null if none yet.
+    public CardDefinitionId? FirstCardPlayedDefinitionId { get; private set; }
+
+    public int CardsPlayedLastTurn { get; private set; }
 
     public IReadOnlyDictionary<CardDefinitionId, int> CardsPlayedByDefinitionThisTurn =>
         _cardsPlayedByDefinitionThisTurn;
@@ -31,9 +45,28 @@ public sealed class CombatantCardPlayTurnStats
             : 0;
     }
 
+    public int GetCardsPlayedWithTagLastTurn(TagId tagId)
+    {
+        return _cardsPlayedByTagLastTurn.TryGetValue(tagId, out var count)
+            ? count
+            : 0;
+    }
+
+    // Whether the FIRST card played this / last turn carried the given tag (its "opening type").
+    public bool FirstCardPlayedThisTurnHasTag(TagId tagId) => _firstCardPlayedTags.Contains(tagId);
+    public bool FirstCardPlayedLastTurnHasTag(TagId tagId) => _firstCardPlayedTagsLastTurn.Contains(tagId);
+
     public void RecordCardPlayed(CardDefinition card)
     {
         ArgumentNullException.ThrowIfNull(card);
+
+        if (CardsPlayedThisTurn == 0)
+        {
+            FirstCardPlayedDefinitionId = card.Id;
+            _firstCardPlayedTags.Clear();
+            foreach (var tag in card.Tags)
+                _firstCardPlayedTags.Add(tag);
+        }
 
         CardsPlayedThisTurn++;
 
@@ -61,11 +94,22 @@ public sealed class CombatantCardPlayTurnStats
 
     public void Reset()
     {
+        // Retain this turn's play profile as "last turn" before clearing, for habit/prediction mechanics.
+        CardsPlayedLastTurn = CardsPlayedThisTurn;
+        _cardsPlayedByTagLastTurn.Clear();
+        foreach (var (tag, count) in _cardsPlayedByTagThisTurn)
+            _cardsPlayedByTagLastTurn[tag] = count;
+        _firstCardPlayedTagsLastTurn.Clear();
+        foreach (var tag in _firstCardPlayedTags)
+            _firstCardPlayedTagsLastTurn.Add(tag);
+
         CardsPlayedThisTurn = 0;
         DamageDealtThisTurn = 0;
         ResourceGainedThisTurn = 0;
+        FirstCardPlayedDefinitionId = null;
         _cardsPlayedByDefinitionThisTurn.Clear();
         _cardsPlayedByTagThisTurn.Clear();
+        _firstCardPlayedTags.Clear();
     }
 }
 

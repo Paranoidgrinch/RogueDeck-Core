@@ -155,6 +155,7 @@ public static class CombatJson
          .Register("combatantDefensivePool", typeof(CombatantDefensivePoolExpression<>))
          .Register("combatantZoneCardCount", typeof(CombatantZoneCardCountExpression<>))
          .Register("combatantStatusStacks", typeof(CombatantStatusStacksExpression<>))
+         .Register("combatantStatusStacksFromSource", typeof(CombatantStatusStacksFromSourceExpression<>))
          .Register("combatantStatusDuration", typeof(CombatantStatusDurationExpression<>))
          .Register("combatantStatusCharges", typeof(CombatantStatusChargesExpression<>))
          .Register("combatantStacksByPolarity", typeof(CombatantStacksByPolarityExpression<>))
@@ -166,6 +167,9 @@ public static class CombatJson
          .Register("countTargets", typeof(CountTargetsExpression<>))
          .Register("sumOverTargets", typeof(SumOverTargetsExpression<>))
          .Register("cardsPlayedThisTurn", typeof(CardsPlayedThisTurnExpression<>))
+         .Register("cardsPlayedThisTurnWithTag", typeof(CardsPlayedThisTurnWithTagExpression<>))
+         .Register("cardsPlayedLastTurn", typeof(CardsPlayedLastTurnExpression<>))
+         .Register("cardsPlayedLastTurnWithTag", typeof(CardsPlayedLastTurnWithTagExpression<>))
          .Register("damageDealtThisTurn", typeof(DamageDealtThisTurnExpression<>))
          .Register("resourceGainedThisTurn", typeof(ResourceGainedThisTurnExpression<>))
          .Register("cardCost", typeof(CardCostExpression<>))
@@ -183,6 +187,7 @@ public static class CombatJson
          .Register("targetDowned", typeof(TargetDownedExpression<>))
          .Register("targetExists", typeof(TargetExistsExpression<>))
          .Register("cardInstanceHasMark", typeof(CardInstanceHasMarkExpression<>))
+         .Register("firstCardPlayedHasTag", typeof(FirstCardPlayedThisTurnHasTagExpression<>))
          .Register("iterationTargetHasStatus", typeof(IterationTargetHasStatusExpression<>));
 
         // Card-instance expressions (resolve a specific card instance to act on).

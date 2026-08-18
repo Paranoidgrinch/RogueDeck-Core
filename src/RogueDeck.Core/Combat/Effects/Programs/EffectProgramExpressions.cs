@@ -799,6 +799,47 @@ public sealed class CombatantStatusStacksExpression<TContext> : ICombatExpressio
     }
 }
 
+// Stacks of a status on the target that were contributed by a SPECIFIC source combatant. Sums only status
+// instances whose SourceCombatantId matches the resolved source selector. This is the substrate for
+// source-bound threshold mechanics — "2 Overdue from the same source", "3 Trespass from the same source" —
+// where each enemy owns its own stacks on the shared player and reacts only to its own accumulation.
+public sealed class CombatantStatusStacksFromSourceExpression<TContext> : ICombatExpression<TContext, int>
+    where TContext : class
+{
+    public ICombatantTargetSelector Selector { get; }
+    public StatusDefinitionId StatusId { get; }
+    public ICombatantTargetSelector SourceSelector { get; }
+
+    public CombatantStatusStacksFromSourceExpression(
+        ICombatantTargetSelector selector,
+        StatusDefinitionId statusId,
+        ICombatantTargetSelector sourceSelector)
+    {
+        ArgumentNullException.ThrowIfNull(selector);
+        ArgumentNullException.ThrowIfNull(sourceSelector);
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
+        StatusId = statusId;
+        SourceSelector = ScalarTargetExpression.RequireSingleSelector(sourceSelector);
+    }
+
+    public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        var selCtx = context.GetTargetSelectionContext();
+
+        var targets = Selector.ResolveTargets(selCtx);
+        if (targets.Count == 0) return 0;
+        if (!combat.TryGetCombatant(ScalarTargetExpression.RequireSingle(targets), out var c) || c is null) return 0;
+
+        var sources = SourceSelector.ResolveTargets(selCtx);
+        if (sources.Count == 0) return 0;
+        var sourceId = ScalarTargetExpression.RequireSingle(sources);
+
+        return ArithmeticSaturation.Saturate(c.Statuses
+            .Where(s => s.DefinitionId == StatusId && s.SourceCombatantId == sourceId)
+            .Sum(s => (long)s.Stacks));
+    }
+}
+
 // Total stacks of all statuses of a given polarity on the target (e.g. "sum of all buff stacks"). Reads
 // each status's polarity from its definition via the bound registry. Composes "convert all buffs into
 // equivalent debuff stacks" (#34 Corruption) and any other polarity-aggregate effect.
@@ -1440,6 +1481,104 @@ public sealed class ResourceGainedThisTurnExpression<TContext> : ICombatExpressi
         var targets = Selector.ResolveTargets(selCtx);
         if (targets.Count == 0) return 0;
         return combat.GetCardPlayTurnStats(ScalarTargetExpression.RequireSingle(targets)).ResourceGainedThisTurn;
+    }
+}
+
+// Count of cards with a given tag the target played THIS turn — the substrate for card-type sequencing
+// ("the third Attack this turn", "played at least one Skill"). Card TYPE (Attack/Skill/Power/Junk) is a tag.
+public sealed class CardsPlayedThisTurnWithTagExpression<TContext> : ICombatExpression<TContext, int>
+    where TContext : class
+{
+    public ICombatantTargetSelector Selector { get; }
+    public TagId Tag { get; }
+
+    public CardsPlayedThisTurnWithTagExpression(ICombatantTargetSelector selector, TagId tag)
+    {
+        ArgumentNullException.ThrowIfNull(selector);
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
+        Tag = tag;
+    }
+
+    public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        var selCtx = context.GetTargetSelectionContext();
+        var targets = Selector.ResolveTargets(selCtx);
+        if (targets.Count == 0) return 0;
+        return combat.GetCardPlayTurnStats(ScalarTargetExpression.RequireSingle(targets))
+                     .GetCardsPlayedWithTagThisTurn(Tag);
+    }
+}
+
+// Total cards the target played on their PREVIOUS turn — the substrate for habit predictions ("the last
+// turn was Busy" = ≥3, "Sparse" = ≤2).
+public sealed class CardsPlayedLastTurnExpression<TContext> : ICombatExpression<TContext, int>
+    where TContext : class
+{
+    public ICombatantTargetSelector Selector { get; }
+
+    public CardsPlayedLastTurnExpression(ICombatantTargetSelector selector)
+    {
+        ArgumentNullException.ThrowIfNull(selector);
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
+    }
+
+    public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        var selCtx = context.GetTargetSelectionContext();
+        var targets = Selector.ResolveTargets(selCtx);
+        if (targets.Count == 0) return 0;
+        return combat.GetCardPlayTurnStats(ScalarTargetExpression.RequireSingle(targets)).CardsPlayedLastTurn;
+    }
+}
+
+// Count of cards with a given tag the target played on their PREVIOUS turn.
+public sealed class CardsPlayedLastTurnWithTagExpression<TContext> : ICombatExpression<TContext, int>
+    where TContext : class
+{
+    public ICombatantTargetSelector Selector { get; }
+    public TagId Tag { get; }
+
+    public CardsPlayedLastTurnWithTagExpression(ICombatantTargetSelector selector, TagId tag)
+    {
+        ArgumentNullException.ThrowIfNull(selector);
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
+        Tag = tag;
+    }
+
+    public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        var selCtx = context.GetTargetSelectionContext();
+        var targets = Selector.ResolveTargets(selCtx);
+        if (targets.Count == 0) return 0;
+        return combat.GetCardPlayTurnStats(ScalarTargetExpression.RequireSingle(targets))
+                     .GetCardsPlayedWithTagLastTurn(Tag);
+    }
+}
+
+// Whether the FIRST card the target played this turn (or last turn) carried a given tag — its "opening
+// type". Substrate for "you opened with an Attack" and prediction "you will open with Violence again".
+public sealed class FirstCardPlayedThisTurnHasTagExpression<TContext> : ICombatExpression<TContext, bool>
+    where TContext : class
+{
+    public ICombatantTargetSelector Selector { get; }
+    public TagId Tag { get; }
+    public bool LastTurn { get; }
+
+    public FirstCardPlayedThisTurnHasTagExpression(ICombatantTargetSelector selector, TagId tag, bool lastTurn = false)
+    {
+        ArgumentNullException.ThrowIfNull(selector);
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
+        Tag = tag;
+        LastTurn = lastTurn;
+    }
+
+    public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        var selCtx = context.GetTargetSelectionContext();
+        var targets = Selector.ResolveTargets(selCtx);
+        if (targets.Count == 0) return false;
+        var stats = combat.GetCardPlayTurnStats(ScalarTargetExpression.RequireSingle(targets));
+        return LastTurn ? stats.FirstCardPlayedLastTurnHasTag(Tag) : stats.FirstCardPlayedThisTurnHasTag(Tag);
     }
 }
 
