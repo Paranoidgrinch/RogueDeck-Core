@@ -91,6 +91,8 @@ public sealed class StandardCombatPackage : ICombatPackage
         registry.RegisterEffectRequestHandler(new MoveHandCardsOnTurnEndEffectHandler());
         registry.RegisterEffectRequestHandler(new MoveCardToZoneEffectHandler());
         registry.RegisterEffectRequestHandler(new TransformCardEffectHandler());
+        registry.RegisterEffectRequestHandler(new MarkCardInstanceEffectHandler());
+        registry.RegisterEffectRequestHandler(new SetCardInstanceMarkCounterEffectHandler());
         registry.RegisterEffectRequestHandler(new CreateCardInstanceEffectHandler());
         registry.RegisterEffectRequestHandler(new MoveAllCardsFromZoneEffectHandler());
         registry.RegisterEffectRequestHandler(new RefillResourceEffectHandler());

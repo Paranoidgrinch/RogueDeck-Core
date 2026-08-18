@@ -169,6 +169,7 @@ public static class CombatJson
          .Register("damageDealtThisTurn", typeof(DamageDealtThisTurnExpression<>))
          .Register("resourceGainedThisTurn", typeof(ResourceGainedThisTurnExpression<>))
          .Register("cardCost", typeof(CardCostExpression<>))
+         .Register("cardInstanceMarkCounter", typeof(CardInstanceMarkCounterExpression<>))
          .Register("iterationTargetStatusStacks", typeof(IterationTargetStatusStacksExpression<>))
          .Register("eventAmount", typeof(EventAmountExpression<>));
 
@@ -181,6 +182,7 @@ public static class CombatJson
          .Register("targetIsAlive", typeof(TargetIsAliveExpression<>))
          .Register("targetDowned", typeof(TargetDownedExpression<>))
          .Register("targetExists", typeof(TargetExistsExpression<>))
+         .Register("cardInstanceHasMark", typeof(CardInstanceHasMarkExpression<>))
          .Register("iterationTargetHasStatus", typeof(IterationTargetHasStatusExpression<>));
 
         // Card-instance expressions (resolve a specific card instance to act on).
@@ -248,6 +250,7 @@ public static class CombatJson
          .Register("node.modifySelectedResource", typeof(ModifySelectedResourceNode<>))
          .Register("node.stealSelectedStatus", typeof(StealSelectedStatusNode<>))
          .Register("node.setCombatantCounter", typeof(SetCombatantCounterNode<>))
+         .Register("node.markCardInstance", typeof(MarkCardInstanceNode<>))
          .Register("node.modifyStatusStacks", typeof(ModifyStatusStacksNode<>))
          .Register("node.modifyStatusDuration", typeof(ModifyStatusDurationNode<>))
          .Register("node.modifyStatusCharges", typeof(ModifyStatusChargesNode<>))

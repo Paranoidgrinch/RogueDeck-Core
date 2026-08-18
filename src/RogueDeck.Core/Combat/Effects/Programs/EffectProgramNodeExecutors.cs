@@ -68,6 +68,7 @@ public sealed class EffectNodeExecutorRegistry
         r.RegisterOpenGeneric(typeof(ModifySelectedResourceNode<>), new ModifySelectedResourceNodeExecutor());
         r.RegisterOpenGeneric(typeof(StealSelectedStatusNode<>), new StealSelectedStatusNodeExecutor());
         r.RegisterOpenGeneric(typeof(SetCombatantCounterNode<>), new SetCombatantCounterNodeExecutor());
+        r.RegisterOpenGeneric(typeof(MarkCardInstanceNode<>), new MarkCardInstanceNodeExecutor());
         r.RegisterOpenGeneric(typeof(RemoveStatusesByPolarityNode<>), new RemoveStatusesByPolarityNodeExecutor());
         r.RegisterOpenGeneric(typeof(ModifyStatusStacksNode<>), new ModifyStatusStacksNodeExecutor());
         r.RegisterOpenGeneric(typeof(ModifyStatusDurationNode<>), new ModifyStatusDurationNodeExecutor());
@@ -931,6 +932,37 @@ internal sealed class SetCombatantCounterNodeExecutor : IEffectNodeExecutor
         foreach (var target in typed.TargetSelector.ResolveTargetsTraced(ctx, combat))
             combat.EnqueueEffect(new SetCombatantCounterEffectRequest(
                 target, typed.CounterId, amount, typed.Relative));
+
+        if (onComplete is not null)
+            combat.EnqueueContinuation(onComplete);
+    }
+}
+
+internal sealed class MarkCardInstanceNodeExecutor : IEffectNodeExecutor
+{
+    public void Execute(IEffectNode node, IEffectExecutionContextCore ctx, CombatState combat,
+        Action<CombatState>? onComplete, Action<IEffectNode, CombatState, Action<CombatState>?> dispatch)
+    {
+        var typed = (IMarkCardInstanceNodeCore)node;
+        var cardInstId = typed.EvaluateCardInstanceId(ctx, combat);
+
+        if (cardInstId is { } id)
+        {
+            var owner = typed.OwnerSelector.ResolveTargetsTraced(ctx, combat).FirstOrDefault();
+            if (owner != default)
+            {
+                CombatantId? source = typed.SourceSelector is { } sel
+                    ? sel.ResolveTargetsTraced(ctx, combat).FirstOrDefault() is { } s && s != default ? s : null
+                    : null;
+
+                combat.EnqueueEffect(new MarkCardInstanceEffectRequest(
+                    CombatantId: owner,
+                    CardInstanceId: id,
+                    Mark: typed.Mark,
+                    Remove: typed.Remove,
+                    Source: source));
+            }
+        }
 
         if (onComplete is not null)
             combat.EnqueueContinuation(onComplete);

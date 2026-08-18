@@ -234,6 +234,85 @@ public sealed class TransformCardEffectHandler : EffectRequestHandler<TransformC
     }
 }
 
+// ── Card-instance marks ─────────────────────────────────────────────────────────────────────────
+// Add or remove a per-instance mark tag on a concrete card. The mark lives on the instance and travels
+// with the card through zones; meaning is authored content (Misfiled / Referenced / Redacted / Counted).
+// When adding, an optional Source binds the mark to a combatant so death cleanup can find and clear it.
+public sealed record MarkCardInstanceEffectRequest(
+    CombatantId CombatantId,
+    CardInstanceId CardInstanceId,
+    TagId Mark,
+    bool Remove = false,
+    CombatantId? Source = null
+) : IEffectRequest;
+
+public sealed class MarkCardInstanceEffectHandler : EffectRequestHandler<MarkCardInstanceEffectRequest>
+{
+    protected override void Resolve(
+        CombatState combat,
+        CombatDefinitionRegistry registry,
+        MarkCardInstanceEffectRequest request)
+    {
+        var zones = combat.GetCardZones(request.CombatantId);
+        var card = zones.GetCard(request.CardInstanceId);
+
+        if (card.OwnerId != request.CombatantId)
+            throw new InvalidOperationException(
+                $"Card instance '{request.CardInstanceId}' is not owned by combatant '{request.CombatantId}'.");
+
+        if (request.Remove)
+        {
+            card.RemoveMark(request.Mark);
+            combat.AddLogEntry(
+                StandardCombatLogTypes.CardMarkChanged,
+                $"Removed mark '{request.Mark.value}' from card instance '{request.CardInstanceId}'.");
+        }
+        else
+        {
+            card.AddMark(request.Mark, request.Source);
+            combat.AddLogEntry(
+                StandardCombatLogTypes.CardMarkChanged,
+                $"Marked card instance '{request.CardInstanceId}' with '{request.Mark.value}'.");
+        }
+    }
+}
+
+// Set or adjust a per-instance mark counter on a concrete card (e.g. a Reference's remaining strength).
+public sealed record SetCardInstanceMarkCounterEffectRequest(
+    CombatantId CombatantId,
+    CardInstanceId CardInstanceId,
+    CounterId Counter,
+    int Value,
+    bool Relative = false
+) : IEffectRequest;
+
+public sealed class SetCardInstanceMarkCounterEffectHandler
+    : EffectRequestHandler<SetCardInstanceMarkCounterEffectRequest>
+{
+    protected override void Resolve(
+        CombatState combat,
+        CombatDefinitionRegistry registry,
+        SetCardInstanceMarkCounterEffectRequest request)
+    {
+        var zones = combat.GetCardZones(request.CombatantId);
+        var card = zones.GetCard(request.CardInstanceId);
+
+        if (card.OwnerId != request.CombatantId)
+            throw new InvalidOperationException(
+                $"Card instance '{request.CardInstanceId}' is not owned by combatant '{request.CombatantId}'.");
+
+        var newValue = request.Relative
+            ? card.GetMarkCounter(request.Counter) + request.Value
+            : request.Value;
+
+        card.SetMarkCounter(request.Counter, newValue);
+
+        combat.AddLogEntry(
+            StandardCombatLogTypes.CardMarkChanged,
+            $"Set mark counter '{request.Counter.value}'={newValue} on card instance '{request.CardInstanceId}'.");
+    }
+}
+
 public sealed record MoveHandCardsOnTurnEndEffectRequest(
     CombatantId CombatantId
 ) : IEffectRequest;

@@ -324,6 +324,19 @@ public interface ISetCombatantCounterNodeCore : INativeEffectOperationNode
     Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(SetCombatantCounterEffectRequest);
 }
 
+// Adds or removes a per-instance mark tag on a selected card (Misfiled / Referenced / Redacted / Counted).
+// The owner selector names whose zones the card lives in; the optional source selector binds the mark to a
+// combatant (so death cleanup can find it). The card itself comes from a card-instance expression.
+public interface IMarkCardInstanceNodeCore : INativeEffectOperationNode
+{
+    ICombatantTargetSelector OwnerSelector { get; }
+    ICombatantTargetSelector? SourceSelector { get; }
+    TagId Mark { get; }
+    bool Remove { get; }
+    CardInstanceId? EvaluateCardInstanceId(IEffectExecutionContextCore ctx, CombatState combat);
+    Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(MarkCardInstanceEffectRequest);
+}
+
 public interface IModifyStatusStacksNodeCore : INativeEffectOperationNode
 {
     ICombatantTargetSelector TargetSelector { get; }

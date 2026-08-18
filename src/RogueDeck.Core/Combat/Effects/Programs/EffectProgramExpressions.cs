@@ -1652,3 +1652,59 @@ public sealed class CardCostExpression<TContext> : ICombatExpression<TContext, i
         return 0;
     }
 }
+
+// True iff the card resolved by the inner card-instance expression currently carries the given per-instance
+// mark (Misfiled / Referenced / Redacted / Counted / …). Returns false when the card cannot be resolved.
+public sealed class CardInstanceHasMarkExpression<TContext> : ICombatExpression<TContext, bool>
+    where TContext : class
+{
+    public ICardInstanceExpression<TContext> Card { get; }
+    public TagId Mark { get; }
+
+    public CardInstanceHasMarkExpression(ICardInstanceExpression<TContext> card, TagId mark)
+    {
+        ArgumentNullException.ThrowIfNull(card);
+        Card = card;
+        Mark = mark;
+    }
+
+    public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        if (Card.Evaluate(context, combat) is not { } instanceId)
+            return false;
+
+        foreach (var zones in combat.CardZonesByCombatant.Values)
+            if (zones.ContainsCard(instanceId))
+                return zones.GetCard(instanceId).HasMark(Mark);
+
+        return false;
+    }
+}
+
+// Reads a per-instance mark counter from the card resolved by the inner card-instance expression.
+// Returns 0 when the card cannot be resolved or carries no such counter.
+public sealed class CardInstanceMarkCounterExpression<TContext> : ICombatExpression<TContext, int>
+    where TContext : class
+{
+    public ICardInstanceExpression<TContext> Card { get; }
+    public CounterId Counter { get; }
+
+    public CardInstanceMarkCounterExpression(ICardInstanceExpression<TContext> card, CounterId counter)
+    {
+        ArgumentNullException.ThrowIfNull(card);
+        Card = card;
+        Counter = counter;
+    }
+
+    public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        if (Card.Evaluate(context, combat) is not { } instanceId)
+            return 0;
+
+        foreach (var zones in combat.CardZonesByCombatant.Values)
+            if (zones.ContainsCard(instanceId))
+                return zones.GetCard(instanceId).GetMarkCounter(Counter);
+
+        return 0;
+    }
+}

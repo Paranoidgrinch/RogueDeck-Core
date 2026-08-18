@@ -1227,6 +1227,48 @@ public sealed class TransformCardNode<TContext> : ITransformCardNodeCore, IEffec
         CardExpression.Evaluate((EffectExecutionContext<TContext>)ctx, combat);
 }
 
+// ── MarkCardInstanceNode ──────────────────────────────────────────────────────
+
+// Adds or removes a per-instance mark tag on a selected card. The card comes from a card-instance
+// expression (played card, chosen/positional card in a zone, trigger-event card, …); the owner selector
+// names whose zones it lives in; the optional source selector binds the mark to a combatant.
+public sealed class MarkCardInstanceNode<TContext> : IMarkCardInstanceNodeCore, IEffectNode<TContext>
+    where TContext : class
+{
+    public ICombatantTargetSelector OwnerSelector { get; }
+    public ICombatantTargetSelector? SourceSelector { get; }
+    public ICardInstanceExpression<TContext> CardExpression { get; }
+    public TagId Mark { get; }
+    public bool Remove { get; }
+
+    public IReadOnlyList<IEffectNode<TContext>> Children => [];
+
+    public IEnumerable<ICombatantTargetSelector> GetTargetSelectors() =>
+        SourceSelector is null ? [OwnerSelector] : [OwnerSelector, SourceSelector];
+
+    public MarkCardInstanceNode(
+        ICombatantTargetSelector ownerSelector,
+        ICardInstanceExpression<TContext> cardExpression,
+        TagId mark,
+        bool remove = false,
+        ICombatantTargetSelector? sourceSelector = null)
+    {
+        ArgumentNullException.ThrowIfNull(ownerSelector);
+        ArgumentNullException.ThrowIfNull(cardExpression);
+
+        OwnerSelector = ownerSelector;
+        CardExpression = cardExpression;
+        Mark = mark;
+        Remove = remove;
+        SourceSelector = sourceSelector;
+    }
+
+    public IEnumerable<IResultKeyConsumer> GetExpressionConsumers() => [];
+
+    CardInstanceId? IMarkCardInstanceNodeCore.EvaluateCardInstanceId(IEffectExecutionContextCore ctx, CombatState combat) =>
+        CardExpression.Evaluate((EffectExecutionContext<TContext>)ctx, combat);
+}
+
 // ── SetCombatResultNode ───────────────────────────────────────────────────────
 
 public interface ISetCombatResultNodeCore : INativeEffectOperationNode
