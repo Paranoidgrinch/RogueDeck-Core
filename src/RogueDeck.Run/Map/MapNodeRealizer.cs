@@ -17,6 +17,7 @@ public static class MapNodeRealizer
             case MapNodeKind.Combat:
             case MapNodeKind.Elite:
             case MapNodeKind.Boss:
+            case MapNodeKind.Mimic: // a Treasure node that flipped into a fight — realized as a normal combat
                 if (encounter is not { } id)
                     throw new InvalidOperationException(
                         $"A {kind} node has no encounter to run; add candidates for {kind} to MapGeneration.Encounters.");

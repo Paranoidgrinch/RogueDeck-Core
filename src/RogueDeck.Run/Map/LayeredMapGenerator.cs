@@ -16,6 +16,12 @@ public enum MapNodeKind
     // each role to a concrete NodeType + payload — Workbench → WorkbenchRef, Treasure → the game's reward node.
     Treasure,
     Workbench,
+
+    // A Mimic is NOT a placed topology kind — it is never drawn by the varied rows or gate funnels. It exists
+    // only as a realization outcome + encounter-pool key: a Treasure node flips into a Mimic combat with a
+    // per-act chance (MapGenerationSpec.TreasureMimicChancePercent), drawing its fight from Encounters[Mimic]
+    // (tuned ≈ a weak elite of that act). Appended so existing ordinals are unchanged.
+    Mimic,
 }
 
 // A node's grid position in a layered act: Row 0 is the entry row, the last row is the boss.

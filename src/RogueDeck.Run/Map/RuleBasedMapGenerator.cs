@@ -144,9 +144,20 @@ public static class RuleBasedMapGenerator
                 }
                 else
                 {
-                    var encounter = SelectEncounter(kind, ri, spec, realization, contentRng!);
-                    var realized = realization.Content(kind, new MapCoord(ri, c), encounter);
+                    // A Treasure node flips into a Mimic combat with a per-act chance. The roll consumes the
+                    // content RNG unconditionally on Treasure nodes so map layout stays deterministic per seed.
+                    var effectiveKind = kind;
+                    if (kind == MapNodeKind.Treasure && spec.TreasureMimicChancePercent > 0
+                        && realization.Selector.HasCandidates(MapNodeKind.Mimic)
+                        && contentRng!.Next(100) < spec.TreasureMimicChancePercent)
+                    {
+                        effectiveKind = MapNodeKind.Mimic;
+                    }
+
+                    var encounter = SelectEncounter(effectiveKind, ri, spec, realization, contentRng!);
+                    var realized = realization.Content(effectiveKind, new MapCoord(ri, c), encounter);
                     builder.AddNode(id, realized.Type, realized.Payload);
+                    kind = effectiveKind;
                 }
                 roles[id] = kind;
             }
@@ -247,7 +258,7 @@ public static class RuleBasedMapGenerator
     }
 
     private static bool IsCombatRole(MapNodeKind kind) =>
-        kind is MapNodeKind.Combat or MapNodeKind.Elite or MapNodeKind.Boss;
+        kind is MapNodeKind.Combat or MapNodeKind.Elite or MapNodeKind.Boss or MapNodeKind.Mimic;
 
     private static readonly NodeType TrialType = new("gen.trial");
     private const string TrialPayload = "";

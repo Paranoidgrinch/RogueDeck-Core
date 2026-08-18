@@ -51,6 +51,11 @@ public sealed record MapGenerationSpec
     public EncounterDistribution Encounters { get; init; } = new();
     public BalanceTargets BalanceTargets { get; init; } = new();
 
+    // Chance (0–100) that a generated Treasure node is instead a MIMIC: a combat drawn from Encounters[Mimic]
+    // (tuned ≈ a weak elite of this act). 0 = never. Rise it per act (e.g. 5/10/15/20 across Acts I–IV) so
+    // treasure gets progressively riskier. Requires at least one Encounters[Mimic] candidate when > 0.
+    public int TreasureMimicChancePercent { get; init; }
+
     // Which authored content a NON-combat generated node references, by role → id: a Shop id, a Workbench id, or an
     // Event id (Event / Rest / Treasure roles all resolve to an authored event by default). Combat / Elite / Boss
     // nodes ignore this — their encounter is drawn from Encounters. A role that can appear (a gate or a positive
