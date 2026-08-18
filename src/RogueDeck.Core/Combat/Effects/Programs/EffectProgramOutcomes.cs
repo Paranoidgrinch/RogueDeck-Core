@@ -440,12 +440,13 @@ public sealed class EffectExecutionContext<TContext> : IEffectExecutionContextCo
         OutputScaleDenominator = denominator;
     }
 
-    // Scales a produced output amount by the current fraction, rounding DOWN, but only when the scale
-    // actually reduces (num < den) and the amount is positive. Identity otherwise, so every output node can
-    // call this unconditionally and pay nothing outside a scaled card play.
+    // Scales a produced output amount by the current fraction, rounding DOWN. Identity when the scale is 1/1
+    // (num == den) or the amount is non-positive, so every output node can call it unconditionally and pay
+    // nothing outside a scaled play. The fraction may reduce (Redacted 1/2) OR amplify (Returning Move 3/5,
+    // Full-Moon reflection 3/2) — both directions are meaningful for replayed / marked plays.
     public int ScaleOutput(int amount)
     {
-        if (amount <= 0 || OutputScaleNumerator >= OutputScaleDenominator)
+        if (amount <= 0 || OutputScaleNumerator == OutputScaleDenominator)
             return amount;
         return (int)((long)amount * OutputScaleNumerator / OutputScaleDenominator);
     }

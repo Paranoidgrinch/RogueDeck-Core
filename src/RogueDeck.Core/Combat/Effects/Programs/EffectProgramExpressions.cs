@@ -1729,6 +1729,39 @@ public sealed class RandomCardInZoneExpression<TContext>
     }
 }
 
+// The first card in a SELECTED owner's zone that carries a given per-instance mark, or null if none. This is
+// how a recurrence enemy points at a recorded ("Counted") card to replay, or how a mechanic finds "the
+// Referenced card" among the player's cards. Deterministic (pile order).
+public sealed class FirstMarkedCardInOwnerZoneExpression<TContext>
+    : ICardInstanceExpression<TContext>
+    where TContext : class
+{
+    public ICombatantTargetSelector OwnerSelector { get; }
+    public CardZone Zone { get; }
+    public TagId Mark { get; }
+
+    public FirstMarkedCardInOwnerZoneExpression(ICombatantTargetSelector ownerSelector, CardZone zone, TagId mark)
+    {
+        ArgumentNullException.ThrowIfNull(ownerSelector);
+        OwnerSelector = ScalarTargetExpression.RequireSingleSelector(ownerSelector);
+        Zone = zone;
+        Mark = mark;
+    }
+
+    public CardInstanceId? Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        var owners = OwnerSelector.ResolveTargets(context.GetTargetSelectionContext());
+        if (owners.Count == 0) return null;
+        var ownerId = ScalarTargetExpression.RequireSingle(owners);
+        if (!combat.CardZonesByCombatant.ContainsKey(ownerId)) return null;
+
+        foreach (var card in combat.GetCardZones(ownerId).GetCardsInZone(Zone))
+            if (card.HasMark(Mark))
+                return card.Id;
+        return null;
+    }
+}
+
 // Selects a card by POSITION from a zone of a SELECTED owner (not necessarily the acting combatant). This is
 // what lets an ENEMY point at one of the PLAYER's cards — e.g. mark the top of the opponent's draw pile as
 // Misfiled, or Reference a card in the opponent's hand. Resolves the owner via a target selector (EventTarget

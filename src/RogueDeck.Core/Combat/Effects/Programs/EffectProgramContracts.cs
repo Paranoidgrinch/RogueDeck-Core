@@ -160,6 +160,10 @@ public interface ISideEffectNodeCore : IEffectNode
 public interface IReplayCardProgramNodeCore : IEffectNode
 {
     ICombatantTargetSelector TargetSelector { get; }
+    // Output scale applied to the replayed program (1/1 = full strength). Lets a recurrence enemy replay a
+    // recorded player move at reduced (Returning Move ~3/5) or amplified (Full-Moon reflection ~3/2) power.
+    int ScaleNumerator { get; }
+    int ScaleDenominator { get; }
     CardDefinitionId? EvaluateCardDefinitionId(IEffectExecutionContextCore ctx, CombatState combat);
 }
 

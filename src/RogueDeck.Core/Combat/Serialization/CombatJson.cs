@@ -197,6 +197,7 @@ public static class CombatJson
          .Register("cardInstance.triggerEvent", typeof(TriggerEventCardInstanceExpression<>))
          .Register("cardInstance.inZone", typeof(CardInZoneExpression<>))
          .Register("cardInstance.inOwnerZone", typeof(CardInOwnerZoneExpression<>))
+         .Register("cardInstance.firstMarkedInOwnerZone", typeof(FirstMarkedCardInOwnerZoneExpression<>))
          .Register("cardInstance.chosenInZone", typeof(ChosenCardInZoneExpression<>))
          .Register("cardInstance.randomInZone", typeof(RandomCardInZoneExpression<>))
          .Register("cardInstance.randomInOwnerZone", typeof(RandomCardInOwnerZoneExpression<>))

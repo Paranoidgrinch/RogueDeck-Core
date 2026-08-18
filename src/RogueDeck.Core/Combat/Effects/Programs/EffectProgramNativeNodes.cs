@@ -846,19 +846,29 @@ public sealed class ReplayCardProgramNode<TContext> : IReplayCardProgramNodeCore
 {
     public ICardInstanceExpression<TContext> Card { get; }
     public ICombatantTargetSelector TargetSelector { get; }
+    public int ScaleNumerator { get; }
+    public int ScaleDenominator { get; }
     public IEnumerable<ICombatantTargetSelector> GetTargetSelectors() => [TargetSelector];
 
     public IReadOnlyList<IEffectNode<TContext>> Children => [];
 
     public ReplayCardProgramNode(
         ICardInstanceExpression<TContext> card,
-        ICombatantTargetSelector targetSelector)
+        ICombatantTargetSelector targetSelector,
+        int scaleNumerator = 1,
+        int scaleDenominator = 1)
     {
         ArgumentNullException.ThrowIfNull(card);
         ArgumentNullException.ThrowIfNull(targetSelector);
+        if (scaleDenominator <= 0)
+            throw new ArgumentOutOfRangeException(nameof(scaleDenominator));
+        if (scaleNumerator < 0)
+            throw new ArgumentOutOfRangeException(nameof(scaleNumerator));
 
         Card = card;
         TargetSelector = targetSelector;
+        ScaleNumerator = scaleNumerator;
+        ScaleDenominator = scaleDenominator;
     }
 
     CardDefinitionId? IReplayCardProgramNodeCore.EvaluateCardDefinitionId(

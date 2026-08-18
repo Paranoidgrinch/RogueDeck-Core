@@ -1454,8 +1454,12 @@ internal sealed class ReplayCardProgramNodeExecutor : IEffectNodeExecutor
                 new CombatantTargetSelectionContext(combat, source, targetId),
                 new TriggeredEffectActionSource(SourceCombatantId: sourceId, SourceCardId: card.Id));
 
+            var replayContext = new EffectExecutionContext<CardPlayContext>(new CardPlayContext(card), buildContext);
+            if (typed.ScaleNumerator != typed.ScaleDenominator)
+                replayContext.SetOutputScale(typed.ScaleNumerator, typed.ScaleDenominator);
+
             EffectProgramExecutor.Execute(
-                program, new CardPlayContext(card), buildContext, combat,
+                program, replayContext, combat,
                 onComplete: onComplete,
                 registry: registry.EffectNodeExecutors);
             return;
