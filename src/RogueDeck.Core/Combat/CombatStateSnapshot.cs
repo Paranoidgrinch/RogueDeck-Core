@@ -25,11 +25,14 @@ public sealed record StatusInstanceSnapshot(
     StatusVisibility Visibility = StatusVisibility.Visible
 );
 
-// Immutable capture of one card instance.
+// Immutable capture of one card instance, including its per-instance marks (tags/counters/source).
 public sealed record CardInstanceSnapshot(
     CardInstanceId Id,
     CardDefinitionId DefinitionId,
-    CardZone Zone
+    CardZone Zone,
+    ImmutableArray<TagId> Marks = default,                       // sorted by value; default = empty
+    ImmutableArray<(CounterId Key, int Value)> MarkCounters = default, // sorted by key.value; default = empty
+    CombatantId? MarkSourceCombatantId = null
 );
 
 // Immutable capture of a combatant's card zones, in pile order.

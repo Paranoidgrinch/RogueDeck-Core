@@ -35,16 +35,46 @@ public sealed class CardInstance
 
     public CardZone Zone { get; private set; }
 
+    // ── Per-instance marks ────────────────────────────────────────────────────────────────────────
+    // A card instance may carry mutable marks that live ON THE INSTANCE (not its definition) and travel
+    // with it through every zone: a set of mark tags, a small counter bag, and an optional binding to the
+    // combatant that placed the mark. This mirrors StatusInstance's per-instance Tags/Counters/Source and
+    // is the substrate for content mechanics such as Misfiled / Referenced / Redacted / Counted — a card is
+    // marked, and later triggered programs react to the mark when the card is drawn, played, or leaves hand.
+    // The engine attaches no behaviour to any specific mark; meaning is authored content.
+    private readonly HashSet<TagId> _marks = new();
+    private readonly Dictionary<CounterId, int> _markCounters = new();
+
+    public IReadOnlySet<TagId> Marks => _marks;
+    public IReadOnlyDictionary<CounterId, int> MarkCounters => _markCounters;
+
+    // The combatant that applied the mark(s), when a mechanic is source-bound (e.g. a Reference belongs to
+    // the enemy that created it, so death cleanup can find and clear it). Null = unbound.
+    public CombatantId? MarkSourceCombatantId { get; private set; }
+
     public CardInstance(
         CardInstanceId id,
         CardDefinitionId definitionId,
         CombatantId ownerId,
-        CardZone zone)
+        CardZone zone,
+        IEnumerable<TagId>? initialMarks = null,
+        IEnumerable<KeyValuePair<CounterId, int>>? initialMarkCounters = null,
+        CombatantId? markSourceCombatantId = null)
     {
         Id = id;
         DefinitionId = definitionId;
         OwnerId = ownerId;
         Zone = zone;
+
+        if (initialMarks is not null)
+            foreach (var mark in initialMarks)
+                _marks.Add(mark);
+
+        if (initialMarkCounters is not null)
+            foreach (var (key, value) in initialMarkCounters)
+                _markCounters[key] = value;
+
+        MarkSourceCombatantId = markSourceCombatantId;
     }
 
     public void SetZone(CardZone zone)
@@ -59,6 +89,32 @@ public sealed class CardInstance
     {
         DefinitionId = definitionId;
     }
+
+    // ── Mark mutation ─────────────────────────────────────────────────────────────────────────────
+    public bool HasMark(TagId mark) => _marks.Contains(mark);
+
+    // Adds a mark tag; returns true if it was newly added. Optionally (re)binds the mark source.
+    public bool AddMark(TagId mark, CombatantId? source = null)
+    {
+        if (source is { } s)
+            MarkSourceCombatantId = s;
+        return _marks.Add(mark);
+    }
+
+    public bool RemoveMark(TagId mark) => _marks.Remove(mark);
+
+    public int GetMarkCounter(CounterId id) =>
+        _markCounters.TryGetValue(id, out var value) ? value : 0;
+
+    public void SetMarkCounter(CounterId id, int value)
+    {
+        if (value == 0)
+            _markCounters.Remove(id);
+        else
+            _markCounters[id] = value;
+    }
+
+    public void SetMarkSource(CombatantId? source) => MarkSourceCombatantId = source;
 }
 
 public sealed class CombatantCardZones

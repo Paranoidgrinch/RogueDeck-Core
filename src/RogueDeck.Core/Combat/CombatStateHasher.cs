@@ -131,8 +131,22 @@ public static class CombatStateHasher
         ImmutableArray<CardInstanceSnapshot> cards)
     {
         foreach (var card in cards)
+        {
             sb.Append(zone).Append('=').Append(card.Id.value)
-                .Append(' ').Append(card.DefinitionId.value)
-                .Append('\n');
+                .Append(' ').Append(card.DefinitionId.value);
+
+            if (!card.Marks.IsDefaultOrEmpty)
+                foreach (var mark in card.Marks)
+                    sb.Append(" m:").Append(mark.value);
+
+            if (!card.MarkCounters.IsDefaultOrEmpty)
+                foreach (var (key, value) in card.MarkCounters)
+                    sb.Append(" mc:").Append(key.value).Append('=').Append(value);
+
+            if (card.MarkSourceCombatantId is { } src)
+                sb.Append(" msrc:").Append(src.value);
+
+            sb.Append('\n');
+        }
     }
 }

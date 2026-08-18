@@ -116,5 +116,16 @@ public static class CombatStateSnapshotter
             BanishedPile: zones.BanishedPile.Select(SnapshotCard).ToImmutableArray());
 
     private static CardInstanceSnapshot SnapshotCard(CardInstance c) =>
-        new(c.Id, c.DefinitionId, c.Zone);
+        new(
+            c.Id,
+            c.DefinitionId,
+            c.Zone,
+            Marks: c.Marks
+                .OrderBy(t => t.value, StringComparer.Ordinal)
+                .ToImmutableArray(),
+            MarkCounters: c.MarkCounters
+                .Select(kv => (kv.Key, kv.Value))
+                .OrderBy(p => p.Key.value, StringComparer.Ordinal)
+                .ToImmutableArray(),
+            MarkSourceCombatantId: c.MarkSourceCombatantId);
 }

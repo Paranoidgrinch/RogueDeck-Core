@@ -720,7 +720,13 @@ public sealed class CombatState
         System.Collections.Immutable.ImmutableArray<CardInstanceSnapshot> pile, CardZone zone)
     {
         foreach (var card in pile)
-            zones.AddCard(new CardInstance(card.Id, card.DefinitionId, owner, zone));
+            zones.AddCard(new CardInstance(
+                card.Id, card.DefinitionId, owner, zone,
+                initialMarks: card.Marks.IsDefault ? null : card.Marks,
+                initialMarkCounters: card.MarkCounters.IsDefault
+                    ? null
+                    : card.MarkCounters.Select(c => new KeyValuePair<CounterId, int>(c.Key, c.Value)),
+                markSourceCombatantId: card.MarkSourceCombatantId));
     }
 
     public void AddLogEntry(string type, string message)
