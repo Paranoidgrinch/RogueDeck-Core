@@ -350,7 +350,7 @@
             _previewLoadout = balance.LoadoutStrength(start, _blueprint.Deck);
             _preview = RuleBasedMapGenerator.Generate(
                 spec, _previewSeed, _previewLoadout, balance,
-                (kind, _, encounter) => MapNodeRealizer.Realize(spec, kind, encounter));
+                (kind, _, encounter, nodeRef) => MapNodeRealizer.Realize(spec, kind, encounter, nodeRef));
             _previewPositions = MapGraphLayout.Resolve(_preview.Map);
             _previewSize = MapGraphLayout.CanvasSize(_previewPositions);
             _previewError = null;

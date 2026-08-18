@@ -72,7 +72,7 @@ public static class RunSetup
         var balance = new BalanceCalculator(blueprint.Balance, blueprint.Encounters);
         var generated = RuleBasedMapGenerator.Generate(
             spec, seed, startingLoadout, balance,
-            (kind, _, encounter) => MapNodeRealizer.Realize(spec, kind, encounter));
+            (kind, _, encounter, nodeRef) => MapNodeRealizer.Realize(spec, kind, encounter, nodeRef));
         return generated.Map;
     }
 }

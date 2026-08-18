@@ -9,8 +9,8 @@ public class MapEncounterConstraintsTests
 {
     private static readonly NodeType Mark = new("test.mark");
 
-    private static NodeContent Realize(MapNodeKind kind, MapCoord coord, EncounterId? encounter) =>
-        new(Mark, encounter?.ToString() ?? "none");
+    private static NodeContent Realize(MapNodeKind kind, MapCoord coord, EncounterId? encounter, string? nodeRef = null) =>
+        new(Mark, encounter?.ToString() ?? nodeRef ?? "none");
 
     private static BalanceCalculator EmptyBalance() =>
         new(new BalanceManifest(), Array.Empty<EncounterDefinition>());
@@ -91,5 +91,47 @@ public class MapEncounterConstraintsTests
         foreach (var (id, kind) in generated.Roles)
             if (kind == MapNodeKind.MultiCombat)
                 Assert.StartsWith("duo.", (string)generated.Map.Nodes.First(n => n.Id == id).Payload);
+    }
+
+    [Fact]
+    public void Non_combat_nodes_draw_distinct_refs_from_their_pool()
+    {
+        var spec = new MapGenerationSpec
+        {
+            Rows = 8,
+            MinWidth = 2,
+            MaxWidth = 4,
+            MinEnemiesPerPath = 2,
+            PerPathMinimums = new Dictionary<MapNodeKind, int> { [MapNodeKind.Event] = 3 },
+            KindWeights = new Dictionary<MapNodeKind, int>
+            {
+                [MapNodeKind.Combat] = 3,
+                [MapNodeKind.Event] = 3,
+            },
+            Encounters = new EncounterDistribution
+            {
+                ByRole = new Dictionary<MapNodeKind, IReadOnlyList<EncounterPoolEntry>>
+                {
+                    [MapNodeKind.Combat] = Pool("fight.", 40),
+                    [MapNodeKind.Boss] = Pool("boss.", 5),
+                },
+            },
+            // A pool of distinct events (Realize surfaces the chosen ref as the node payload).
+            NodeRefPools = new Dictionary<MapNodeKind, IReadOnlyList<string>>
+            {
+                [MapNodeKind.Event] = Enumerable.Range(0, 20).Select(i => $"event.{i}").ToArray(),
+            },
+        };
+
+        var generated = RuleBasedMapGenerator.Generate(spec, seed: 3, 0, EmptyBalance(), Realize);
+
+        var eventRefs = generated.Map.Nodes
+            .Where(n => generated.Roles[n.Id] == MapNodeKind.Event)
+            .Select(n => (string)n.Payload)
+            .ToList();
+
+        Assert.NotEmpty(eventRefs);
+        Assert.All(eventRefs, r => Assert.StartsWith("event.", r));
+        Assert.Equal(eventRefs.Count, eventRefs.Distinct().Count()); // pool >> nodes ⇒ all distinct
     }
 }

@@ -8,8 +8,8 @@ public class MimicTreasureTests
 {
     private static readonly NodeType Mark = new("test.mark");
 
-    private static NodeContent Realize(MapNodeKind kind, MapCoord coord, EncounterId? encounter) =>
-        new(Mark, encounter?.ToString() ?? "none");
+    private static NodeContent Realize(MapNodeKind kind, MapCoord coord, EncounterId? encounter, string? nodeRef = null) =>
+        new(Mark, encounter?.ToString() ?? nodeRef ?? "none");
 
     private static BalanceCalculator EmptyBalance() =>
         new(new BalanceManifest(), Array.Empty<EncounterDefinition>());

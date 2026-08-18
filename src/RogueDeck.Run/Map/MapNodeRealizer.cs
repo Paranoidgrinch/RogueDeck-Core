@@ -9,7 +9,9 @@ namespace RogueDeck.Run;
 // its own content delegate to RuleBasedMapGenerator instead.
 public static class MapNodeRealizer
 {
-    public static NodeContent Realize(MapGenerationSpec spec, MapNodeKind kind, EncounterId? encounter)
+    // nodeRef, when set (from NodeRefPools via the generator), is the specific authored ref this non-combat node
+    // drew; null falls back to the single NodeRefs[kind]. Combat roles ignore it.
+    public static NodeContent Realize(MapGenerationSpec spec, MapNodeKind kind, EncounterId? encounter, string? nodeRef = null)
     {
         ArgumentNullException.ThrowIfNull(spec);
         switch (kind)
@@ -25,16 +27,16 @@ public static class MapNodeRealizer
                 return new NodeContent(StandardRunIds.CombatNode, new EncounterRef(id));
 
             case MapNodeKind.Shop:
-                return new NodeContent(StandardRunIds.ShopNode, new ShopRef(new ShopId(RequireRef(spec, kind))));
+                return new NodeContent(StandardRunIds.ShopNode, new ShopRef(new ShopId(nodeRef ?? RequireRef(spec, kind))));
 
             case MapNodeKind.Workbench:
                 return new NodeContent(
-                    ShredEngineIds.WorkbenchNode, new WorkbenchRef(new WorkbenchId(RequireRef(spec, kind))));
+                    ShredEngineIds.WorkbenchNode, new WorkbenchRef(new WorkbenchId(nodeRef ?? RequireRef(spec, kind))));
 
             case MapNodeKind.Event:
             case MapNodeKind.Rest:
             case MapNodeKind.Treasure:
-                return new NodeContent(StandardRunIds.EventNode, new EventRef(new EventId(RequireRef(spec, kind))));
+                return new NodeContent(StandardRunIds.EventNode, new EventRef(new EventId(nodeRef ?? RequireRef(spec, kind))));
 
             default:
                 throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unhandled map node kind.");

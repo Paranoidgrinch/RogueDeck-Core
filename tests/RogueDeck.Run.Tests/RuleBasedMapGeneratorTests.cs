@@ -10,8 +10,8 @@ public class RuleBasedMapGeneratorTests
 {
     private static readonly NodeType Mark = new("test.mark");
 
-    private static NodeContent Realize(MapNodeKind kind, MapCoord coord, EncounterId? encounter) =>
-        new(Mark, encounter?.ToString() ?? "none");
+    private static NodeContent Realize(MapNodeKind kind, MapCoord coord, EncounterId? encounter, string? nodeRef = null) =>
+        new(Mark, encounter?.ToString() ?? nodeRef ?? "none");
 
     private static BalanceCalculator EmptyBalance() =>
         new(new BalanceManifest(), Array.Empty<EncounterDefinition>());
@@ -128,7 +128,7 @@ public class RuleBasedMapGeneratorTests
         };
 
         var generated = RuleBasedMapGenerator.Generate(spec, 5, 0, EmptyBalance(),
-            (kind, coord, enc) => new NodeContent(Mark, "p"));
+            (kind, coord, enc, nodeRef) => new NodeContent(Mark, "p"));
 
         // Group nodes by row; at least one wide row must contain more than one distinct role.
         var byRow = generated.Roles
@@ -189,7 +189,7 @@ public class RuleBasedMapGeneratorTests
         };
 
         var chosen = new Dictionary<MapCoord, string>();
-        RuleBasedMapGenerator.Generate(spec, 5, startingLoadout: 100, balance, (kind, coord, encounter) =>
+        RuleBasedMapGenerator.Generate(spec, 5, startingLoadout: 100, balance, (kind, coord, encounter, nodeRef) =>
         {
             chosen[coord] = encounter?.ToString() ?? "none";
             return new NodeContent(Mark, "p");

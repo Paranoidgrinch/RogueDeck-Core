@@ -62,6 +62,14 @@ public sealed record MapGenerationSpec
     // weight) but has no ref here makes generation fail with a clear message (RunDocumentValidator flags it earlier).
     public IReadOnlyDictionary<MapNodeKind, string> NodeRefs { get; init; } = new Dictionary<MapNodeKind, string>();
 
+    // Optional per-kind POOLS of authored ref ids for non-combat roles (Event/Rest/Treasure/Shop/Workbench). When
+    // a kind has a non-empty pool here, each such node draws a DISTINCT ref without replacement (so a path can hold
+    // several different events, not the same one repeated) — the non-combat analogue of the Encounters pools. Falls
+    // back to the single NodeRefs[kind] when a kind has no pool. Pools are drawn from the same deterministic content
+    // RNG; leaving this empty keeps generation byte-identical to before.
+    public IReadOnlyDictionary<MapNodeKind, IReadOnlyList<string>> NodeRefPools { get; init; } =
+        new Dictionary<MapNodeKind, IReadOnlyList<string>>();
+
     // The kinds a gate funnel can be, in a fixed order (used to lay gates out and to iterate deterministically).
     // Boss is the fixed top row and is never a per-path gate.
     public static readonly IReadOnlyList<MapNodeKind> GateKinds = new[]

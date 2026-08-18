@@ -24,7 +24,7 @@ public static class RuleBasedMapGenerator
         int seed,
         int startingLoadout,
         BalanceCalculator balance,
-        Func<MapNodeKind, MapCoord, EncounterId?, NodeContent> content)
+        Func<MapNodeKind, MapCoord, EncounterId?, string?, NodeContent> content)
     {
         ArgumentNullException.ThrowIfNull(spec);
         ArgumentNullException.ThrowIfNull(balance);
@@ -117,7 +117,7 @@ public static class RuleBasedMapGenerator
     // ── Build (topology + optional content) ──────────────────────────────────────────────────────────────
     private sealed record ContentRealization(
         EncounterSelector Selector, int StartingLoadout, int ContentSeed,
-        Func<MapNodeKind, MapCoord, EncounterId?, NodeContent> Content);
+        Func<MapNodeKind, MapCoord, EncounterId?, string?, NodeContent> Content);
 
     private static (RunMap Map, Dictionary<NodeId, MapNodeKind> Roles) Build(
         MapGenerationSpec spec, Branches branches, IReadOnlyDictionary<MapNodeKind, int> gateCounts, int wireSeed,
@@ -130,6 +130,8 @@ public static class RuleBasedMapGenerator
         // Encounter templates are drawn WITHOUT replacement across the whole map, so a run never meets the same
         // fight twice (until a role's pool is exhausted). Shared across roles: a template lives in one pool.
         var usedEncounters = new HashSet<EncounterId>();
+        // Same for non-combat node refs (events/rest/treasure), per NodeRefPools — distinct nodes get distinct refs.
+        var usedRefs = new HashSet<string>();
 
         var builder = new RunMapBuilder();
         var roles = new Dictionary<NodeId, MapNodeKind>();
@@ -159,7 +161,8 @@ public static class RuleBasedMapGenerator
                     }
 
                     var encounter = SelectEncounter(effectiveKind, ri, spec, realization, contentRng!, usedEncounters);
-                    var realized = realization.Content(effectiveKind, new MapCoord(ri, c), encounter);
+                    var nodeRef = SelectNodeRef(effectiveKind, spec, contentRng!, usedRefs);
+                    var realized = realization.Content(effectiveKind, new MapCoord(ri, c), encounter, nodeRef);
                     builder.AddNode(id, realized.Type, realized.Payload);
                     kind = effectiveKind;
                 }
@@ -260,6 +263,26 @@ public static class RuleBasedMapGenerator
         var loadout = spec.BalanceTargets.AssumedLoadout(realization.StartingLoadout, row);
         var target = spec.BalanceTargets.TargetNet(row);
         var picked = realization.Selector.Select(kind, loadout, target, spec.BalanceTargets.Tolerance, rng.Next, used);
+        used.Add(picked);
+        return picked;
+    }
+
+    // Picks the authored ref a non-combat node realizes as, from NodeRefPools[kind] WITHOUT replacement (so a path
+    // holds distinct events/treasures/rests). Returns null for combat roles and for kinds with no pool (the realizer
+    // then falls back to the single NodeRefs[kind]); consumes RNG only when a pool is actually drawn, so an empty
+    // NodeRefPools leaves generation byte-identical.
+    private static string? SelectNodeRef(
+        MapNodeKind kind, MapGenerationSpec spec, MapGenRandom rng, ISet<string> used)
+    {
+        if (IsCombatRole(kind))
+            return null;
+        if (!spec.NodeRefPools.TryGetValue(kind, out var pool) || pool.Count == 0)
+            return null;
+
+        var available = pool.Where(r => !used.Contains(r)).ToList();
+        if (available.Count == 0)
+            available = pool.ToList(); // pool exhausted → allow reuse
+        var picked = available[rng.Next(available.Count)];
         used.Add(picked);
         return picked;
     }
