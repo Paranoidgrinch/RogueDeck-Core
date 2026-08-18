@@ -22,6 +22,12 @@ public enum MapNodeKind
     // per-act chance (MapGenerationSpec.TreasureMimicChancePercent), drawing its fight from Encounters[Mimic]
     // (tuned ≈ a weak elite of that act). Appended so existing ordinals are unchanged.
     Mimic,
+
+    // A guaranteed MULTI-enemy combat (duo/trio). Placed like any other per-path minimum (gate funnels), draws
+    // from Encounters[MultiCombat] (author lists the multi-enemy templates there), realizes as a normal combat,
+    // and counts as an enemy. Kept a distinct role so "≥N multi fights per path" is guaranteed while normal
+    // Combat nodes draw solo templates. Not drawn on wide rows (no default weight) — only placed as gates.
+    MultiCombat,
 }
 
 // A node's grid position in a layered act: Row 0 is the entry row, the last row is the boss.

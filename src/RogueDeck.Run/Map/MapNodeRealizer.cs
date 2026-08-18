@@ -15,6 +15,7 @@ public static class MapNodeRealizer
         switch (kind)
         {
             case MapNodeKind.Combat:
+            case MapNodeKind.MultiCombat: // a guaranteed multi-enemy fight — realized as a normal combat
             case MapNodeKind.Elite:
             case MapNodeKind.Boss:
             case MapNodeKind.Mimic: // a Treasure node that flipped into a fight — realized as a normal combat

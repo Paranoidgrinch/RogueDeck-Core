@@ -23,13 +23,23 @@ public sealed class EncounterSelector
     public bool HasCandidates(MapNodeKind role) => _distribution.For(role).Count > 0;
 
     public EncounterId Select(
-        MapNodeKind role, int loadoutStrength, int targetNet, int tolerance, Func<int, int> next)
+        MapNodeKind role, int loadoutStrength, int targetNet, int tolerance, Func<int, int> next,
+        ISet<EncounterId>? exclude = null)
     {
         ArgumentNullException.ThrowIfNull(next);
-        var candidates = _distribution.For(role);
-        if (candidates.Count == 0)
+        var all = _distribution.For(role);
+        if (all.Count == 0)
             throw new InvalidOperationException(
                 $"No encounter candidates for role {role}; the distribution must list at least one.");
+
+        // Draw WITHOUT replacement: skip templates already placed this run. If every candidate for this role
+        // is used up (pool smaller than the number of nodes needing it), fall back to the full list so a fight
+        // is still chosen — repeats only happen once a role's pool is genuinely exhausted.
+        var candidates = exclude is null || exclude.Count == 0
+            ? all
+            : all.Where(e => !exclude.Contains(e.Encounter)).ToList();
+        if (candidates.Count == 0)
+            candidates = all;
 
         var inBand = new List<EncounterPoolEntry>();
         foreach (var entry in candidates)

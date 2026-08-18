@@ -66,7 +66,7 @@ public sealed record MapGenerationSpec
     // Boss is the fixed top row and is never a per-path gate.
     public static readonly IReadOnlyList<MapNodeKind> GateKinds = new[]
     {
-        MapNodeKind.Combat, MapNodeKind.Elite, MapNodeKind.Event, MapNodeKind.Shop,
+        MapNodeKind.Combat, MapNodeKind.MultiCombat, MapNodeKind.Elite, MapNodeKind.Event, MapNodeKind.Shop,
         MapNodeKind.Rest, MapNodeKind.Treasure, MapNodeKind.Workbench,
     };
 

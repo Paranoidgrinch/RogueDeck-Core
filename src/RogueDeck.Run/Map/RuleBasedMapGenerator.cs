@@ -94,7 +94,7 @@ public static class RuleBasedMapGenerator
             {
                 gateCounts[kind] = gateCounts.GetValueOrDefault(kind) + deficit;
                 added = true;
-                if (kind == MapNodeKind.Combat) pendingCombat += deficit;
+                if (kind is MapNodeKind.Combat or MapNodeKind.MultiCombat) pendingCombat += deficit;
                 if (kind == MapNodeKind.Elite) pendingElite += deficit;
             }
         }
@@ -127,6 +127,10 @@ public static class RuleBasedMapGenerator
         var wire = new MapGenRandom(wireSeed);
         var contentRng = realization is null ? null : new MapGenRandom(realization.ContentSeed);
 
+        // Encounter templates are drawn WITHOUT replacement across the whole map, so a run never meets the same
+        // fight twice (until a role's pool is exhausted). Shared across roles: a template lives in one pool.
+        var usedEncounters = new HashSet<EncounterId>();
+
         var builder = new RunMapBuilder();
         var roles = new Dictionary<NodeId, MapNodeKind>();
 
@@ -154,7 +158,7 @@ public static class RuleBasedMapGenerator
                         effectiveKind = MapNodeKind.Mimic;
                     }
 
-                    var encounter = SelectEncounter(effectiveKind, ri, spec, realization, contentRng!);
+                    var encounter = SelectEncounter(effectiveKind, ri, spec, realization, contentRng!, usedEncounters);
                     var realized = realization.Content(effectiveKind, new MapCoord(ri, c), encounter);
                     builder.AddNode(id, realized.Type, realized.Payload);
                     kind = effectiveKind;
@@ -247,18 +251,22 @@ public static class RuleBasedMapGenerator
         spec.KindWeights.TryGetValue(kind, out var value) ? Math.Max(0, value) : 0;
 
     private static EncounterId? SelectEncounter(
-        MapNodeKind kind, int row, MapGenerationSpec spec, ContentRealization realization, MapGenRandom rng)
+        MapNodeKind kind, int row, MapGenerationSpec spec, ContentRealization realization, MapGenRandom rng,
+        ISet<EncounterId> used)
     {
         if (!IsCombatRole(kind) || !realization.Selector.HasCandidates(kind))
             return null;
 
         var loadout = spec.BalanceTargets.AssumedLoadout(realization.StartingLoadout, row);
         var target = spec.BalanceTargets.TargetNet(row);
-        return realization.Selector.Select(kind, loadout, target, spec.BalanceTargets.Tolerance, rng.Next);
+        var picked = realization.Selector.Select(kind, loadout, target, spec.BalanceTargets.Tolerance, rng.Next, used);
+        used.Add(picked);
+        return picked;
     }
 
     private static bool IsCombatRole(MapNodeKind kind) =>
-        kind is MapNodeKind.Combat or MapNodeKind.Elite or MapNodeKind.Boss or MapNodeKind.Mimic;
+        kind is MapNodeKind.Combat or MapNodeKind.MultiCombat or MapNodeKind.Elite
+            or MapNodeKind.Boss or MapNodeKind.Mimic;
 
     private static readonly NodeType TrialType = new("gen.trial");
     private const string TrialPayload = "";

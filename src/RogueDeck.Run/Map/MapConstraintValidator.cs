@@ -64,7 +64,8 @@ public static class MapConstraintValidator
     // Whether a role counts as an enemy for the min-enemies constraint.
     public static bool IsEnemyRole(MapNodeKind kind) => IsEnemy(kind);
 
-    private static bool IsEnemy(MapNodeKind kind) => kind is MapNodeKind.Combat or MapNodeKind.Elite;
+    private static bool IsEnemy(MapNodeKind kind) =>
+        kind is MapNodeKind.Combat or MapNodeKind.MultiCombat or MapNodeKind.Elite;
 
     // The fewest `matches` nodes on any entry→boss path. minPath(node) = self + min over successors; a leaf is just
     // self. The answer is the minimum over entry nodes. Processed in reverse topological order so every successor is

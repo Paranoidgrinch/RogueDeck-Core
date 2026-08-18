@@ -26,9 +26,12 @@ Maps are hybrid — fixed structure, random layout each run. One `MapGenerationS
 - ✅ Role per-path minimums → `MapGenerationSpec.PerPathMinimums` (Combat/Elite/Event/Rest/Treasure/Shop) +
   `MinEnemiesPerPath`. Enforced today by gate funnels + `MapConstraintValidator`.
 - ✅ Mimic → `TreasureMimicChancePercent` + `Encounters[Mimic]`.
-- ❌ **No-repeat across a run** → new: encounter selection without replacement (design decision below).
-- ❌ **Per-path multi-encounter minimum** → new: constraint on the chosen encounter's enemy count, not the
-  node role.
+- ✅ **No-repeat across a run** → encounter selection is now WITHOUT replacement across the whole map
+  (shared used-set, balance-filtered, graceful fallback once a pool is exhausted). Keep each role's pool
+  ≥ the nodes that draw it.
+- ✅ **Per-path multi-encounter minimum** → new role `MapNodeKind.MultiCombat`: placed via gate funnels like
+  any per-path minimum, draws from `Encounters[MultiCombat]` (list the duo/trio templates there), realizes
+  as a normal combat, counts as an enemy. Set `PerPathMinimums[MultiCombat]` per act.
 
 ## Concrete PerPathMinimums (once the two constraints land)
 ```
