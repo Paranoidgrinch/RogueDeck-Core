@@ -1,8 +1,16 @@
+using System.Text.Json;
 using RogueDeck.Core.Combat;
 using RogueDeck.Scenario.Authoring;
 using RogueDeck.Scenario.Scripting;
 
 namespace RogueDeck.Run;
+
+// A cross-combatant triggered effect scoped to ONE encounter: an event name + a serialized effect program.
+// Registered into that encounter's combat registry only (unlike status triggers, which are global-but-bearer-
+// gated). This is how an enemy passive reacts to a PLAYER action (e.g. "when you play a card, the Scribe gains
+// block") — the program self-gates and targets via selectors; there is no bearer-has-status filter. The program
+// is stored as CombatJson (same shape as StatusTriggerData.Program) and rebuilt at content-build time.
+public sealed record EncounterTriggerData(string Event, JsonElement Program);
 
 // Data-defined combats (R7b). A combat node can carry an EncounterRef (pure data) instead of a hand-authored
 // Func<RunState, Playthrough>. The shared combat definitions (cards, enemy actions, statuses) are authored
@@ -89,13 +97,19 @@ public sealed class EncounterDefinition
     // Cards each player-side combatant draws at its turn start in this fight; null = the engine default (5).
     public int? CardsDrawnPerTurn { get; }
 
+    // Cross-combatant triggered effects active only in this encounter's combat — the substrate for enemy
+    // passives that react to PLAYER actions (see EncounterTriggerData). Serialized as data; rebuilt into live
+    // triggered-effect definitions at content-build time and registered by EncounterCatalog.Build.
+    public IReadOnlyList<EncounterTriggerData> TriggeredEffects { get; }
+
     public EncounterDefinition(
         EncounterId id,
         IReadOnlyList<EncounterEnemy> enemies,
         IReadOnlyList<ResourceSpec>? heroResources = null,
         IReadOnlyList<StartingStatusSpec>? heroStartingStatuses = null,
         string? heroDisplayName = null,
-        int? cardsDrawnPerTurn = null)
+        int? cardsDrawnPerTurn = null,
+        IReadOnlyList<EncounterTriggerData>? triggeredEffects = null)
     {
         if (enemies is null || enemies.Count == 0)
             throw new ArgumentException("An encounter needs at least one enemy.", nameof(enemies));
@@ -107,6 +121,7 @@ public sealed class EncounterDefinition
         HeroStartingStatuses = heroStartingStatuses ?? Array.Empty<StartingStatusSpec>();
         HeroDisplayName = heroDisplayName;
         CardsDrawnPerTurn = cardsDrawnPerTurn;
+        TriggeredEffects = triggeredEffects ?? Array.Empty<EncounterTriggerData>();
     }
 }
 
@@ -118,14 +133,22 @@ public sealed class EncounterCatalog
     private readonly CombatContentLibrary _library;
     private readonly IReadOnlyDictionary<EncounterId, EncounterDefinition> _encounters;
     private readonly HashSet<CardDefinitionId> _cardIds;
+    // Live per-encounter triggered effects (rebuilt from EncounterDefinition.TriggeredEffects by the content
+    // builder). Keyed by encounter id; registered into that encounter's combat in Build. Empty when unused.
+    private readonly IReadOnlyDictionary<EncounterId, IReadOnlyList<ITriggeredEffectDefinition>> _encounterTriggers;
 
-    public EncounterCatalog(CombatContentLibrary library, IEnumerable<EncounterDefinition> encounters)
+    public EncounterCatalog(
+        CombatContentLibrary library,
+        IEnumerable<EncounterDefinition> encounters,
+        IReadOnlyDictionary<EncounterId, IReadOnlyList<ITriggeredEffectDefinition>>? encounterTriggers = null)
     {
         ArgumentNullException.ThrowIfNull(library);
         ArgumentNullException.ThrowIfNull(encounters);
         _library = library;
         _encounters = encounters.ToDictionary(encounter => encounter.Id);
         _cardIds = library.Cards.Select(card => new CardDefinitionId(card.Id)).ToHashSet();
+        _encounterTriggers = encounterTriggers
+            ?? new Dictionary<EncounterId, IReadOnlyList<ITriggeredEffectDefinition>>();
     }
 
     public bool Contains(EncounterId id) => _encounters.ContainsKey(id);
@@ -150,6 +173,9 @@ public sealed class EncounterCatalog
         foreach (var action in _library.EnemyActions) blueprint.EnemyActions.Add(action);
         foreach (var status in _library.Statuses) blueprint.Statuses.Add(status);
         foreach (var trigger in _library.TriggeredPrograms) blueprint.TriggeredPrograms.Add(trigger);
+        // Encounter-scoped cross-combatant triggers (enemy passives reacting to player actions), this fight only.
+        if (_encounterTriggers.TryGetValue(id, out var encounterTriggers))
+            foreach (var trigger in encounterTriggers) blueprint.TriggeredPrograms.Add(trigger);
         foreach (var interceptor in _library.PreDownInterceptors) blueprint.PreDownInterceptors.Add(interceptor);
         foreach (var interceptor in _library.StatusApplicationInterceptors) blueprint.StatusApplicationInterceptors.Add(interceptor);
 

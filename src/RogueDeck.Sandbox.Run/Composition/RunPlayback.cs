@@ -291,7 +291,8 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
                 .Select(r => new ResourceRefillSpec(new ResourceId(r.Id), r.Max)).ToArray());
 
         var builder = new RunContentRegistryBuilder()
-            .SetEncounters(new EncounterCatalog(library, blueprint.Encounters));
+            .SetEncounters(new EncounterCatalog(
+                library, blueprint.Encounters, RebuildEncounterTriggers(blueprint.Encounters)));
         RegisterRelics(builder, blueprint.Relics);
         foreach (var consumable in blueprint.Consumables)
             builder.RegisterConsumable(consumable.ToDefinition());
@@ -324,6 +325,25 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
                 builder.RegisterRelic(relic.ToDefinition());
         if (ids.Add("bloodstone")) builder.RegisterRelic(StandardRelics.Bloodstone());
         if (ids.Add("leech")) builder.RegisterRelic(StandardRelics.Leech());
+    }
+
+    // Rebuild each encounter's serialized cross-combatant triggers into live definitions, keyed by encounter id
+    // so EncounterCatalog registers them only into that encounter's combat. Encounters without triggers are
+    // omitted from the map (no per-fight cost).
+    private static IReadOnlyDictionary<EncounterId, IReadOnlyList<ITriggeredEffectDefinition>> RebuildEncounterTriggers(
+        IReadOnlyList<EncounterDefinition> encounters)
+    {
+        var map = new Dictionary<EncounterId, IReadOnlyList<ITriggeredEffectDefinition>>();
+        foreach (var encounter in encounters)
+        {
+            if (encounter.TriggeredEffects.Count == 0)
+                continue;
+            var triggers = new List<ITriggeredEffectDefinition>();
+            for (var i = 0; i < encounter.TriggeredEffects.Count; i++)
+                triggers.Add(EncounterTriggerRebuild.Rebuild(encounter.Id.Value, i, encounter.TriggeredEffects[i]));
+            map[encounter.Id] = triggers;
+        }
+        return map;
     }
 
     // Rebuild every status' serialized triggers into live triggered-effect definitions (data→engine, via
