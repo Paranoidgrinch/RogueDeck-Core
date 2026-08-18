@@ -135,6 +135,9 @@ public static class RunJson
          .Register("intent.round", typeof(RoundCondition))
          .Register("intent.selfHasStatus", typeof(SelfHasStatusCondition))
          .Register("intent.opponentHasStatus", typeof(OpponentHasStatusCondition))
+         .Register("intent.selfHasCounter", typeof(SelfHasCounterCondition))
+         .Register("intent.selfResource", typeof(SelfResourceCondition))
+         .Register("intent.opponentCardsPlayed", typeof(OpponentCardsPlayedCondition))
          .Register("intent.allOf", typeof(AllOfCondition))
          .Register("intent.anyOf", typeof(AnyOfCondition))
          .Register("intent.not", typeof(NotCondition));

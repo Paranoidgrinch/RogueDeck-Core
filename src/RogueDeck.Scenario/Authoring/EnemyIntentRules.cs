@@ -78,6 +78,50 @@ public sealed record OpponentHasStatusCondition(StatusDefinitionId Status, int M
     }
 }
 
+// The acting enemy's own per-fight counter compared against Value. This is the key enabler for
+// one-shot intent OVERRIDES and non-HP PHASES/ORBITS: a triggered effect bumps a counter (e.g. a
+// "pending transition" flag when a track fills, or an orbit counter each round), a high-priority intent
+// rule fires the special/transition action while the counter matches, and that action resets the counter.
+public sealed record SelfHasCounterCondition(CounterId Counter, ComparisonOperator Op, int Value) : EnemyIntentCondition
+{
+    public override bool Matches(CombatState state, CombatantId self)
+    {
+        if (!state.TryGetCombatant(self, out var c) || c is null)
+            return false;
+        return Compare(c.GetCounter(Counter), Value, Op);
+    }
+}
+
+// The acting enemy's current amount of a resource pool compared against Value ("if my Ink ≥ 3 → …").
+public sealed record SelfResourceCondition(ResourceId Resource, ComparisonOperator Op, int Value) : EnemyIntentCondition
+{
+    public override bool Matches(CombatState state, CombatantId self)
+    {
+        if (!state.TryGetCombatant(self, out var c) || c is null)
+            return false;
+        var current = c.Resources.TryGetValue(Resource, out var pool) ? pool.Current : 0;
+        return Compare(current, Value, Op);
+    }
+}
+
+// How many cards the opposing side played on its previous / current turn, compared against Value. Lets an
+// enemy telegraph a response to the player's tempo ("if you played ≥3 cards last turn → Everyone Moves at
+// Once"). Reads the first opposing combatant's card-play stats (the player in a solo fight).
+public sealed record OpponentCardsPlayedCondition(ComparisonOperator Op, int Value, bool LastTurn = true) : EnemyIntentCondition
+{
+    public override bool Matches(CombatState state, CombatantId self)
+    {
+        if (!state.TryGetCombatant(self, out var me) || me is null)
+            return false;
+        var opponent = state.Combatants.FirstOrDefault(c => c.TeamId != me.TeamId);
+        if (opponent is null)
+            return false;
+        var stats = state.GetCardPlayTurnStats(opponent.Id);
+        var count = LastTurn ? stats.CardsPlayedLastTurn : stats.CardsPlayedThisTurn;
+        return Compare(count, Value, Op);
+    }
+}
+
 // True iff every child condition matches (logical AND; empty ⇒ true).
 public sealed record AllOfCondition(IReadOnlyList<EnemyIntentCondition> Conditions) : EnemyIntentCondition
 {
