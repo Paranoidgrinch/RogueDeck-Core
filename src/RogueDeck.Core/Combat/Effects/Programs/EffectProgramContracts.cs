@@ -337,6 +337,18 @@ public interface IMarkCardInstanceNodeCore : INativeEffectOperationNode
     Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(MarkCardInstanceEffectRequest);
 }
 
+// Sets or adjusts a per-instance mark COUNTER on a selected card — e.g. a Reference's remaining strength, or
+// the two reserved output-scale counters that realise Redacted. Value comes from an int expression.
+public interface ISetCardInstanceMarkCounterNodeCore : INativeEffectOperationNode
+{
+    ICombatantTargetSelector OwnerSelector { get; }
+    CounterId Counter { get; }
+    bool Relative { get; }
+    CardInstanceId? EvaluateCardInstanceId(IEffectExecutionContextCore ctx, CombatState combat);
+    int EvaluateValue(IEffectExecutionContextCore ctx, CombatState combat);
+    Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(SetCardInstanceMarkCounterEffectRequest);
+}
+
 public interface IModifyStatusStacksNodeCore : INativeEffectOperationNode
 {
     ICombatantTargetSelector TargetSelector { get; }

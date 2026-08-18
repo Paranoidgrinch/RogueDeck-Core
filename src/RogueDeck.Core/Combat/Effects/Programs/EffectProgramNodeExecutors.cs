@@ -69,6 +69,7 @@ public sealed class EffectNodeExecutorRegistry
         r.RegisterOpenGeneric(typeof(StealSelectedStatusNode<>), new StealSelectedStatusNodeExecutor());
         r.RegisterOpenGeneric(typeof(SetCombatantCounterNode<>), new SetCombatantCounterNodeExecutor());
         r.RegisterOpenGeneric(typeof(MarkCardInstanceNode<>), new MarkCardInstanceNodeExecutor());
+        r.RegisterOpenGeneric(typeof(SetCardInstanceMarkCounterNode<>), new SetCardInstanceMarkCounterNodeExecutor());
         r.RegisterOpenGeneric(typeof(RemoveStatusesByPolarityNode<>), new RemoveStatusesByPolarityNodeExecutor());
         r.RegisterOpenGeneric(typeof(ModifyStatusStacksNode<>), new ModifyStatusStacksNodeExecutor());
         r.RegisterOpenGeneric(typeof(ModifyStatusDurationNode<>), new ModifyStatusDurationNodeExecutor());
@@ -962,6 +963,31 @@ internal sealed class MarkCardInstanceNodeExecutor : IEffectNodeExecutor
                     Remove: typed.Remove,
                     Source: source));
             }
+        }
+
+        if (onComplete is not null)
+            combat.EnqueueContinuation(onComplete);
+    }
+}
+
+internal sealed class SetCardInstanceMarkCounterNodeExecutor : IEffectNodeExecutor
+{
+    public void Execute(IEffectNode node, IEffectExecutionContextCore ctx, CombatState combat,
+        Action<CombatState>? onComplete, Action<IEffectNode, CombatState, Action<CombatState>?> dispatch)
+    {
+        var typed = (ISetCardInstanceMarkCounterNodeCore)node;
+        var cardInstId = typed.EvaluateCardInstanceId(ctx, combat);
+
+        if (cardInstId is { } id)
+        {
+            var owner = typed.OwnerSelector.ResolveTargetsTraced(ctx, combat).FirstOrDefault();
+            if (owner != default)
+                combat.EnqueueEffect(new SetCardInstanceMarkCounterEffectRequest(
+                    CombatantId: owner,
+                    CardInstanceId: id,
+                    Counter: typed.Counter,
+                    Value: typed.EvaluateValue(ctx, combat),
+                    Relative: typed.Relative));
         }
 
         if (onComplete is not null)

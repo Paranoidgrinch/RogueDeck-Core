@@ -258,6 +258,7 @@ public static class CombatJson
          .Register("node.stealSelectedStatus", typeof(StealSelectedStatusNode<>))
          .Register("node.setCombatantCounter", typeof(SetCombatantCounterNode<>))
          .Register("node.markCardInstance", typeof(MarkCardInstanceNode<>))
+         .Register("node.setCardInstanceMarkCounter", typeof(SetCardInstanceMarkCounterNode<>))
          .Register("node.modifyStatusStacks", typeof(ModifyStatusStacksNode<>))
          .Register("node.modifyStatusDuration", typeof(ModifyStatusDurationNode<>))
          .Register("node.modifyStatusCharges", typeof(ModifyStatusChargesNode<>))

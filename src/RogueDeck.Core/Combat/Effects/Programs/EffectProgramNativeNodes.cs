@@ -1269,6 +1269,45 @@ public sealed class MarkCardInstanceNode<TContext> : IMarkCardInstanceNodeCore, 
         CardExpression.Evaluate((EffectExecutionContext<TContext>)ctx, combat);
 }
 
+// Sets/adjusts a per-instance mark counter on a selected card. Value from an int expression.
+public sealed class SetCardInstanceMarkCounterNode<TContext> : ISetCardInstanceMarkCounterNodeCore, IEffectNode<TContext>
+    where TContext : class
+{
+    public ICombatantTargetSelector OwnerSelector { get; }
+    public ICardInstanceExpression<TContext> CardExpression { get; }
+    public CounterId Counter { get; }
+    public ICombatExpression<TContext, int> Value { get; }
+    public bool Relative { get; }
+
+    public IReadOnlyList<IEffectNode<TContext>> Children => [];
+    public IEnumerable<ICombatantTargetSelector> GetTargetSelectors() => [OwnerSelector];
+
+    public SetCardInstanceMarkCounterNode(
+        ICombatantTargetSelector ownerSelector,
+        ICardInstanceExpression<TContext> cardExpression,
+        CounterId counter,
+        ICombatExpression<TContext, int> value,
+        bool relative = false)
+    {
+        ArgumentNullException.ThrowIfNull(ownerSelector);
+        ArgumentNullException.ThrowIfNull(cardExpression);
+        ArgumentNullException.ThrowIfNull(value);
+        OwnerSelector = ownerSelector;
+        CardExpression = cardExpression;
+        Counter = counter;
+        Value = value;
+        Relative = relative;
+    }
+
+    public IEnumerable<IResultKeyConsumer> GetExpressionConsumers() => Value.GetAllConsumers();
+
+    CardInstanceId? ISetCardInstanceMarkCounterNodeCore.EvaluateCardInstanceId(IEffectExecutionContextCore ctx, CombatState combat) =>
+        CardExpression.Evaluate((EffectExecutionContext<TContext>)ctx, combat);
+
+    int ISetCardInstanceMarkCounterNodeCore.EvaluateValue(IEffectExecutionContextCore ctx, CombatState combat) =>
+        Value.Evaluate((EffectExecutionContext<TContext>)ctx, combat);
+}
+
 // ── SetCombatResultNode ───────────────────────────────────────────────────────
 
 public interface ISetCombatResultNodeCore : INativeEffectOperationNode
