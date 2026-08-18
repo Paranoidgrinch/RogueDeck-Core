@@ -1,5 +1,19 @@
 # Bureaucrats & Broomsticks — Enemy/Elite/Boss Mechanics: Engine Audit & Minimal-Change Plan
 
+> **STATUS 2026-08-18 — engine work COMPLETE (Phases 1–6), pushed to `origin/main`.**
+> The engine can now represent every mechanic family in the Standard/Elite/Boss master pools.
+> All suites green (Core 1401 / Scenario 684 / Run 441 / Sandbox 291). Remaining: **Phase 7**
+> (expose the new nodes/expressions/intent-conditions in the Studio *visual* authoring palette —
+> a UI batch; the B&B converter path already works via raw EffectProgram JSON / CombatJson).
+>
+> Delivered primitives: per-instance **card marks** (tags/counters/source) + mark ops/expressions;
+> **Redacted** one-shot output scaling (both card-play paths); **card-play ordering** stats
+> (opening type + previous-turn snapshot); **source-scoped status stacks**; richer **intent
+> conditions** (self counter / self resource / opponent tempo); **owner-scoped** + **marked-card**
+> card selectors (enemy → player card); **scalable card replay** (Returning Move / Lunar Echoes).
+> Prediction & Weighed compose on these — no extra engine. A real BuildContent wiring gap (package
+> executor registration) was caught by the Phase-5 torture test and fixed.
+
 **Date:** 2026-08-18
 **Source designs (canonical, Downloads):**
 - `..._Master_Standard_Encounter_Pools_Acts_I-IV_FINAL_AUDIT.md` — 110 identities / 162 encounters
