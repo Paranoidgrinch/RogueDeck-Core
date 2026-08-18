@@ -202,6 +202,11 @@ public sealed class StandardCombatPackage : ICombatPackage
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(TransformCardNode<>), new TransformCardNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(MarkCardInstanceNode<>), new MarkCardInstanceNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(SetCardInstanceMarkCounterNode<>), new SetCardInstanceMarkCounterNodeExecutor());
+        registry.RegisterEffectNodeExecutorOpenGeneric(typeof(SetCombatantCounterNode<>), new SetCombatantCounterNodeExecutor());
+        registry.RegisterEffectNodeExecutorOpenGeneric(typeof(RemoveSelectedStatusNode<>), new RemoveSelectedStatusNodeExecutor());
+        registry.RegisterEffectNodeExecutorOpenGeneric(typeof(ModifySelectedStatusStacksNode<>), new ModifySelectedStatusStacksNodeExecutor());
+        registry.RegisterEffectNodeExecutorOpenGeneric(typeof(ModifySelectedResourceNode<>), new ModifySelectedResourceNodeExecutor());
+        registry.RegisterEffectNodeExecutorOpenGeneric(typeof(StealSelectedStatusNode<>), new StealSelectedStatusNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(SetCombatResultNode<>), new SetCombatResultNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(PlayCardNode<>), new PlayCardNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(InstallTemporaryRuleNode<>), new InstallTemporaryRuleNodeExecutor());
