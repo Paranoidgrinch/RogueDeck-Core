@@ -587,7 +587,7 @@ internal sealed class DealDamageNodeExecutor : IEffectNodeExecutor
         Action<CombatState>? onComplete, Action<IEffectNode, CombatState, Action<CombatState>?> dispatch)
     {
         var typed = (IDealDamageNodeCore)node;
-        var amount = typed.EvaluateAmount(ctx, combat);
+        var amount = ctx.ScaleOutput(typed.EvaluateAmount(ctx, combat));
         var targetList = typed.TargetSelector.ResolveTargetsTraced(ctx, combat).ToList();
         var slots = typed.ResultKey is not null
             ? targetList.Select(_ => new DamageOutcomeSlot()).ToList()
@@ -629,7 +629,7 @@ internal sealed class HealNodeExecutor : IEffectNodeExecutor
         Action<CombatState>? onComplete, Action<IEffectNode, CombatState, Action<CombatState>?> dispatch)
     {
         var typed = (IHealNodeCore)node;
-        var amount = typed.EvaluateAmount(ctx, combat);
+        var amount = ctx.ScaleOutput(typed.EvaluateAmount(ctx, combat));
         var targetList = typed.TargetSelector.ResolveTargetsTraced(ctx, combat).ToList();
         var slots = typed.ResultKey is not null
             ? targetList.Select(_ => new HealOutcomeSlot()).ToList()
@@ -749,7 +749,7 @@ internal sealed class GainBlockNodeExecutor : IEffectNodeExecutor
         Action<CombatState>? onComplete, Action<IEffectNode, CombatState, Action<CombatState>?> dispatch)
     {
         var typed = (IGainBlockNodeCore)node;
-        var amount = typed.EvaluateAmount(ctx, combat);
+        var amount = ctx.ScaleOutput(typed.EvaluateAmount(ctx, combat));
         var targetList = typed.TargetSelector.ResolveTargetsTraced(ctx, combat).ToList();
 
         foreach (var targetId in targetList)
@@ -806,7 +806,7 @@ internal sealed class GainResourceNodeExecutor : IEffectNodeExecutor
         Action<CombatState>? onComplete, Action<IEffectNode, CombatState, Action<CombatState>?> dispatch)
     {
         var typed = (IGainResourceNodeCore)node;
-        var amount = typed.EvaluateAmount(ctx, combat);
+        var amount = ctx.ScaleOutput(typed.EvaluateAmount(ctx, combat));
         var targetList = typed.TargetSelector.ResolveTargetsTraced(ctx, combat).ToList();
         var slots = typed.ResultKey is not null
             ? targetList.Select(_ => new GainResourceOutcomeSlot()).ToList()
@@ -884,7 +884,7 @@ internal sealed class ApplyStatusNodeExecutor : IEffectNodeExecutor
         Action<CombatState>? onComplete, Action<IEffectNode, CombatState, Action<CombatState>?> dispatch)
     {
         var typed = (IApplyStatusNodeCore)node;
-        var stacks = typed.EvaluateStacks(ctx, combat);
+        var stacks = ctx.ScaleOutput(typed.EvaluateStacks(ctx, combat));
         var targetList = typed.TargetSelector.ResolveTargetsTraced(ctx, combat).ToList();
         var slots = typed.ResultKey is not null
             ? targetList.Select(_ => new ApplyStatusOutcomeSlot()).ToList()
@@ -1250,7 +1250,7 @@ internal sealed class DrawCardsNodeExecutor : IEffectNodeExecutor
         Action<CombatState>? onComplete, Action<IEffectNode, CombatState, Action<CombatState>?> dispatch)
     {
         var typed = (IDrawCardsNodeCore)node;
-        var count = typed.EvaluateCount(ctx, combat);
+        var count = ctx.ScaleOutput(typed.EvaluateCount(ctx, combat));
         var targetList = typed.TargetSelector.ResolveTargetsTraced(ctx, combat).ToList();
         var slots = typed.ResultKey is not null
             ? targetList.Select(_ => new DrawCardsOutcomeSlot()).ToList()

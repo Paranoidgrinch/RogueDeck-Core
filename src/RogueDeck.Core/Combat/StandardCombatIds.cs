@@ -72,6 +72,14 @@ public static class StandardCombatIds
     // shuffle-free opening draw), so the first turn's draw always includes it. Purely a setup ordering, so it needs
     // no runtime hook. Authored like any tag (CardData.Tags).
     public static readonly TagId InnateTag = new("innate");
+
+    // Reserved per-instance mark counters that scale a card's NEXT play output (the engine substrate for
+    // Redacted). When a card instance carries both, the card-play pipeline installs OutputScale = Num/Den on
+    // the play's execution context (halving = 1/2), scaling the card's own damage/Block/heal/draw/energy/status
+    // output, then consumes (clears) both counters — a one-shot reduction. Content sets them with the ordinary
+    // SetCardInstanceMarkCounter op; nothing else in the engine attaches meaning to these counter ids.
+    public static readonly CounterId CardOutputScaleNumeratorCounter = new("standard.card_output_scale_num");
+    public static readonly CounterId CardOutputScaleDenominatorCounter = new("standard.card_output_scale_den");
 }
 
 

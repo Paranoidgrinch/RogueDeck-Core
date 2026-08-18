@@ -390,6 +390,18 @@ public interface IEffectExecutionContextCore
 
     CombatantTargetSelectionContext GetTargetSelectionContext();
     TriggeredEffectActionBuildContext GetBuildContextWithIterationTarget();
+
+    // ── Output scaling ────────────────────────────────────────────────────────
+    // A fractional scale applied to the numeric OUTPUTS produced by THIS program's own nodes — damage,
+    // Block, healing, draw count, energy gain, status stacks. Defaults to 1/1 (no scaling). The card-play
+    // pipeline sets it when the played card instance carries a next-play output-scale mark (the engine
+    // substrate for Redacted = halve next play, 1/2). It scales only positive amounts and only downward;
+    // it never touches cost, hit count, target count, or movement. Reactions triggered by these outputs
+    // run in their OWN execution contexts (scale 1/1), so a debuff-on-damage reaction is never scaled.
+    int OutputScaleNumerator { get; }
+    int OutputScaleDenominator { get; }
+    void SetOutputScale(int numerator, int denominator);
+    int ScaleOutput(int amount);
 }
 
 // ── Per-execution mutable context ─────────────────────────────────────────────
@@ -413,6 +425,30 @@ public sealed class EffectExecutionContext<TContext> : IEffectExecutionContextCo
 
     public TContext SourceContext { get; }
     public TriggeredEffectActionBuildContext BuildContext { get; }
+
+    // Output scale (see IEffectExecutionContextCore). 1/1 = identity; the card-play pipeline may narrow it.
+    public int OutputScaleNumerator { get; private set; } = 1;
+    public int OutputScaleDenominator { get; private set; } = 1;
+
+    public void SetOutputScale(int numerator, int denominator)
+    {
+        if (denominator <= 0)
+            throw new ArgumentOutOfRangeException(nameof(denominator), "Output scale denominator must be positive.");
+        if (numerator < 0)
+            throw new ArgumentOutOfRangeException(nameof(numerator), "Output scale numerator cannot be negative.");
+        OutputScaleNumerator = numerator;
+        OutputScaleDenominator = denominator;
+    }
+
+    // Scales a produced output amount by the current fraction, rounding DOWN, but only when the scale
+    // actually reduces (num < den) and the amount is positive. Identity otherwise, so every output node can
+    // call this unconditionally and pay nothing outside a scaled card play.
+    public int ScaleOutput(int amount)
+    {
+        if (amount <= 0 || OutputScaleNumerator >= OutputScaleDenominator)
+            return amount;
+        return (int)((long)amount * OutputScaleNumerator / OutputScaleDenominator);
+    }
 
     // Lexical iteration-target stack: the innermost open ForEach/aggregate scope is the top.
     // Inner scopes shadow outer ones; closing a scope (pop) restores the parent target.

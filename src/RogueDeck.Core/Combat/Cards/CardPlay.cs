@@ -138,8 +138,30 @@ public sealed class CombatCardPlayProcessor
                 TargetCombatantId: targetCombatantId,
                 CardInstanceId: cardInstanceId));
 
+        // Redacted substrate: if the played instance carries a next-play output-scale mark, read + consume it
+        // ONCE here (a one-shot reduction), then apply the fraction to BOTH card execution paths — the legacy
+        // effect-request list (below) and the on-play Program (via its execution context). It narrows only
+        // player-facing output (damage/Block/heal/draw/energy/status), never cost/hit-count/target-count.
+        var scaleNum = 1;
+        var scaleDen = 1;
+        if (cardInstanceId is { } scaleInstanceId)
+        {
+            var playedCard = combat.GetCardZones(source.Id).GetCard(scaleInstanceId);
+            var den = playedCard.GetMarkCounter(StandardCombatIds.CardOutputScaleDenominatorCounter);
+            if (den > 0)
+            {
+                scaleNum = playedCard.GetMarkCounter(StandardCombatIds.CardOutputScaleNumeratorCounter);
+                scaleDen = den;
+                playedCard.SetMarkCounter(StandardCombatIds.CardOutputScaleNumeratorCounter, 0);
+                playedCard.SetMarkCounter(StandardCombatIds.CardOutputScaleDenominatorCounter, 0);
+            }
+        }
+        var outputScaled = scaleNum < scaleDen;
+
         foreach (var effectRequest in effectRequests)
-            combat.EnqueueEffect(effectRequest);
+            combat.EnqueueEffect(outputScaled
+                ? CardOutputScaling.ScaleRequest(effectRequest, scaleNum, scaleDen)
+                : effectRequest);
 
         if (card.Program is { } program)
         {
@@ -186,8 +208,14 @@ public sealed class CombatCardPlayProcessor
                 };
             }
 
+            var executionContext = new EffectExecutionContext<CardPlayContext>(
+                new CardPlayContext(card, cardInstanceId), buildContext);
+
+            if (outputScaled)
+                executionContext.SetOutputScale(scaleNum, scaleDen);
+
             EffectProgramExecutor.Execute(
-                program, new CardPlayContext(card, cardInstanceId), buildContext, combat,
+                program, executionContext, combat,
                 onComplete: null,
                 registry: registry.EffectNodeExecutors,
                 onTerminal: onTerminal);
