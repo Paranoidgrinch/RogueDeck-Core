@@ -88,11 +88,21 @@ public sealed record PassiveModifierSpec(
     // Damage pipelines only: when set, the spec applies only to damage of this element (fire/ice/…). This
     // is how a status expresses elemental resistance (ScalePercent 50 for Fire) or weakness (ScalePercent
     // 200). Null (default) = element-agnostic, so existing specs apply to all damage incl. untyped.
-    ElementId? RestrictElement = null);
+    ElementId? RestrictElement = null,
+    // Damage pipelines only: when set, the spec applies only to damage whose SOURCE CARD carries this tag —
+    // "I take 4 less from attacks", "spells hurt me more". Damage from an enemy action or from a card without
+    // the tag is untouched. Null (default) = card-agnostic, so existing specs are unaffected.
+    TagId? RestrictSourceCardTag = null);
 
 // Shared fold used by every generic declarative modifier.
 internal static class DeclarativePassiveModifierEngine
 {
+    private static bool SourceCardHasTag(
+        CombatDefinitionRegistry registry, CardDefinitionId? sourceCardId, TagId tag) =>
+        sourceCardId is { } cardId
+        && registry.CardDefinitions.TryGetValue(cardId, out var card)
+        && card.Tags.Contains(tag);
+
     public static int Apply(
         CombatState combat,
         CombatDefinitionRegistry registry,
@@ -101,7 +111,8 @@ internal static class DeclarativePassiveModifierEngine
         DamageKind? damageKind,
         int amount,
         StatusDefinitionId? appliesToStatusId = null,
-        ElementId? damageElement = null)
+        ElementId? damageElement = null,
+        CardDefinitionId? damageSourceCardId = null)
     {
         // Legacy bespoke modifiers all no-op at non-positive amounts; preserve that.
         if (amount <= 0)
@@ -130,6 +141,10 @@ internal static class DeclarativePassiveModifierEngine
                 // Element gate: an element-restricted spec applies only to damage of that element (so untyped
                 // damage, or another element, is never scaled by a resistance/weakness meant for this one).
                 if (spec.RestrictElement is { } specElement && specElement != damageElement)
+                    continue;
+                // Source-card gate: only damage dealt by a card carrying that tag counts. No card (an enemy
+                // action, a status tick) never matches, which is what "from attacks" means.
+                if (spec.RestrictSourceCardTag is { } specTag && !SourceCardHasTag(registry, damageSourceCardId, specTag))
                     continue;
                 applicable.Add((spec.Priority, group.Key.value, i, spec, totalStacks));
             }
@@ -198,7 +213,7 @@ public sealed class DeclarativePassiveDamageModifier : IDamageAmountModifier
 
         return DeclarativePassiveModifierEngine.Apply(
             context.Combat, context.Registry, combatant, _pipeline, context.Kind, currentAmount,
-            damageElement: context.Element);
+            damageElement: context.Element, damageSourceCardId: context.SourceCardId);
     }
 }
 

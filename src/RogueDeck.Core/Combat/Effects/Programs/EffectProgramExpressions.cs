@@ -1840,6 +1840,32 @@ public sealed class IteratedCardExpression<TContext>
 
 // The card instance carried by a CardPlayed trigger's event — the card whose play fired the trigger
 // (unlike PlayedCardInstance, which reads the in-flight card during a card's own on-play program).
+// True when the card that CAUSED the triggering event carries the given tag — "was that hit an attack card?".
+// Reads the damage event's source card definition (a hit from an enemy action or a status tick has none, and
+// is therefore never a match). Data-only, like EventAmountExpression, so it works in any damage context.
+public sealed class TriggerEventSourceCardHasTagExpression<TContext> : ICombatExpression<TContext, bool>
+    where TContext : class
+{
+    public TagId Tag { get; }
+
+    public TriggerEventSourceCardHasTagExpression(TagId tag) => Tag = tag;
+
+    public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        var cardId = context.SourceContext switch
+        {
+            DamageReceivedTriggeredEffectContext received => received.CombatEvent.SourceCardId,
+            DamageDealtTriggeredEffectContext dealt => dealt.CombatEvent.SourceCardId,
+            _ => null,
+        };
+
+        return cardId is { } id
+            && combat.DefinitionRegistry is { } registry
+            && registry.CardDefinitions.TryGetValue(id, out var card)
+            && card.Tags.Contains(Tag);
+    }
+}
+
 public sealed class TriggerEventCardInstanceExpression<TContext>
     : ICardInstanceExpression<TContext>
     where TContext : class

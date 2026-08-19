@@ -102,13 +102,17 @@ public sealed record PassiveModifierData(
     int Magnitude,
     int Priority = 100,
     DamageKind? RestrictDamageKind = DamageKind.Direct,
-    string? AppliesToStatusId = null)
+    string? AppliesToStatusId = null,
+    // Damage pipelines only: restrict the spec to damage dealt by a card carrying this tag ("4 less from
+    // attacks"). Null = card-agnostic, as before.
+    string? RestrictSourceCardTag = null)
 {
     public static PassiveModifierData From(PassiveModifierSpec spec) => new(
         spec.Pipeline, spec.Operation, spec.Magnitude, spec.Priority, spec.RestrictDamageKind,
-        spec.AppliesToStatusId?.value);
+        spec.AppliesToStatusId?.value, spec.RestrictSourceCardTag?.value);
 
     public PassiveModifierSpec ToSpec() => new(
         Pipeline, Operation, Magnitude, Priority, RestrictDamageKind,
-        AppliesToStatusId is null ? null : new StatusDefinitionId(AppliesToStatusId));
+        AppliesToStatusId is null ? null : new StatusDefinitionId(AppliesToStatusId),
+        RestrictSourceCardTag: RestrictSourceCardTag is null ? null : new TagId(RestrictSourceCardTag));
 }
