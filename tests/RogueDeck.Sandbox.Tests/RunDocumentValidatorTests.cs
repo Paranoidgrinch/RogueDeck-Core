@@ -427,6 +427,35 @@ public class RunDocumentValidatorTests
         Assert.Empty(RunDocumentValidator.ValidateForExport(Generated()));
     }
 
+    // MultiCombat and Mimic are FIGHTS: they draw from the encounter pools like Combat, and asking them for a
+    // node ref would reject a perfectly good act (the Mimic role appears as soon as treasure can bite).
+    [Fact]
+    public void The_export_gate_accepts_multi_combat_and_mimic_backed_by_encounter_pools()
+    {
+        var bp = Generated();
+        bp = bp with
+        {
+            MapGeneration = bp.MapGeneration! with
+            {
+                PerPathMinimums = new Dictionary<MapNodeKind, int> { [MapNodeKind.MultiCombat] = 1 },
+                TreasureMimicChancePercent = 10,
+                Encounters = new EncounterDistribution
+                {
+                    ByRole = new Dictionary<MapNodeKind, IReadOnlyList<EncounterPoolEntry>>
+                    {
+                        [MapNodeKind.Combat] = new[] { new EncounterPoolEntry(new EncounterId("fight")) },
+                        [MapNodeKind.MultiCombat] = new[] { new EncounterPoolEntry(new EncounterId("fight")) },
+                        [MapNodeKind.Boss] = new[] { new EncounterPoolEntry(new EncounterId("fight")) },
+                        [MapNodeKind.Mimic] = new[] { new EncounterPoolEntry(new EncounterId("fight")) },
+                    },
+                },
+            },
+        };
+
+        Assert.DoesNotContain(RunDocumentValidator.ValidateForExport(bp),
+            p => p.StartsWith("Map Rules:", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void The_export_gate_blocks_a_generation_role_with_no_resolvable_content()
     {

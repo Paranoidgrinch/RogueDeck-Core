@@ -308,7 +308,11 @@ public static class RunDocumentValidator
 
         foreach (var kind in appearing)
         {
-            if (kind is MapNodeKind.Combat or MapNodeKind.Elite or MapNodeKind.Boss)
+            // Every combat-flavoured role is backed by an ENCOUNTER pool, not by an authored node ref —
+            // MultiCombat (the guaranteed multi-enemy fight) and Mimic (a treasure that turned out to bite)
+            // included.
+            if (kind is MapNodeKind.Combat or MapNodeKind.MultiCombat or MapNodeKind.Elite or MapNodeKind.Boss
+                or MapNodeKind.Mimic)
             {
                 var candidates = spec.Encounters.For(kind);
                 if (candidates.Count == 0)

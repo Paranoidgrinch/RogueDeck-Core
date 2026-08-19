@@ -102,6 +102,10 @@ public sealed record MapGenerationSpec
         foreach (var (kind, weight) in KindWeights)
             if (weight > 0)
                 kinds.Add(kind);
+        // A treasure that can flip into a mimic makes that role appear too — it draws an encounter like any
+        // other fight, and a spec without candidates for it would only fail once a run rolled one.
+        if (TreasureMimicChancePercent > 0)
+            kinds.Add(MapNodeKind.Mimic);
         return kinds;
     }
 
