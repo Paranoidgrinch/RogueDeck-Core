@@ -87,6 +87,18 @@ public sealed record CardsDrawnCardCountAmount
     }
 }
 
+// Bearer filter for a status trigger: only the drawing combatant's own statuses may react to its draw.
+public sealed record CardsDrawnSourceHasStatusTriggerFilter(StatusDefinitionId StatusDefinitionId)
+    : ITriggeredProgramFilter<CardsDrawnTriggeredEffectContext>
+{
+    public bool Matches(CardsDrawnTriggeredEffectContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        return context.Source.Statuses.Any(status => status.DefinitionId == StatusDefinitionId);
+    }
+}
+
 public sealed record CardsDrawnCardDefinitionTriggerFilter(CardDefinitionId CardDefinitionId)
     : ITriggeredProgramFilter<CardsDrawnTriggeredEffectContext>
 {

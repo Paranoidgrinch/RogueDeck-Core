@@ -57,6 +57,9 @@ public static class StatusDataRebuild
             TriggerEvent.BlockGained => TriggeredProgramContextAdapters.BlockGained.Define(
                 id, Program<BlockGainedTriggeredEffectContext>(data),
                 filters: [new BlockGainedTargetHasStatusTriggerFilter(statusId)]),
+            TriggerEvent.CardsDrawn => TriggeredProgramContextAdapters.CardsDrawn.Define(
+                id, Program<CardsDrawnTriggeredEffectContext>(data),
+                filters: [new CardsDrawnSourceHasStatusTriggerFilter(statusId)]),
             TriggerEvent.RoundStarted => TriggeredProgramContextAdapters.RoundStarted.Define(
                 id, Program<RoundStartedTriggeredEffectContext>(data)),
             TriggerEvent.RoundEnded => TriggeredProgramContextAdapters.RoundEnded.Define(

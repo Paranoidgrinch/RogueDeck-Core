@@ -308,6 +308,7 @@ public static class StudioVocabulary
         ["TriggerEvent.StatusMerged"] = "a status merges on the bearer",
         ["TriggerEvent.StatusStacksChanged"] = "a status on the bearer is adjusted up or down",
         ["TriggerEvent.BlockGained"] = "the bearer gains Block",
+        ["TriggerEvent.CardsDrawn"] = "the bearer draws cards",
         ["TriggerEvent.RoundStarted"] = "a round starts",
         ["TriggerEvent.RoundEnded"] = "a round ends",
         ["EffectTarget.Target"] = "the event's target",

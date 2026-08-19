@@ -56,6 +56,7 @@ public static class StatusTriggerPrograms
             [TriggerEvent.StatusMerged] = For<StatusMergedTriggeredEffectContext>(),
             [TriggerEvent.StatusStacksChanged] = For<StatusStacksChangedTriggeredEffectContext>(),
             [TriggerEvent.BlockGained] = For<BlockGainedTriggeredEffectContext>(),
+            [TriggerEvent.CardsDrawn] = For<CardsDrawnTriggeredEffectContext>(),
             [TriggerEvent.RoundStarted] = For<RoundStartedTriggeredEffectContext>(),
             [TriggerEvent.RoundEnded] = For<RoundEndedTriggeredEffectContext>(),
         };
