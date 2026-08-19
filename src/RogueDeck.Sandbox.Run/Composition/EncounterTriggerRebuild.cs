@@ -44,6 +44,8 @@ public static class EncounterTriggerRebuild
                 id, Program<StatusRemovedTriggeredEffectContext>(data)),
             TriggerEvent.StatusMerged => TriggeredProgramContextAdapters.StatusMerged.Define(
                 id, Program<StatusMergedTriggeredEffectContext>(data)),
+            TriggerEvent.StatusStacksChanged => TriggeredProgramContextAdapters.StatusStacksChanged.Define(
+                id, Program<StatusStacksChangedTriggeredEffectContext>(data)),
             TriggerEvent.RoundStarted => TriggeredProgramContextAdapters.RoundStarted.Define(
                 id, Program<RoundStartedTriggeredEffectContext>(data)),
             TriggerEvent.RoundEnded => TriggeredProgramContextAdapters.RoundEnded.Define(

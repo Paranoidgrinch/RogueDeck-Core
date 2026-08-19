@@ -305,6 +305,7 @@ public static class StudioVocabulary
         ["TriggerEvent.StatusApplied"] = "the bearer gains another status",
         ["TriggerEvent.StatusRemoved"] = "a status is removed from the bearer",
         ["TriggerEvent.StatusMerged"] = "a status merges on the bearer",
+        ["TriggerEvent.StatusStacksChanged"] = "a status on the bearer is adjusted up or down",
         ["TriggerEvent.RoundStarted"] = "a round starts",
         ["TriggerEvent.RoundEnded"] = "a round ends",
         ["EffectTarget.Target"] = "the event's target",

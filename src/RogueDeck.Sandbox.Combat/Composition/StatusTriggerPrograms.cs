@@ -54,6 +54,7 @@ public static class StatusTriggerPrograms
             [TriggerEvent.StatusApplied] = For<StatusAppliedTriggeredEffectContext>(),
             [TriggerEvent.StatusRemoved] = For<StatusRemovedTriggeredEffectContext>(),
             [TriggerEvent.StatusMerged] = For<StatusMergedTriggeredEffectContext>(),
+            [TriggerEvent.StatusStacksChanged] = For<StatusStacksChangedTriggeredEffectContext>(),
             [TriggerEvent.RoundStarted] = For<RoundStartedTriggeredEffectContext>(),
             [TriggerEvent.RoundEnded] = For<RoundEndedTriggeredEffectContext>(),
         };

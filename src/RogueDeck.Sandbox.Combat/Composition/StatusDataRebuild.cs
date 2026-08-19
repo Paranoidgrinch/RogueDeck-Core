@@ -51,6 +51,9 @@ public static class StatusDataRebuild
                 id, Program<StatusRemovedTriggeredEffectContext>(data), filters: [new StatusRemovedTargetHasStatusTriggerFilter(statusId)]),
             TriggerEvent.StatusMerged => TriggeredProgramContextAdapters.StatusMerged.Define(
                 id, Program<StatusMergedTriggeredEffectContext>(data), filters: [new StatusMergedTargetHasStatusTriggerFilter(statusId)]),
+            TriggerEvent.StatusStacksChanged => TriggeredProgramContextAdapters.StatusStacksChanged.Define(
+                id, Program<StatusStacksChangedTriggeredEffectContext>(data),
+                filters: [new StatusStacksChangedTargetHasStatusTriggerFilter(statusId)]),
             TriggerEvent.RoundStarted => TriggeredProgramContextAdapters.RoundStarted.Define(
                 id, Program<RoundStartedTriggeredEffectContext>(data)),
             TriggerEvent.RoundEnded => TriggeredProgramContextAdapters.RoundEnded.Define(

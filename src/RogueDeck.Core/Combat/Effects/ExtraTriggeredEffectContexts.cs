@@ -94,6 +94,19 @@ public sealed record StatusStacksChangedDefinitionTriggerFilter(StatusDefinition
     }
 }
 
+// The owner-scoped counterpart (mirrors StatusRemovedTargetHasStatusTriggerFilter): the combatant whose stacks
+// moved must carry the status that owns the trigger. This is what makes "while I have fewer than N of X"
+// passives re-evaluate when something ADJUSTS a status instead of applying or removing it.
+public sealed record StatusStacksChangedTargetHasStatusTriggerFilter(StatusDefinitionId StatusDefinitionId)
+    : ITriggeredProgramFilter<StatusStacksChangedTriggeredEffectContext>
+{
+    public bool Matches(StatusStacksChangedTriggeredEffectContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return context.TargetCombatant.Statuses.Any(status => status.DefinitionId == StatusDefinitionId);
+    }
+}
+
 public static class StatusStacksChangedTriggeredEffectTargetResolver
 {
     public static TriggeredEffectActionBuildContext CreateActionBuildContext(
