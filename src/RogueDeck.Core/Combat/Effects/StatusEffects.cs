@@ -358,13 +358,45 @@ public sealed class DamageOverTimeOnTurnStartedHandler
                 continue;
 
             combat.EnqueueEffect(
-                new DealDamageEffectRequest(
+                new DamageOverTimeTickEffectRequest(
                     TargetCombatantId: combatEvent.CombatantId,
-                    Amount: status.Stacks,
-                    SourceCombatantId: status.SourceCombatantId,
-                    SourceCardId: status.SourceCardId,
-                    Kind: DamageKind.DamageOverTime));
+                    StatusInstanceId: status.Id));
         }
+    }
+}
+
+// One damage-over-time instance ticking at its bearer's turn start. The tick reads the instance's stacks
+// when it RESOLVES, not when it was queued: turn-start triggers run before this automation (see
+// TurnStartedEffectRecipeArchitectureTests) but their own work is queued too, so an "antidote" trigger that
+// removes stacks must shrink the very tick it precedes. A vanished or emptied instance ticks for nothing.
+public sealed record DamageOverTimeTickEffectRequest(
+    CombatantId TargetCombatantId,
+    StatusInstanceId StatusInstanceId) : IEffectRequest;
+
+public sealed class DamageOverTimeTickEffectHandler
+    : EffectRequestHandler<DamageOverTimeTickEffectRequest>
+{
+    protected override void Resolve(
+        CombatState combat,
+        CombatDefinitionRegistry registry,
+        DamageOverTimeTickEffectRequest tick)
+    {
+        if (!combat.TryGetCombatant(tick.TargetCombatantId, out var combatant))
+            return;
+
+        var status = combatant!.Statuses.FirstOrDefault(s => s.Id == tick.StatusInstanceId);
+        if (status is null
+            || status.Stacks <= 0
+            || !status.Tags.Contains(StandardCombatIds.DamageOverTimeTag))
+            return;
+
+        combat.EnqueueEffect(
+            new DealDamageEffectRequest(
+                TargetCombatantId: tick.TargetCombatantId,
+                Amount: status.Stacks,
+                SourceCombatantId: status.SourceCombatantId,
+                SourceCardId: status.SourceCardId,
+                Kind: DamageKind.DamageOverTime));
     }
 }
 

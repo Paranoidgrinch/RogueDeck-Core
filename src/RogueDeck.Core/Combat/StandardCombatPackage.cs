@@ -81,6 +81,7 @@ public sealed class StandardCombatPackage : ICombatPackage
         registry.RegisterEffectRequestHandler(new DecreaseStatusDurationEffectHandler());
         registry.RegisterEffectRequestHandler(new DecreaseStatusChargesEffectHandler());
         registry.RegisterEffectRequestHandler(new DealDamageEffectHandler());
+        registry.RegisterEffectRequestHandler(new DamageOverTimeTickEffectHandler());
         registry.RegisterEffectRequestHandler(new HealEffectHandler());
         registry.RegisterEffectRequestHandler(new ModifyMaxHealthEffectHandler());
         registry.RegisterEffectRequestHandler(new SetHealthEffectHandler());
