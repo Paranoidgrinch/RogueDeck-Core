@@ -109,7 +109,7 @@ public sealed record CombatSelectorSpec(
 public sealed record CombatConditionSpec(
     string Kind = "compare",                                   // compare | hasStatus | isAlive | downed | exists | advanced
     string SelectorKey = "source",                             // the inspected target
-    string ValueKind = "currentHealth",                        // compare left: currentHealth/maxHealth/missingHealth/healthPercentage/currentResource/statusStacks
+    string ValueKind = "currentHealth",                        // compare left: currentHealth/maxHealth/missingHealth/healthPercentage/currentResource/statusStacks/counter
     ComparisonOperator Op = ComparisonOperator.GreaterOrEqual,
     int Right = 1,
     string Id = "")                                            // statusId (hasStatus/statusStacks) or resourceId (currentResource)
@@ -970,6 +970,7 @@ public static class CombatProgramModel
             "healthPercentage" => new CombatantHealthPercentageExpression<TContext>(selector),
             "currentResource" => new CombatantCurrentResourceExpression<TContext>(selector, new ResourceId(id)),
             "statusStacks" => new CombatantStatusStacksExpression<TContext>(selector, new StatusDefinitionId(id)),
+            "counter" => new CombatantCounterExpression<TContext>(selector, new CounterId(id)),
             _ => new CombatantCurrentHealthExpression<TContext>(selector), // "currentHealth"
         };
 
@@ -983,6 +984,7 @@ public static class CombatProgramModel
             CombatantHealthPercentageExpression<TContext> e when KeyFor(e.Selector) is { } k => (k, "healthPercentage", ""),
             CombatantCurrentResourceExpression<TContext> e when KeyFor(e.Selector) is { } k => (k, "currentResource", e.ResourceId.value),
             CombatantStatusStacksExpression<TContext> e when KeyFor(e.Selector) is { } k => (k, "statusStacks", e.StatusId.value),
+            CombatantCounterExpression<TContext> e when KeyFor(e.Selector) is { } k => (k, "counter", e.CounterId.value),
             _ => null,
         };
 

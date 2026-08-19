@@ -1005,13 +1005,23 @@ else
                 onChange(spec with { Right = AsInt(e.Value, spec.Right) })));
             builder.CloseElement();
 
-            if (spec.ValueKind is "currentResource" or "statusStacks")
+            if (spec.ValueKind is "currentResource" or "statusStacks" or "counter")
             {
                 builder.OpenElement(seq++, "input");
                 builder.AddAttribute(seq++, "value", spec.Id);
                 builder.AddAttribute(seq++, "style", "width:8rem");
-                builder.AddAttribute(seq++, "placeholder", spec.ValueKind == "currentResource" ? "resource id" : "status id");
-                builder.AddAttribute(seq++, "list", spec.ValueKind == "currentResource" ? "rd-resource-ids" : "rd-status-ids");
+                builder.AddAttribute(seq++, "placeholder", spec.ValueKind switch
+                {
+                    "currentResource" => "resource id",
+                    "counter" => "counter id",
+                    _ => "status id",
+                });
+                builder.AddAttribute(seq++, "list", spec.ValueKind switch
+                {
+                    "currentResource" => "rd-resource-ids",
+                    "counter" => "rd-counter-ids",
+                    _ => "rd-status-ids",
+                });
                 builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
                     onChange(spec with { Id = AsString(e.Value) })));
                 builder.CloseElement();

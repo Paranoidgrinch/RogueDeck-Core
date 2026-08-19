@@ -230,6 +230,7 @@ public static class StudioVocabulary
         ("healthPercentage", "HP %", "The unit's health as a percentage of its maximum (0–100)."),
         ("currentResource", "resource…", "The unit's current amount of a named resource (fill in the resource id)."),
         ("statusStacks", "status stacks…", "The stacks of a named status on the unit (fill in the status id)."),
+        ("counter", "counter…", "The unit's per-fight counter (a track like a countdown; fill in the counter id)."),
     ];
 
     // ── card selection kinds (which card a targeted card op points at) ──────────────────────────────────────────
