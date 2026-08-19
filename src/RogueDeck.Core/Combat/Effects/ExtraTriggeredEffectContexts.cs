@@ -239,3 +239,38 @@ public static class CombatantLifecycleChangedTriggeredEffectTargetResolver
             new TriggeredEffectActionSource(context.CombatEvent.CombatantId));
     }
 }
+
+// ── BlockGained ──────────────────────────────────────────────────────────────
+// "Whenever someone gains Block". Mirrors the DamageReceived shape: the GAINER is the event target, the
+// applier (if any) the source, so a program can buff the gainer with `eventTarget` regardless of who caused it.
+public sealed record BlockGainedTriggeredEffectContext(
+    CombatState Combat,
+    CombatDefinitionRegistry Registry,
+    BlockGainedCombatEvent CombatEvent,
+    CombatantState TargetCombatant,
+    CombatantState? SourceCombatant);
+
+public sealed record BlockGainedTargetHasStatusTriggerFilter(StatusDefinitionId StatusDefinitionId)
+    : ITriggeredProgramFilter<BlockGainedTriggeredEffectContext>
+{
+    public bool Matches(BlockGainedTriggeredEffectContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return context.TargetCombatant.Statuses.Any(status => status.DefinitionId == StatusDefinitionId);
+    }
+}
+
+public static class BlockGainedTriggeredEffectTargetResolver
+{
+    public static TriggeredEffectActionBuildContext CreateActionBuildContext(
+        BlockGainedTriggeredEffectContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return new TriggeredEffectActionBuildContext(
+            new CombatantTargetSelectionContext(
+                context.Combat,
+                context.SourceCombatant ?? context.TargetCombatant,
+                context.CombatEvent.TargetCombatantId),
+            new TriggeredEffectActionSource(context.CombatEvent.TargetCombatantId));
+    }
+}

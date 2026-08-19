@@ -267,6 +267,17 @@ public static class TriggeredProgramContextAdapters
             },
             StatusStacksChangedTriggeredEffectTargetResolver.CreateActionBuildContext);
 
+    public static readonly TriggeredProgramAdapter<BlockGainedCombatEvent, BlockGainedTriggeredEffectContext>
+        BlockGained = new(
+            (combat, registry, e) =>
+            {
+                if (!combat.TryGetCombatant(e.TargetCombatantId, out var t)) return null;
+                CombatantState? source = null;
+                if (e.SourceCombatantId is { } sid && combat.TryGetCombatant(sid, out var s)) source = s;
+                return new BlockGainedTriggeredEffectContext(combat, registry, e, t!, source);
+            },
+            BlockGainedTriggeredEffectTargetResolver.CreateActionBuildContext);
+
     public static readonly TriggeredProgramAdapter<StatusDurationChangedCombatEvent, StatusDurationChangedTriggeredEffectContext>
         StatusDurationChanged = new(
             (combat, registry, e) =>

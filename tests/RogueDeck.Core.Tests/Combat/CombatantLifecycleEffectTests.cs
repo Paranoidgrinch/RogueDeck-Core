@@ -174,7 +174,9 @@ public class CombatantLifecycleEffectTests
             GetBlockOrZero(combat, new CombatantId("hero_001")));
 
         Assert.Equal(0, combat.PendingEffectCount);
-        Assert.Equal(0, combat.PendingEventCount);
+        // The block gain announces itself (BlockGainedCombatEvent). It is raised on the way to victory, and the
+        // queue loop stops once the combat is decided, so that one announcement is left unconsumed by design.
+        Assert.Equal(1, combat.PendingEventCount);
     }
 
     private sealed record LifecycleChangedSnapshot(

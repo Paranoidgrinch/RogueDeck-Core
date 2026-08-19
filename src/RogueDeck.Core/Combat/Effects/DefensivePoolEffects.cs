@@ -61,6 +61,8 @@ public sealed class GainBlockEffectHandler : EffectRequestHandler<GainBlockEffec
             TraceBlockGain(combat, tracing, gainBlock, modifierSteps,
                 amountAfterModifiers: modifiedAmount, blockBefore: 0, blockAfter: modifiedAmount);
 
+            RaiseBlockGained(combat, gainBlock, modifiedAmount);
+
             if (gainBlock.OutcomeSlot is { } newPoolSlot)
                 newPoolSlot.Value = new GainBlockOutcome(
                     RequestedAmount: gainBlock.Amount,
@@ -83,6 +85,8 @@ public sealed class GainBlockEffectHandler : EffectRequestHandler<GainBlockEffec
         TraceBlockGain(combat, tracing, gainBlock, modifierSteps,
             amountAfterModifiers: modifiedAmount, blockBefore: previousBlock, blockAfter: newBlock);
 
+        RaiseBlockGained(combat, gainBlock, modifiedAmount);
+
         if (gainBlock.OutcomeSlot is { } slot)
             slot.Value = new GainBlockOutcome(
                 RequestedAmount: gainBlock.Amount,
@@ -90,6 +94,15 @@ public sealed class GainBlockEffectHandler : EffectRequestHandler<GainBlockEffec
                 PreviousBlock: previousBlock,
                 NewBlock: newBlock);
     }
+
+    // Only a gain that actually landed is announced — a gain modified down to zero is not a "gain Block" event.
+    private static void RaiseBlockGained(CombatState combat, GainBlockEffectRequest gainBlock, int gainedAmount) =>
+        combat.EnqueueEvent(new BlockGainedCombatEvent(
+            TargetCombatantId: gainBlock.TargetCombatantId,
+            GainedAmount: gainedAmount,
+            RequestedAmount: gainBlock.Amount,
+            SourceCombatantId: gainBlock.SourceCombatantId,
+            SourceCardId: gainBlock.SourceCardId));
 
     private static void TraceBlockGain(
         CombatState combat,

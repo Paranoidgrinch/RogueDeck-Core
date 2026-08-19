@@ -145,6 +145,16 @@ public sealed record HealedCombatEvent(
     CardDefinitionId? SourceCardId = null
 ) : ICombatEvent;
 
+// A combatant actually gained Block (a gain modified down to zero raises nothing). The counterpart of
+// HealedCombatEvent for the defensive pool — what "whenever someone gains Block" hooks listen to.
+public sealed record BlockGainedCombatEvent(
+    CombatantId TargetCombatantId,
+    int GainedAmount,
+    int RequestedAmount,
+    CombatantId? SourceCombatantId = null,
+    CardDefinitionId? SourceCardId = null
+) : ICombatEvent;
+
 public sealed record StatusApplicationBlockedCombatEvent(
     CombatantId TargetCombatantId,
     StatusDefinitionId BlockedStatusDefinitionId,

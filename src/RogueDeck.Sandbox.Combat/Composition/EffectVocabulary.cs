@@ -42,6 +42,7 @@ public enum TriggerEvent
     StatusRemoved,  // when a status is removed from the bearer
     StatusMerged,   // when a status merges into an existing one on the bearer
     StatusStacksChanged, // when a status on the bearer is adjusted up or down (not applied or removed)
+    BlockGained,    // when the bearer gains Block
     RoundStarted,   // at the start of each round
     RoundEnded,     // at the end of each round
 }

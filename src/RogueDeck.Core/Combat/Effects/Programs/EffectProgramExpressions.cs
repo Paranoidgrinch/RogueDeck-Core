@@ -974,6 +974,7 @@ public sealed class EventAmountExpression<TContext> : ICombatExpression<TContext
             DamageReceivedTriggeredEffectContext received => received.CombatEvent.HealthDamage,
             DamageDealtTriggeredEffectContext dealt => dealt.CombatEvent.HealthDamage,
             ResourceGainedTriggeredEffectContext gained => gained.CombatEvent.GainedAmount,
+            BlockGainedTriggeredEffectContext blocked => blocked.CombatEvent.GainedAmount,
             _ => 0,
         };
 }
