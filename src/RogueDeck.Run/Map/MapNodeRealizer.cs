@@ -24,7 +24,10 @@ public static class MapNodeRealizer
                 if (encounter is not { } id)
                     throw new InvalidOperationException(
                         $"A {kind} node has no encounter to run; add candidates for {kind} to MapGeneration.Encounters.");
-                return new NodeContent(StandardRunIds.CombatNode, new EncounterRef(id));
+                return new NodeContent(StandardRunIds.CombatNode, spec.VictoryRewards.TryGetValue(kind, out var reward)
+                    ? new EncounterRef(id, reward.Source, new RewardId($"{reward.RewardIdPrefix}:{id.Value}"),
+                        reward.PickCount)
+                    : new EncounterRef(id));
 
             case MapNodeKind.Shop:
                 return new NodeContent(StandardRunIds.ShopNode, new ShopRef(new ShopId(nodeRef ?? RequireRef(spec, kind))));

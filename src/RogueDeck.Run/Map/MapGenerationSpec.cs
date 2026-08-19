@@ -17,6 +17,10 @@ public sealed record BalanceTargets
     public int TargetNet(int row) => StartNet - NetDropPerRow * row;
 }
 
+// The spoils a generated fight of one role grants. Mirrors the three reward fields of EncounterRef; the id is
+// suffixed with the encounter so two fights of the same role stay distinguishable in the run log.
+public sealed record MapVictoryReward(IRewardSource Source, string RewardIdPrefix = "spoils", int PickCount = 1);
+
 // The rules a run's map is generated from (RuleBasedMapGenerator). The act is a backbone of `Rows` WIDE "branch"
 // rows (row 0 is the entry) plus a single boss row, where each branch node draws its kind independently from
 // `KindWeights` — so both a row's columns and the paths through it genuinely differ. Per-path minimums and the
@@ -55,6 +59,13 @@ public sealed record MapGenerationSpec
     // (tuned ≈ a weak elite of this act). 0 = never. Rise it per act (e.g. 5/10/15/20 across Acts I–IV) so
     // treasure gets progressively riskier. Requires at least one Encounters[Mimic] candidate when > 0.
     public int TreasureMimicChancePercent { get; init; }
+
+    // What a generated FIGHT pays out, per role. A generated map's combat nodes otherwise carry a bare
+    // EncounterRef and grant nothing on victory, which quietly costs a procedural act its whole reward economy
+    // (an authored map states the spoils on each EncounterRef). Roles without an entry pay nothing, exactly as
+    // before; Elite/Boss usually pay more than Combat.
+    public IReadOnlyDictionary<MapNodeKind, MapVictoryReward> VictoryRewards { get; init; } =
+        new Dictionary<MapNodeKind, MapVictoryReward>();
 
     // Which authored content a NON-combat generated node references, by role → id: a Shop id, a Workbench id, or an
     // Event id (Event / Rest / Treasure roles all resolve to an authored event by default). Combat / Elite / Boss
