@@ -29,6 +29,14 @@ public static class MapConstraintValidator
                 problems.Add($"Every path should hold at least {min} {kind} node(s), but some path has only {worst}.");
         }
 
+        foreach (var (kind, max) in spec.PerPathMaximums)
+        {
+            var kindLocal = kind;
+            var richest = MaxCountOnAnyPath(map, order, roles, k => k == kindLocal);
+            if (richest > max)
+                problems.Add($"No path should hold more than {max} {kind} node(s), but some path holds {richest}.");
+        }
+
         if (spec.MinEnemiesPerPath > 0)
         {
             var worst = MinCountOnAnyPath(map, order, roles, IsEnemy);
@@ -61,6 +69,17 @@ public static class MapConstraintValidator
         return MinCountOnAnyPath(map, TopologicalOrder(map), roles, matches);
     }
 
+    // The MOST `matches`-role nodes on any entry→boss path (the richest path). Public so the generator can see
+    // where a per-path ceiling is broken and rewrite the offending nodes.
+    public static int RichestPathCount(
+        RunMap map, IReadOnlyDictionary<NodeId, MapNodeKind> roles, Func<MapNodeKind, bool> matches)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        ArgumentNullException.ThrowIfNull(roles);
+        ArgumentNullException.ThrowIfNull(matches);
+        return MaxCountOnAnyPath(map, TopologicalOrder(map), roles, matches);
+    }
+
     // Whether a role counts as an enemy for the min-enemies constraint.
     public static bool IsEnemyRole(MapNodeKind kind) => IsEnemy(kind);
 
@@ -90,6 +109,29 @@ public static class MapConstraintValidator
         foreach (var entry in EntryNodes(map))
             answer = Math.Min(answer, minPath.TryGetValue(entry, out var value) ? value : 0);
         return answer == int.MaxValue ? 0 : answer;
+    }
+
+    // The most `matches` nodes on any entry→boss path — the mirror of MinCountOnAnyPath.
+    private static int MaxCountOnAnyPath(
+        RunMap map, IReadOnlyList<NodeId> order, IReadOnlyDictionary<NodeId, MapNodeKind> roles,
+        Func<MapNodeKind, bool> matches)
+    {
+        var maxPath = new Dictionary<NodeId, int>();
+        for (var i = order.Count - 1; i >= 0; i--)
+        {
+            var id = order[i];
+            var self = roles.TryGetValue(id, out var kind) && matches(kind) ? 1 : 0;
+
+            var best = -1;
+            foreach (var successor in map.SuccessorIds(id))
+                best = Math.Max(best, maxPath[successor]);
+            maxPath[id] = best < 0 ? self : self + best; // no successors ⇒ leaf
+        }
+
+        var answer = 0;
+        foreach (var entry in EntryNodes(map))
+            answer = Math.Max(answer, maxPath.TryGetValue(entry, out var value) ? value : 0);
+        return answer;
     }
 
     private static IEnumerable<NodeId> EntryNodes(RunMap map) =>

@@ -39,12 +39,16 @@ public static class RuleBasedMapGenerator
 
         var branches = DrawBranches(spec, kindsSeed);
 
-        // Find the gate multiset that satisfies every per-path constraint, crediting the branch rows.
+        // Find the gate multiset that satisfies every per-path constraint, crediting the branch rows — and hold
+        // the per-path CEILINGS while doing it: an overshooting branch node is rewritten before the next pass, so
+        // gates and ceilings settle together.
         var gateCounts = new Dictionary<MapNodeKind, int>();
         for (var iteration = 0; iteration < MaxGateIterations; iteration++)
         {
             var (trialMap, trialRoles) = Build(spec, branches, gateCounts, wireSeed);
-            if (!AccumulateDeficits(spec, trialMap, trialRoles, gateCounts))
+            var changed = AccumulateDeficits(spec, trialMap, trialRoles, gateCounts);
+            changed |= EnforceMaximums(spec, branches, trialMap, trialRoles);
+            if (!changed)
                 break;
         }
 
@@ -68,7 +72,7 @@ public static class RuleBasedMapGenerator
             widths[r] = width;
             kinds[r] = new MapNodeKind[width];
             for (var c = 0; c < width; c++)
-                kinds[r][c] = DrawVariedKind(spec, rng);
+                kinds[r][c] = DrawVariedKind(spec, rng, c);
         }
         return new Branches(widths, kinds);
     }
@@ -230,12 +234,55 @@ public static class RuleBasedMapGenerator
         return gates;
     }
 
-    // ── Varied-row kind draw + encounter selection ───────────────────────────────────────────────────────
-    private static MapNodeKind DrawVariedKind(MapGenerationSpec spec, MapGenRandom rng)
+    // ── Per-path ceilings ────────────────────────────────────────────────────────────────────────────────
+    // Rewrites branch nodes until no path holds more of a kind than the spec allows. The DEEPEST offender goes
+    // first (the map's opening keeps its promised flavour, the tail gives way), and it becomes Combat — the one
+    // kind a ceiling is never put on in practice, and the honest filler for "this slot may not be that".
+    // Returns true when something changed, so the caller rebuilds and re-measures.
+    private static bool EnforceMaximums(
+        MapGenerationSpec spec, Branches branches, RunMap map, IReadOnlyDictionary<NodeId, MapNodeKind> roles)
     {
+        var changed = false;
+        foreach (var (kind, max) in spec.PerPathMaximums)
+        {
+            if (kind == MapNodeKind.Combat)
+                continue; // the filler cannot be capped by rewriting into itself
+            var kindLocal = kind;
+            if (MapConstraintValidator.RichestPathCount(map, roles, k => k == kindLocal) <= max)
+                continue;
+
+            for (var r = branches.Kinds.Length - 1; r >= 0; r--)
+            {
+                var rewritten = false;
+                for (var c = branches.Kinds[r].Length - 1; c >= 0; c--)
+                    if (branches.Kinds[r][c] == kind)
+                    {
+                        branches.Kinds[r][c] = MapNodeKind.Combat;
+                        rewritten = true;
+                        break;
+                    }
+
+                if (rewritten)
+                {
+                    changed = true;
+                    break;
+                }
+            }
+        }
+
+        return changed;
+    }
+
+    // ── Varied-row kind draw + encounter selection ───────────────────────────────────────────────────────
+    // `column` picks the lane: with LaneProfiles set, each column draws from its own flavour, so the left of the
+    // map can be a gauntlet while the right is an errand run.
+    private static MapNodeKind DrawVariedKind(MapGenerationSpec spec, MapGenRandom rng, int column)
+    {
+        var weights = LaneWeights(spec, column);
+
         var total = 0;
         foreach (var kind in MapGenerationSpec.GateKinds)
-            total += Weight(spec, kind);
+            total += Weight(weights, kind);
         if (total <= 0)
             return MapNodeKind.Combat;
 
@@ -243,15 +290,20 @@ public static class RuleBasedMapGenerator
         var cumulative = 0;
         foreach (var kind in MapGenerationSpec.GateKinds)
         {
-            cumulative += Weight(spec, kind);
+            cumulative += Weight(weights, kind);
             if (roll < cumulative)
                 return kind;
         }
         return MapNodeKind.Combat; // unreachable: roll < total
     }
 
-    private static int Weight(MapGenerationSpec spec, MapNodeKind kind) =>
-        spec.KindWeights.TryGetValue(kind, out var value) ? Math.Max(0, value) : 0;
+    private static IReadOnlyDictionary<MapNodeKind, int> LaneWeights(MapGenerationSpec spec, int column) =>
+        spec.LaneProfiles.Count == 0
+            ? spec.KindWeights
+            : spec.LaneProfiles[column % spec.LaneProfiles.Count].KindWeights;
+
+    private static int Weight(IReadOnlyDictionary<MapNodeKind, int> weights, MapNodeKind kind) =>
+        weights.TryGetValue(kind, out var value) ? Math.Max(0, value) : 0;
 
     private static EncounterId? SelectEncounter(
         MapNodeKind kind, int row, MapGenerationSpec spec, ContentRealization realization, MapGenRandom rng,

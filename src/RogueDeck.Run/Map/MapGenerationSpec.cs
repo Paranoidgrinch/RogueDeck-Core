@@ -41,6 +41,17 @@ public sealed record MapGenerationSpec
     // rows already guarantee on the worst path. Kinds not listed default to 0.
     public IReadOnlyDictionary<MapNodeKind, int> PerPathMinimums { get; init; } = EmptyCounts;
 
+    // Ceiling of each kind on EVERY entry→boss path: no path may hold more than this. Where the varied rows
+    // overshoot, the generator rewrites the deepest offending nodes into ordinary Combat until the ceiling
+    // holds. Kinds not listed are unlimited. A maximum below the matching minimum is a spec error.
+    public IReadOnlyDictionary<MapNodeKind, int> PerPathMaximums { get; init; } = EmptyCounts;
+
+    // Column FLAVOURS. With lanes, a map's columns are not drawn from one table: column c takes its weights
+    // from LaneProfiles[c % count], so the left of the map can be a combat gauntlet while the right is an
+    // errand run — paths that keep to a side differ in what they hold AND in the order they hold it. Empty
+    // (the default) = every column uses KindWeights, exactly as before.
+    public IReadOnlyList<MapLaneProfile> LaneProfiles { get; init; } = Array.Empty<MapLaneProfile>();
+
     // Guaranteed enemies (Combat + Elite nodes) on every path. Met by adding Combat gate funnels for whatever the
     // varied rows and the elite gates don't already guarantee on the worst path.
     public int MinEnemiesPerPath { get; init; }
@@ -102,6 +113,10 @@ public sealed record MapGenerationSpec
         foreach (var (kind, weight) in KindWeights)
             if (weight > 0)
                 kinds.Add(kind);
+        foreach (var lane in LaneProfiles)
+            foreach (var (kind, weight) in lane.KindWeights)
+                if (weight > 0)
+                    kinds.Add(kind);
         // A treasure that can flip into a mimic makes that role appear too — it draws an encounter like any
         // other fight, and a spec without candidates for it would only fail once a run rolled one.
         if (TreasureMimicChancePercent > 0)
@@ -117,9 +132,24 @@ public sealed record MapGenerationSpec
             throw new ArgumentOutOfRangeException(nameof(MinWidth), MinWidth, "Row width must be at least 1.");
         if (MaxWidth < MinWidth)
             throw new ArgumentOutOfRangeException(nameof(MaxWidth), MaxWidth, "MaxWidth must be >= MinWidth.");
+
+        foreach (var (kind, max) in PerPathMaximums)
+        {
+            if (max < 0)
+                throw new ArgumentOutOfRangeException(nameof(PerPathMaximums), max,
+                    $"A per-path maximum cannot be negative ({kind}).");
+            if (PerPathMinimums.TryGetValue(kind, out var min) && min > max)
+                throw new ArgumentOutOfRangeException(nameof(PerPathMaximums), max,
+                    $"The per-path maximum for {kind} ({max}) is below its minimum ({min}).");
+        }
+
+        foreach (var lane in LaneProfiles)
+            if (lane.KindWeights.Count == 0)
+                throw new ArgumentException($"Lane '{lane.Name}' has no kind weights.", nameof(LaneProfiles));
     }
 
     private static readonly IReadOnlyDictionary<MapNodeKind, int> EmptyCounts = new Dictionary<MapNodeKind, int>();
+
 
     private static readonly IReadOnlyDictionary<MapNodeKind, int> DefaultWeights = new Dictionary<MapNodeKind, int>
     {
@@ -127,3 +157,7 @@ public sealed record MapGenerationSpec
         [MapNodeKind.Event] = 3,
     };
 }
+
+// The weights one column FLAVOUR draws from (see MapGenerationSpec.LaneProfiles). Name is for authoring and
+// the Studio preview only — generation reads the weights.
+public sealed record MapLaneProfile(string Name, IReadOnlyDictionary<MapNodeKind, int> KindWeights);

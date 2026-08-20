@@ -47,6 +47,41 @@
         </div>
 
         <div class="editor-card" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:1rem; margin:.75rem 0">
+            <strong>Per-path maximums</strong>
+            <span class="muted"> — no entry→boss path may hold more than this (0 = unlimited); overshooting nodes become ordinary fights</span>
+            <div class="run-bar" style="gap:1rem; flex-wrap:wrap; margin-top:.4rem">
+                @foreach (var kind in Reservable)
+                {
+                    var k = kind;
+                    <label>@k <input type="number" min="0" value="@Get(spec.PerPathMaximums, k)" style="width:4.5rem"
+                                     @onchange="e => Save(spec with { PerPathMaximums = WithKind(spec.PerPathMaximums, k, AsInt(e.Value)) })" /></label>
+                }
+            </div>
+        </div>
+
+        <div class="editor-card" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:1rem; margin:.75rem 0">
+            <strong>Column lanes</strong>
+            <span class="muted"> — give the columns different flavours so the routes diverge; with no lanes every column uses the weights below</span>
+            @for (var laneIndex = 0; laneIndex < spec.LaneProfiles.Count; laneIndex++)
+            {
+                var li = laneIndex;
+                var lane = spec.LaneProfiles[li];
+                <div class="run-bar" style="gap:1rem; flex-wrap:wrap; margin-top:.4rem">
+                    <label>name <input value="@lane.Name" style="width:8rem"
+                                       @onchange="e => SaveLane(li, lane with { Name = AsString(e.Value) })" /></label>
+                    @foreach (var kind in Reservable)
+                    {
+                        var k = kind;
+                        <label>@k <input type="number" min="0" value="@Get(lane.KindWeights, k)" style="width:4.5rem"
+                                         @onchange="e => SaveLane(li, lane with { KindWeights = WithKind(lane.KindWeights, k, AsInt(e.Value)) })" /></label>
+                    }
+                    <button class="mini" @onclick="() => RemoveLane(li)">✕</button>
+                </div>
+            }
+            <button class="mini" style="margin-top:.4rem" @onclick="AddLane">+ lane</button>
+        </div>
+
+        <div class="editor-card" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:1rem; margin:.75rem 0">
             <strong>Varied-row kind weights</strong>
             <span class="muted"> — how the wide branch rows fill their columns (the map's variety)</span>
             <div class="run-bar" style="gap:1rem; flex-wrap:wrap; margin-top:.4rem">
@@ -277,6 +312,7 @@
     }
 
     private static int AsInt(object? v) => int.TryParse(v?.ToString(), out var n) ? n : 0;
+    private static string AsString(object? v) => v?.ToString() ?? "";
     private static int Get(IReadOnlyDictionary<MapNodeKind, int> d, MapNodeKind k) => d.TryGetValue(k, out var v) ? v : 0;
     private static string GetRef(MapGenerationSpec spec, MapNodeKind k) => spec.NodeRefs.TryGetValue(k, out var v) ? v : "";
 
@@ -290,6 +326,37 @@
     {
         _blueprint = _blueprint with { MapGeneration = spec };
         Doc.Save(_blueprint);
+    }
+
+    // ── column lanes ────────────────────────────────────────────────────────────────
+    private void SaveLane(int index, MapLaneProfile lane)
+    {
+        if (_blueprint.MapGeneration is not { } spec)
+            return;
+        var lanes = spec.LaneProfiles.ToList();
+        lanes[index] = lane;
+        Save(spec with { LaneProfiles = lanes });
+    }
+
+    private void AddLane()
+    {
+        if (_blueprint.MapGeneration is not { } spec)
+            return;
+        var lanes = spec.LaneProfiles.ToList();
+        lanes.Add(new MapLaneProfile($"lane {lanes.Count + 1}", new Dictionary<MapNodeKind, int>
+        {
+            [MapNodeKind.Combat] = 5,
+        }));
+        Save(spec with { LaneProfiles = lanes });
+    }
+
+    private void RemoveLane(int index)
+    {
+        if (_blueprint.MapGeneration is not { } spec)
+            return;
+        var lanes = spec.LaneProfiles.ToList();
+        lanes.RemoveAt(index);
+        Save(spec with { LaneProfiles = lanes });
     }
 
     private static IReadOnlyDictionary<MapNodeKind, int> WithKind(
