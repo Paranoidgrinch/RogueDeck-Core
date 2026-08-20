@@ -192,6 +192,10 @@ public sealed record CombatNodeModel(
     string Element = "",
     // dealDamage that bypasses the target's block/defensive pools (pierce). false canonically for other kinds.
     bool IgnoresBlock = false,
+    // dealDamage's pipeline. Direct is an ordinary hit that Strength/Weak/Doubt and every Direct-restricted
+    // passive modifier can change; DamageOverTime is the "HP loss, not damage" kind a status tick uses, which
+    // those modifiers skip. Direct canonically for other kinds so build<->classify round-trips exactly.
+    DamageKind DamageKind = DamageKind.Direct,
     // setCombatantCounter: the counter id written on the target. "" canonically for other kinds.
     string CounterId = "",
     // setCombatantCounter: relative (add the amount) vs absolute (set it). true is the engine default; false
@@ -293,6 +297,7 @@ public sealed record CombatNodeModel(
         && Max == other.Max
         && Element == other.Element
         && IgnoresBlock == other.IgnoresBlock
+        && DamageKind == other.DamageKind
         && CounterId == other.CounterId
         && Relative == other.Relative
         && MovementMode == other.MovementMode
@@ -336,6 +341,7 @@ public sealed record CombatNodeModel(
         hash.Add(Max);
         hash.Add(Element);
         hash.Add(IgnoresBlock);
+        hash.Add(DamageKind);
         hash.Add(CounterId);
         hash.Add(Relative);
         hash.Add(MovementMode);
@@ -637,6 +643,7 @@ public static class CombatProgramModel
                 Max = UsesMinMax(kind) ? node.Max : null,
                 Element = kind == "dealDamage" ? node.Element : "",
                 IgnoresBlock = kind == "dealDamage" && node.IgnoresBlock,
+                DamageKind = kind == "dealDamage" ? node.DamageKind : DamageKind.Direct,
                 CounterId = UsesCounterId(kind) ? (node.CounterId == "" ? "combo" : node.CounterId) : "",
                 Relative = UsesCounterId(kind) && (node.Kind == "setCombatantCounter" ? node.Relative : true),
                 MovementMode = UsesMovement(kind) ? node.MovementMode : MovementMode.ToAbsolute,
@@ -1047,7 +1054,8 @@ public static class CombatProgramModel
         {
             "dealDamage" => new DealDamageNode<TContext>(
                 selector, amount, ignoresBlock: model.IgnoresBlock,
-                element: string.IsNullOrEmpty(model.Element) ? null : new ElementId(model.Element)),
+                element: string.IsNullOrEmpty(model.Element) ? null : new ElementId(model.Element),
+                kind: model.DamageKind),
             "heal" => new HealNode<TContext>(selector, amount),
             "gainResource" => new GainResourceNode<TContext>(selector, new ResourceId(model.ResourceId), amount, model.DefaultMax),
             "loseResource" => new LoseResourceNode<TContext>(selector, new ResourceId(model.ResourceId), amount),
@@ -1124,7 +1132,7 @@ public static class CombatProgramModel
                 return ddAmount.IsAdvanced
                     ? null
                     : WithSelector(n.TargetSelector, new CombatNodeModel("dealDamage", "source", ddAmount,
-                        Element: n.Element?.value ?? "", IgnoresBlock: n.IgnoresBlock));
+                        Element: n.Element?.value ?? "", IgnoresBlock: n.IgnoresBlock, DamageKind: n.Kind));
             case HealNode<TContext> { ResultKey: null } n:
                 return Leaf("heal", n.TargetSelector, n.Amount);
             case GainBlockNode<TContext> { ResultKey: null } n:

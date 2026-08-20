@@ -203,6 +203,12 @@ else
                    @onchange="e => Set(Node with { Element = AsString(e.Value) })" />
             <label class="muted"><input type="checkbox" checked="@Node.IgnoresBlock"
                    @onchange="e => Set(Node with { IgnoresBlock = AsBool(e.Value) })" /> ignores block</label>
+            <select value="@Node.DamageKind" @onchange="e => Set(Node with { DamageKind = Enum.Parse<DamageKind>(AsString(e.Value)) })">
+                @foreach (var damageKind in Enum.GetValues<DamageKind>())
+                {
+                    <option value="@damageKind" selected="@(Node.DamageKind == damageKind)">@StudioVocabulary.EnumDisplay(damageKind)</option>
+                }
+            </select>
         }
         @if (CombatProgramModel.UsesResourceId(Node.Kind))
         {

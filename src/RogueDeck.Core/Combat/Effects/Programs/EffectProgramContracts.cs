@@ -185,6 +185,7 @@ public interface IDealDamageNodeCore : INativeEffectOperationNode
     EffectResultKey<OrderedTargetOutcomes<DamageOutcome>>? ResultKey { get; }
     bool IgnoresBlock => false;
     ElementId? Element => null;
+    DamageKind Kind => DamageKind.Direct;
     Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(DealDamageEffectRequest);
 }
 

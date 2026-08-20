@@ -559,6 +559,31 @@ public class CombatProgramModelTests
     }
 
     [Fact]
+    public void DealDamage_round_trips_its_damage_kind()
+    {
+        // A status tick is "HP loss, not damage": authored as DamageOverTime so passive modifiers that
+        // restrict to ordinary hits (Strength, Weak, a bearer's own attack debuff) never touch it.
+        var tick = new CombatNodeModel("dealDamage", "source", CombatAmountSpec.FromConst(5),
+            IgnoresBlock: true, DamageKind: DamageKind.DamageOverTime);
+
+        var node = Assert.IsType<DealDamageNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(tick).Root);
+        Assert.Equal(DamageKind.DamageOverTime, node.Kind);
+
+        var options = CombatJson.CreateOptions<CardPlayContext>();
+        var json = JsonSerializer.Serialize(CombatProgramModel.Build<CardPlayContext>(tick), options);
+        var back = JsonSerializer.Deserialize<EffectProgram<CardPlayContext>>(json, options)!;
+        Assert.Equal(tick, CombatProgramModel.Classify(back));
+    }
+
+    [Fact]
+    public void Damage_kind_defaults_to_direct_so_existing_programs_are_unchanged()
+    {
+        var plain = new CombatNodeModel("dealDamage", "eventTarget", CombatAmountSpec.FromConst(6));
+        Assert.Equal(DamageKind.Direct,
+            Assert.IsType<DealDamageNode<CardPlayContext>>(CombatProgramModel.Build<CardPlayContext>(plain).Root).Kind);
+    }
+
+    [Fact]
     public void Untyped_non_piercing_damage_still_round_trips_with_defaults()
     {
         // The common case (no element, respects block) must round-trip unchanged after 1c widened the node.

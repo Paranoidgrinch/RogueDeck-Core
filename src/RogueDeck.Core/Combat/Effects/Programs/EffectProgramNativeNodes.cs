@@ -10,6 +10,16 @@ public sealed class DealDamageNode<TContext> : IDealDamageNodeCore, IEffectNode<
     public bool IgnoresBlock { get; }
     public ElementId? Element { get; }
 
+    // Which pipeline this hit belongs to. Direct is an ordinary attack — Strength, Doubt and every other
+    // passive modifier that restricts to Direct sees it. DamageOverTime is the "HP loss, not damage" kind the
+    // status ticks need (Paperwork, Lien, Citation, Blood Ink): the same downing and block rules apply, but
+    // modifiers restricted to Direct leave it alone, so a bearer's own Doubt cannot shrink its Paperwork.
+    // Serialized only when it is not the Direct default, so documents authored before the kind existed
+    // (and every ordinary hit since) round-trip byte-identically.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public DamageKind Kind { get; }
+
     public IReadOnlyList<IEffectNode<TContext>> Children => [];
 
     public DealDamageNode(
@@ -17,7 +27,8 @@ public sealed class DealDamageNode<TContext> : IDealDamageNodeCore, IEffectNode<
         ICombatExpression<TContext, int> amount,
         EffectResultKey<OrderedTargetOutcomes<DamageOutcome>>? resultKey = null,
         bool ignoresBlock = false,
-        ElementId? element = null)
+        ElementId? element = null,
+        DamageKind kind = DamageKind.Direct)
     {
         ArgumentNullException.ThrowIfNull(targetSelector);
         ArgumentNullException.ThrowIfNull(amount);
@@ -27,6 +38,7 @@ public sealed class DealDamageNode<TContext> : IDealDamageNodeCore, IEffectNode<
         ResultKey = resultKey;
         IgnoresBlock = ignoresBlock;
         Element = element;
+        Kind = kind;
     }
 
     public ProducedResult? GetProducedResult() =>

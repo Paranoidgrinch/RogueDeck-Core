@@ -600,6 +600,7 @@ internal sealed class DealDamageNodeExecutor : IEffectNodeExecutor
                 Amount: amount,
                 SourceCombatantId: ctx.BuildContext.Source.SourceCombatantId,
                 SourceCardId: ctx.BuildContext.Source.SourceCardId,
+                Kind: typed.Kind,
                 IgnoresBlock: typed.IgnoresBlock,
                 Element: typed.Element,
                 OutcomeSlot: slots?[i]));

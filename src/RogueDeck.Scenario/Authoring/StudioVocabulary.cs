@@ -281,6 +281,9 @@ public static class StudioVocabulary
         ["MovementMode.AwayFromEnemies"] = "away from the enemies",
         ["MovementMode.PushFromSource"] = "push away from me",
         ["MovementMode.PullToSource"] = "pull toward me",
+        ["DamageKind.Direct"] = "an ordinary hit",
+        ["DamageKind.DamageOverTime"] = "HP loss over time",
+        ["DamageKind.Reflected"] = "reflected back",
         ["ZonePlacement.Top"] = "on top",
         ["ZonePlacement.Bottom"] = "at the bottom",
         ["CombatantLifecycleState.Removed"] = "removed from combat",
@@ -333,6 +336,9 @@ public static class StudioVocabulary
 
     private static readonly IReadOnlyDictionary<string, string> EnumDescriptions = new Dictionary<string, string>
     {
+        ["DamageKind.Direct"] = "A normal hit: Strength, Weak and every other modifier that restricts to ordinary hits changes it.",
+        ["DamageKind.DamageOverTime"] = "HP loss from a lingering effect (poison, paperwork). Modifiers restricted to ordinary hits leave it alone.",
+        ["DamageKind.Reflected"] = "Damage bounced back at an attacker (thorns).",
         ["CardZone.DrawPile"] = "The face-down pile cards are drawn from.",
         ["CardZone.Hand"] = "The cards currently held and playable.",
         ["CardZone.DiscardPile"] = "Played or discarded cards; reshuffled into the draw pile when it runs out.",
