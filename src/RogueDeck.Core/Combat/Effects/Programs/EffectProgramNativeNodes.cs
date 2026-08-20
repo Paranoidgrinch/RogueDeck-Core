@@ -1564,3 +1564,42 @@ public sealed class ChooseOptionsNode<TContext> : IChooseOptionsNodeCore, IEffec
 
     IEffectNode IChooseOptionsNodeCore.OptionAt(int index) => _options[index];
 }
+
+// Put a card from hand into the Queue without playing it out — "you may Queue one non-Rite card from your
+// hand for 0 Energy", "choose another card in your hand and Queue it, paying 1 less Energy".
+//
+// Queueing is normally a property of the card being played (CardData.QueueOnPlay). This is the other way in:
+// an EFFECT queues a card that has no such property of its own, which is how one card defers another. The
+// card counts as played now, exactly as the Queue rules say, so what watches card plays sees it — but nothing
+// is paid here. Whatever the queueing card charges for the privilege it charges itself, because the price
+// differs per card ("for 0 Energy", "paying 1 less Energy").
+public sealed class QueueCardNode<TContext> : IQueueCardNodeCore, IEffectNode<TContext>
+    where TContext : class
+{
+    public ICombatantTargetSelector TargetSelector { get; }
+    public IEnumerable<ICombatantTargetSelector> GetTargetSelectors() =>
+        CardTargetSelector is null ? [TargetSelector] : [TargetSelector, CardTargetSelector];
+
+    public ICardInstanceExpression<TContext> Card { get; }
+
+    // Whom the queued card is aimed at, locked now and honoured when it resolves. Null = no target.
+    public ICombatantTargetSelector? CardTargetSelector { get; }
+
+    public IReadOnlyList<IEffectNode<TContext>> Children => [];
+
+    public QueueCardNode(
+        ICombatantTargetSelector targetSelector,
+        ICardInstanceExpression<TContext> card,
+        ICombatantTargetSelector? cardTargetSelector = null)
+    {
+        ArgumentNullException.ThrowIfNull(targetSelector);
+        ArgumentNullException.ThrowIfNull(card);
+
+        TargetSelector = targetSelector;
+        Card = card;
+        CardTargetSelector = cardTargetSelector;
+    }
+
+    CardInstanceId? IQueueCardNodeCore.EvaluateCardInstanceId(IEffectExecutionContextCore ctx, CombatState combat) =>
+        Card.Evaluate((EffectExecutionContext<TContext>)ctx, combat);
+}

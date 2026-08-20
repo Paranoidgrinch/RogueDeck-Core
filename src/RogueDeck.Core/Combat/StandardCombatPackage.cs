@@ -200,6 +200,7 @@ public sealed class StandardCombatPackage : ICombatPackage
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(DrawCardsNode<>), new DrawCardsNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(ResolveQueuedCardsNode<>), new ResolveQueuedCardsNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(ChooseOptionsNode<>), new ChooseOptionsNodeExecutor());
+        registry.RegisterEffectNodeExecutorOpenGeneric(typeof(QueueCardNode<>), new QueueCardNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(MoveAllCardsFromZoneNode<>), new MoveAllCardsFromZoneNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(CreateCardInstanceNode<>), new CreateCardInstanceNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(CreateCardCopyNode<>), new CreateCardCopyNodeExecutor());

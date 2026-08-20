@@ -247,6 +247,7 @@ public static class CombatJson
     {
         r.Register("node.resolveQueuedCards", typeof(ResolveQueuedCardsNode<>))
          .Register("node.chooseOptions", typeof(ChooseOptionsNode<>))
+         .Register("node.queueCard", typeof(QueueCardNode<>))
          .Register("node.dealDamage", typeof(DealDamageNode<>))
          .Register("node.heal", typeof(HealNode<>))
          .Register("node.modifyMaxHealth", typeof(ModifyMaxHealthNode<>))

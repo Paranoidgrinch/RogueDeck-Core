@@ -185,6 +185,48 @@ public class QueueTortureTests
         }
     }
 
+    // "You may Queue one non-Rite card from your hand for 0 Energy" — one card deferring another, which the
+    // queued card knows nothing about. It counts as played the moment it is queued, as the Queue rules say.
+    [Fact]
+    public void An_effect_can_queue_a_card_that_is_not_a_queue_card_itself()
+    {
+        var blueprint = Duel();
+        var deferring = Card("staff",
+            new CombatNodeModel("queueCard", "source",
+                Card: new CombatCardSpec("chosen", CardZone.Hand),
+                HasCardTarget: true, ToSelectorKey: "eventTarget"));
+
+        blueprint = blueprint with
+        {
+            Cards = [.. blueprint.Cards!, deferring],
+            Deck = new[] { "staff", "counter", "counter" }.Select(id => new CardDefinitionId(id)).ToList(),
+        };
+        blueprint = blueprint with { Start = blueprint.Start with { Deck = blueprint.Deck } };
+
+        var fight = Start(blueprint);
+        using (fight.Play)
+        {
+            var enemyHealth = fight.Enemy.Health.Current;
+
+            // "counter" is an ordinary card — no QueueOnPlay of its own — and it is put in the Queue anyway.
+            fight.Play_("staff");
+            var offered = fight.Play.CombatDriver!.PendingCardChoice;
+            Assert.NotNull(offered);
+            fight.Play.CombatDriver.SupplyCardChoice(
+                [offered!.First(c => c.DefinitionId.value == "counter").Id]);
+            Assert.Null(fight.Play.Session!.Error);
+            Assert.Single(fight.Queue);
+            Assert.Equal(enemyHealth, fight.Enemy.Health.Current);
+
+            fight.Play.CombatDriver.EndTurn();
+            Assert.Null(fight.Play.Session!.Error);
+
+            // 6 + 3 per card in the Queue — and by the time it resolves the Queue holds only itself.
+            Assert.Empty(fight.Queue);
+            Assert.Equal(enemyHealth - (6 + 3), fight.Enemy.Health.Current);
+        }
+    }
+
     [Fact]
     public void A_queued_card_whose_target_has_left_the_fight_fizzles()
     {

@@ -55,6 +55,7 @@ public sealed class EffectNodeExecutorRegistry
         r.RegisterOpenGeneric(typeof(DealDamageNode<>), new DealDamageNodeExecutor());
         r.RegisterOpenGeneric(typeof(ResolveQueuedCardsNode<>), new ResolveQueuedCardsNodeExecutor());
         r.RegisterOpenGeneric(typeof(ChooseOptionsNode<>), new ChooseOptionsNodeExecutor());
+        r.RegisterOpenGeneric(typeof(QueueCardNode<>), new QueueCardNodeExecutor());
         r.RegisterOpenGeneric(typeof(HealNode<>), new HealNodeExecutor());
         r.RegisterOpenGeneric(typeof(ModifyMaxHealthNode<>), new ModifyMaxHealthNodeExecutor());
         r.RegisterOpenGeneric(typeof(SetHealthNode<>), new SetHealthNodeExecutor());
@@ -2059,5 +2060,45 @@ public sealed class ChooseOptionsNodeExecutor : IEffectNodeExecutor
             ctx.CloseScope();
             RunOption(node, picks, at + 1, ctx, c, onComplete, dispatch);
         });
+    }
+}
+
+public sealed class QueueCardNodeExecutor : IEffectNodeExecutor
+{
+    public void Execute(IEffectNode node, IEffectExecutionContextCore ctx, CombatState combat,
+        Action<CombatState>? onComplete, Action<IEffectNode, CombatState, Action<CombatState>?> dispatch)
+    {
+        var typed = (IQueueCardNodeCore)node;
+        var cardId = typed.EvaluateCardInstanceId(ctx, combat);
+        var owners = typed.TargetSelector.ResolveTargetsTraced(ctx, combat).ToList();
+
+        if (cardId is { } instanceId && owners.Count > 0)
+        {
+            var target = typed.CardTargetSelector?.ResolveTargetsTraced(ctx, combat).FirstOrDefault();
+            foreach (var ownerId in owners)
+            {
+                var zones = combat.GetCardZones(ownerId);
+                if (!zones.ContainsCard(instanceId))
+                    continue;
+
+                var card = zones.GetCard(instanceId);
+                card.SetQueuedTarget(target);
+                combat.EnqueueEffect(new MoveCardToZoneEffectRequest(ownerId, instanceId, CardZone.QueuePile));
+                combat.AddLogEntry(
+                    StandardCombatLogTypes.CardMovedToZone,
+                    $"Card '{instanceId}' was queued by '{ownerId}'.");
+
+                // The Queue rules are explicit that a queued card counts as played NOW, so everything that
+                // watches card plays sees it here rather than when it later resolves.
+                combat.EnqueueEvent(new CardPlayedCombatEvent(
+                    CardDefinitionId: card.DefinitionId,
+                    SourceCombatantId: ownerId,
+                    TargetCombatantId: target,
+                    CardInstanceId: instanceId));
+            }
+        }
+
+        if (onComplete is not null)
+            combat.EnqueueContinuation(onComplete);
     }
 }

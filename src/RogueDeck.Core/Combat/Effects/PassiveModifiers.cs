@@ -148,8 +148,10 @@ internal static class DeclarativePassiveModifierEngine
                 // damage, or another element, is never scaled by a resistance/weakness meant for this one).
                 if (spec.RestrictElement is { } specElement && specElement != damageElement)
                     continue;
-                // Source-card gate: only damage dealt by a card carrying that tag counts. No card (an enemy
-                // action, a status tick) never matches, which is what "from attacks" means.
+                // Source-card gate: only damage dealt by — or, in the cost pipeline, the price OF — a card
+                // carrying that tag counts. No card (an enemy action, a status tick) never matches, which is
+                // what "from attacks" means; in the cost pipeline it is what "the first Deed you play each
+                // turn costs 1 less" means.
                 if (spec.RestrictSourceCardTag is { } specTag && !SourceCardHasTag(registry, damageSourceCardId, specTag))
                     continue;
                 applicable.Add((spec.Priority, group.Key.value, i, spec, totalStacks));
@@ -252,8 +254,10 @@ public sealed class DeclarativePassiveCostModifier : ICardCostModifier
     public int ModifyCostAmount(CardCostModificationContext context, int currentAmount)
     {
         ArgumentNullException.ThrowIfNull(context);
+        // The card being priced is the "source card" here, so a spec restricted to a card tag prices only
+        // cards of that kind — "the first Deed you play each turn costs 1 less".
         return DeclarativePassiveModifierEngine.Apply(
             context.Combat, context.Registry, context.Source, PassiveModifierPipeline.CardCost,
-            damageKind: null, currentAmount);
+            damageKind: null, currentAmount, damageSourceCardId: context.Card.Id);
     }
 }

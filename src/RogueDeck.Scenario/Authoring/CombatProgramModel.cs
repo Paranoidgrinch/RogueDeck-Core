@@ -428,6 +428,7 @@ public static class CombatProgramModel
         ("createCardCopy", "copy a card"),
         ("playCard", "play a card"),
         ("replayCardProgram", "replay a card's program"),
+        ("queueCard", "queue a card"),
         ("resolveQueuedCards", "resolve queued cards"),
         ("moveCombatant", "move combatant"),
         ("swapPositions", "swap positions"),
@@ -473,10 +474,10 @@ public static class CombatProgramModel
             or "removeSelectedStatus" or "stealSelectedStatus" or "refillResource"
             or "moveCombatant" or "swapPositions"
             or "setCombatantLifecycleState" or "changeCombatantTeam" or "setCombatResult" or "removeTemporaryRule"
-            or "summonCombatant" or "playCard" or "replayCardProgram");
+            or "summonCombatant" or "playCard" or "replayCardProgram" or "queueCard");
 
     // playCard aims the played card at an optional target — its row shows a "target" toggle + a selector.
-    public static bool UsesCardTarget(string kind) => kind is "playCard";
+    public static bool UsesCardTarget(string kind) => kind is "playCard" or "queueCard";
 
     // moveCombatant (2D-grid positioning): a movement mode plus its coordinate amounts (X/Y for ToAbsolute, else a
     // single Step). swapPositions exchanges two combatants' cells (its second selector reuses ToSelectorKey).
@@ -608,6 +609,8 @@ public static class CombatProgramModel
         "createCardCopy" => new("createCardCopy", "source", CombatAmountSpec.FromConst(1), Card: new CombatCardSpec("chosen", CardZone.Hand), ToZone: CardZone.Hand),
         "playCard" => new("playCard", "source", Card: new CombatCardSpec("chosen", CardZone.Hand), HasCardTarget: true, ToSelectorKey: "eventTarget"),
         "replayCardProgram" => new("replayCardProgram", "eventTarget", Card: new CombatCardSpec("chosen", CardZone.Hand)),
+        "queueCard" => new("queueCard", "source", Card: new CombatCardSpec("chosen", CardZone.Hand),
+            HasCardTarget: true, ToSelectorKey: "eventTarget"),
         "moveCombatant" => new("moveCombatant", "eventTarget",
             MovementMode: MovementMode.ToAbsolute, MoveX: CombatAmountSpec.FromConst(0), MoveY: CombatAmountSpec.FromConst(0)),
         "swapPositions" => new("swapPositions", "source", ToSelectorKey: "eventTarget"),
@@ -1144,6 +1147,8 @@ public static class CombatProgramModel
             "playCard" => new PlayCardNode<TContext>(selector, BuildCard<TContext>(model.CardOrDefault),
                 model.HasCardTarget ? SelectorFor(model.SecondarySelector) : null),
             "replayCardProgram" => new ReplayCardProgramNode<TContext>(BuildCard<TContext>(model.CardOrDefault), selector),
+            "queueCard" => new QueueCardNode<TContext>(selector, BuildCard<TContext>(model.CardOrDefault),
+                model.HasCardTarget ? SelectorFor(model.SecondarySelector) : null),
             "moveCombatant" => model.MovementMode == MovementMode.ToAbsolute
                 ? new MoveCombatantNode<TContext>(selector, MovementMode.ToAbsolute,
                     x: BuildAmount<TContext>(model.MoveX ?? CombatAmountSpec.FromConst(0)),
@@ -1321,6 +1326,13 @@ public static class CombatProgramModel
                     return WithSelector(n.PlayerSelector, new CombatNodeModel("playCard", "source", Card: pcCard, HasCardTarget: false));
                 return WithSecondarySelector(n.CardTargetSelector,
                     WithSelector(n.PlayerSelector, new CombatNodeModel("playCard", "source", Card: pcCard, HasCardTarget: true)));
+            case QueueCardNode<TContext> n:
+                if (ClassifyCard(n.Card) is not { } qcCard)
+                    return null;
+                if (n.CardTargetSelector is null)
+                    return WithSelector(n.TargetSelector, new CombatNodeModel("queueCard", "source", Card: qcCard, HasCardTarget: false));
+                return WithSecondarySelector(n.CardTargetSelector,
+                    WithSelector(n.TargetSelector, new CombatNodeModel("queueCard", "source", Card: qcCard, HasCardTarget: true)));
             case ReplayCardProgramNode<TContext> n:
                 return ClassifyCard(n.Card) is { } rcCard
                     ? WithSelector(n.TargetSelector, new CombatNodeModel("replayCardProgram", "source", Card: rcCard))
