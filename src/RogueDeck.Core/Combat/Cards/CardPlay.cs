@@ -167,6 +167,10 @@ public sealed class CombatCardPlayProcessor
         {
             var buildContext = CreateCardPlayBuildContext(combat, card.Id, source, targetCombatantId);
 
+            // Open the play's once-per-play ledger around the whole program, so every hit the program
+            // produces — including the ones its own repeat/replay nodes produce — counts as this one play.
+            combat.BeginCardPlayScope();
+
             Action<EffectProgramExecutionState, CombatState>? onTerminal = null;
             if (cardInstanceId is not null)
             {
@@ -214,11 +218,16 @@ public sealed class CombatCardPlayProcessor
             if (outputScaled)
                 executionContext.SetOutputScale(scaleNum, scaleDen);
 
+            var placeCard = onTerminal;
             EffectProgramExecutor.Execute(
                 program, executionContext, combat,
                 onComplete: null,
                 registry: registry.EffectNodeExecutors,
-                onTerminal: onTerminal);
+                onTerminal: (state, c) =>
+                {
+                    placeCard?.Invoke(state, c);
+                    c.EndCardPlayScope();
+                });
         }
         else if (cardInstanceId is not null)
         {

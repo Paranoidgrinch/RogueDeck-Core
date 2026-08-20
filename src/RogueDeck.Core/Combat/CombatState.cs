@@ -64,6 +64,27 @@ public sealed class CombatState
 
     public void SetCardChooser(ICombatCardChooser? chooser) => CardChooser = chooser;
 
+    // Card-play scope: a claim ledger for modifiers that must contribute once per PLAY rather than once per
+    // hit ("+N total damage"). The card-play pipeline opens a fresh scope for every play; a claim inside it
+    // succeeds exactly once per key, and every hit of that play — including the ones a card's own repeat
+    // produces — sees the key already taken. Outside a play no scope is open and every claim fails, so a
+    // once-per-play spec cannot leak into a status tick or an enemy action. Transient bookkeeping within a
+    // single play, so it is deliberately not part of the snapshot or the state hash.
+    // Nested, because a card's program can play another card: the copy is its own play and gets its own
+    // ledger, and closing it hands the outer play its ledger back.
+    private readonly Stack<HashSet<string>> _cardPlayScopes = new();
+
+    internal void BeginCardPlayScope() => _cardPlayScopes.Push(new HashSet<string>(StringComparer.Ordinal));
+
+    internal void EndCardPlayScope()
+    {
+        if (_cardPlayScopes.Count > 0)
+            _cardPlayScopes.Pop();
+    }
+
+    internal bool TryClaimOncePerCardPlay(string key) =>
+        _cardPlayScopes.Count > 0 && _cardPlayScopes.Peek().Add(key);
+
     public int NextStatusInstanceNumber { get; private set; } = 1;
 
     public int NextCardInstanceNumber { get; private set; } = 1;

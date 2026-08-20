@@ -92,7 +92,12 @@ public sealed record PassiveModifierSpec(
     // Damage pipelines only: when set, the spec applies only to damage whose SOURCE CARD carries this tag —
     // "I take 4 less from attacks", "spells hurt me more". Damage from an enemy action or from a card without
     // the tag is untouched. Null (default) = card-agnostic, so existing specs are unaffected.
-    TagId? RestrictSourceCardTag = null);
+    TagId? RestrictSourceCardTag = null,
+    // Damage pipelines only: when true the spec contributes at most ONCE per card play, instead of once per
+    // hit. This is what "+N total damage" means on a card or relic — a three-hit Deed and a Deed that repeats
+    // itself both collect the bonus a single time. Outside a card play (a status tick, an enemy action) a
+    // once-per-play spec never applies, because there is no play to be "once" within.
+    bool OncePerCardPlay = false);
 
 // Shared fold used by every generic declarative modifier.
 internal static class DeclarativePassiveModifierEngine
@@ -164,6 +169,13 @@ internal static class DeclarativePassiveModifierEngine
         var current = amount;
         foreach (var entry in applicable)
         {
+            // A once-per-card-play spec is claimed the first time it is reached inside the current play and
+            // skipped for every later hit of that play. Claiming happens here, after every other gate, so a
+            // spec that would not have applied anyway does not burn its one use.
+            if (entry.spec.OncePerCardPlay &&
+                !combat.TryClaimOncePerCardPlay($"{pipeline}|{entry.statusId}|{entry.specIndex}|{combatant.Id.value}"))
+                continue;
+
             // An expression magnitude scales by live state (evaluated against the read-from combatant);
             // otherwise the constant Magnitude is used.
             var magnitude = entry.spec.MagnitudeExpression?.Evaluate(combat, combatant) ?? entry.spec.Magnitude;

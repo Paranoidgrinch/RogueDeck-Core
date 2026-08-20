@@ -83,6 +83,14 @@
                             <input value="@mod.AppliesToStatusId" style="width:7rem" placeholder="status id (optional)" list="rd-status-ids"
                                    @onchange="e => SetModifier(index, modIndex, mod with { AppliesToStatusId = Nullable(AsString(e.Value)) })" />
                         </label>
+                        <label title="Damage only: apply only to damage dealt by a card carrying this tag (leave blank for any source).">only from cards tagged
+                            <input value="@mod.RestrictSourceCardTag" style="width:7rem" placeholder="card tag (optional)"
+                                   @onchange="e => SetModifier(index, modIndex, mod with { RestrictSourceCardTag = Nullable(AsString(e.Value)) })" />
+                        </label>
+                        <label title="Damage only: contribute once per card played instead of once per hit — what '+N total damage' means.">
+                            <input type="checkbox" checked="@mod.OncePerCardPlay"
+                                   @onchange="e => SetModifier(index, modIndex, mod with { OncePerCardPlay = AsBool(e.Value) })" /> once per card played
+                        </label>
                         <button class="mini" @onclick="() => RemoveModifier(index, modIndex)">✕</button>
                     </div>
                 }
