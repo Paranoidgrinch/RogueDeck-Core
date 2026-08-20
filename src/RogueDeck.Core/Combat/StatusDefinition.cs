@@ -33,6 +33,11 @@ public sealed class StatusDefinition
     // instead of a bespoke C# modifier class. Immutable from construction (see PassiveModifiers.cs).
     public IReadOnlyList<PassiveModifierSpec> PassiveModifiers { get; }
 
+    // "Due notice": while this status is on a combatant, statuses newly applied TO that combatant do not take
+    // effect at once — they wait the given number of the bearer's turn starts, visible and cleansable but
+    // inert. Null = applications land immediately, as always.
+    public IncomingStatusDelaySpec? IncomingStatusDelay { get; }
+
     internal void Freeze() => _tags = _tags.ToImmutableHashSet();
 
     public StatusDefinition(
@@ -49,7 +54,8 @@ public sealed class StatusDefinition
         bool showDurationInUi = false,
         bool showChargesInUi = false,
         StatusStackingBehavior stackingBehavior = StatusStackingBehavior.CreateSeparateInstance,
-        IEnumerable<PassiveModifierSpec>? passiveModifiers = null)
+        IEnumerable<PassiveModifierSpec>? passiveModifiers = null,
+        IncomingStatusDelaySpec? incomingStatusDelay = null)
     {
         if (string.IsNullOrWhiteSpace(displayNameKey))
             throw new ArgumentException("Display name key cannot be empty.", nameof(displayNameKey));
@@ -71,5 +77,13 @@ public sealed class StatusDefinition
         ShowChargesInUi = showChargesInUi;
         StackingBehavior = stackingBehavior;
         PassiveModifiers = passiveModifiers?.ToImmutableArray() ?? ImmutableArray<PassiveModifierSpec>.Empty;
+        IncomingStatusDelay = incomingStatusDelay;
     }
+}
+
+// How long an incoming status waits, and which kinds wait at all. A null polarity delays everything; the
+// classic use delays only what hurts (Polarity = Debuff).
+public sealed record IncomingStatusDelaySpec(int Turns, StatusPolarity? Polarity = null)
+{
+    public bool Applies(StatusPolarity polarity) => Polarity is null || Polarity == polarity;
 }

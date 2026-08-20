@@ -112,8 +112,10 @@ public static class CombatStateHasher
             .Append(" stk=").Append(s.Stacks)
             .Append(" dur=").Append(s.DurationTurns)
             .Append(" chg=").Append(s.Charges)
-            .Append(" pol=").Append((int)s.Polarity)
-            .Append('\n');
+            .Append(" pol=").Append((int)s.Polarity);
+        if (s.PendingTurns > 0)
+            sb.Append(" pend=").Append(s.PendingTurns);
+        sb.Append('\n');
     }
 
     private static void AppendCardZones(StringBuilder sb, CombatantCardZonesSnapshot zones)

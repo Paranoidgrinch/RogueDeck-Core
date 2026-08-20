@@ -76,7 +76,8 @@ public static class CombatStateSnapshotter
                 .Select(kv => (kv.Key, new PoolSnapshot(kv.Value.Current, kv.Value.Max, kv.Value.CanExceedMax)))
                 .OrderBy(p => p.Key.value, StringComparer.Ordinal)
                 .ToImmutableArray(),
-            Statuses: c.Statuses.Select(SnapshotStatus).ToImmutableArray(),
+            // AllStatuses: a snapshot has to carry the pending ones too, or a save would silently drop them.
+            Statuses: c.AllStatuses.Select(SnapshotStatus).ToImmutableArray(),
             Tags: c.Tags
                 .OrderBy(t => t.value, StringComparer.Ordinal)
                 .ToImmutableArray(),
@@ -105,7 +106,8 @@ public static class CombatStateSnapshotter
             SourceCardId: s.SourceCardId,
             AppliedRound: s.AppliedRound,
             AppliedTurn: s.AppliedTurn,
-            Visibility: s.Visibility);
+            Visibility: s.Visibility,
+            PendingTurns: s.PendingTurns);
 
     private static CombatantCardZonesSnapshot SnapshotCardZones(CombatantCardZones zones) =>
         new(

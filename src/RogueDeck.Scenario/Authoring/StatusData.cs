@@ -36,6 +36,10 @@ public sealed record StatusData
     // Debuff-block interceptor (suppress the first debuff application, run effects). Null = no debuff block.
     public StatusDebuffBlockData? DebuffBlock { get; init; }
 
+    // "Due notice": statuses applied to the bearer wait this many of the bearer's turn starts before they take
+    // effect. Null = they land at once, as always.
+    public IncomingStatusDelayData? IncomingStatusDelay { get; init; }
+
     public static StatusData From(StatusBlueprint status)
     {
         ArgumentNullException.ThrowIfNull(status);
@@ -52,6 +56,9 @@ public sealed record StatusData
             StackingBehavior = status.StackingBehavior,
             Tags = status.Tags.Select(t => t.value).ToArray(),
             PassiveModifiers = status.PassiveModifiers.Select(PassiveModifierData.From).ToArray(),
+            IncomingStatusDelay = status.IncomingStatusDelay is { } delay
+                ? new IncomingStatusDelayData(delay.Turns, delay.Polarity)
+                : null,
         };
     }
 
@@ -67,6 +74,9 @@ public sealed record StatusData
             UsesDuration = UsesDuration,
             UsesCharges = UsesCharges,
             StackingBehavior = StackingBehavior,
+            IncomingStatusDelay = IncomingStatusDelay is { } delay
+                ? new IncomingStatusDelaySpec(delay.Turns, delay.Polarity)
+                : null,
         };
         foreach (var tag in Tags)
             status.Tags.Add(new TagId(tag));
@@ -81,6 +91,10 @@ public sealed record StatusData
 // is deserialized under; the program itself is context-agnostic on the wire. Escapes (non-serializable effects)
 // are dropped upstream, so anything stored here round-trips.
 public sealed record StatusTriggerData(string Event, JsonElement Program);
+
+// How long statuses applied to this status' bearer are postponed, and which of them wait at all (null polarity
+// = everything). The engine face is IncomingStatusDelaySpec.
+public sealed record IncomingStatusDelayData(int Turns, StatusPolarity? Polarity = null);
 
 // A status' death-prevention interceptor as data: the HP to survive at, plus the effects to run when it fires.
 public sealed record StatusDeathPreventionData(int SurvivingHealth, IReadOnlyList<InterceptorEffectData> Effects);

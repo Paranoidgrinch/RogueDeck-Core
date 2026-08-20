@@ -172,6 +172,19 @@ public sealed record StatusAppliedCombatEvent(
     CardDefinitionId? SourceCardId = null
 ) : ICombatEvent;
 
+// A postponed status has finished waiting and is now in force. It is deliberately NOT a second StatusApplied:
+// the application already happened, this is the notice taking effect.
+public sealed record StatusActivatedCombatEvent(
+    CombatantId TargetCombatantId,
+    StatusInstanceId StatusInstanceId,
+    StatusDefinitionId StatusDefinitionId,
+    int Stacks,
+    int DurationTurns,
+    int Charges,
+    CombatantId? SourceCombatantId = null,
+    CardDefinitionId? SourceCardId = null
+) : ICombatEvent;
+
 public sealed record StatusMergedCombatEvent(
     CombatantId TargetCombatantId,
     StatusInstanceId StatusInstanceId,

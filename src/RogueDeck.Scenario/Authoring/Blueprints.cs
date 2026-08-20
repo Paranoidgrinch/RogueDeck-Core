@@ -20,6 +20,10 @@ public sealed class StatusBlueprint
     public List<TagId> Tags { get; } = new();
     public List<PassiveModifierSpec> PassiveModifiers { get; } = new();
 
+    // "Due notice": while a combatant bears this status, statuses newly applied TO it wait the given number of
+    // its turn starts before taking effect (visible and cleansable, but inert). Null = immediate, as always.
+    public IncomingStatusDelaySpec? IncomingStatusDelay { get; init; }
+
     public StatusBlueprint(string id)
     {
         if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("Status id cannot be empty.", nameof(id));
@@ -35,7 +39,8 @@ public sealed class StatusBlueprint
         var def = new StatusDefinition(
             DefinitionId, new PackageId(PackageId), NameKey, DescriptionKey,
             polarity: Polarity, usesStacks: UsesStacks, usesDuration: UsesDuration, usesCharges: UsesCharges,
-            stackingBehavior: StackingBehavior, passiveModifiers: PassiveModifiers);
+            stackingBehavior: StackingBehavior, passiveModifiers: PassiveModifiers,
+            incomingStatusDelay: IncomingStatusDelay);
         foreach (var tag in Tags) def.Tags.Add(tag);
         return def;
     }

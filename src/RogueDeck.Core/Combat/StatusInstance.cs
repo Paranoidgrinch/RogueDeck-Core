@@ -13,6 +13,14 @@ public sealed class StatusInstance
     public int DurationTurns { get; private set; }
     public int Charges { get; private set; }
 
+    // Turns this instance still has to wait before it takes effect. A pending instance is VISIBLE (and can be
+    // cleansed) but inert: it carries no modifiers, fires no triggers and is invisible to every "does the
+    // bearer have this status" question, because CombatantState.Statuses only lists active ones. It counts
+    // down at the bearer's turn start and becomes active at zero. Zero — the default — is "in force now".
+    public int PendingTurns { get; private set; }
+
+    public bool IsActive => PendingTurns == 0;
+
     public int AppliedRound { get; }
     public int AppliedTurn { get; }
 
@@ -38,7 +46,8 @@ public sealed class StatusInstance
         int appliedTurn = 1,
         StatusVisibility visibility = StatusVisibility.Visible,
         StatusPolarity polarity = StatusPolarity.Neutral,
-        IEnumerable<TagId>? initialTags = null)
+        IEnumerable<TagId>? initialTags = null,
+        int pendingTurns = 0)
     {
         if (stacks < 0)
             throw new ArgumentOutOfRangeException(nameof(stacks), "Stacks cannot be negative.");
@@ -49,6 +58,9 @@ public sealed class StatusInstance
         if (charges < 0)
             throw new ArgumentOutOfRangeException(nameof(charges), "Charges cannot be negative.");
 
+        if (pendingTurns < 0)
+            throw new ArgumentOutOfRangeException(nameof(pendingTurns), "Pending turns cannot be negative.");
+
         Id = id;
         DefinitionId = definitionId;
         OwnerCombatantId = ownerCombatantId;
@@ -57,6 +69,7 @@ public sealed class StatusInstance
         Stacks = stacks;
         DurationTurns = durationTurns;
         Charges = charges;
+        PendingTurns = pendingTurns;
         AppliedRound = appliedRound;
         AppliedTurn = appliedTurn;
         Visibility = visibility;
@@ -81,6 +94,14 @@ public sealed class StatusInstance
             throw new ArgumentOutOfRangeException(nameof(value), "Duration cannot be negative.");
 
         DurationTurns = value;
+    }
+
+    public void SetPendingTurns(int value)
+    {
+        if (value < 0)
+            throw new ArgumentOutOfRangeException(nameof(value), "Pending turns cannot be negative.");
+
+        PendingTurns = value;
     }
 
     public void SetCharges(int value)

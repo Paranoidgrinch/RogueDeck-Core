@@ -102,7 +102,11 @@ public sealed class ApplyStatusEffectHandler : EffectRequestHandler<ApplyStatusE
                 damageKind: null, applyStatus.Stacks, appliesToStatusId: applyStatus.StatusDefinitionId);
         }
 
-        if (definition.StackingBehavior == StatusStackingBehavior.MergeWithExistingInstance)
+        // Due notice: a status the target carries can postpone what lands on it. A postponed application is
+        // always its own instance — merging it into a status already in force would make it effective at once.
+        var pendingTurns = IncomingDelayFor(combat, registry, target, definition);
+
+        if (pendingTurns == 0 && definition.StackingBehavior == StatusStackingBehavior.MergeWithExistingInstance)
         {
             var existingStatus = target.Statuses.FirstOrDefault(
                 status => status.DefinitionId == applyStatus.StatusDefinitionId);
@@ -163,9 +167,29 @@ public sealed class ApplyStatusEffectHandler : EffectRequestHandler<ApplyStatusE
             combat.CurrentTurn,
             definition.DefaultVisibility,
             definition.Polarity,
-            initialTags: definition.Tags);
+            initialTags: definition.Tags,
+            pendingTurns: pendingTurns);
 
         target.AddStatus(newStatus);
+
+        if (pendingTurns > 0)
+        {
+            combat.AddLogEntry(
+                StandardCombatLogTypes.StatusApplied,
+                $"Status '{applyStatus.StatusDefinitionId}' on '{applyStatus.TargetCombatantId}' is pending "
+                + $"for {pendingTurns} turn(s).");
+
+            if (applyStatus.OutcomeSlot is { } pendingSlot)
+                pendingSlot.Value = new ApplyStatusOutcome(
+                    Applied: true, Merged: false, Blocked: false,
+                    ResultingStacks: newStatus.Stacks,
+                    ResultingDurationTurns: newStatus.DurationTurns,
+                    ResultingCharges: newStatus.Charges);
+
+            // A pending status is not in force, so it raises no StatusApplied event: nothing may react to a
+            // notice as though it were an effect. The activation event comes when it takes hold.
+            return;
+        }
 
         if (applyStatus.OutcomeSlot is { } appliedSlot)
             appliedSlot.Value = new ApplyStatusOutcome(
@@ -195,6 +219,22 @@ public sealed class ApplyStatusEffectHandler : EffectRequestHandler<ApplyStatusE
                 Charges: newStatus.Charges,
                 SourceCombatantId: newStatus.SourceCombatantId,
                 SourceCardId: newStatus.SourceCardId));
+    }
+
+    // The longest delay any status in force on the target imposes on this kind of application.
+    private static int IncomingDelayFor(
+        CombatState combat, CombatDefinitionRegistry registry, CombatantState target, StatusDefinition definition)
+    {
+        var delay = 0;
+        foreach (var status in target.Statuses)
+        {
+            if (!registry.TryGetStatus(status.DefinitionId, out var carried) || carried is null)
+                continue;
+            if (carried.IncomingStatusDelay is { } spec && spec.Applies(definition.Polarity) && spec.Turns > delay)
+                delay = spec.Turns;
+        }
+
+        return delay;
     }
 
     // Returns the decisive interception result together with the id of the interceptor that
@@ -338,6 +378,47 @@ public sealed class DecreaseTimedStatusDurationsOnTurnEndedHandler
     }
 }
 
+// Postponed statuses count down at the start of their bearer's turn and take effect at zero.
+public sealed class ActivatePendingStatusesOnTurnStartedHandler
+    : CombatEventHandler<TurnStartedCombatEvent>
+{
+    protected override void Handle(
+        CombatState combat,
+        CombatDefinitionRegistry registry,
+        TurnStartedCombatEvent combatEvent)
+    {
+        if (!combat.TryGetCombatant(combatEvent.CombatantId, out var combatant) || combatant is null)
+            return;
+
+        var pending = combatant.PendingStatuses.ToList();
+        if (pending.Count == 0)
+            return;
+
+        foreach (var status in pending)
+        {
+            status.SetPendingTurns(status.PendingTurns - 1);
+            if (!status.IsActive)
+                continue;
+
+            combat.AddLogEntry(
+                StandardCombatLogTypes.StatusApplied,
+                $"Status '{status.DefinitionId}' on '{combatant.Id}' takes effect.");
+
+            combat.EnqueueEvent(new StatusActivatedCombatEvent(
+                TargetCombatantId: combatant.Id,
+                StatusInstanceId: status.Id,
+                StatusDefinitionId: status.DefinitionId,
+                Stacks: status.Stacks,
+                DurationTurns: status.DurationTurns,
+                Charges: status.Charges,
+                SourceCombatantId: status.SourceCombatantId,
+                SourceCardId: status.SourceCardId));
+        }
+
+        combatant.RecountActiveStatuses();
+    }
+}
+
 public sealed class DamageOverTimeOnTurnStartedHandler
     : CombatEventHandler<TurnStartedCombatEvent>
 {
@@ -458,7 +539,9 @@ public sealed class RemoveStatusEffectHandler : EffectRequestHandler<RemoveStatu
         registry.GetStatus(request.StatusDefinitionId);
 
         var target = combat.GetCombatant(request.TargetCombatantId);
-        var statusesToRemove = target.Statuses
+        // AllStatuses: a notice that has not taken effect yet can still be answered — cleansing reaches
+        // pending instances as well as those in force.
+        var statusesToRemove = target.AllStatuses
             .Where(status => status.DefinitionId == request.StatusDefinitionId)
             .ToArray();
 
@@ -898,7 +981,8 @@ public sealed class RemoveStatusesByPolarityEffectHandler
     {
         var target = combat.GetCombatant(request.TargetCombatantId);
 
-        var statusesToRemove = target.Statuses
+        // AllStatuses: a cleanse sweeps pending notices out too, before they can take hold.
+        var statusesToRemove = target.AllStatuses
             .Where(status => registry.GetStatus(status.DefinitionId).Polarity == request.Polarity)
             .ToArray();
 

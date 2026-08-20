@@ -21,7 +21,16 @@ public sealed class CombatantState
 
     public IReadOnlyDictionary<ResourceId, ValuePoolState> Resources => _resources;
     public IReadOnlyDictionary<DefensivePoolId, ValuePoolState> DefensivePools => _defensivePools;
-    public IReadOnlyList<StatusInstance> Statuses => _statuses;
+    // Statuses in force. A status applied under a delay (Article of Due Notice and friends) waits in
+    // PendingStatuses until its bearer's next turn begins, so nothing in the effect pipeline sees it early;
+    // AllStatuses is what the UI, the hasher and serialization walk.
+    public IReadOnlyList<StatusInstance> Statuses =>
+        _statuses.Count == _activeCount ? _statuses : _statuses.Where(status => status.IsActive).ToList();
+    public IEnumerable<StatusInstance> PendingStatuses => _statuses.Where(status => !status.IsActive);
+    public IReadOnlyList<StatusInstance> AllStatuses => _statuses;
+
+    // Fast path for the common case: no pending instance means Statuses can hand back the list itself.
+    private int _activeCount;
     public IReadOnlySet<TagId> Tags => _tags;
     public IReadOnlyDictionary<CounterId, int> Counters => _counters;
 
@@ -31,8 +40,22 @@ public sealed class CombatantState
     public void AddDefensivePool(DefensivePoolId id, ValuePoolState pool) => _defensivePools.Add(id, pool);
 
     // Internal mutation — bypasses the effect queue; only for use by effect handlers.
-    internal void AddStatus(StatusInstance status) => _statuses.Add(status);
-    internal bool RemoveStatus(StatusInstance status) => _statuses.Remove(status);
+    internal void AddStatus(StatusInstance status)
+    {
+        _statuses.Add(status);
+        RecountActiveStatuses();
+    }
+
+    internal bool RemoveStatus(StatusInstance status)
+    {
+        var removed = _statuses.Remove(status);
+        if (removed)
+            RecountActiveStatuses();
+        return removed;
+    }
+
+    // Called after anything changes an instance's pending state.
+    internal void RecountActiveStatuses() => _activeCount = _statuses.Count(status => status.IsActive);
 
     // Persistent per-combatant scalar counters (#persistent-combat-stats): named integers that live for the
     // whole fight (e.g. a combo/attacks-this-combat tally), survive save/restore, and are read/written by the

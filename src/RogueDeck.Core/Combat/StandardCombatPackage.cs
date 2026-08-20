@@ -114,6 +114,8 @@ public sealed class StandardCombatPackage : ICombatPackage
         // Refill BEFORE the turn-start triggers, so a triggered program that spends/steals the refilled
         // resource (fatigue: "lose 1 energy at turn start") isn't silently topped back up to max.
         registry.RegisterCombatEventHandler(new RefillResourceOnTurnStartedHandler(StandardCombatIds.EnergyResource, defaultMax: 3));
+        // Postponed statuses take effect BEFORE that turn's triggers read them.
+        registry.RegisterCombatEventHandler(new ActivatePendingStatusesOnTurnStartedHandler());
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.TurnStarted.CreateHandler());
 
         registry.RegisterCombatEventHandler(new DrawCardsOnTurnStartedHandler(_cardsDrawnPerTurn));

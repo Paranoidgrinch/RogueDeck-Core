@@ -713,7 +713,8 @@ public sealed class CombatState
             sourceCombatantId: s.SourceCombatantId, sourceCardId: s.SourceCardId,
             stacks: s.Stacks, durationTurns: s.DurationTurns, charges: s.Charges,
             appliedRound: s.AppliedRound, appliedTurn: s.AppliedTurn,
-            visibility: s.Visibility, polarity: s.Polarity, initialTags: s.Tags);
+            visibility: s.Visibility, polarity: s.Polarity, initialTags: s.Tags,
+            pendingTurns: s.PendingTurns);
 
     private static void RestorePile(
         CombatantCardZones zones, CombatantId owner,

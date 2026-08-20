@@ -22,7 +22,10 @@ public sealed record StatusInstanceSnapshot(
     CardDefinitionId? SourceCardId = null,
     int AppliedRound = 1,
     int AppliedTurn = 1,
-    StatusVisibility Visibility = StatusVisibility.Visible
+    StatusVisibility Visibility = StatusVisibility.Visible,
+    // Turns this instance still waits before it takes effect (see StatusInstance.PendingTurns). Part of the
+    // determinism hash: a pending status behaves differently from one in force.
+    int PendingTurns = 0
 );
 
 // Immutable capture of one card instance, including its per-instance marks (tags/counters/source).

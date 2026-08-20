@@ -146652,7 +146652,8 @@
       "PassiveModifiers": [],
       "Triggers": [],
       "DeathPrevention": null,
-      "DebuffBlock": null
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null
     },
     {
       "Id": "doubt",
@@ -146712,7 +146713,8 @@
         }
       ],
       "DeathPrevention": null,
-      "DebuffBlock": null
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null
     },
     {
       "Id": "panic",
@@ -146772,7 +146774,8 @@
         }
       ],
       "DeathPrevention": null,
-      "DebuffBlock": null
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null
     },
     {
       "Id": "fatigue",
@@ -146852,7 +146855,8 @@
         }
       ],
       "DeathPrevention": null,
-      "DebuffBlock": null
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null
     },
     {
       "Id": "strength",
@@ -146878,7 +146882,8 @@
       ],
       "Triggers": [],
       "DeathPrevention": null,
-      "DebuffBlock": null
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null
     },
     {
       "Id": "poison",
@@ -146930,7 +146935,8 @@
         }
       ],
       "DeathPrevention": null,
-      "DebuffBlock": null
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null
     },
     {
       "Id": "bookworm",
@@ -147372,7 +147378,8 @@
         }
       ],
       "DeathPrevention": null,
-      "DebuffBlock": null
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null
     },
     {
       "Id": "queue_advances",
@@ -147538,7 +147545,8 @@
         }
       ],
       "DeathPrevention": null,
-      "DebuffBlock": null
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null
     },
     {
       "Id": "still_missing_a_signature",
@@ -149059,7 +149067,8 @@
         }
       ],
       "DeathPrevention": null,
-      "DebuffBlock": null
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null
     },
     {
       "Id": "signature_pending",
@@ -149085,7 +149094,8 @@
       ],
       "Triggers": [],
       "DeathPrevention": null,
-      "DebuffBlock": null
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null
     },
     {
       "Id": "paper_seals_wax",
@@ -150035,7 +150045,8 @@
         }
       ],
       "DeathPrevention": null,
-      "DebuffBlock": null
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null
     },
     {
       "Id": "one_remaining_seal",
@@ -150386,7 +150397,8 @@
         }
       ],
       "DeathPrevention": null,
-      "DebuffBlock": null
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null
     },
     {
       "Id": "seal_intact",
@@ -150412,7 +150424,8 @@
       ],
       "Triggers": [],
       "DeathPrevention": null,
-      "DebuffBlock": null
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null
     },
     {
       "Id": "witness_the_seal",
@@ -150470,7 +150483,8 @@
         }
       ],
       "DeathPrevention": null,
-      "DebuffBlock": null
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null
     },
     {
       "Id": "both_directions_mandatory",
@@ -150486,7 +150500,8 @@
       "PassiveModifiers": [],
       "Triggers": [],
       "DeathPrevention": null,
-      "DebuffBlock": null
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null
     },
     {
       "Id": "loophole",
@@ -150544,7 +150559,8 @@
         }
       ],
       "DeathPrevention": null,
-      "DebuffBlock": null
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null
     },
     {
       "Id": "the_applicant",
@@ -150560,7 +150576,8 @@
       "PassiveModifiers": [],
       "Triggers": [],
       "DeathPrevention": null,
-      "DebuffBlock": null
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null
     },
     {
       "Id": "still_in_force_passive",
@@ -150618,7 +150635,8 @@
         }
       ],
       "DeathPrevention": null,
-      "DebuffBlock": null
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null
     },
     {
       "Id": "stolen_sand_passive",
@@ -150634,7 +150652,8 @@
       "PassiveModifiers": [],
       "Triggers": [],
       "DeathPrevention": null,
-      "DebuffBlock": null
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null
     },
     {
       "Id": "your_number_is_fading",
@@ -150739,7 +150758,8 @@
         }
       ],
       "DeathPrevention": null,
-      "DebuffBlock": null
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null
     },
     {
       "Id": "stolen_minute_passive",
@@ -150755,7 +150775,8 @@
       "PassiveModifiers": [],
       "Triggers": [],
       "DeathPrevention": null,
-      "DebuffBlock": null
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null
     },
     {
       "Id": "counterclaim",
@@ -151179,7 +151200,8 @@
         }
       ],
       "DeathPrevention": null,
-      "DebuffBlock": null
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null
     },
     {
       "Id": "sustained",
@@ -151237,7 +151259,8 @@
         }
       ],
       "DeathPrevention": null,
-      "DebuffBlock": null
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null
     }
   ],
   "Relics": [
