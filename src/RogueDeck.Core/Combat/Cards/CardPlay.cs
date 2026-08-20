@@ -158,6 +158,15 @@ public sealed class CombatCardPlayProcessor
         }
         var outputScaled = scaleNum < scaleDen;
 
+        // A per-copy price is a promise to ONE card and is kept once: the play has been paid for by now, so
+        // the mark is spent here rather than lingering into the next time this card is drawn.
+        if (cardInstanceId is { } pricedInstanceId)
+        {
+            var zones = combat.GetCardZones(source.Id);
+            if (zones.ContainsCard(pricedInstanceId))
+                zones.GetCard(pricedInstanceId).SetMarkCounter(StandardCombatIds.CardCostDeltaCounter, 0);
+        }
+
         // Open the action here, before anything the card does: everything it sets in motion — its legacy
         // effect list AND its program — belongs to this one action, and the action is what "once per action"
         // and "was that a damaging action?" are asked about.

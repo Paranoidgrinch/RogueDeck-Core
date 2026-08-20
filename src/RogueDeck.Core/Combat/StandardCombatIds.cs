@@ -80,6 +80,13 @@ public static class StandardCombatIds
     // SetCardInstanceMarkCounter op; nothing else in the engine attaches meaning to these counter ids.
     public static readonly CounterId CardOutputScaleNumeratorCounter = new("standard.card_output_scale_num");
     public static readonly CounterId CardOutputScaleDenominatorCounter = new("standard.card_output_scale_den");
+
+    // A reserved per-instance mark that changes what THIS COPY of a card costs — "the card you chose costs 1
+    // less the first time you play it", which no status can express, because a status prices every card its
+    // wearer holds. The delta is added to each of the card's resource costs (clamped at zero) and CONSUMED
+    // when the card is played, so it is a one-shot price on one card rather than a standing discount.
+    // Content sets it with the ordinary SetCardInstanceMarkCounter op; nothing else attaches meaning to it.
+    public static readonly CounterId CardCostDeltaCounter = new("standard.card_cost_delta");
 }
 
 

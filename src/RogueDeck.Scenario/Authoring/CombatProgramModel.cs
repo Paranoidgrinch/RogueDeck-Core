@@ -429,6 +429,8 @@ public static class CombatProgramModel
         ("playCard", "play a card"),
         ("replayCardProgram", "replay a card's program"),
         ("queueCard", "queue a card"),
+        ("markCardInstance", "mark a card"),
+        ("setCardInstanceMarkCounter", "set a card's counter"),
         ("resolveQueuedCards", "resolve queued cards"),
         ("moveCombatant", "move combatant"),
         ("swapPositions", "swap positions"),
@@ -459,7 +461,8 @@ public static class CombatProgramModel
 
     // setCombatantCounter writes a named per-fight counter on the target; its row shows a counter-id field and a
     // relative/absolute toggle (relative adds the amount, absolute sets it).
-    public static bool UsesCounterId(string kind) => kind is "setCombatantCounter";
+    public static bool UsesCounterId(string kind) =>
+        kind is "setCombatantCounter" or "setCardInstanceMarkCounter";
 
     // The leaf kinds that name a specific status (apply / remove / modify-* show a status-id field).
     public static bool UsesStatusId(string kind) =>
@@ -474,10 +477,13 @@ public static class CombatProgramModel
             or "removeSelectedStatus" or "stealSelectedStatus" or "refillResource"
             or "moveCombatant" or "swapPositions"
             or "setCombatantLifecycleState" or "changeCombatantTeam" or "setCombatResult" or "removeTemporaryRule"
-            or "summonCombatant" or "playCard" or "replayCardProgram" or "queueCard");
+            or "summonCombatant" or "playCard" or "replayCardProgram" or "queueCard" or "markCardInstance");
 
     // playCard aims the played card at an optional target — its row shows a "target" toggle + a selector.
     public static bool UsesCardTarget(string kind) => kind is "playCard" or "queueCard";
+
+    // The per-instance card ops: a mark tag (markCardInstance) or a mark counter on ONE card copy.
+    public static bool UsesCardMark(string kind) => kind is "markCardInstance" or "setCardInstanceMarkCounter";
 
     // moveCombatant (2D-grid positioning): a movement mode plus its coordinate amounts (X/Y for ToAbsolute, else a
     // single Step). swapPositions exchanges two combatants' cells (its second selector reuses ToSelectorKey).
@@ -611,6 +617,11 @@ public static class CombatProgramModel
         "replayCardProgram" => new("replayCardProgram", "eventTarget", Card: new CombatCardSpec("chosen", CardZone.Hand)),
         "queueCard" => new("queueCard", "source", Card: new CombatCardSpec("chosen", CardZone.Hand),
             HasCardTarget: true, ToSelectorKey: "eventTarget"),
+        "markCardInstance" => new("markCardInstance", "source", Card: new CombatCardSpec("chosen", CardZone.Hand),
+            ToTag: "marked"),
+        "setCardInstanceMarkCounter" => new("setCardInstanceMarkCounter", "source",
+            CombatAmountSpec.FromConst(1), Card: new CombatCardSpec("chosen", CardZone.Hand),
+            CounterId: "card_mark", Relative: false),
         "moveCombatant" => new("moveCombatant", "eventTarget",
             MovementMode: MovementMode.ToAbsolute, MoveX: CombatAmountSpec.FromConst(0), MoveY: CombatAmountSpec.FromConst(0)),
         "swapPositions" => new("swapPositions", "source", ToSelectorKey: "eventTarget"),
@@ -680,7 +691,11 @@ public static class CombatProgramModel
                 IgnoresBlock = kind == "dealDamage" && node.IgnoresBlock,
                 DamageKind = kind == "dealDamage" ? node.DamageKind : DamageKind.Direct,
                 CounterId = UsesCounterId(kind) ? (node.CounterId == "" ? "combo" : node.CounterId) : "",
-                Relative = UsesCounterId(kind) && (node.Kind == "setCombatantCounter" ? node.Relative : true),
+                // markCardInstance reuses Relative as its "remove the mark" flag, so it keeps whatever was set.
+                Relative = UsesCardMark(kind)
+                    ? node.Relative
+                    : UsesCounterId(kind) && (node.Kind == "setCombatantCounter" ? node.Relative : true),
+                ToTag = kind is "forEachCardInZone" or "markCardInstance" ? node.ToTag : "",
                 MovementMode = UsesMovement(kind) ? node.MovementMode : MovementMode.ToAbsolute,
                 MoveX = kind == "moveCombatant" ? (node.MoveX ?? CombatAmountSpec.FromConst(0)) : null,
                 MoveY = kind == "moveCombatant" ? (node.MoveY ?? CombatAmountSpec.FromConst(0)) : null,
@@ -1153,6 +1168,11 @@ public static class CombatProgramModel
             "replayCardProgram" => new ReplayCardProgramNode<TContext>(BuildCard<TContext>(model.CardOrDefault), selector),
             "queueCard" => new QueueCardNode<TContext>(selector, BuildCard<TContext>(model.CardOrDefault),
                 model.HasCardTarget ? SelectorFor(model.SecondarySelector) : null),
+            "markCardInstance" => new MarkCardInstanceNode<TContext>(
+                selector, BuildCard<TContext>(model.CardOrDefault), new TagId(model.ToTag), model.Relative),
+            "setCardInstanceMarkCounter" => new SetCardInstanceMarkCounterNode<TContext>(
+                selector, BuildCard<TContext>(model.CardOrDefault), new CounterId(model.CounterId),
+                amount, model.Relative),
             "moveCombatant" => model.MovementMode == MovementMode.ToAbsolute
                 ? new MoveCombatantNode<TContext>(selector, MovementMode.ToAbsolute,
                     x: BuildAmount<TContext>(model.MoveX ?? CombatAmountSpec.FromConst(0)),
@@ -1330,6 +1350,19 @@ public static class CombatProgramModel
                     return WithSelector(n.PlayerSelector, new CombatNodeModel("playCard", "source", Card: pcCard, HasCardTarget: false));
                 return WithSecondarySelector(n.CardTargetSelector,
                     WithSelector(n.PlayerSelector, new CombatNodeModel("playCard", "source", Card: pcCard, HasCardTarget: true)));
+            case MarkCardInstanceNode<TContext> { SourceSelector: null } n:
+                return ClassifyCard(n.CardExpression) is { } mcCard
+                    ? WithSelector(n.OwnerSelector, new CombatNodeModel("markCardInstance", "source",
+                        Card: mcCard, ToTag: n.Mark.value, Relative: n.Remove))
+                    : null;
+            case SetCardInstanceMarkCounterNode<TContext> n:
+                if (ClassifyCard(n.CardExpression) is not { } smCard)
+                    return null;
+                var smAmount = ClassifyAmount(n.Value);
+                return smAmount.IsAdvanced
+                    ? null
+                    : WithSelector(n.OwnerSelector, new CombatNodeModel("setCardInstanceMarkCounter", "source",
+                        smAmount, Card: smCard, CounterId: n.Counter.value, Relative: n.Relative));
             case QueueCardNode<TContext> n:
                 if (ClassifyCard(n.Card) is not { } qcCard)
                     return null;

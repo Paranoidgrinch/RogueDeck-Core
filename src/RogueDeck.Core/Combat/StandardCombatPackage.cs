@@ -62,6 +62,7 @@ public sealed class StandardCombatPackage : ICombatPackage
         registry.RegisterCardCostModifier(new FreeNextCardCostModifier());
         registry.RegisterCardCostModifier(new FirstAttackEachTurnFreeCostModifier());
         registry.RegisterCardCostModifier(new SkillCostReductionCostModifier());
+        registry.RegisterCardCostModifier(new CardInstanceCostModifier());
 
         registry.RegisterStatusApplicationInterceptor(new ArtifactStatusApplicationInterceptor());
         registry.RegisterStatusApplicationInterceptor(new DeclarativeStatusPreventionInterceptor());
