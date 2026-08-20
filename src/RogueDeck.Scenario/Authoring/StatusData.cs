@@ -167,21 +167,21 @@ public sealed record PassiveModifierData(
     // Damage pipelines only: restrict the spec to damage dealt by a card carrying this tag ("4 less from
     // attacks"). Null = card-agnostic, as before.
     string? RestrictSourceCardTag = null,
-    // Damage pipelines only: contribute once per card PLAY rather than once per hit — what "+N total damage"
-    // means. A multi-hit card and a card that repeats itself both collect the bonus once. False = per hit,
-    // and false is kept out of the wire format so documents written before the flag existed round-trip
-    // byte-identically.
+    // Damage pipelines only: contribute once per ACTION — one card play, one enemy action — rather than once
+    // per hit, which is what "+N total damage" means. A multi-hit card and a card that repeats itself both
+    // collect the bonus once. False = per hit, and false is kept out of the wire format so documents written
+    // before the flag existed round-trip byte-identically.
     [property: System.Text.Json.Serialization.JsonIgnore(
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
-    bool OncePerCardPlay = false)
+    bool OncePerAction = false)
 {
     public static PassiveModifierData From(PassiveModifierSpec spec) => new(
         spec.Pipeline, spec.Operation, spec.Magnitude, spec.Priority, spec.RestrictDamageKind,
-        spec.AppliesToStatusId?.value, spec.RestrictSourceCardTag?.value, spec.OncePerCardPlay);
+        spec.AppliesToStatusId?.value, spec.RestrictSourceCardTag?.value, spec.OncePerAction);
 
     public PassiveModifierSpec ToSpec() => new(
         Pipeline, Operation, Magnitude, Priority, RestrictDamageKind,
         AppliesToStatusId is null ? null : new StatusDefinitionId(AppliesToStatusId),
         RestrictSourceCardTag: RestrictSourceCardTag is null ? null : new TagId(RestrictSourceCardTag),
-        OncePerCardPlay: OncePerCardPlay);
+        OncePerAction: OncePerAction);
 }

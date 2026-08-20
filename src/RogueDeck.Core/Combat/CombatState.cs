@@ -64,26 +64,28 @@ public sealed class CombatState
 
     public void SetCardChooser(ICombatCardChooser? chooser) => CardChooser = chooser;
 
-    // Card-play scope: a claim ledger for modifiers that must contribute once per PLAY rather than once per
-    // hit ("+N total damage"). The card-play pipeline opens a fresh scope for every play; a claim inside it
-    // succeeds exactly once per key, and every hit of that play — including the ones a card's own repeat
-    // produces — sees the key already taken. Outside a play no scope is open and every claim fails, so a
-    // once-per-play spec cannot leak into a status tick or an enemy action. Transient bookkeeping within a
-    // single play, so it is deliberately not part of the snapshot or the state hash.
-    // Nested, because a card's program can play another card: the copy is its own play and gets its own
-    // ledger, and closing it hands the outer play its ledger back.
-    private readonly Stack<HashSet<string>> _cardPlayScopes = new();
+    // Action scope: a claim ledger for rules that must fire once per ACTION rather than once per hit. An
+    // action is one card play or one enemy action; both open a fresh scope around their whole program, so a
+    // claim inside succeeds exactly once and every later hit of the same action — including the ones the
+    // program's own repeats produce — finds the key taken. That is what "+N TOTAL damage" means, and what
+    // "a multi-hit attack spends only one stack" means.
+    //
+    // Outside an action no scope is open and every claim fails, so a once-per-action rule cannot leak into a
+    // status tick or a turn-boundary program. Nested, because an action's program can start another action:
+    // the inner one gets its own ledger and closing it hands the outer its ledger back. Transient bookkeeping
+    // within one action, so it is deliberately not part of the snapshot or the state hash.
+    private readonly Stack<HashSet<string>> _actionScopes = new();
 
-    internal void BeginCardPlayScope() => _cardPlayScopes.Push(new HashSet<string>(StringComparer.Ordinal));
+    internal void BeginActionScope() => _actionScopes.Push(new HashSet<string>(StringComparer.Ordinal));
 
-    internal void EndCardPlayScope()
+    internal void EndActionScope()
     {
-        if (_cardPlayScopes.Count > 0)
-            _cardPlayScopes.Pop();
+        if (_actionScopes.Count > 0)
+            _actionScopes.Pop();
     }
 
-    internal bool TryClaimOncePerCardPlay(string key) =>
-        _cardPlayScopes.Count > 0 && _cardPlayScopes.Peek().Add(key);
+    public bool TryClaimOnceThisAction(string key) =>
+        _actionScopes.Count > 0 && _actionScopes.Peek().Add(key);
 
     public int NextStatusInstanceNumber { get; private set; } = 1;
 

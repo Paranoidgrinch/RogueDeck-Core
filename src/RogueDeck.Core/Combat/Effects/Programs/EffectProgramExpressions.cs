@@ -975,6 +975,11 @@ public sealed class EventAmountExpression<TContext> : ICombatExpression<TContext
             DamageDealtTriggeredEffectContext dealt => dealt.CombatEvent.HealthDamage,
             ResourceGainedTriggeredEffectContext gained => gained.CombatEvent.GainedAmount,
             BlockGainedTriggeredEffectContext blocked => blocked.CombatEvent.GainedAmount,
+            // A stack change reports its DELTA: negative when the status lost stacks, positive when it gained
+            // them. That sign is the whole question for a rule that only cares about decay ("whenever another
+            // status on the holder loses one or more stacks").
+            StatusStacksChangedTriggeredEffectContext changed =>
+                changed.CombatEvent.NewStacks - changed.CombatEvent.OldStacks,
             _ => 0,
         };
 }
@@ -1863,6 +1868,68 @@ public sealed class TriggerEventSourceCardHasTagExpression<TContext> : ICombatEx
             && combat.DefinitionRegistry is { } registry
             && registry.CardDefinitions.TryGetValue(id, out var card)
             && card.Tags.Contains(Tag);
+    }
+}
+
+// True when the status the triggering event is about is the named one — "did THIS status move?".
+// A status-borne rule cannot otherwise tell which status changed, because the event is not addressable from
+// the program; the alternative is the per-status counter mirror, which needs one counter per status watched.
+// The common use is the negation: a status that answers every OTHER status' movement must not answer its own.
+public sealed class TriggerEventStatusIsExpression<TContext> : ICombatExpression<TContext, bool>
+    where TContext : class
+{
+    public StatusDefinitionId Status { get; }
+
+    public TriggerEventStatusIsExpression(StatusDefinitionId status) => Status = status;
+
+    public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        var statusId = context.SourceContext switch
+        {
+            StatusAppliedTriggeredEffectContext applied => applied.CombatEvent.StatusDefinitionId,
+            StatusRemovedTriggeredEffectContext removed => removed.CombatEvent.StatusDefinitionId,
+            StatusMergedTriggeredEffectContext merged => merged.CombatEvent.StatusDefinitionId,
+            StatusStacksChangedTriggeredEffectContext changed => changed.CombatEvent.StatusDefinitionId,
+            StatusExpiredTriggeredEffectContext expired => expired.CombatEvent.StatusDefinitionId,
+            StatusApplicationBlockedTriggeredEffectContext blocked => blocked.CombatEvent.BlockedStatusDefinitionId,
+            _ => (StatusDefinitionId?)null,
+        };
+
+        return statusId == Status;
+    }
+}
+
+// "Is this the first time this rule has been reached during the current action?" — and CLAIMS that first
+// time, so every later evaluation within the same action answers false.
+//
+// The rule it exists for is "one action, one trigger, however many hits it makes": Doubt is spent once per
+// Attack action even when the attack strikes three times, and Citation fires once per non-damaging action
+// however many sub-effects it contains. A trigger program fires per hit and has no other way to tell the
+// first hit of an action from its fifth.
+//
+// Deliberately a claim and not a pure test: the claim IS the answer, and there is nowhere else to put it —
+// a program cannot write to the action scope. Two consequences worth knowing when authoring: give each rule
+// its own key (the key is the ledger entry, so two rules sharing one key take each other's turn), and
+// remember that a short-circuiting And/Or may never reach it — which is usually what you want, since a rule
+// whose other conditions failed should not burn its one use.
+//
+// Outside an action — a status tick, a turn-boundary program — no scope is open and the answer is always
+// false, so a once-per-action rule simply does not fire there.
+public sealed class ClaimOnceThisActionExpression<TContext> : ICombatExpression<TContext, bool>
+    where TContext : class
+{
+    public string Key { get; }
+
+    public ClaimOnceThisActionExpression(string key)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        Key = key;
+    }
+
+    public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        ArgumentNullException.ThrowIfNull(combat);
+        return combat.TryClaimOnceThisAction(Key);
     }
 }
 

@@ -87,9 +87,9 @@
                             <input value="@mod.RestrictSourceCardTag" style="width:7rem" placeholder="card tag (optional)"
                                    @onchange="e => SetModifier(index, modIndex, mod with { RestrictSourceCardTag = Nullable(AsString(e.Value)) })" />
                         </label>
-                        <label title="Damage only: contribute once per card played instead of once per hit — what '+N total damage' means.">
-                            <input type="checkbox" checked="@mod.OncePerCardPlay"
-                                   @onchange="e => SetModifier(index, modIndex, mod with { OncePerCardPlay = AsBool(e.Value) })" /> once per card played
+                        <label title="Damage only: contribute once per action (card play or enemy action) instead of once per hit — what '+N total damage' means.">
+                            <input type="checkbox" checked="@mod.OncePerAction"
+                                   @onchange="e => SetModifier(index, modIndex, mod with { OncePerAction = AsBool(e.Value) })" /> once per action (card play or enemy action)
                         </label>
                         <button class="mini" @onclick="() => RemoveModifier(index, modIndex)">✕</button>
                     </div>

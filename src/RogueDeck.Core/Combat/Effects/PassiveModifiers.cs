@@ -93,11 +93,12 @@ public sealed record PassiveModifierSpec(
     // "I take 4 less from attacks", "spells hurt me more". Damage from an enemy action or from a card without
     // the tag is untouched. Null (default) = card-agnostic, so existing specs are unaffected.
     TagId? RestrictSourceCardTag = null,
-    // Damage pipelines only: when true the spec contributes at most ONCE per card play, instead of once per
-    // hit. This is what "+N total damage" means on a card or relic — a three-hit Deed and a Deed that repeats
-    // itself both collect the bonus a single time. Outside a card play (a status tick, an enemy action) a
-    // once-per-play spec never applies, because there is no play to be "once" within.
-    bool OncePerCardPlay = false);
+    // Damage pipelines only: when true the spec contributes at most ONCE per action — one card play or one
+    // enemy action — instead of once per hit. This is what "+N total damage" means on a card or relic: a
+    // three-hit Deed and a Deed that repeats itself both collect the bonus a single time. Outside an action
+    // (a status tick, a turn-boundary program) such a spec never applies, because there is no action to be
+    // "once" within.
+    bool OncePerAction = false);
 
 // Shared fold used by every generic declarative modifier.
 internal static class DeclarativePassiveModifierEngine
@@ -169,11 +170,11 @@ internal static class DeclarativePassiveModifierEngine
         var current = amount;
         foreach (var entry in applicable)
         {
-            // A once-per-card-play spec is claimed the first time it is reached inside the current play and
-            // skipped for every later hit of that play. Claiming happens here, after every other gate, so a
-            // spec that would not have applied anyway does not burn its one use.
-            if (entry.spec.OncePerCardPlay &&
-                !combat.TryClaimOncePerCardPlay($"{pipeline}|{entry.statusId}|{entry.specIndex}|{combatant.Id.value}"))
+            // A once-per-action spec is claimed the first time it is reached inside the current action and
+            // skipped for every later hit of it. Claiming happens here, after every other gate, so a spec that
+            // would not have applied anyway does not burn its one use.
+            if (entry.spec.OncePerAction &&
+                !combat.TryClaimOnceThisAction($"{pipeline}|{entry.statusId}|{entry.specIndex}|{combatant.Id.value}"))
                 continue;
 
             // An expression magnitude scales by live state (evaluated against the read-from combatant);

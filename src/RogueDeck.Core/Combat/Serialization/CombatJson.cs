@@ -189,6 +189,8 @@ public static class CombatJson
          .Register("cardInstanceHasMark", typeof(CardInstanceHasMarkExpression<>))
          .Register("firstCardPlayedHasTag", typeof(FirstCardPlayedThisTurnHasTagExpression<>))
          .Register("eventSourceCardHasTag", typeof(TriggerEventSourceCardHasTagExpression<>))
+         .Register("eventStatusIs", typeof(TriggerEventStatusIsExpression<>))
+         .Register("claimOnceThisAction", typeof(ClaimOnceThisActionExpression<>))
          .Register("iterationTargetHasStatus", typeof(IterationTargetHasStatusExpression<>));
 
         // Card-instance expressions (resolve a specific card instance to act on).

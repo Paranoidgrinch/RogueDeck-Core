@@ -48,13 +48,18 @@ public sealed class ExecuteEnemyActionEffectHandler
 
         if (action.Program is { } program)
         {
+            // An enemy action is an ACTION in the same sense a card play is: everything its program does,
+            // however many hits it makes, happens once. Rules written "once per action" claim inside this
+            // scope (see CombatState.TryClaimOnceThisAction).
+            combat.BeginActionScope();
             EffectProgramExecutor.Execute(
                 program,
                 new EnemyActionContext(action),
                 buildContext,
                 combat,
                 onComplete: null,
-                registry: registry.EffectNodeExecutors);
+                registry: registry.EffectNodeExecutors,
+                onTerminal: (_, c) => c.EndActionScope());
         }
     }
 }
