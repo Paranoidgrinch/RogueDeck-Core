@@ -143,7 +143,7 @@ public static class RuleBasedMapGenerator
         for (var ri = 0; ri < plan.Count; ri++)
         {
             var row = plan[ri];
-            var width = row.IsGate ? 1 : branches.Widths[row.BranchIndex];
+            var width = WidthOf(spec, row, branches);
             for (var c = 0; c < width; c++)
             {
                 var kind = row.IsGate ? row.GateKind : branches.Kinds[row.BranchIndex][c];
@@ -179,13 +179,19 @@ public static class RuleBasedMapGenerator
             builder.Entry(MapWiring.Id(0, c));
 
         for (var ri = 0; ri < plan.Count - 1; ri++)
-            MapWiring.WireRows(builder, ri, WidthOf(plan[ri], branches), WidthOf(plan[ri + 1], branches), wire);
+            MapWiring.WireRows(builder, ri, WidthOf(spec, plan[ri], branches), WidthOf(spec, plan[ri + 1], branches), wire);
 
         return (builder.Build(), roles);
     }
 
-    private static int WidthOf(RowPlanRow row, Branches branches) =>
-        row.IsGate ? 1 : branches.Widths[row.BranchIndex];
+    // A guarantee row is a funnel (width 1) unless the spec asks it to keep the map's width, in which case it
+    // borrows the width of the branch row it sits next to.
+    private static int WidthOf(MapGenerationSpec spec, RowPlanRow row, Branches branches) =>
+        row.IsGate
+            ? (spec.WideGuaranteeRows && row.GateKind != MapNodeKind.Boss
+                ? branches.Widths[Math.Min(row.BranchIndex, branches.Widths.Length - 1)]
+                : 1)
+            : branches.Widths[row.BranchIndex];
 
     // ── Row plan: branch rows (row 0 first) + spread gate funnels + boss ─────────────────────────────────
     private readonly record struct RowPlanRow(bool IsGate, MapNodeKind GateKind, int BranchIndex);
@@ -205,7 +211,7 @@ public static class RuleBasedMapGenerator
             var isGate = gateIndex < gates.Count
                 && ((slot + 1) * gates.Count / tail) > (slot * gates.Count / tail);
             if (isGate)
-                plan.Add(new RowPlanRow(true, gates[gateIndex++], 0));
+                plan.Add(new RowPlanRow(true, gates[gateIndex++], branchIndex));
             else
                 plan.Add(new RowPlanRow(false, default, branchIndex++));
         }

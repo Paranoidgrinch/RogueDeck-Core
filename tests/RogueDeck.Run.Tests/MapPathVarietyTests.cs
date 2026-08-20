@@ -147,6 +147,48 @@ public class MapPathVarietyTests
         Assert.True(shapes > 1, "the routes should not all read the same");
     }
 
+    // A wide guarantee row keeps the map branching where a funnel would pinch it shut — and guarantees just as
+    // absolutely, because a path crosses exactly one node per row.
+    [Theory]
+    [InlineData(4)]
+    [InlineData(19)]
+    public void Wide_guarantee_rows_keep_the_map_open_without_losing_the_guarantee(int seed)
+    {
+        var minimums = new Dictionary<MapNodeKind, int>
+        {
+            [MapNodeKind.Elite] = 1,
+            [MapNodeKind.Shop] = 2,
+            [MapNodeKind.Rest] = 2,
+        };
+        var spec = Spec() with { PerPathMinimums = minimums, WideGuaranteeRows = true };
+        var narrow = Spec() with { PerPathMinimums = minimums };
+
+        var wide = RuleBasedMapGenerator.Generate(spec, seed, 0, EmptyBalance(), Realize);
+        var funnelled = RuleBasedMapGenerator.Generate(narrow, seed, 0, EmptyBalance(), Realize);
+
+        Assert.Empty(RunMapValidator.Validate(wide.Map));
+        Assert.Empty(MapConstraintValidator.Validate(wide, spec));
+
+        // The guarantee still holds on every route …
+        foreach (var path in AllPaths(wide))
+            foreach (var (kind, min) in minimums)
+                Assert.True(path.Count(k => k == kind) >= min,
+                    $"a route holds only {path.Count(k => k == kind)} {kind} node(s), fewer than the {min} promised");
+
+        // … and the map stays open: more nodes than the funnelled version, and no pinch point before the boss.
+        Assert.True(wide.Map.Nodes.Count > funnelled.Map.Nodes.Count,
+            $"wide={wide.Map.Nodes.Count} funnelled={funnelled.Map.Nodes.Count}");
+
+        var rows = wide.Map.Nodes
+            .GroupBy(n => n.Id.Value.Split('c')[0])
+            .OrderBy(g => g.Key.Length).ThenBy(g => g.Key, StringComparer.Ordinal)
+            .ToList();
+        var pinched = rows.Take(rows.Count - 1).Count(g => g.Count() == 1);
+        var funnelledRows = funnelled.Map.Nodes.GroupBy(n => n.Id.Value.Split('c')[0]).ToList();
+        Assert.True(pinched < funnelledRows.Count(g => g.Count() == 1),
+            "wide guarantee rows should leave fewer width-1 rows than funnels do");
+    }
+
     // Without lanes the generator is byte-identical to before: one weight table, same map.
     [Fact]
     public void An_empty_lane_list_changes_nothing()

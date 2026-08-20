@@ -47,6 +47,13 @@
         </div>
 
         <div class="editor-card" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:1rem; margin:.75rem 0">
+            <label><input type="checkbox" checked="@spec.WideGuaranteeRows"
+                          @onchange="e => Save(spec with { WideGuaranteeRows = e.Value is bool b && b })" />
+                Wide guarantee rows</label>
+            <span class="muted"> — a guaranteed kind fills a FULL row instead of pinching the map into a width-1 funnel; the promise is the same, the branching survives</span>
+        </div>
+
+        <div class="editor-card" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:1rem; margin:.75rem 0">
             <strong>Per-path maximums</strong>
             <span class="muted"> — no entry→boss path may hold more than this (0 = unlimited); overshooting nodes become ordinary fights</span>
             <div class="run-bar" style="gap:1rem; flex-wrap:wrap; margin-top:.4rem">

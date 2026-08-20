@@ -46,6 +46,13 @@ public sealed record MapGenerationSpec
     // holds. Kinds not listed are unlimited. A maximum below the matching minimum is a spec error.
     public IReadOnlyDictionary<MapNodeKind, int> PerPathMaximums { get; init; } = EmptyCounts;
 
+    // How a guarantee row is drawn. A per-path minimum is met by a row EVERY path crosses; by default that row
+    // is a width-1 funnel, which is a readable landmark but pinches the map shut wherever a guarantee lands.
+    // With this on, the row keeps the map's width and simply fills every column with that kind: the guarantee
+    // is just as absolute (a path crosses exactly one node per row) while the branching — and with it the
+    // variety between routes — survives. The nodes still draw their own content, so the columns differ.
+    public bool WideGuaranteeRows { get; init; }
+
     // Column FLAVOURS. With lanes, a map's columns are not drawn from one table: column c takes its weights
     // from LaneProfiles[c % count], so the left of the map can be a combat gauntlet while the right is an
     // errand run — paths that keep to a side differ in what they hold AND in the order they hold it. Empty
