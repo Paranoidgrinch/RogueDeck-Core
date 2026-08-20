@@ -189,6 +189,14 @@ public interface IDealDamageNodeCore : INativeEffectOperationNode
     Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(DealDamageEffectRequest);
 }
 
+public interface IChooseOptionsNodeCore : IEffectNode
+{
+    IReadOnlyList<string> Labels { get; }
+    int Count { get; }
+    string Purpose { get; }
+    IEffectNode OptionAt(int index);
+}
+
 public interface IResolveQueuedCardsNodeCore : IEffectNode
 {
     ICombatantTargetSelector TargetSelector { get; }

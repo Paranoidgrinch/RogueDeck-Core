@@ -1520,3 +1520,47 @@ public sealed class ResolveQueuedCardsNode<TContext> : IResolveQueuedCardsNodeCo
     int IResolveQueuedCardsNodeCore.EvaluateAmount(IEffectExecutionContextCore ctx, CombatState combat) =>
         Amount.Evaluate((EffectExecutionContext<TContext>)ctx, combat);
 }
+
+// "Choose one: …" — the card offers named options and the player picks which of them happen.
+//
+// The options are the node's children and Labels names them in the same order; Count is how many the player
+// takes ("choose 2 different options"), and they resolve in the order picked, each waiting for the one before
+// it. Distinctness is inherent: an option is chosen by index and an index cannot be taken twice.
+//
+// Without an option chooser installed — headless play, simulation — the first Count options are taken, so a
+// card that offers a choice always resolves to something.
+public sealed class ChooseOptionsNode<TContext> : IChooseOptionsNodeCore, IEffectNode<TContext>
+    where TContext : class
+{
+    private readonly IEffectNode<TContext>[] _options;
+
+    public IReadOnlyList<string> Labels { get; }
+    public int Count { get; }
+    public string Purpose { get; }
+
+    public IReadOnlyList<IEffectNode<TContext>> Children => _options;
+
+    public string GetChildPathSegment(int childIndex) => $"option[{childIndex}]";
+
+    [System.Text.Json.Serialization.JsonConstructor]
+    public ChooseOptionsNode(
+        IReadOnlyList<IEffectNode<TContext>> children,
+        IReadOnlyList<string> labels,
+        int count = 1,
+        string purpose = "choose an option")
+    {
+        ArgumentNullException.ThrowIfNull(children);
+        ArgumentNullException.ThrowIfNull(labels);
+        if (children.Count == 0)
+            throw new ArgumentException("A choice must offer at least one option.", nameof(children));
+        if (labels.Count != children.Count)
+            throw new ArgumentException("Every option needs a label.", nameof(labels));
+
+        _options = children.ToArray();
+        Labels = labels.ToArray();
+        Count = Math.Clamp(count, 1, children.Count);
+        Purpose = string.IsNullOrWhiteSpace(purpose) ? "choose an option" : purpose;
+    }
+
+    IEffectNode IChooseOptionsNodeCore.OptionAt(int index) => _options[index];
+}

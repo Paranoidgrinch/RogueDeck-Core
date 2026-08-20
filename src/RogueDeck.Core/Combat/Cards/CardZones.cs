@@ -33,6 +33,17 @@ public interface ICombatCardChooser
     IReadOnlyList<CardInstanceId> ChooseCards(IReadOnlyList<CardInstance> candidates, int count, string purpose);
 }
 
+// The player-input collaborator for in-combat OPTION selection — "choose one: gain 2 Censure; or apply 2
+// Censure to an enemy". The card names its options, the player picks; the sibling of ICombatCardChooser and
+// bound by the same rule: DETERMINISTIC for a given combat so replays reproduce. When absent (headless play)
+// the first options are taken, so a card that offers a choice still resolves.
+//
+// Returns the INDEXES of the chosen options, in the order they should resolve.
+public interface ICombatOptionChooser
+{
+    IReadOnlyList<int> ChooseOptions(IReadOnlyList<string> options, int count, string purpose);
+}
+
 public sealed class CardInstance
 {
     public CardInstanceId Id { get; }

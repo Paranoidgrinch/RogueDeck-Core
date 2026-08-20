@@ -52,10 +52,43 @@
             {
                 @ConditionControls(Node.Condition ?? new CombatConditionSpec(), spec => Set(Node with { Condition = spec }))
             }
+            else if (Node.Kind == "chooseOptions")
+            {
+                @AmountControls(Node.AmountOrDefault, spec => Set(Node with { Amount = spec }))
+                <span class="muted">of them —</span>
+                <input value="@Node.Purpose" style="width:12rem" placeholder="prompt shown to the player"
+                       @onchange="e => Set(Node with { Purpose = AsString(e.Value) })" />
+            }
             @RemoveButton
         </div>
 
-        @if (Node.Kind == "sequence")
+        @if (Node.Kind == "chooseOptions")
+        {
+            var options = Node.ChildrenOrEmpty;
+            @for (var i = 0; i < options.Count; i++)
+            {
+                var ix = i;
+                <div class="fx-body">
+                    <div class="run-bar">
+                        <span class="muted">option @(ix + 1)</span>
+                        <input value="@LabelAt(ix)" style="width:14rem" placeholder="what the player reads"
+                               @onchange="e => SetOptionLabel(ix, AsString(e.Value))" />
+                    </div>
+                    <CombatProgramEditor Node="options[ix]"
+                                         NodeChanged="c => ReplaceChild(ix, c)"
+                                         Removed="() => RemoveOption(ix)" />
+                </div>
+            }
+            <div class="fx-body">
+                <span class="muted">add option:</span>
+                @foreach (var (kind, label) in CombatProgramModel.AllKinds)
+                {
+                    var k = kind;
+                    <button class="mini" title="@StudioVocabulary.NodeDescription(kind)" @onclick="() => AddOption(k)">+ @label</button>
+                }
+            </div>
+        }
+        else if (Node.Kind == "sequence" || Node.Kind == "causalSequence")
         {
             var children = Node.ChildrenOrEmpty;
             @for (var i = 0; i < children.Count; i++)
@@ -1092,6 +1125,46 @@ else
 
     private void AddChild(string kind) =>
         Set(Node with { Children = Node.ChildrenOrEmpty.Append(CombatProgramModel.NewNode(kind)).ToList() });
+
+    // A choice keeps one LABEL per option, in the same order as the options themselves, so adding or removing
+    // one has to move both lists together — a label without its option, or an option without its label, would
+    // not build.
+    private string LabelAt(int i) =>
+        i >= 0 && i < Node.OptionLabelsOrEmpty.Count ? Node.OptionLabelsOrEmpty[i] : "";
+
+    private void SetOptionLabel(int i, string label)
+    {
+        var labels = Node.OptionLabelsOrEmpty.ToList();
+        while (labels.Count <= i)
+            labels.Add("");
+        labels[i] = label;
+        Set(Node with { OptionLabels = labels });
+    }
+
+    private void AddOption(string kind)
+    {
+        var labels = Node.OptionLabelsOrEmpty.ToList();
+        labels.Add($"option {labels.Count + 1}");
+        Set(Node with
+        {
+            Children = Node.ChildrenOrEmpty.Append(CombatProgramModel.NewNode(kind)).ToList(),
+            OptionLabels = labels,
+        });
+    }
+
+    private void RemoveOption(int i)
+    {
+        var options = Node.ChildrenOrEmpty.ToList();
+        var labels = Node.OptionLabelsOrEmpty.ToList();
+        if (i >= 0 && i < options.Count)
+            options.RemoveAt(i);
+        if (i >= 0 && i < labels.Count)
+            labels.RemoveAt(i);
+        // A choice must keep at least one option to remain buildable.
+        Set(options.Count == 0
+            ? Node with { Children = new[] { CombatProgramModel.NewNode("gainBlock") }, OptionLabels = new[] { "option 1" } }
+            : Node with { Children = options, OptionLabels = labels });
+    }
 
     private void SetBody(CombatNodeModel body) => Set(Node with { Children = new[] { body } });
 

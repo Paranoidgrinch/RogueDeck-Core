@@ -17,6 +17,7 @@ public sealed class PartyInteractiveCombatDriver : ICombatDriver, IReplayResetta
 {
     private readonly ReplayScript _script;
     private readonly UiCombatCardChooser _cardChooser;
+    private readonly UiCombatOptionChooser _optionChooser;
 
     // The party fight currently awaiting the players, or null when no party combat is in progress.
     public PartyCombat? Current { get; private set; }
@@ -26,6 +27,10 @@ public sealed class PartyInteractiveCombatDriver : ICombatDriver, IReplayResetta
     public IReadOnlyList<CardInstance>? PendingCardChoice => _cardChooser.PendingCandidates;
     public int PendingCardChoiceCount => _cardChooser.PendingCount;
     public string PendingCardChoicePurpose => _cardChooser.PendingPurpose;
+
+    public IReadOnlyList<string>? PendingOptionChoice => _optionChooser.PendingOptions;
+    public int PendingOptionChoiceCount => _optionChooser.PendingCount;
+    public string PendingOptionChoicePurpose => _optionChooser.PendingPurpose;
 
     // Replay applies every action synchronously inside the caller's answer method; kept because the view disables
     // its controls against it.
@@ -38,12 +43,14 @@ public sealed class PartyInteractiveCombatDriver : ICombatDriver, IReplayResetta
     {
         _script = script ?? new ReplayScript();
         _cardChooser = new UiCombatCardChooser(_script);
+        _optionChooser = new UiCombatOptionChooser(_script);
     }
 
     public void ResetForReplay()
     {
         Current = null;
         _cardChooser.ResetForReplay();
+        _optionChooser.ResetForReplay();
         _script.Reset(); // idempotent with the session's own reset; keeps driver-only rigs (tests) correct
     }
 
@@ -59,6 +66,7 @@ public sealed class PartyInteractiveCombatDriver : ICombatDriver, IReplayResetta
         var combat = new PartyCombat(
             compiled, EnemyIntentSelectors.Build(compiled), playthrough.CombatId, playthrough.RandomSeed);
         combat.State.SetCardChooser(_cardChooser);
+        combat.State.SetOptionChooser(_optionChooser);
         Current = combat;
         var allies = playthrough.Blueprint.Allies;
         var heroId = compiled.Hero.CombatantId;
@@ -94,7 +102,7 @@ public sealed class PartyInteractiveCombatDriver : ICombatDriver, IReplayResetta
 
     public void PlayCardFor(CombatantId member, CardInstanceId cardId, CombatantId? target)
     {
-        if (Current is null || _cardChooser.IsAwaitingChoice)
+        if (Current is null || _cardChooser.IsAwaitingChoice || _optionChooser.IsAwaitingChoice)
             return;
         _script.Advance(new CombatPlayEntry(member, cardId, target));
     }
@@ -102,13 +110,15 @@ public sealed class PartyInteractiveCombatDriver : ICombatDriver, IReplayResetta
     // Ending the last living member runs the enemy phase + opens the next player phase, inside PartyCombat.EndTurn.
     public void EndTurnFor(CombatantId member)
     {
-        if (Current is null || _cardChooser.IsAwaitingChoice)
+        if (Current is null || _cardChooser.IsAwaitingChoice || _optionChooser.IsAwaitingChoice)
             return;
         _script.Advance(new CombatEndTurnEntry(member));
     }
 
     // The UI's answer to a pending in-combat card choice.
     public void SupplyCardChoice(IReadOnlyList<CardInstanceId> picks) => _cardChooser.Supply(picks);
+
+    public void SupplyOptionChoice(IReadOnlyList<int> picks) => _optionChooser.Supply(picks);
 
     public void Dispose()
     {

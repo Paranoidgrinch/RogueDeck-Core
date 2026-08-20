@@ -15,6 +15,7 @@ public sealed class InteractiveCombatDriver : ICombatDriver, IReplayResettable, 
 {
     private readonly ReplayScript _script;
     private readonly UiCombatCardChooser _cardChooser;
+    private readonly UiCombatOptionChooser _optionChooser;
 
     // The fight currently awaiting the player, or null when no combat is in progress.
     public InteractiveCombat? Current { get; private set; }
@@ -24,6 +25,12 @@ public sealed class InteractiveCombatDriver : ICombatDriver, IReplayResettable, 
     public IReadOnlyList<CardInstance>? PendingCardChoice => _cardChooser.PendingCandidates;
     public int PendingCardChoiceCount => _cardChooser.PendingCount;
     public string PendingCardChoicePurpose => _cardChooser.PendingPurpose;
+
+    // A pending in-combat OPTION choice ("choose one: …"): the option labels, how many the player takes, and
+    // what for — null when none is awaiting a pick. The UI renders these and calls SupplyOptionChoice.
+    public IReadOnlyList<string>? PendingOptionChoice => _optionChooser.PendingOptions;
+    public int PendingOptionChoiceCount => _optionChooser.PendingCount;
+    public string PendingOptionChoicePurpose => _optionChooser.PendingPurpose;
 
     // Replay applies every action synchronously inside the caller's answer method, so nothing is ever mid-flight
     // when the UI runs. Kept because the view disables its controls against it.
@@ -37,12 +44,14 @@ public sealed class InteractiveCombatDriver : ICombatDriver, IReplayResettable, 
     {
         _script = script ?? new ReplayScript();
         _cardChooser = new UiCombatCardChooser(_script);
+        _optionChooser = new UiCombatOptionChooser(_script);
     }
 
     public void ResetForReplay()
     {
         Current = null;
         _cardChooser.ResetForReplay();
+        _optionChooser.ResetForReplay();
         _script.Reset(); // idempotent with the session's own reset; keeps driver-only rigs (tests) correct
     }
 
@@ -56,6 +65,7 @@ public sealed class InteractiveCombatDriver : ICombatDriver, IReplayResettable, 
         var combat = new InteractiveCombat(
             compiled, EnemyIntentSelectors.Build(compiled), playthrough.CombatId, playthrough.RandomSeed);
         combat.State.SetCardChooser(_cardChooser);
+        combat.State.SetOptionChooser(_optionChooser);
         Current = combat;
 
         while (true)
@@ -100,20 +110,23 @@ public sealed class InteractiveCombatDriver : ICombatDriver, IReplayResettable, 
 
     public void PlayCard(CardInstanceId cardId, CombatantId? target)
     {
-        if (Current is null || _cardChooser.IsAwaitingChoice)
+        if (Current is null || _cardChooser.IsAwaitingChoice || _optionChooser.IsAwaitingChoice)
             return;
         _script.Advance(new CombatPlayEntry(null, cardId, target));
     }
 
     public void EndTurn()
     {
-        if (Current is null || _cardChooser.IsAwaitingChoice)
+        if (Current is null || _cardChooser.IsAwaitingChoice || _optionChooser.IsAwaitingChoice)
             return;
         _script.Advance(new CombatEndTurnEntry(null));
     }
 
     // The UI's answer to a pending in-combat card choice.
     public void SupplyCardChoice(IReadOnlyList<CardInstanceId> picks) => _cardChooser.Supply(picks);
+
+    // The UI's answer to a pending in-combat option choice: the indexes taken, in the order they resolve.
+    public void SupplyOptionChoice(IReadOnlyList<int> picks) => _optionChooser.Supply(picks);
 
     public void Dispose()
     {

@@ -64,6 +64,12 @@ public sealed class CombatState
 
     public void SetCardChooser(ICombatCardChooser? chooser) => CardChooser = chooser;
 
+    // The player-input collaborator for in-combat option prompts ("choose one: …"). Same contract as the card
+    // chooser: set once by the driver, deterministic, absent ⇒ the first options are taken.
+    public ICombatOptionChooser? OptionChooser { get; private set; }
+
+    public void SetOptionChooser(ICombatOptionChooser? chooser) => OptionChooser = chooser;
+
     // What a combatant is ABOUT to do, as a kind name ("Attack", "Defend", …) — the telegraph, readable from
     // inside a combat program so a card can say "if the target intends to Attack".
     //

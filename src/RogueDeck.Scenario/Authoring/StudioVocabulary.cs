@@ -122,6 +122,7 @@ public static class StudioVocabulary
         ["removeTemporaryRule"] = "Remove a temporary combat rule by its id.",
         ["summonCombatant"] = "Create a brand-new unit on a team, with a name, max health, an optional grid cell and starting statuses.",
         ["sequence"] = "Run several steps together — they all start at once, so none of them can see what the others did.",
+        ["chooseOptions"] = "Offer the player named options and run the ones they take, in the order they pick them. The amount is how many they take; an option cannot be taken twice. With no player to ask (headless play), the first options are taken.",
         ["causalSequence"] = "Run several steps in order, each waiting for the one before it to have HAPPENED. Use this whenever a step reads what an earlier step did.",
         ["forEachTarget"] = "Run the steps once for each selected unit (that unit becomes the step's focus).",
         ["forEachCardInZone"] = "Run the steps once for each card in a zone (optionally only cards of one definition).",
@@ -150,8 +151,8 @@ public static class StudioVocabulary
         ("Movement (grid)", ["moveCombatant", "swapPositions"]),
         ("Combat control", ["setCombatantCounter", "setCombatantLifecycleState", "changeCombatantTeam",
             "setCombatResult", "removeTemporaryRule", "summonCombatant"]),
-        ("Control flow", ["sequence", "causalSequence", "forEachTarget", "forEachCardInZone", "repeat",
-            "repeatUntil", "randomTargets", "conditional"]),
+        ("Control flow", ["sequence", "causalSequence", "chooseOptions", "forEachTarget", "forEachCardInZone",
+            "repeat", "repeatUntil", "randomTargets", "conditional"]),
     ];
 
     public static readonly IReadOnlyList<(string Group, IReadOnlyList<string> Kinds)> AmountKindGroups =
@@ -433,6 +434,7 @@ public static class StudioVocabulary
         {
             "sequence" => string.Join("; and ", node.ChildrenOrEmpty.Select(Describe)),
             "causalSequence" => string.Join("; then ", node.ChildrenOrEmpty.Select(Describe)),
+            "chooseOptions" => $"choose {amount} of: {string.Join(" / ", node.OptionLabelsOrEmpty)}",
             "forEachTarget" => $"for each of {target}: {DescribeBody(node)}",
             "forEachCardInZone" => $"for each card in {EnumDisplayLoose(node.FromZone.ToString())}: {DescribeBody(node)}",
             "repeat" => $"{amount}× ({DescribeBody(node)})",

@@ -100,7 +100,11 @@
                     }
                 </div>
             }
-            @if (ActiveCardChoice is { } cardChoice)
+            @if (ActiveOptionChoice is { } optionChoice)
+            {
+                @OptionChoicePrompt(optionChoice)
+            }
+            else if (ActiveCardChoice is { } cardChoice)
             {
                 @CardChoicePrompt(cardChoice)
             }
@@ -193,7 +197,12 @@
                 </select>
             </div>
 
-            @if (ActiveCardChoice is { } partyCardChoice)
+            @if (ActiveOptionChoice is { } partyOptionChoice)
+            {
+                @* A member's play parked mid-resolution on a "choose one" prompt. *@
+                @OptionChoicePrompt(partyOptionChoice)
+            }
+            else if (ActiveCardChoice is { } partyCardChoice)
             {
                 @* A member's play parked mid-resolution on a card choice; show it and hide the member panels. *@
                 @CardChoicePrompt(partyCardChoice)
@@ -495,6 +504,72 @@
         _cardPicks.Clear();
         SupplyActiveCardChoice(picks);
     }
+
+    // ── in-combat option choice ("choose one: …") ──────────────────────────────────
+    private IReadOnlyList<string>? ActiveOptionChoice =>
+        CombatDriver?.PendingOptionChoice ?? PartyCombatDriver?.PendingOptionChoice;
+
+    private int ActiveOptionChoiceCount =>
+        CombatDriver?.PendingOptionChoice is not null ? CombatDriver.PendingOptionChoiceCount
+        : PartyCombatDriver?.PendingOptionChoiceCount ?? 0;
+
+    private string ActiveOptionChoicePurpose =>
+        CombatDriver?.PendingOptionChoice is not null ? CombatDriver.PendingOptionChoicePurpose
+        : PartyCombatDriver?.PendingOptionChoicePurpose ?? "";
+
+    private readonly List<int> _optionPicks = new();
+
+    private void ToggleOptionPick(int index)
+    {
+        if (ActiveOptionChoiceCount <= 1)
+        {
+            _optionPicks.Clear();
+            SupplyActiveOptionChoice(new[] { index });
+            return;
+        }
+        if (!_optionPicks.Remove(index) && _optionPicks.Count < ActiveOptionChoiceCount)
+            _optionPicks.Add(index); // order matters: the options resolve as they were picked
+    }
+
+    private void ConfirmOptionPicks()
+    {
+        var picks = _optionPicks.ToArray();
+        _optionPicks.Clear();
+        SupplyActiveOptionChoice(picks);
+    }
+
+    private void SupplyActiveOptionChoice(IReadOnlyList<int> picks)
+    {
+        if (CombatDriver?.PendingOptionChoice is not null)
+            CombatDriver.SupplyOptionChoice(picks);
+        else
+            PartyCombatDriver?.SupplyOptionChoice(picks);
+    }
+
+    // The shared option prompt: the card's own options as buttons. One pick supplies immediately; several
+    // toggle into an ordered set — the order they are picked is the order they resolve — and Confirm sends it.
+    private RenderFragment OptionChoicePrompt(IReadOnlyList<string> options) =>
+        @<text>
+            <h2>@ActiveOptionChoicePurpose</h2>
+            <p class="muted">Pick @ActiveOptionChoiceCount.</p>
+            <div class="choices">
+                @for (var oi = 0; oi < options.Count; oi++)
+                {
+                    var index = oi;
+                    var picked = _optionPicks.IndexOf(index);
+                    <button class="play @(picked >= 0 ? "active" : "")" @onclick="() => ToggleOptionPick(index)">
+                        @(picked >= 0 && ActiveOptionChoiceCount > 1 ? $"{picked + 1}. " : "")@options[index]
+                    </button>
+                }
+            </div>
+            @if (ActiveOptionChoiceCount > 1)
+            {
+                <button class="play" disabled="@(_optionPicks.Count != ActiveOptionChoiceCount)"
+                        @onclick="ConfirmOptionPicks">
+                    Confirm (@_optionPicks.Count/@ActiveOptionChoiceCount)
+                </button>
+            }
+        </text>;
 
     // The shared card-choice prompt (used by both the single-hero and party combat views): candidate cards as
     // buttons (single pick supplies immediately; multi-pick toggles then Confirm), hiding the normal hand controls.

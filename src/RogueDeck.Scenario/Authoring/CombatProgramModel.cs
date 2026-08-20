@@ -232,7 +232,12 @@ public sealed record CombatNodeModel(
     string SelectorStatusId = "",
     IReadOnlyList<CombatSelectorSpec>? SelectorMembers = null,
     string ToSelectorStatusId = "",
-    IReadOnlyList<CombatSelectorSpec>? ToSelectorMembers = null)
+    IReadOnlyList<CombatSelectorSpec>? ToSelectorMembers = null,
+    // chooseOptions: the label of each option, in the same order as Children, and the prompt shown to the
+    // player. Empty / "" canonically for every other kind so build<->classify round-trips exactly. How many
+    // options the player takes rides in Amount, like every other count.
+    IReadOnlyList<string>? OptionLabels = null,
+    string Purpose = "")
 {
     public CombatAmountSpec AmountOrDefault => Amount ?? CombatAmountSpec.FromConst(3);
     // The primary / secondary target selectors assembled from their key + parameterization.
@@ -243,6 +248,7 @@ public sealed record CombatNodeModel(
     public ResourceSelectionSpec ResourceSelectionOrDefault => ResourceSelection ?? new ResourceSelectionSpec();
     public IReadOnlyList<StatusGrant> StartingStatusesOrEmpty => StartingStatuses ?? Array.Empty<StatusGrant>();
     public IReadOnlyList<CombatNodeModel> ChildrenOrEmpty => Children ?? Array.Empty<CombatNodeModel>();
+    public IReadOnlyList<string> OptionLabelsOrEmpty => OptionLabels ?? Array.Empty<string>();
 
     public static CombatNodeModel Sequence(IReadOnlyList<CombatNodeModel> children) =>
         new("sequence", Children: children);
@@ -252,6 +258,13 @@ public sealed record CombatNodeModel(
     // for anything that reads what the step before it did ("apply 2 Seal; if that Ratified the target, …").
     public static CombatNodeModel CausalSequence(IReadOnlyList<CombatNodeModel> children) =>
         new("causalSequence", Children: children);
+
+    // "Choose one: …" — one child per option, one label per child, and how many the player takes.
+    public static CombatNodeModel ChooseOptions(
+        int count, IReadOnlyList<string> labels, IReadOnlyList<CombatNodeModel> options,
+        string purpose = "choose an option") =>
+        new("chooseOptions", Amount: CombatAmountSpec.FromConst(count), Children: options,
+            OptionLabels: labels, Purpose: purpose);
 
     public static CombatNodeModel ForEach(string selectorKey, CombatNodeModel body) =>
         new("forEachTarget", SelectorKey: selectorKey, Children: new[] { body });
@@ -368,6 +381,9 @@ public sealed record CombatNodeModel(
         hash.Add(SelectorStatusId);
         foreach (var m in SelectorMembers ?? Array.Empty<CombatSelectorSpec>())
             hash.Add(m);
+        hash.Add(Purpose);
+        foreach (var label in OptionLabels ?? Array.Empty<string>())
+            hash.Add(label);
         hash.Add(ToSelectorStatusId);
         foreach (var m in ToSelectorMembers ?? Array.Empty<CombatSelectorSpec>())
             hash.Add(m);
@@ -517,6 +533,7 @@ public static class CombatProgramModel
     [
         ("sequence", "in sequence…"),
         ("causalSequence", "one after another…"),
+        ("chooseOptions", "the player chooses…"),
         ("forEachTarget", "for each target…"),
         ("forEachCardInZone", "for each card in zone…"),
         ("repeat", "repeat…"),
@@ -602,6 +619,9 @@ public static class CombatProgramModel
             TeamId: "enemies", SummonDefinitionId: "skeleton", SummonDisplayName: "Skeleton"),
         "sequence" => CombatNodeModel.Sequence(new[] { NewNode("dealDamage") }),
         "causalSequence" => CombatNodeModel.CausalSequence(new[] { NewNode("dealDamage") }),
+        "chooseOptions" => CombatNodeModel.ChooseOptions(
+            1, new[] { "the first thing", "the other thing" },
+            new[] { NewNode("gainBlock"), NewNode("dealDamage") }),
         "forEachTarget" => CombatNodeModel.ForEach("allEnemies", NewNode("dealDamage")),
         "forEachCardInZone" => CombatNodeModel.ForEachCard("source", CardZone.Hand, NewNode("transformCard")),
         "repeat" => CombatNodeModel.Repeat(CombatAmountSpec.FromConst(2), NewNode("dealDamage")),
@@ -651,6 +671,8 @@ public static class CombatProgramModel
                 DefaultMax = UsesDefaultMax(kind) ? (kind == "refillResource" ? (node.DefaultMax ?? 3) : node.DefaultMax) : null,
                 Min = UsesMinMax(kind) ? node.Min : null,
                 Max = UsesMinMax(kind) ? node.Max : null,
+                OptionLabels = kind == "chooseOptions" ? node.OptionLabels : null,
+                Purpose = kind == "chooseOptions" ? node.Purpose : "",
                 Element = kind == "dealDamage" ? node.Element : "",
                 IgnoresBlock = kind == "dealDamage" && node.IgnoresBlock,
                 DamageKind = kind == "dealDamage" ? node.DamageKind : DamageKind.Direct,
@@ -677,6 +699,12 @@ public static class CombatProgramModel
 
         if (wasComposite && isComposite)
         {
+            if (kind == "chooseOptions")
+                return CombatNodeModel.ChooseOptions(
+                    node.AmountOrDefault.Const,
+                    node.OptionLabelsOrEmpty.Count > 0 ? node.OptionLabelsOrEmpty : ["the first thing", "the other thing"],
+                    node.ChildrenOrEmpty.Count > 0 ? node.ChildrenOrEmpty : [NewNode("gainBlock"), NewNode("dealDamage")],
+                    string.IsNullOrWhiteSpace(node.Purpose) ? "choose an option" : node.Purpose);
             if (kind is "sequence" or "causalSequence")
             {
                 var steps = node.ChildrenOrEmpty.Count > 0 ? node.ChildrenOrEmpty : new[] { NewNode("dealDamage") };
@@ -1035,6 +1063,12 @@ public static class CombatProgramModel
             case "causalSequence":
                 return new CausalSequenceEffectNode<TContext>(
                     model.ChildrenOrEmpty.Select(BuildNode<TContext>).ToArray());
+            case "chooseOptions":
+                return new ChooseOptionsNode<TContext>(
+                    model.ChildrenOrEmpty.Select(BuildNode<TContext>).ToArray(),
+                    model.OptionLabelsOrEmpty,
+                    model.AmountOrDefault.Const,
+                    model.Purpose);
             case "forEachTarget":
                 return new ForEachTargetEffectNode<TContext>(SelectorFor(model.PrimarySelector), BuildBody<TContext>(model));
             case "forEachCardInZone":
@@ -1299,6 +1333,10 @@ public static class CombatProgramModel
             case CausalSequenceEffectNode<TContext> s:
                 return ClassifyChildren<TContext>(s.Children) is { } causalChildren
                     ? CombatNodeModel.CausalSequence(causalChildren)
+                    : null;
+            case ChooseOptionsNode<TContext> c:
+                return ClassifyChildren<TContext>(c.Children) is { } options
+                    ? CombatNodeModel.ChooseOptions(c.Count, c.Labels, options, c.Purpose)
                     : null;
             case ForEachTargetEffectNode<TContext> f
                 when f.MaxIterations == ForEachTargetEffectNode<TContext>.DefaultMaxIterations:

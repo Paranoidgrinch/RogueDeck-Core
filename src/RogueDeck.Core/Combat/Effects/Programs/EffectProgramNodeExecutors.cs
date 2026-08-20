@@ -54,6 +54,7 @@ public sealed class EffectNodeExecutorRegistry
         r.RegisterOpenGeneric(typeof(SideEffectNode<>), new SideEffectNodeExecutor());
         r.RegisterOpenGeneric(typeof(DealDamageNode<>), new DealDamageNodeExecutor());
         r.RegisterOpenGeneric(typeof(ResolveQueuedCardsNode<>), new ResolveQueuedCardsNodeExecutor());
+        r.RegisterOpenGeneric(typeof(ChooseOptionsNode<>), new ChooseOptionsNodeExecutor());
         r.RegisterOpenGeneric(typeof(HealNode<>), new HealNodeExecutor());
         r.RegisterOpenGeneric(typeof(ModifyMaxHealthNode<>), new ModifyMaxHealthNodeExecutor());
         r.RegisterOpenGeneric(typeof(SetHealthNode<>), new SetHealthNodeExecutor());
@@ -2005,5 +2006,58 @@ public sealed class ResolveQueuedCardsNodeExecutor : IEffectNodeExecutor
 
         if (onComplete is not null)
             combat.EnqueueContinuation(onComplete);
+    }
+}
+
+public sealed class ChooseOptionsNodeExecutor : IEffectNodeExecutor
+{
+    public void Execute(IEffectNode node, IEffectExecutionContextCore ctx, CombatState combat,
+        Action<CombatState>? onComplete, Action<IEffectNode, CombatState, Action<CombatState>?> dispatch)
+    {
+        var typed = (IChooseOptionsNodeCore)node;
+        var picks = Picks(typed, combat);
+        RunOption(typed, picks, 0, ctx, combat, onComplete, dispatch);
+    }
+
+    // Whom the player picked, sanitised: indexes in range, no repeats, never more than were asked for. Without
+    // a chooser the first options are taken, so a card that offers a choice still resolves in headless play.
+    private static IReadOnlyList<int> Picks(IChooseOptionsNodeCore node, CombatState combat)
+    {
+        var fallback = Enumerable.Range(0, Math.Min(node.Count, node.Labels.Count)).ToList();
+        if (combat.OptionChooser is not { } chooser)
+            return fallback;
+
+        var chosen = chooser.ChooseOptions(node.Labels, node.Count, node.Purpose);
+        if (chosen is null)
+            return fallback;
+
+        var clean = new List<int>();
+        foreach (var index in chosen)
+            if (index >= 0 && index < node.Labels.Count && !clean.Contains(index) && clean.Count < node.Count)
+                clean.Add(index);
+
+        return clean.Count > 0 ? clean : fallback;
+    }
+
+    // The chosen options resolve in the order they were picked, each waiting for the one before it — a choice
+    // is read like the card text it came from.
+    private static void RunOption(
+        IChooseOptionsNodeCore node, IReadOnlyList<int> picks, int at,
+        IEffectExecutionContextCore ctx, CombatState combat,
+        Action<CombatState>? onComplete, Action<IEffectNode, CombatState, Action<CombatState>?> dispatch)
+    {
+        if (at >= picks.Count)
+        {
+            if (onComplete is not null)
+                combat.EnqueueContinuation(onComplete);
+            return;
+        }
+
+        ctx.OpenScope();
+        dispatch(node.OptionAt(picks[at]), combat, c =>
+        {
+            ctx.CloseScope();
+            RunOption(node, picks, at + 1, ctx, c, onComplete, dispatch);
+        });
     }
 }
