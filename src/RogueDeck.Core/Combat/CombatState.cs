@@ -64,6 +64,19 @@ public sealed class CombatState
 
     public void SetCardChooser(ICombatCardChooser? chooser) => CardChooser = chooser;
 
+    // What a combatant is ABOUT to do, as a kind name ("Attack", "Defend", …) — the telegraph, readable from
+    // inside a combat program so a card can say "if the target intends to Attack".
+    //
+    // A projection, not state: which action an enemy will take is recomputed from the live state every time it
+    // is asked, and the rules that decide it live a layer up (they are content, not engine). The driver that
+    // owns those rules installs this; without one the answer is simply unknown, which is the honest answer in
+    // a script-driven scenario where the enemy's action is dictated rather than chosen. Must be deterministic
+    // for a given state so replays reproduce. Not part of the snapshot or the state hash.
+    public Func<CombatState, CombatantId, string?>? UpcomingIntentKind { get; private set; }
+
+    public void SetUpcomingIntentKind(Func<CombatState, CombatantId, string?>? projection) =>
+        UpcomingIntentKind = projection;
+
     // Action scope: a claim ledger for rules that must fire once per ACTION rather than once per hit. An
     // action is one card play or one enemy action; both open a fresh scope around their whole program, so a
     // claim inside succeeds exactly once and every later hit of the same action — including the ones the

@@ -38,6 +38,7 @@ public sealed class InteractiveCombat
 
         _combat = ScenarioCombatFactory.Build(compiled, combatId, randomSeed);
         _combat.TraceListener = _collector;
+        InstallTelegraph();
 
         // Start the hero's first turn (draws the opening hand).
         if (_combat.TurnPhase == CombatTurnPhase.WaitingToStartTurn)
@@ -64,6 +65,7 @@ public sealed class InteractiveCombat
 
         _combat = restoredState;
         _combat.TraceListener = _collector;
+        InstallTelegraph();
 
         if (_combat.TurnPhase == CombatTurnPhase.WaitingToStartTurn)
             _turns.StartCurrentTurn(_combat, _registry);
@@ -90,6 +92,17 @@ public sealed class InteractiveCombat
     // after the hero within the same round), as its authored intent (label + kind). Null for the hero,
     // an unknown/actionless combatant, or a finished fight — a frontend renders it as the pre-turn
     // intent icon next to each enemy.
+    // Let combat programs read the telegraph too: a card that says "if the target intends to Attack" needs
+    // the same projection this class renders for the UI. The rules that decide an enemy's next action are
+    // content and live here, so this is where the engine is handed a way to ask.
+    private void InstallTelegraph() =>
+        _combat.SetUpcomingIntentKind((state, combatant) =>
+            combatant == _heroId
+                ? null
+                : _enemyIntent(state, combatant, state.CurrentRound) is { } actionId
+                    ? _compiled.IntentFor(actionId)?.Kind.ToString()
+                    : null);
+
     public ActionIntent? UpcomingIntentFor(CombatantId combatant)
     {
         if (IsOver || combatant == _heroId)

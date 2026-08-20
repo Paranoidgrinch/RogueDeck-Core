@@ -1044,6 +1044,22 @@ else
                 onChange(spec with { Id = AsString(e.Value) })));
             builder.CloseElement();
         }
+        else if (spec.Kind == "intends")
+        {
+            builder.OpenElement(seq++, "select");
+            builder.AddAttribute(seq++, "value", spec.Id);
+            builder.AddAttribute(seq++, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+                onChange(spec with { Id = AsString(e.Value) })));
+            foreach (var kind in Enum.GetValues<IntentKind>())
+            {
+                builder.OpenElement(seq++, "option");
+                builder.AddAttribute(seq++, "value", kind.ToString());
+                builder.AddAttribute(seq++, "selected", spec.Id == kind.ToString());
+                builder.AddContent(seq++, StudioVocabulary.EnumDisplay(kind));
+                builder.CloseElement();
+            }
+            builder.CloseElement();
+        }
     };
 
     private static string OpSymbol(ComparisonOperator op) => op switch

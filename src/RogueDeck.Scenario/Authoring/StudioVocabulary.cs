@@ -222,6 +222,7 @@ public static class StudioVocabulary
         ("isAlive", "is alive", "True when the chosen unit is alive."),
         ("downed", "is downed", "True when the chosen unit is downed."),
         ("exists", "exists", "True when the selection picks at least one unit."),
+        ("intends", "intends to…", "True when the chosen unit is about to take an action of that kind (Attack, Defend, Buff, Debuff, Special) — what its telegraph shows. False when it is not going to act, or when the host shows no telegraph."),
     ];
 
     public static readonly IReadOnlyList<(string Kind, string Label, string Description)> CompareValueKinds =

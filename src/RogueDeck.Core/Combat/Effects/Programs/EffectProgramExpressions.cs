@@ -1946,6 +1946,42 @@ public sealed class ClaimOnceThisActionExpression<TContext> : ICombatExpression<
     }
 }
 
+// "Does this combatant intend to <kind>?" — reads the telegraph the driver installed on the combat.
+//
+// The Bureaucrat has a run of cards that pay attention to what an enemy is about to do ("apply 3 Paperwork.
+// If the target intends to Attack, also apply 1 Doubt"), and so do several relics. The upcoming action is a
+// projection recomputed from the live state, so the answer changes as the fight does — which is the point:
+// a card played before an enemy is softened may see a different intent than one played after.
+//
+// Answers false when no telegraph is installed, when the combatant is not going to act, or when the selector
+// does not resolve to exactly one combatant.
+public sealed class TargetIntendsExpression<TContext> : ICombatExpression<TContext, bool>
+    where TContext : class
+{
+    public ICombatantTargetSelector Selector { get; }
+    public string Kind { get; }
+
+    public TargetIntendsExpression(ICombatantTargetSelector selector, string kind)
+    {
+        ArgumentNullException.ThrowIfNull(selector);
+        ArgumentException.ThrowIfNullOrWhiteSpace(kind);
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
+        Kind = kind;
+    }
+
+    public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        if (combat.UpcomingIntentKind is not { } telegraph)
+            return false;
+
+        var targets = Selector.ResolveTargets(context.GetTargetSelectionContext());
+        if (targets.Count != 1)
+            return false;
+
+        return string.Equals(telegraph(combat, targets.First()), Kind, StringComparison.OrdinalIgnoreCase);
+    }
+}
+
 public sealed class TriggerEventCardInstanceExpression<TContext>
     : ICardInstanceExpression<TContext>
     where TContext : class

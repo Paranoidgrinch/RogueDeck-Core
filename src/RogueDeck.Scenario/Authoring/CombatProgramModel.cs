@@ -107,12 +107,12 @@ public sealed record CombatSelectorSpec(
 // target (health / resource / status stacks vs a constant), or a target-state predicate (has status / alive /
 // downed / exists). Anything richer (and/or/not, computed right operand) classifies "advanced" → JSON escape.
 public sealed record CombatConditionSpec(
-    string Kind = "compare",                                   // compare | hasStatus | isAlive | downed | exists | advanced
+    string Kind = "compare",                                   // compare | hasStatus | isAlive | downed | exists | intends | advanced
     string SelectorKey = "source",                             // the inspected target
     string ValueKind = "currentHealth",                        // compare left: currentHealth/maxHealth/missingHealth/healthPercentage/currentResource/statusStacks/counter
     ComparisonOperator Op = ComparisonOperator.GreaterOrEqual,
     int Right = 1,
-    string Id = "")                                            // statusId (hasStatus/statusStacks) or resourceId (currentResource)
+    string Id = "")                                            // statusId (hasStatus/statusStacks), resourceId (currentResource) or intent kind (intends)
 {
     public bool IsAdvanced => Kind == "advanced";
 }
@@ -955,6 +955,7 @@ public static class CombatProgramModel
             "isAlive" => new TargetIsAliveExpression<TContext>(selector),
             "downed" => new TargetDownedExpression<TContext>(selector),
             "exists" => new TargetExistsExpression<TContext>(selector),
+            "intends" => new TargetIntendsExpression<TContext>(selector, spec.Id),
             _ => new ComparisonExpression<TContext>(
                 ConditionLeftValue<TContext>(selector, spec.ValueKind, spec.Id),
                 spec.Op,
@@ -973,6 +974,8 @@ public static class CombatProgramModel
                 return new CombatConditionSpec("isAlive", key);
             case TargetDownedExpression<TContext> e when KeyFor(e.Selector) is { } key:
                 return new CombatConditionSpec("downed", key);
+            case TargetIntendsExpression<TContext> e when KeyFor(e.Selector) is { } key:
+                return new CombatConditionSpec("intends", key, Id: e.Kind);
             case TargetExistsExpression<TContext> e when KeyFor(e.Selector) is { } key:
                 return new CombatConditionSpec("exists", key);
             case ComparisonExpression<TContext> c

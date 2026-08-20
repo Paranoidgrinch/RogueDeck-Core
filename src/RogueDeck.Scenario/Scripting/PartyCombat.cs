@@ -53,6 +53,15 @@ public sealed class PartyCombat
         _targeting = targeting;
         _combat = ScenarioCombatFactory.Build(compiled, combatId, randomSeed);
 
+        // Let combat programs read the telegraph: a card that asks "does the target intend to Attack" gets
+        // the same projection the UI renders. Player-team members do not telegraph.
+        _combat.SetUpcomingIntentKind((state, combatant) =>
+            state.TryGetCombatant(combatant, out var c) && c is not null && c.TeamId == PlayerTeam
+                ? null
+                : enemyIntent(state, combatant, state.CurrentRound) is { } actionId
+                    ? compiled.IntentFor(actionId)?.Kind.ToString()
+                    : null);
+
         // Open the first player phase: every player-team member starts its turn and draws its own opening hand.
         _phases.StartTeamPhase(_combat, _registry, PlayerTeam);
     }
