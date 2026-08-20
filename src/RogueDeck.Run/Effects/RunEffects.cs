@@ -5,21 +5,28 @@ namespace RogueDeck.Run;
 // The built-in run effects. Each one mutates RunState and raises the matching IRunEvent, so relics observe a
 // uniform stream regardless of which node or effect produced the change. Registered by StandardRunPackage.
 
-public sealed record ChangeResourceRunEffect(RunResourceId Resource, int Delta) : IRunEffectRequest;
+// Changes a run resource. `MaxDelta` turns the change into a SPREAD: the actual amount is rolled from the run's
+// own RNG between Delta and MaxDelta (inclusive), so a procedural act's fights can pay 25–40 gold rather than
+// one baked number. Null (the default) keeps it exact, as before.
+public sealed record ChangeResourceRunEffect(RunResourceId Resource, int Delta, int? MaxDelta = null)
+    : IRunEffectRequest;
 
 public sealed class ChangeResourceRunEffectHandler : RunEffectHandler<ChangeResourceRunEffect>
 {
     protected override void Resolve(RunState run, RunDefinitionRegistry registry, ChangeResourceRunEffect request)
     {
         var previous = run.GetResource(request.Resource);
-        var next = Math.Max(0, previous + request.Delta);
+        var delta = request.MaxDelta is { } max && max > request.Delta
+            ? request.Delta + run.NextRandom(max - request.Delta + 1)
+            : request.Delta;
+        var next = Math.Max(0, previous + delta);
         if (next == previous)
             return; // no actual change (e.g. a computed +0) — raise nothing, like the flag/counter effects
 
         run.SetResource(request.Resource, next);
 
         run.AddLog(StandardRunLogTypes.ResourceChanged,
-            $"{request.Resource} {previous} -> {next} ({request.Delta:+0;-0;0}).");
+            $"{request.Resource} {previous} -> {next} ({delta:+0;-0;0}).");
         run.RaiseEvent(new ResourceChangedRunEvent(request.Resource, previous, next, next - previous));
     }
 }

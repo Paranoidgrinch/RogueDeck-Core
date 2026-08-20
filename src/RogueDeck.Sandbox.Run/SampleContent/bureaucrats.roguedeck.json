@@ -1016,7 +1016,8 @@
                                       "Resource": {
                                         "Value": "gold"
                                       },
-                                      "Delta": 40
+                                      "Delta": 40,
+                                      "MaxDelta": null
                                     }
                                   }
                                 ]
@@ -1089,7 +1090,8 @@
                                       "Resource": {
                                         "Value": "gold"
                                       },
-                                      "Delta": 25
+                                      "Delta": 25,
+                                      "MaxDelta": null
                                     }
                                   }
                                 ]
@@ -1114,7 +1116,8 @@
                                       "Resource": {
                                         "Value": "gold"
                                       },
-                                      "Delta": 75
+                                      "Delta": 75,
+                                      "MaxDelta": null
                                     }
                                   }
                                 ]
@@ -1351,7 +1354,8 @@
                     "Resource": {
                       "Value": "gold"
                     },
-                    "Delta": -300
+                    "Delta": -300,
+                    "MaxDelta": null
                   }
                 },
                 {
@@ -1407,7 +1411,8 @@
                     "Resource": {
                       "Value": "gold"
                     },
-                    "Delta": 75
+                    "Delta": 75,
+                    "MaxDelta": null
                   }
                 }
               ],
@@ -3117,7 +3122,8 @@
                                       "Resource": {
                                         "Value": "gold"
                                       },
-                                      "Delta": 40
+                                      "Delta": 40,
+                                      "MaxDelta": null
                                     }
                                   }
                                 ]
@@ -3190,7 +3196,8 @@
                                       "Resource": {
                                         "Value": "gold"
                                       },
-                                      "Delta": 25
+                                      "Delta": 25,
+                                      "MaxDelta": null
                                     }
                                   }
                                 ]
@@ -3215,7 +3222,8 @@
                                       "Resource": {
                                         "Value": "gold"
                                       },
-                                      "Delta": 75
+                                      "Delta": 75,
+                                      "MaxDelta": null
                                     }
                                   }
                                 ]
@@ -4617,7 +4625,8 @@
                                       "Resource": {
                                         "Value": "gold"
                                       },
-                                      "Delta": 40
+                                      "Delta": 40,
+                                      "MaxDelta": null
                                     }
                                   }
                                 ]
@@ -4690,7 +4699,8 @@
                                       "Resource": {
                                         "Value": "gold"
                                       },
-                                      "Delta": 25
+                                      "Delta": 25,
+                                      "MaxDelta": null
                                     }
                                   }
                                 ]
@@ -4715,7 +4725,8 @@
                                       "Resource": {
                                         "Value": "gold"
                                       },
-                                      "Delta": 75
+                                      "Delta": 75,
+                                      "MaxDelta": null
                                     }
                                   }
                                 ]
@@ -5844,7 +5855,8 @@
                                       "Resource": {
                                         "Value": "gold"
                                       },
-                                      "Delta": 40
+                                      "Delta": 40,
+                                      "MaxDelta": null
                                     }
                                   }
                                 ]
@@ -5917,7 +5929,8 @@
                                       "Resource": {
                                         "Value": "gold"
                                       },
-                                      "Delta": 25
+                                      "Delta": 25,
+                                      "MaxDelta": null
                                     }
                                   }
                                 ]
@@ -5942,7 +5955,8 @@
                                       "Resource": {
                                         "Value": "gold"
                                       },
-                                      "Delta": 75
+                                      "Delta": 75,
+                                      "MaxDelta": null
                                     }
                                   }
                                 ]
@@ -7334,7 +7348,8 @@
                                       "Resource": {
                                         "Value": "gold"
                                       },
-                                      "Delta": 40
+                                      "Delta": 40,
+                                      "MaxDelta": null
                                     }
                                   }
                                 ]
@@ -7407,7 +7422,8 @@
                                       "Resource": {
                                         "Value": "gold"
                                       },
-                                      "Delta": 25
+                                      "Delta": 25,
+                                      "MaxDelta": null
                                     }
                                   }
                                 ]
@@ -7432,7 +7448,8 @@
                                       "Resource": {
                                         "Value": "gold"
                                       },
-                                      "Delta": 75
+                                      "Delta": 75,
+                                      "MaxDelta": null
                                     }
                                   }
                                 ]
@@ -8055,7 +8072,8 @@
                     "Resource": {
                       "Value": "gold"
                     },
-                    "Delta": 75
+                    "Delta": 75,
+                    "MaxDelta": null
                   }
                 }
               ],
@@ -9761,7 +9779,8 @@
                                       "Resource": {
                                         "Value": "gold"
                                       },
-                                      "Delta": 40
+                                      "Delta": 40,
+                                      "MaxDelta": null
                                     }
                                   }
                                 ]
@@ -9834,7 +9853,8 @@
                                       "Resource": {
                                         "Value": "gold"
                                       },
-                                      "Delta": 25
+                                      "Delta": 25,
+                                      "MaxDelta": null
                                     }
                                   }
                                 ]
@@ -9859,7 +9879,8 @@
                                       "Resource": {
                                         "Value": "gold"
                                       },
-                                      "Delta": 75
+                                      "Delta": 75,
+                                      "MaxDelta": null
                                     }
                                   }
                                 ]
@@ -10744,7 +10765,8 @@
                                       "Resource": {
                                         "Value": "gold"
                                       },
-                                      "Delta": 40
+                                      "Delta": 40,
+                                      "MaxDelta": null
                                     }
                                   }
                                 ]
@@ -10817,7 +10839,8 @@
                                       "Resource": {
                                         "Value": "gold"
                                       },
-                                      "Delta": 25
+                                      "Delta": 25,
+                                      "MaxDelta": null
                                     }
                                   }
                                 ]
@@ -10842,7 +10865,8 @@
                                       "Resource": {
                                         "Value": "gold"
                                       },
-                                      "Delta": 75
+                                      "Delta": 75,
+                                      "MaxDelta": null
                                     }
                                   }
                                 ]
@@ -132780,7 +132804,8 @@
                           "Resource": {
                             "Value": "gold"
                           },
-                          "Delta": 24
+                          "Delta": 24,
+                          "MaxDelta": null
                         }
                       },
                       {
@@ -133236,7 +133261,8 @@
                           "Resource": {
                             "Value": "gold"
                           },
-                          "Delta": 22
+                          "Delta": 22,
+                          "MaxDelta": null
                         }
                       },
                       {
@@ -133692,7 +133718,8 @@
                           "Resource": {
                             "Value": "gold"
                           },
-                          "Delta": 22
+                          "Delta": 22,
+                          "MaxDelta": null
                         }
                       },
                       {
@@ -134148,7 +134175,8 @@
                           "Resource": {
                             "Value": "gold"
                           },
-                          "Delta": 23
+                          "Delta": 23,
+                          "MaxDelta": null
                         }
                       },
                       {
@@ -134616,7 +134644,8 @@
                           "Resource": {
                             "Value": "gold"
                           },
-                          "Delta": 16
+                          "Delta": 16,
+                          "MaxDelta": null
                         }
                       },
                       {
@@ -135072,7 +135101,8 @@
                           "Resource": {
                             "Value": "gold"
                           },
-                          "Delta": 17
+                          "Delta": 17,
+                          "MaxDelta": null
                         }
                       },
                       {
@@ -135540,7 +135570,8 @@
                           "Resource": {
                             "Value": "gold"
                           },
-                          "Delta": 37
+                          "Delta": 37,
+                          "MaxDelta": null
                         }
                       },
                       {
@@ -135996,7 +136027,8 @@
                           "Resource": {
                             "Value": "gold"
                           },
-                          "Delta": 26
+                          "Delta": 26,
+                          "MaxDelta": null
                         }
                       },
                       {
@@ -136464,7 +136496,8 @@
                           "Resource": {
                             "Value": "gold"
                           },
-                          "Delta": 40
+                          "Delta": 40,
+                          "MaxDelta": null
                         }
                       },
                       {
@@ -136932,7 +136965,8 @@
                           "Resource": {
                             "Value": "gold"
                           },
-                          "Delta": 25
+                          "Delta": 25,
+                          "MaxDelta": null
                         }
                       },
                       {
@@ -137388,7 +137422,8 @@
                           "Resource": {
                             "Value": "gold"
                           },
-                          "Delta": 28
+                          "Delta": 28,
+                          "MaxDelta": null
                         }
                       },
                       {
@@ -137844,7 +137879,8 @@
                           "Resource": {
                             "Value": "gold"
                           },
-                          "Delta": 38
+                          "Delta": 38,
+                          "MaxDelta": null
                         }
                       },
                       {
@@ -138300,7 +138336,8 @@
                           "Resource": {
                             "Value": "gold"
                           },
-                          "Delta": 34
+                          "Delta": 34,
+                          "MaxDelta": null
                         }
                       },
                       {
@@ -138756,7 +138793,8 @@
                           "Resource": {
                             "Value": "gold"
                           },
-                          "Delta": 39
+                          "Delta": 39,
+                          "MaxDelta": null
                         }
                       },
                       {
@@ -139212,7 +139250,8 @@
                           "Resource": {
                             "Value": "gold"
                           },
-                          "Delta": 76
+                          "Delta": 76,
+                          "MaxDelta": null
                         }
                       },
                       {
@@ -140295,7 +140334,8 @@
                                             "Resource": {
                                               "Value": "gold"
                                             },
-                                            "Delta": 40
+                                            "Delta": 40,
+                                            "MaxDelta": null
                                           }
                                         }
                                       ]
@@ -140368,7 +140408,8 @@
                                             "Resource": {
                                               "Value": "gold"
                                             },
-                                            "Delta": 25
+                                            "Delta": 25,
+                                            "MaxDelta": null
                                           }
                                         }
                                       ]
@@ -140393,7 +140434,8 @@
                                             "Resource": {
                                               "Value": "gold"
                                             },
-                                            "Delta": 75
+                                            "Delta": 75,
+                                            "MaxDelta": null
                                           }
                                         }
                                       ]
@@ -140579,7 +140621,8 @@
                           "Resource": {
                             "Value": "gold"
                           },
-                          "Delta": 32
+                          "Delta": 32,
+                          "MaxDelta": null
                         }
                       },
                       {
@@ -141035,7 +141078,8 @@
                           "Resource": {
                             "Value": "gold"
                           },
-                          "Delta": 32
+                          "Delta": 32,
+                          "MaxDelta": null
                         }
                       },
                       {
@@ -141491,7 +141535,8 @@
                           "Resource": {
                             "Value": "gold"
                           },
-                          "Delta": 30
+                          "Delta": 30,
+                          "MaxDelta": null
                         }
                       },
                       {
@@ -141947,7 +141992,8 @@
                           "Resource": {
                             "Value": "gold"
                           },
-                          "Delta": 39
+                          "Delta": 39,
+                          "MaxDelta": null
                         }
                       },
                       {
@@ -142403,7 +142449,8 @@
                           "Resource": {
                             "Value": "gold"
                           },
-                          "Delta": 76
+                          "Delta": 76,
+                          "MaxDelta": null
                         }
                       },
                       {
@@ -143486,7 +143533,8 @@
                                             "Resource": {
                                               "Value": "gold"
                                             },
-                                            "Delta": 40
+                                            "Delta": 40,
+                                            "MaxDelta": null
                                           }
                                         }
                                       ]
@@ -143559,7 +143607,8 @@
                                             "Resource": {
                                               "Value": "gold"
                                             },
-                                            "Delta": 25
+                                            "Delta": 25,
+                                            "MaxDelta": null
                                           }
                                         }
                                       ]
@@ -143584,7 +143633,8 @@
                                             "Resource": {
                                               "Value": "gold"
                                             },
-                                            "Delta": 75
+                                            "Delta": 75,
+                                            "MaxDelta": null
                                           }
                                         }
                                       ]
@@ -143770,7 +143820,8 @@
                           "Resource": {
                             "Value": "gold"
                           },
-                          "Delta": 32
+                          "Delta": 32,
+                          "MaxDelta": null
                         }
                       },
                       {
@@ -144226,7 +144277,8 @@
                           "Resource": {
                             "Value": "gold"
                           },
-                          "Delta": 26
+                          "Delta": 26,
+                          "MaxDelta": null
                         }
                       },
                       {
@@ -144730,7 +144782,8 @@
                           "Resource": {
                             "Value": "gold"
                           },
-                          "Delta": 109
+                          "Delta": 109,
+                          "MaxDelta": null
                         }
                       },
                       {
@@ -145813,7 +145866,8 @@
                                             "Resource": {
                                               "Value": "gold"
                                             },
-                                            "Delta": 40
+                                            "Delta": 40,
+                                            "MaxDelta": null
                                           }
                                         }
                                       ]
@@ -145886,7 +145940,8 @@
                                             "Resource": {
                                               "Value": "gold"
                                             },
-                                            "Delta": 25
+                                            "Delta": 25,
+                                            "MaxDelta": null
                                           }
                                         }
                                       ]
@@ -145911,7 +145966,8 @@
                                             "Resource": {
                                               "Value": "gold"
                                             },
-                                            "Delta": 75
+                                            "Delta": 75,
+                                            "MaxDelta": null
                                           }
                                         }
                                       ]
@@ -151502,7 +151558,8 @@
                     "Resource": {
                       "Value": "gold"
                     },
-                    "Delta": 15
+                    "Delta": 15,
+                    "MaxDelta": null
                   }
                 }
               }
@@ -152114,7 +152171,8 @@
                     "Resource": {
                       "Value": "gold"
                     },
-                    "Delta": 15
+                    "Delta": 15,
+                    "MaxDelta": null
                   }
                 }
               }
@@ -152307,7 +152365,8 @@
                     "Resource": {
                       "Value": "gold"
                     },
-                    "Delta": 15
+                    "Delta": 15,
+                    "MaxDelta": null
                   }
                 }
               }
@@ -153254,7 +153313,8 @@
                     "Resource": {
                       "Value": "gold"
                     },
-                    "Delta": 5
+                    "Delta": 5,
+                    "MaxDelta": null
                   }
                 }
               }
@@ -153281,7 +153341,8 @@
                     "Resource": {
                       "Value": "gold"
                     },
-                    "Delta": 10
+                    "Delta": 10,
+                    "MaxDelta": null
                   }
                 }
               }
@@ -153313,7 +153374,8 @@
                     "Resource": {
                       "Value": "gold"
                     },
-                    "Delta": 10
+                    "Delta": 10,
+                    "MaxDelta": null
                   }
                 }
               }
@@ -153340,7 +153402,8 @@
                     "Resource": {
                       "Value": "gold"
                     },
-                    "Delta": 10
+                    "Delta": 10,
+                    "MaxDelta": null
                   }
                 }
               }
