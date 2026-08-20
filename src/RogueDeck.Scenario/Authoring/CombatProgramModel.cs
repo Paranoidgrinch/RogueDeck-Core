@@ -756,6 +756,9 @@ public static class CombatProgramModel
         ("backmostEnemy", CombatantTargetSelectors.BackmostEnemyOfSource),
         ("nearestEnemy", CombatantTargetSelectors.NearestEnemyOfSource),
         ("opposingInColumn", CombatantTargetSelectors.OpposingInColumn),
+        // The target the surrounding loop is currently on — the only way a "for each" or "random targets"
+        // body can name what it is looping over. Resolves to nothing outside a loop.
+        ("iterationTarget", CombatantTargetSelectors.IterationTarget),
         // Whole-board / damaged-ally reads (parameterless).
         ("allCombatants", CombatantTargetSelectors.AllCombatants),
         ("allDamagedAllies", CombatantTargetSelectors.AllDamagedAlliesOfSource),
@@ -768,7 +771,8 @@ public static class CombatProgramModel
     // condition-selector dropdown offers this subset; leaf-node effect selectors may use the full catalog.
     public static readonly IReadOnlyList<string> SingleTargetSelectorKeys =
     [
-        "eventTarget", "source", "lowestHealthEnemy", "highestHealthEnemy", "lowestHealthAlly", "highestHealthAlly",
+        "eventTarget", "source", "iterationTarget",
+        "lowestHealthEnemy", "highestHealthEnemy", "lowestHealthAlly", "highestHealthAlly",
         // Positional single-target selectors (P1) — each resolves to at most one combatant.
         "frontmostEnemy", "backmostEnemy", "nearestEnemy",
     ];

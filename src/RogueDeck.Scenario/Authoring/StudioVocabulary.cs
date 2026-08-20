@@ -59,6 +59,8 @@ public static class StudioVocabulary
                 "The single enemy the fewest grid steps away. Grid battles only."),
             ["opposingInColumn"] = ("enemies across the lane",
                 "Every enemy standing in the same column as the acting unit — directly across from it. Grid battles only."),
+            ["iterationTarget"] = ("this loop's unit",
+                "The unit the surrounding 'for each' or 'random targets' loop is currently on. Resolves to nobody outside a loop."),
             ["allCombatants"] = ("everyone",
                 "Every living unit on both teams."),
             ["allDamagedAllies"] = ("hurt allies",
