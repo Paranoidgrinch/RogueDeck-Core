@@ -243,7 +243,8 @@ public static class CombatJson
     // only the Func-backed result CONSUMER expressions (PreviousOutcome*) remain non-serializable escapes.
     private static void RegisterNodes(CombatJsonRegistry r)
     {
-        r.Register("node.dealDamage", typeof(DealDamageNode<>))
+        r.Register("node.resolveQueuedCards", typeof(ResolveQueuedCardsNode<>))
+         .Register("node.dealDamage", typeof(DealDamageNode<>))
          .Register("node.heal", typeof(HealNode<>))
          .Register("node.modifyMaxHealth", typeof(ModifyMaxHealthNode<>))
          .Register("node.setHealth", typeof(SetHealthNode<>))

@@ -189,6 +189,12 @@ public interface IDealDamageNodeCore : INativeEffectOperationNode
     Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(DealDamageEffectRequest);
 }
 
+public interface IResolveQueuedCardsNodeCore : IEffectNode
+{
+    ICombatantTargetSelector TargetSelector { get; }
+    int EvaluateAmount(IEffectExecutionContextCore ctx, CombatState combat);
+}
+
 public interface IHealNodeCore : INativeEffectOperationNode
 {
     ICombatantTargetSelector TargetSelector { get; }

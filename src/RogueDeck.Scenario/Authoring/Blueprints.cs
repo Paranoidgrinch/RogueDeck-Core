@@ -71,6 +71,9 @@ public sealed class CardBlueprint
     public CardZone TurnEndHandDestinationZone { get; set; } = CardZone.DiscardPile;
     public CardZone PlayedCardDestinationZone { get; set; } = CardZone.DiscardPile;
 
+    // "Queue: …" — the card is played now and resolves at the next resolution window.
+    public bool QueueOnPlay { get; set; }
+
     public CardBlueprint(string id)
     {
         if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("Card id cannot be empty.", nameof(id));
@@ -96,6 +99,7 @@ public sealed class CardBlueprint
             RetainInHandOnTurnEnd = RetainInHandOnTurnEnd,
             TurnEndHandDestinationZone = TurnEndHandDestinationZone,
             PlayedCardDestinationZone = PlayedCardDestinationZone,
+            QueueOnPlay = QueueOnPlay,
         };
         builder.Costs.AddRange(Costs);
         builder.Tags.AddRange(Tags);

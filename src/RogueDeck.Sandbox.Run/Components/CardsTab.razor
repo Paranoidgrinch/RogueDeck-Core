@@ -77,6 +77,25 @@
             {
                 <p class="error">⚠ @issue</p>
             }
+            <div class="run-bar">
+                <label title="Where the card goes once it has been played.">after playing
+                    <select value="@card.PlayedCardDestinationZone"
+                            @onchange="e => SetPlayedDestination(ci, Enum.Parse<CardZone>(AsString(e.Value)))">
+                        @foreach (var zone in Enum.GetValues<CardZone>())
+                        {
+                            <option value="@zone" selected="@(card.PlayedCardDestinationZone == zone)">@StudioVocabulary.EnumDisplay(zone)</option>
+                        }
+                    </select>
+                </label>
+                <label title="@StudioVocabulary.FieldDescription("CardData.QueueOnPlay")">
+                    <input type="checkbox" checked="@card.QueueOnPlay"
+                           @onchange="e => SetQueueOnPlay(ci, AsBool(e.Value))" /> @StudioVocabulary.FieldLabel("CardData.QueueOnPlay")
+                </label>
+                <label title="The card stays in hand when the turn ends instead of being discarded.">
+                    <input type="checkbox" checked="@card.RetainInHandOnTurnEnd"
+                           @onchange="e => SetRetainInHand(ci, AsBool(e.Value))" /> retain in hand
+                </label>
+            </div>
             <div class="fx-body">
                 <span class="muted">program:</span>
                 @{ var model = ModelOf(card); }
@@ -214,6 +233,17 @@
 
     private void SetEnergy(int index, int energy) =>
         EditCard(index, c => c with { Costs = WithEnergy(c.Costs, energy) });
+
+    private static bool AsBool(object? v) => v is bool b ? b : bool.TryParse(v?.ToString(), out var r) && r;
+
+    private void SetPlayedDestination(int index, CardZone zone) =>
+        EditCard(index, c => c with { PlayedCardDestinationZone = zone });
+
+    private void SetQueueOnPlay(int index, bool queued) =>
+        EditCard(index, c => c with { QueueOnPlay = queued });
+
+    private void SetRetainInHand(int index, bool retain) =>
+        EditCard(index, c => c with { RetainInHandOnTurnEnd = retain });
 
     private void SetCardProgram(int index, CombatNodeModel node) =>
         EditCard(index, c => c with { Program = CombatProgramModel.Build<CardPlayContext>(node) });

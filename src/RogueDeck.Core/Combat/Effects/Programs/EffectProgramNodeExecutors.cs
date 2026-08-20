@@ -53,6 +53,7 @@ public sealed class EffectNodeExecutorRegistry
         r.RegisterOpenGeneric(typeof(ConditionalEffectNode<>), new ConditionalNodeExecutor());
         r.RegisterOpenGeneric(typeof(SideEffectNode<>), new SideEffectNodeExecutor());
         r.RegisterOpenGeneric(typeof(DealDamageNode<>), new DealDamageNodeExecutor());
+        r.RegisterOpenGeneric(typeof(ResolveQueuedCardsNode<>), new ResolveQueuedCardsNodeExecutor());
         r.RegisterOpenGeneric(typeof(HealNode<>), new HealNodeExecutor());
         r.RegisterOpenGeneric(typeof(ModifyMaxHealthNode<>), new ModifyMaxHealthNodeExecutor());
         r.RegisterOpenGeneric(typeof(SetHealthNode<>), new SetHealthNodeExecutor());
@@ -1987,5 +1988,22 @@ internal sealed class PlayCardNodeExecutor : IEffectNodeExecutor
         {
             combat.EnqueueContinuation(onComplete);
         }
+    }
+}
+
+public sealed class ResolveQueuedCardsNodeExecutor : IEffectNodeExecutor
+{
+    public void Execute(IEffectNode node, IEffectExecutionContextCore ctx, CombatState combat,
+        Action<CombatState>? onComplete, Action<IEffectNode, CombatState, Action<CombatState>?> dispatch)
+    {
+        var typed = (IResolveQueuedCardsNodeCore)node;
+        var count = typed.EvaluateAmount(ctx, combat);
+
+        if (count > 0 && combat.DefinitionRegistry is { } registry)
+            foreach (var ownerId in typed.TargetSelector.ResolveTargetsTraced(ctx, combat))
+                QueueResolution.ResolveOldest(combat, registry, ownerId, count);
+
+        if (onComplete is not null)
+            combat.EnqueueContinuation(onComplete);
     }
 }

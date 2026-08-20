@@ -27,6 +27,13 @@ public sealed record CardData
     public CardZone TurnEndHandDestinationZone { get; init; } = CardZone.DiscardPile;
     public CardZone PlayedCardDestinationZone { get; init; } = CardZone.DiscardPile;
 
+    // "Queue: …" — playing the card pays its cost and locks its target now, but its effect waits in the Queue
+    // until the next resolution window. False for every ordinary card, and false is kept out of the wire
+    // format so documents written before the Queue existed round-trip byte-identically.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool QueueOnPlay { get; init; }
+
     public static CardData From(CardBlueprint card)
     {
         ArgumentNullException.ThrowIfNull(card);
@@ -43,6 +50,7 @@ public sealed record CardData
             RetainInHandOnTurnEnd = card.RetainInHandOnTurnEnd,
             TurnEndHandDestinationZone = card.TurnEndHandDestinationZone,
             PlayedCardDestinationZone = card.PlayedCardDestinationZone,
+            QueueOnPlay = card.QueueOnPlay,
         };
     }
 
@@ -58,6 +66,7 @@ public sealed record CardData
             RetainInHandOnTurnEnd = RetainInHandOnTurnEnd,
             TurnEndHandDestinationZone = TurnEndHandDestinationZone,
             PlayedCardDestinationZone = PlayedCardDestinationZone,
+            QueueOnPlay = QueueOnPlay,
         };
         card.Costs.AddRange(Costs);
         card.Tags.AddRange(Tags);

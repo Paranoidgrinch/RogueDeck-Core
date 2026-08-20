@@ -119,6 +119,10 @@ public sealed class StandardCombatPackage : ICombatPackage
         registry.RegisterCombatEventHandler(new ActivatePendingStatusesOnTurnStartedHandler());
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.TurnStarted.CreateHandler());
 
+        // The Queue resolves after the turn's triggers and BEFORE the draw — the design's turn order, and the
+        // reason a queued card's effect can be counted on to have happened before the hand arrives.
+        registry.RegisterCombatEventHandler(new ResolveQueueOnTurnStartedHandler());
+
         registry.RegisterCombatEventHandler(new DrawCardsOnTurnStartedHandler(_cardsDrawnPerTurn));
         registry.RegisterCombatEventHandler(new ClearBlockOnTurnStartedHandler());
         registry.RegisterCombatEventHandler(new CardLifecycleTurnEndInHandHandler());
@@ -193,6 +197,7 @@ public sealed class StandardCombatPackage : ICombatPackage
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(ModifyStatusDurationNode<>), new ModifyStatusDurationNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(ModifyStatusChargesNode<>), new ModifyStatusChargesNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(DrawCardsNode<>), new DrawCardsNodeExecutor());
+        registry.RegisterEffectNodeExecutorOpenGeneric(typeof(ResolveQueuedCardsNode<>), new ResolveQueuedCardsNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(MoveAllCardsFromZoneNode<>), new MoveAllCardsFromZoneNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(CreateCardInstanceNode<>), new CreateCardInstanceNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(CreateCardCopyNode<>), new CreateCardCopyNodeExecutor());

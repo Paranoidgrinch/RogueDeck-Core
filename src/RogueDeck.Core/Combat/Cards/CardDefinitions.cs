@@ -31,6 +31,11 @@ public sealed class CardDefinition
 
     public CardZone PlayedCardDestinationZone { get; }
 
+    // A QUEUED card is played now and resolves later: playing it pays its cost, locks its target and counts as
+    // a play for everything watching, but its program does not run — the card waits in the Queue until a
+    // resolution window comes round. False for every ordinary card.
+    public bool QueueOnPlay { get; }
+
     internal CardDefinition(
         CardDefinitionId id,
         PackageId packageId,
@@ -43,7 +48,8 @@ public sealed class CardDefinition
         bool retainInHandOnTurnEnd,
         CardZone turnEndHandDestinationZone,
         CardZone playedCardDestinationZone,
-        IReadOnlyDictionary<CardLifecycleTrigger, EffectProgram<CardLifecycleContext>>? lifecyclePrograms = null)
+        IReadOnlyDictionary<CardLifecycleTrigger, EffectProgram<CardLifecycleContext>>? lifecyclePrograms = null,
+        bool queueOnPlay = false)
     {
         Id = id;
         PackageId = packageId;
@@ -58,6 +64,7 @@ public sealed class CardDefinition
         RetainInHandOnTurnEnd = retainInHandOnTurnEnd;
         TurnEndHandDestinationZone = turnEndHandDestinationZone;
         PlayedCardDestinationZone = playedCardDestinationZone;
+        QueueOnPlay = queueOnPlay;
     }
 }
 
@@ -87,6 +94,9 @@ public sealed class CardDefinitionBuilder
     public CardZone TurnEndHandDestinationZone { get; set; } = CardZone.DiscardPile;
 
     public CardZone PlayedCardDestinationZone { get; set; } = CardZone.DiscardPile;
+
+    // "Queue: …" — the card is played now and resolves at the next resolution window.
+    public bool QueueOnPlay { get; set; } = false;
 
     public CardDefinitionBuilder(
         CardDefinitionId id,
@@ -133,7 +143,8 @@ public sealed class CardDefinitionBuilder
             PlayedCardDestinationZone,
             LifecyclePrograms.Count == 0
                 ? null
-                : LifecyclePrograms.ToImmutableDictionary());
+                : LifecyclePrograms.ToImmutableDictionary(),
+            QueueOnPlay);
 
         return _built;
     }

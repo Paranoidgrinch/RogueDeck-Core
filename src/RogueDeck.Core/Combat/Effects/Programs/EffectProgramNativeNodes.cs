@@ -1490,3 +1490,33 @@ public sealed class RemoveTemporaryRuleNode<TContext>
             ? new ProducedResult(key.Name, key.GetType().GenericTypeArguments[0], TargetSelectorCardinality.ExactlyOne)
             : null;
 }
+
+// Resolve queued cards NOW instead of waiting for the ordinary window — the Bureaucrat's "resolve your oldest
+// Queued card immediately" (Night Docket) and "at the end of your turn, if you have at least 2 Queued cards,
+// resolve your oldest" (Processional Calendar).
+//
+// Amount is how many to resolve, oldest first; the selector names whose Queue is emptied (normally the player
+// running the program). Cards queued while this runs wait for the next window, exactly as at turn start.
+public sealed class ResolveQueuedCardsNode<TContext> : IResolveQueuedCardsNodeCore, IEffectNode<TContext>
+    where TContext : class
+{
+    public ICombatantTargetSelector TargetSelector { get; }
+    public IEnumerable<ICombatantTargetSelector> GetTargetSelectors() => [TargetSelector];
+    public ICombatExpression<TContext, int> Amount { get; }
+
+    public IReadOnlyList<IEffectNode<TContext>> Children => [];
+
+    public ResolveQueuedCardsNode(ICombatantTargetSelector targetSelector, ICombatExpression<TContext, int> amount)
+    {
+        ArgumentNullException.ThrowIfNull(targetSelector);
+        ArgumentNullException.ThrowIfNull(amount);
+
+        TargetSelector = targetSelector;
+        Amount = amount;
+    }
+
+    public IEnumerable<IResultKeyConsumer> GetExpressionConsumers() => Amount.GetAllConsumers();
+
+    int IResolveQueuedCardsNodeCore.EvaluateAmount(IEffectExecutionContextCore ctx, CombatState combat) =>
+        Amount.Evaluate((EffectExecutionContext<TContext>)ctx, combat);
+}

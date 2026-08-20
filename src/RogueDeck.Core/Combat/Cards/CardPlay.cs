@@ -163,6 +163,21 @@ public sealed class CombatCardPlayProcessor
                 ? CardOutputScaling.ScaleRequest(effectRequest, scaleNum, scaleDen)
                 : effectRequest);
 
+        // A QUEUED card is played now and resolves later: the cost is paid, CardPlayed has fired, and the
+        // chosen target is locked onto the instance — but the program waits. The card goes to the back of the
+        // Queue; the resolution window (the owner's next turn, before the draw) runs it in order.
+        if (card.QueueOnPlay && cardInstanceId is { } queuedInstanceId)
+        {
+            var zones = combat.GetCardZones(source.Id);
+            zones.GetCard(queuedInstanceId).SetQueuedTarget(targetCombatantId);
+            combat.EnqueueEffect(new MoveCardToZoneEffectRequest(
+                source.Id, queuedInstanceId, CardZone.QueuePile));
+            combat.AddLogEntry(
+                StandardCombatLogTypes.CardMovedToZone,
+                $"Card '{queuedInstanceId}' was queued by '{source.Id}'.");
+            return;
+        }
+
         if (card.Program is { } program)
         {
             var buildContext = CreateCardPlayBuildContext(combat, card.Id, source, targetCombatantId);
@@ -293,7 +308,7 @@ public sealed class CombatCardPlayProcessor
             validator.Validate(context);
     }
 
-    private static TriggeredEffectActionBuildContext CreateCardPlayBuildContext(
+    internal static TriggeredEffectActionBuildContext CreateCardPlayBuildContext(
         CombatState combat,
         CardDefinitionId cardDefinitionId,
         CombatantState source,

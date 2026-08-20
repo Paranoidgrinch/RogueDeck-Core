@@ -6,7 +6,13 @@ public enum CardZone
     Hand,
     DiscardPile,
     ExhaustPile,
-    BanishedPile
+    BanishedPile,
+
+    // Cards that have been PLAYED but whose effect has not happened yet — the Bureaucrat's Queue. Queueing a
+    // card pays its cost and locks its target now; the card waits here, oldest first, until a resolution
+    // window comes round (the owner's next turn, before the draw) or an effect resolves it early. Appended
+    // last so every zone name already on the wire keeps its meaning.
+    QueuePile
 }
 
 // Where a card lands in its destination zone. Draw takes from the front (index 0 = the "top"), so Top places a card
@@ -51,6 +57,14 @@ public sealed class CardInstance
     // The combatant that applied the mark(s), when a mechanic is source-bound (e.g. a Reference belongs to
     // the enemy that created it, so death cleanup can find and clear it). Null = unbound.
     public CombatantId? MarkSourceCombatantId { get; private set; }
+
+    // Whom this card was aimed at when it was QUEUED. The target is locked at queue time, so a queued card
+    // that resolves later still hits what its player chose — and if that combatant is gone by then, the
+    // target-bound parts of the card simply fizzle rather than picking a new victim. Null on any card that is
+    // not waiting in the Queue, and on a queued card that never had a target.
+    public CombatantId? QueuedTargetId { get; private set; }
+
+    public void SetQueuedTarget(CombatantId? target) => QueuedTargetId = target;
 
     public CardInstance(
         CardInstanceId id,
@@ -124,6 +138,7 @@ public sealed class CombatantCardZones
     private readonly List<CardInstance> _discardPile = new();
     private readonly List<CardInstance> _exhaustPile = new();
     private readonly List<CardInstance> _banishedPile = new();
+    private readonly List<CardInstance> _queue = new();
 
     public IReadOnlyList<CardInstance> DrawPile => _drawPile;
     public IReadOnlyList<CardInstance> Hand => _hand;
@@ -131,11 +146,15 @@ public sealed class CombatantCardZones
     public IReadOnlyList<CardInstance> ExhaustPile => _exhaustPile;
     public IReadOnlyList<CardInstance> BanishedPile => _banishedPile;
 
+    // Oldest first: the Queue resolves FIFO, so index 0 is the card that has waited longest.
+    public IReadOnlyList<CardInstance> Queue => _queue;
+
     public IReadOnlyCollection<CardInstance> AllCards => _drawPile
         .Concat(_hand)
         .Concat(_discardPile)
         .Concat(_exhaustPile)
         .Concat(_banishedPile)
+        .Concat(_queue)
         .ToArray();
 
     public void AddCard(CardInstance card)
@@ -305,6 +324,7 @@ public sealed class CombatantCardZones
             CardZone.DiscardPile => _discardPile,
             CardZone.ExhaustPile => _exhaustPile,
             CardZone.BanishedPile => _banishedPile,
+            CardZone.QueuePile => _queue,
             _ => throw new InvalidOperationException($"Unsupported card zone '{zone}'.")
         };
     }

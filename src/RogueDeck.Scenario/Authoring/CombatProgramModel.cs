@@ -406,6 +406,7 @@ public static class CombatProgramModel
         ("createCardCopy", "copy a card"),
         ("playCard", "play a card"),
         ("replayCardProgram", "replay a card's program"),
+        ("resolveQueuedCards", "resolve queued cards"),
         ("moveCombatant", "move combatant"),
         ("swapPositions", "swap positions"),
         ("setCombatantLifecycleState", "set lifecycle state"),
@@ -565,6 +566,7 @@ public static class CombatProgramModel
         "modifyMaxHealth" => new("modifyMaxHealth", "source", CombatAmountSpec.FromConst(5)),
         "setHealth" => new("setHealth", "source", CombatAmountSpec.FromConst(10)),
         "drawCards" => new("drawCards", "source", CombatAmountSpec.FromConst(1)),
+        "resolveQueuedCards" => new("resolveQueuedCards", "source", CombatAmountSpec.FromConst(1)),
         "applyStatus" => new("applyStatus", "eventTarget", CombatAmountSpec.FromConst(1), StatusId: "poison"),
         "removeStatus" => new("removeStatus", "eventTarget", StatusId: "poison"),
         "cleanse" => new("cleanse", "source", Polarity: StatusPolarity.Debuff),
@@ -1066,6 +1068,7 @@ public static class CombatProgramModel
             "modifyMaxHealth" => new ModifyMaxHealthNode<TContext>(selector, amount),
             "setHealth" => new SetHealthNode<TContext>(selector, amount),
             "drawCards" => new DrawCardsNode<TContext>(selector, amount),
+            "resolveQueuedCards" => new ResolveQueuedCardsNode<TContext>(selector, amount),
             "applyStatus" => new ApplyStatusNode<TContext>(
                 selector, new StatusDefinitionId(model.StatusId), amount, model.DurationTurns, model.Charges),
             "removeStatus" => new RemoveStatusNode<TContext>(selector, new StatusDefinitionId(model.StatusId)),
@@ -1135,6 +1138,8 @@ public static class CombatProgramModel
                         Element: n.Element?.value ?? "", IgnoresBlock: n.IgnoresBlock, DamageKind: n.Kind));
             case HealNode<TContext> { ResultKey: null } n:
                 return Leaf("heal", n.TargetSelector, n.Amount);
+            case ResolveQueuedCardsNode<TContext> n:
+                return Leaf("resolveQueuedCards", n.TargetSelector, n.Amount);
             case GainBlockNode<TContext> { ResultKey: null } n:
                 return Leaf("gainBlock", n.TargetSelector, n.Amount);
             case GainResourceNode<TContext> { ResultKey: null } n:
