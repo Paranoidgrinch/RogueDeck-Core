@@ -293,7 +293,10 @@ public sealed class NodeJsonConverter : JsonConverter<Node>
         var id = new NodeId(root.GetProperty("id").GetString()!);
         var type = new NodeType(root.GetProperty("type").GetString()!);
         var payload = JsonSerializer.Deserialize<IRunNodePayload>(root.GetProperty("payload").GetRawText(), options)!;
-        return new Node(id, type, payload);
+        var tags = root.TryGetProperty("tags", out var tagged)
+            ? JsonSerializer.Deserialize<List<string>>(tagged.GetRawText(), options)
+            : null;
+        return new Node(id, type, payload, tags);
     }
 
     public override void Write(Utf8JsonWriter writer, Node value, JsonSerializerOptions options)
@@ -306,6 +309,13 @@ public sealed class NodeJsonConverter : JsonConverter<Node>
         writer.WriteString("type", value.Type.Value);
         writer.WritePropertyName("payload");
         JsonSerializer.Serialize(writer, payload, options);
+        // Written only when the node actually carries tags, so every document authored before node tags
+        // existed still round-trips byte-identically.
+        if (value.Tags.Count > 0)
+        {
+            writer.WritePropertyName("tags");
+            JsonSerializer.Serialize(writer, value.Tags, options);
+        }
         writer.WriteEndObject();
     }
 }

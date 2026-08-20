@@ -8,13 +8,22 @@ public sealed class Node
     public NodeType Type { get; }
     public object Payload { get; }
 
-    public Node(NodeId id, NodeType type, object payload)
+    // What this stop IS, beyond which resolver runs it: "elite", "boss", "treasure", "shop" — a generated
+    // elite is an ordinary combat node, so without tags nothing downstream can tell an elite win from any
+    // other win. Tags travel with the node into NodeEntered/CombatResolved, where relics read them. Empty by
+    // default, so an untagged map behaves exactly as before.
+    public IReadOnlyList<string> Tags { get; }
+
+    public Node(NodeId id, NodeType type, object payload, IReadOnlyList<string>? tags = null)
     {
         ArgumentNullException.ThrowIfNull(payload);
         Id = id;
         Type = type;
         Payload = payload;
+        Tags = tags ?? [];
     }
+
+    public bool HasTag(string tag) => Tags.Contains(tag, StringComparer.Ordinal);
 }
 
 // A directed edge in the run map's graph: after finishing `From`, `To` becomes a reachable next node. Only

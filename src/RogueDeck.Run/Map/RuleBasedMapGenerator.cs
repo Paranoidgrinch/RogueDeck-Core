@@ -177,7 +177,7 @@ public static class RuleBasedMapGenerator
                     var encounter = SelectEncounter(effectiveKind, ri, spec, realization, contentRng!, usedEncounters);
                     var nodeRef = SelectNodeRef(effectiveKind, spec, contentRng!, usedRefs);
                     var realized = realization.Content(effectiveKind, new MapCoord(ri, c), encounter, nodeRef);
-                    builder.AddNode(id, realized.Type, realized.Payload);
+                    builder.AddNode(id, realized.Type, realized.Payload, realized.Tags);
                     kind = effectiveKind;
                 }
                 roles[id] = kind;

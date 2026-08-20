@@ -19,8 +19,8 @@ public sealed class RunMapBuilder
         return this;
     }
 
-    public RunMapBuilder AddNode(NodeId id, NodeType type, object payload) =>
-        AddNode(new Node(id, type, payload));
+    public RunMapBuilder AddNode(NodeId id, NodeType type, object payload, IReadOnlyList<string>? tags = null) =>
+        AddNode(new Node(id, type, payload, tags));
 
     public RunMapBuilder Connect(NodeId from, NodeId to)
     {

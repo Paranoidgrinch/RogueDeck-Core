@@ -35,7 +35,7 @@ public readonly record struct MapCoord(int Row, int Column);
 
 // What the caller realizes a generated node as: its NodeType + data payload (e.g. combat -> EncounterRef, event ->
 // EventRef). The generator supplies the kind + coordinate; the caller returns the concrete content.
-public readonly record struct NodeContent(NodeType Type, object Payload);
+public readonly record struct NodeContent(NodeType Type, object Payload, IReadOnlyList<string>? Tags = null);
 
 // Shape of a layered act: `Rows` rows of branching combat/event/shop/etc. nodes, then a single boss row on top.
 // Each row's width is drawn in [MinWidth, MaxWidth]. Deterministic from a seed.
