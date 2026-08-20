@@ -40,14 +40,26 @@ public class MimicTreasureTests
         },
     };
 
+    // At 100 % every treasure the branch rows drew is a mimic. The one treasure that is PROMISED to every path
+    // still stands: a guarantee row never flips, or the promise would quietly break for the paths crossing it.
     [Fact]
-    public void At_100_percent_every_treasure_node_becomes_a_mimic_combat()
+    public void At_100_percent_every_drawn_treasure_becomes_a_mimic_combat()
     {
-        var generated = RuleBasedMapGenerator.Generate(Spec(100), seed: 7, 0, EmptyBalance(), Realize);
+        var spec = Spec(100) with
+        {
+            KindWeights = new Dictionary<MapNodeKind, int>
+            {
+                [MapNodeKind.Combat] = 5,
+                [MapNodeKind.Treasure] = 5,
+            },
+        };
+        var generated = RuleBasedMapGenerator.Generate(spec, seed: 7, 0, EmptyBalance(), Realize);
         var roles = generated.Roles;
 
         Assert.Contains(roles.Values, k => k == MapNodeKind.Mimic);
-        Assert.DoesNotContain(roles.Values, k => k == MapNodeKind.Treasure); // all flipped
+        // Exactly the promised one is left, and every path still crosses it.
+        Assert.Equal(1, roles.Values.Count(k => k == MapNodeKind.Treasure));
+        Assert.Empty(MapConstraintValidator.Validate(generated, spec));
 
         // Every mimic node realized as the mimic combat encounter.
         foreach (var (id, kind) in roles)

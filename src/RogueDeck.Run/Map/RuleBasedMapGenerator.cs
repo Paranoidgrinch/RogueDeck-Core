@@ -45,14 +45,14 @@ public static class RuleBasedMapGenerator
         var gateCounts = new Dictionary<MapNodeKind, int>();
         for (var iteration = 0; iteration < MaxGateIterations; iteration++)
         {
-            var (trialMap, trialRoles) = Build(spec, branches, gateCounts, wireSeed);
-            var changed = AccumulateDeficits(spec, trialMap, trialRoles, gateCounts);
+            var (trialMap, trialRoles, trialGuaranteed) = Build(spec, branches, gateCounts, wireSeed);
+            var changed = AccumulateDeficits(spec, trialMap, trialRoles, trialGuaranteed, gateCounts);
             changed |= EnforceMaximums(spec, branches, trialMap, trialRoles);
             if (!changed)
                 break;
         }
 
-        var (map, roles) = Build(
+        var (map, roles, _) = Build(
             spec, branches, gateCounts, wireSeed,
             new ContentRealization(new EncounterSelector(spec.Encounters, balance), startingLoadout, contentSeed, content));
         return new GeneratedMap(map, roles);
@@ -82,7 +82,7 @@ public static class RuleBasedMapGenerator
     // changed anything (so the caller rebuilds and re-checks). Map-wide minimums are advisory (validator-only).
     private static bool AccumulateDeficits(
         MapGenerationSpec spec, RunMap map, IReadOnlyDictionary<NodeId, MapNodeKind> roles,
-        Dictionary<MapNodeKind, int> gateCounts)
+        IReadOnlySet<NodeId> guaranteed, Dictionary<MapNodeKind, int> gateCounts)
     {
         var added = false;
 
@@ -93,7 +93,11 @@ public static class RuleBasedMapGenerator
             if (min <= 0)
                 continue;
             var kindLocal = kind;
-            var deficit = min - MapConstraintValidator.WorstPathCount(map, roles, k => k == kindLocal);
+            // A treasure drawn by a branch row may still turn out to be a mimic, so it cannot be counted
+            // toward the treasure promise — only the ones the guarantee rows put there can.
+            var flippable = kindLocal == MapNodeKind.Treasure && spec.TreasureMimicChancePercent > 0;
+            var deficit = min - MapConstraintValidator.WorstPathCount(
+                map, roles, (id, k) => k == kindLocal && (!flippable || guaranteed.Contains(id)));
             if (deficit > 0)
             {
                 gateCounts[kind] = gateCounts.GetValueOrDefault(kind) + deficit;
@@ -123,7 +127,7 @@ public static class RuleBasedMapGenerator
         EncounterSelector Selector, int StartingLoadout, int ContentSeed,
         Func<MapNodeKind, MapCoord, EncounterId?, string?, NodeContent> Content);
 
-    private static (RunMap Map, Dictionary<NodeId, MapNodeKind> Roles) Build(
+    private static (RunMap Map, Dictionary<NodeId, MapNodeKind> Roles, HashSet<NodeId> GuaranteedNodes) Build(
         MapGenerationSpec spec, Branches branches, IReadOnlyDictionary<MapNodeKind, int> gateCounts, int wireSeed,
         ContentRealization? realization = null)
     {
@@ -139,6 +143,9 @@ public static class RuleBasedMapGenerator
 
         var builder = new RunMapBuilder();
         var roles = new Dictionary<NodeId, MapNodeKind>();
+        // Nodes that sit on a guarantee row: those are the promises, and only they may be counted toward a
+        // per-path minimum when the kind can still change under the player's feet (a treasure→mimic flip).
+        var guaranteed = new HashSet<NodeId>();
 
         for (var ri = 0; ri < plan.Count; ri++)
         {
@@ -156,10 +163,13 @@ public static class RuleBasedMapGenerator
                 {
                     // A Treasure node flips into a Mimic combat with a per-act chance. The roll consumes the
                     // content RNG unconditionally on Treasure nodes so map layout stays deterministic per seed.
+                    // A treasure that sits on a GUARANTEE row never flips: that node is the promise "every path
+                    // holds a treasure", and a mimic would quietly break it for the paths crossing it.
                     var effectiveKind = kind;
                     if (kind == MapNodeKind.Treasure && spec.TreasureMimicChancePercent > 0
                         && realization.Selector.HasCandidates(MapNodeKind.Mimic)
-                        && contentRng!.Next(100) < spec.TreasureMimicChancePercent)
+                        && contentRng!.Next(100) < spec.TreasureMimicChancePercent
+                        && !row.IsGate)
                     {
                         effectiveKind = MapNodeKind.Mimic;
                     }
@@ -171,6 +181,8 @@ public static class RuleBasedMapGenerator
                     kind = effectiveKind;
                 }
                 roles[id] = kind;
+                if (row.IsGate)
+                    guaranteed.Add(id);
             }
         }
 
@@ -181,7 +193,7 @@ public static class RuleBasedMapGenerator
         for (var ri = 0; ri < plan.Count - 1; ri++)
             MapWiring.WireRows(builder, ri, WidthOf(spec, plan[ri], branches), WidthOf(spec, plan[ri + 1], branches), wire);
 
-        return (builder.Build(), roles);
+        return (builder.Build(), roles, guaranteed);
     }
 
     // A guarantee row is a funnel (width 1) unless the spec asks it to keep the map's width, in which case it

@@ -63,6 +63,15 @@ public static class MapConstraintValidator
     public static int WorstPathCount(
         RunMap map, IReadOnlyDictionary<NodeId, MapNodeKind> roles, Func<MapNodeKind, bool> matches)
     {
+        ArgumentNullException.ThrowIfNull(matches);
+        return WorstPathCount(map, roles, (_, kind) => matches(kind));
+    }
+
+    // The same, when WHICH node it is matters as well as its kind (a treasure that may still flip into a mimic
+    // cannot be counted toward a treasure guarantee, but the one on a guarantee row can).
+    public static int WorstPathCount(
+        RunMap map, IReadOnlyDictionary<NodeId, MapNodeKind> roles, Func<NodeId, MapNodeKind, bool> matches)
+    {
         ArgumentNullException.ThrowIfNull(map);
         ArgumentNullException.ThrowIfNull(roles);
         ArgumentNullException.ThrowIfNull(matches);
@@ -91,13 +100,18 @@ public static class MapConstraintValidator
     // solved before the node that depends on it.
     private static int MinCountOnAnyPath(
         RunMap map, IReadOnlyList<NodeId> order, IReadOnlyDictionary<NodeId, MapNodeKind> roles,
-        Func<MapNodeKind, bool> matches)
+        Func<MapNodeKind, bool> matches) =>
+        MinCountOnAnyPath(map, order, roles, (_, kind) => matches(kind));
+
+    private static int MinCountOnAnyPath(
+        RunMap map, IReadOnlyList<NodeId> order, IReadOnlyDictionary<NodeId, MapNodeKind> roles,
+        Func<NodeId, MapNodeKind, bool> matches)
     {
         var minPath = new Dictionary<NodeId, int>();
         for (var i = order.Count - 1; i >= 0; i--)
         {
             var id = order[i];
-            var self = roles.TryGetValue(id, out var kind) && matches(kind) ? 1 : 0;
+            var self = roles.TryGetValue(id, out var kind) && matches(id, kind) ? 1 : 0;
 
             var best = int.MaxValue;
             foreach (var successor in map.SuccessorIds(id))
