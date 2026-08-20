@@ -4,7 +4,9 @@ public sealed record StatusApplicationBlockedTriggeredEffectContext(
     CombatState Combat,
     CombatDefinitionRegistry Registry,
     StatusApplicationBlockedCombatEvent CombatEvent,
-    CombatantState TargetCombatant);
+    CombatantState TargetCombatant,
+    // Who tried to apply the refused status, when the application named a source.
+    CombatantState? SourceCombatant = null);
 
 public sealed record FixedStatusApplicationBlockedTriggeredEffectAmount(int Amount)
     : ICombatValueProvider<StatusApplicationBlockedTriggeredEffectContext, int>
@@ -61,10 +63,13 @@ public static class StatusApplicationBlockedTriggeredEffectTargetResolver
     {
         ArgumentNullException.ThrowIfNull(context);
 
+        // "source" is the combatant that REFUSED the status — the one wearing the prohibition — and
+        // "eventTarget" is whoever tried to apply it, so a rule can answer the one who was refused. With no
+        // named applier the event target falls back to the refuser, so a program never resolves to nobody.
         return new CombatantTargetSelectionContext(
             Combat: context.Combat,
             Source: context.TargetCombatant,
-            EventTargetId: context.CombatEvent.TargetCombatantId);
+            EventTargetId: context.CombatEvent.SourceCombatantId ?? context.CombatEvent.TargetCombatantId);
     }
 
     public static TriggeredEffectActionSource CreateActionSource(

@@ -138,7 +138,9 @@ public static class TriggeredProgramContextAdapters
             (combat, registry, e) =>
             {
                 if (!combat.TryGetCombatant(e.TargetCombatantId, out var target)) return null;
-                return new StatusApplicationBlockedTriggeredEffectContext(combat, registry, e, target!);
+                CombatantState? applier = null;
+                if (e.SourceCombatantId is { } sid && combat.TryGetCombatant(sid, out var s)) applier = s;
+                return new StatusApplicationBlockedTriggeredEffectContext(combat, registry, e, target!, applier);
             },
             StatusApplicationBlockedTriggeredEffectTargetResolver.CreateActionBuildContext);
 

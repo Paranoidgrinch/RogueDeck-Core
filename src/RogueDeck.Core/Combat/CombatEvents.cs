@@ -159,7 +159,11 @@ public sealed record StatusApplicationBlockedCombatEvent(
     CombatantId TargetCombatantId,
     StatusDefinitionId BlockedStatusDefinitionId,
     StatusInstanceId BlockingStatusInstanceId,
-    StatusDefinitionId BlockingStatusDefinitionId
+    StatusDefinitionId BlockingStatusDefinitionId,
+    // Who tried to apply it, when the application named a source. A rule that answers a refusal usually wants
+    // to answer the one who was refused — "the first time each turn your Censure prevents a negative Status
+    // applied by an enemy, apply 2 Censure to THAT enemy".
+    CombatantId? SourceCombatantId = null
 ) : ICombatEvent;
 public sealed record StatusAppliedCombatEvent(
     CombatantId TargetCombatantId,

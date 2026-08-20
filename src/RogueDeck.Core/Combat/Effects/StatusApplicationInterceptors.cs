@@ -88,7 +88,8 @@ public sealed class ArtifactStatusApplicationInterceptor : IStatusApplicationInt
             TargetCombatantId: context.TargetCombatant.Id,
             BlockedStatusDefinitionId: context.Request.StatusDefinitionId,
             BlockingStatusInstanceId: artifactStatus.Id,
-            BlockingStatusDefinitionId: artifactStatus.DefinitionId));
+            BlockingStatusDefinitionId: artifactStatus.DefinitionId,
+            SourceCombatantId: context.Request.SourceCombatantId));
 
         context.Combat.EnqueueEffect(new DecreaseStatusChargesEffectRequest(
             TargetCombatantId: context.TargetCombatant.Id,
@@ -155,7 +156,8 @@ public sealed class DeclarativeStatusPreventionInterceptor : IStatusApplicationI
                 TargetCombatantId: bearer.Id,
                 BlockedStatusDefinitionId: context.Request.StatusDefinitionId,
                 BlockingStatusInstanceId: candidate.Id,
-                BlockingStatusDefinitionId: candidate.DefinitionId));
+                BlockingStatusDefinitionId: candidate.DefinitionId,
+                SourceCombatantId: context.Request.SourceCombatantId));
 
             ModifyStatusStacksEffectHandler.ApplyDelta(context.Combat, bearer, candidate, -spent);
 
