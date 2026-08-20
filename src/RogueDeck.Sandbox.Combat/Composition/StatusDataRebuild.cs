@@ -60,8 +60,13 @@ public static class StatusDataRebuild
                 id, Program<CombatantDownedTriggeredEffectContext>(data),
                 filters: Scoped<CombatantDownedTriggeredEffectContext>(c => c.Combat,
                     new CombatantDownedHasStatusTriggerFilter(statusId))),
+            // Bearer scope here means something slightly different from the other events: the question is
+            // whether THIS status is the one that ran out. Anywhere is how a status watches every OTHER
+            // status expiring, on anyone.
             TriggerEvent.StatusExpired => TriggeredProgramContextAdapters.StatusExpired.Define(
-                id, Program<StatusExpiredTriggeredEffectContext>(data), filters: [new StatusExpiredStatusDefinitionTriggerFilter(statusId)]),
+                id, Program<StatusExpiredTriggeredEffectContext>(data),
+                filters: Scoped<StatusExpiredTriggeredEffectContext>(c => c.Combat,
+                    new StatusExpiredStatusDefinitionTriggerFilter(statusId))),
             TriggerEvent.ResourceGained => TriggeredProgramContextAdapters.ResourceGained.Define(
                 id, Program<ResourceGainedTriggeredEffectContext>(data),
                 filters: Scoped<ResourceGainedTriggeredEffectContext>(c => c.Combat,
