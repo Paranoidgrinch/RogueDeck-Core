@@ -40,6 +40,10 @@ public sealed record StatusData
     // effect. Null = they land at once, as always.
     public IncomingStatusDelayData? IncomingStatusDelay { get; init; }
 
+    // "Full disclosure": how much of their own draw pile the bearer sees, and how far past the ordinary
+    // telegraph they read an enemy's intents. Null = the ordinary view.
+    public DisclosureData? Disclosure { get; init; }
+
     public static StatusData From(StatusBlueprint status)
     {
         ArgumentNullException.ThrowIfNull(status);
@@ -59,6 +63,9 @@ public sealed record StatusData
             IncomingStatusDelay = status.IncomingStatusDelay is { } delay
                 ? new IncomingStatusDelayData(delay.Turns, delay.Polarity)
                 : null,
+            Disclosure = status.Disclosure is { } sight
+                ? new DisclosureData(sight.DrawPileCards, sight.IntentLookahead)
+                : null,
         };
     }
 
@@ -76,6 +83,9 @@ public sealed record StatusData
             StackingBehavior = StackingBehavior,
             IncomingStatusDelay = IncomingStatusDelay is { } delay
                 ? new IncomingStatusDelaySpec(delay.Turns, delay.Polarity)
+                : null,
+            Disclosure = Disclosure is { } sight
+                ? new DisclosureSpec(sight.DrawPileCards, sight.IntentLookahead)
                 : null,
         };
         foreach (var tag in Tags)
@@ -95,6 +105,10 @@ public sealed record StatusTriggerData(string Event, JsonElement Program);
 // How long statuses applied to this status' bearer are postponed, and which of them wait at all (null polarity
 // = everything). The engine face is IncomingStatusDelaySpec.
 public sealed record IncomingStatusDelayData(int Turns, StatusPolarity? Polarity = null);
+
+// What the bearer may see beyond the ordinary view: cards off the top of their own draw pile, and enemy
+// actions past the current telegraph. The engine face is DisclosureSpec.
+public sealed record DisclosureData(int DrawPileCards = 0, int IntentLookahead = 0);
 
 // A status' death-prevention interceptor as data: the HP to survive at, plus the effects to run when it fires.
 public sealed record StatusDeathPreventionData(int SurvivingHealth, IReadOnlyList<InterceptorEffectData> Effects);

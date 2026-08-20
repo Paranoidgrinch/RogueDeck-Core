@@ -99,6 +99,43 @@ public sealed class InteractiveCombat
             : null;
     }
 
+    // What the hero is currently allowed to see beyond the ordinary view (B&B's Article of Full Disclosure and
+    // anything like it): granted by statuses in force on them.
+    public DisclosureSpec HeroDisclosure => DisclosureSpec.For(_combat, _registry, _heroId);
+
+    // The top of the hero's own draw pile, as far as their sight reaches. Empty without a disclosure.
+    public IReadOnlyList<CardInstance> RevealedDrawPile
+    {
+        get
+        {
+            var reach = HeroDisclosure.DrawPileCards;
+            if (reach <= 0)
+                return Array.Empty<CardInstance>();
+
+            var pile = _combat.GetCardZones(_heroId).DrawPile;
+            // The draw takes from the END of the pile, so "the top" is the tail, nearest first.
+            return pile.Reverse().Take(reach).ToList();
+        }
+    }
+
+    // The enemy's telegraph, plus as many actions past it as the hero's sight reaches. The first entry is the
+    // ordinary UpcomingIntentFor; the rest are the actions the enemy WOULD take on the rounds after it, read
+    // off the state as it stands — a projection, exactly like the visible telegraph itself.
+    public IReadOnlyList<ActionIntent> UpcomingIntentsFor(CombatantId combatant)
+    {
+        if (IsOver || combatant == _heroId)
+            return Array.Empty<ActionIntent>();
+
+        var depth = 1 + Math.Max(0, HeroDisclosure.IntentLookahead);
+        var intents = new List<ActionIntent>(depth);
+        for (var ahead = 0; ahead < depth; ahead++)
+            if (_enemyIntent(_combat, combatant, _combat.CurrentRound + ahead) is { } actionId &&
+                _compiled.IntentFor(actionId) is { } intent)
+                intents.Add(intent);
+
+        return intents;
+    }
+
     public ScenarioReport ToReport() => new(_steps.ToList(), _combat.Result, _combat);
 
     public string RenderLog() => new NarrativeLogRenderer().Render(ToReport());

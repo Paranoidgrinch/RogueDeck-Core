@@ -24,6 +24,9 @@ public sealed class StatusBlueprint
     // its turn starts before taking effect (visible and cleansable, but inert). Null = immediate, as always.
     public IncomingStatusDelaySpec? IncomingStatusDelay { get; init; }
 
+    // "Full disclosure": extra sight for the bearer (own draw pile, enemy telegraph depth). Null = ordinary.
+    public DisclosureSpec? Disclosure { get; init; }
+
     public StatusBlueprint(string id)
     {
         if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("Status id cannot be empty.", nameof(id));
@@ -40,7 +43,7 @@ public sealed class StatusBlueprint
             DefinitionId, new PackageId(PackageId), NameKey, DescriptionKey,
             polarity: Polarity, usesStacks: UsesStacks, usesDuration: UsesDuration, usesCharges: UsesCharges,
             stackingBehavior: StackingBehavior, passiveModifiers: PassiveModifiers,
-            incomingStatusDelay: IncomingStatusDelay);
+            incomingStatusDelay: IncomingStatusDelay, disclosure: Disclosure);
         foreach (var tag in Tags) def.Tags.Add(tag);
         return def;
     }

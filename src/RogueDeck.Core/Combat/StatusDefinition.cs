@@ -38,6 +38,10 @@ public sealed class StatusDefinition
     // inert. Null = applications land immediately, as always.
     public IncomingStatusDelaySpec? IncomingStatusDelay { get; }
 
+    // "Full disclosure": what its BEARER is allowed to see beyond the ordinary view — the top of their own
+    // draw pile, and how many enemy actions ahead their telegraph reaches. Null = the ordinary view.
+    public DisclosureSpec? Disclosure { get; }
+
     internal void Freeze() => _tags = _tags.ToImmutableHashSet();
 
     public StatusDefinition(
@@ -55,7 +59,8 @@ public sealed class StatusDefinition
         bool showChargesInUi = false,
         StatusStackingBehavior stackingBehavior = StatusStackingBehavior.CreateSeparateInstance,
         IEnumerable<PassiveModifierSpec>? passiveModifiers = null,
-        IncomingStatusDelaySpec? incomingStatusDelay = null)
+        IncomingStatusDelaySpec? incomingStatusDelay = null,
+        DisclosureSpec? disclosure = null)
     {
         if (string.IsNullOrWhiteSpace(displayNameKey))
             throw new ArgumentException("Display name key cannot be empty.", nameof(displayNameKey));
@@ -78,6 +83,7 @@ public sealed class StatusDefinition
         StackingBehavior = stackingBehavior;
         PassiveModifiers = passiveModifiers?.ToImmutableArray() ?? ImmutableArray<PassiveModifierSpec>.Empty;
         IncomingStatusDelay = incomingStatusDelay;
+        Disclosure = disclosure;
     }
 }
 
@@ -86,4 +92,37 @@ public sealed class StatusDefinition
 public sealed record IncomingStatusDelaySpec(int Turns, StatusPolarity? Polarity = null)
 {
     public bool Applies(StatusPolarity polarity) => Polarity is null || Polarity == polarity;
+}
+
+// What a status lets its bearer see. DrawPileCards is how many cards of their own draw pile are revealed;
+// IntentLookahead is how many enemy actions BEYOND the ordinary telegraph they may read. Both are pure
+// visibility: nothing in the effect pipeline reads them, they only widen what a host may render.
+public sealed record DisclosureSpec(int DrawPileCards = 0, int IntentLookahead = 0)
+{
+    public static readonly DisclosureSpec None = new();
+
+    public DisclosureSpec Combine(DisclosureSpec other) => other is null
+        ? this
+        : new DisclosureSpec(
+            Math.Max(DrawPileCards, other.DrawPileCards),
+            Math.Max(IntentLookahead, other.IntentLookahead));
+
+    // The sight a combatant currently has: the widest grant among the statuses in force on it.
+    public static DisclosureSpec For(
+        CombatState combat, CombatDefinitionRegistry registry, CombatantId combatantId)
+    {
+        ArgumentNullException.ThrowIfNull(combat);
+        ArgumentNullException.ThrowIfNull(registry);
+
+        if (!combat.TryGetCombatant(combatantId, out var combatant) || combatant is null)
+            return None;
+
+        var sight = None;
+        foreach (var status in combatant.Statuses)
+            if (registry.TryGetStatus(status.DefinitionId, out var definition) &&
+                definition?.Disclosure is { } granted)
+                sight = sight.Combine(granted);
+
+        return sight;
+    }
 }

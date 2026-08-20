@@ -310,6 +310,7 @@ public static class StudioVocabulary
         ["TriggerEvent.BlockGained"] = "the bearer gains Block",
         ["TriggerEvent.CardsDrawn"] = "the bearer draws cards",
         ["StatusData.IncomingStatusDelay"] = "Postpone incoming statuses",
+        ["StatusData.Disclosure"] = "Show the bearer more",
         ["TriggerEvent.RoundStarted"] = "a round starts",
         ["TriggerEvent.RoundEnded"] = "a round ends",
         ["EffectTarget.Target"] = "the event's target",
@@ -357,6 +358,10 @@ public static class StudioVocabulary
             "While a combatant wears this status, statuses applied TO it do not take effect at once: they wait "
             + "the given number of that combatant's turn starts. A waiting status is visible and can still be "
             + "removed, but it carries no modifiers and fires no triggers until it takes hold.",
+        ["StatusData.Disclosure"] =
+            "Pure visibility: while a combatant wears this status, a frontend may show them the given number of "
+            + "cards off the top of their own draw pile and that many enemy actions BEYOND the ordinary "
+            + "telegraph. Nothing about the fight itself changes.",
         ["PassiveModifierPipeline.OutgoingStatusApplicationStacks"] = "Changes how many stacks the bearer applies when it gives statuses to others.",
         ["PassiveModifierPipeline.TurnStartDraw"] = "Changes how many cards the bearer draws at the start of its turn (never below zero). AddPerStack −1 is the classic 'draw fewer cards' debuff.",
         ["PassiveModifierOperation.AddPerStack"] = "Adds the magnitude once per stack of this status.",

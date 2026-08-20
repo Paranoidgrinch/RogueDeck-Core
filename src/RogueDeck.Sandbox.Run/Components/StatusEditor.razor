@@ -159,6 +159,30 @@
             </div>
 
             <div class="editor-effects">
+                <span class="muted">@StudioVocabulary.FieldLabel("StatusData.Disclosure"):</span>
+                @if (status.Disclosure is { } sight)
+                {
+                    <div class="run-bar">
+                        <label>draw pile
+                            <input type="number" value="@sight.DrawPileCards" style="width:4rem"
+                                   @onchange="e => SetDisclosure(index, sight with { DrawPileCards = Math.Max(0, AsInt(e.Value, sight.DrawPileCards)) })" />
+                            card(s)
+                        </label>
+                        <label>enemy intents ahead
+                            <input type="number" value="@sight.IntentLookahead" style="width:4rem"
+                                   @onchange="e => SetDisclosure(index, sight with { IntentLookahead = Math.Max(0, AsInt(e.Value, sight.IntentLookahead)) })" />
+                        </label>
+                        <button class="mini" @onclick="() => SetDisclosure(index, null)">✕ remove</button>
+                    </div>
+                    <div class="muted">@StudioVocabulary.FieldDescription("StatusData.Disclosure")</div>
+                }
+                else
+                {
+                    <button class="mini" @onclick="() => SetDisclosure(index, new DisclosureData(1, 1))">+ disclosure</button>
+                }
+            </div>
+
+            <div class="editor-effects">
                 <span class="muted">Debuff block:</span>
                 @if (status.DebuffBlock is { } db)
                 {
@@ -349,6 +373,10 @@
     // "Due notice": statuses applied to the bearer wait before they take effect.
     private Task SetIncomingDelay(int index, IncomingStatusDelayData? data) =>
         Edit(index, s => s with { IncomingStatusDelay = data });
+
+    // "Full disclosure": extra sight for the bearer.
+    private Task SetDisclosure(int index, DisclosureData? data) =>
+        Edit(index, s => s with { Disclosure = data });
 
     private static StatusPolarity? AsPolarity(object? value) =>
         AsString(value) is { } text && Enum.TryParse<StatusPolarity>(text, out var polarity) ? polarity : null;
