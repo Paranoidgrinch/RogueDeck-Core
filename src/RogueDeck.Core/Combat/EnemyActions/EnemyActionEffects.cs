@@ -38,6 +38,12 @@ public sealed class ExecuteEnemyActionEffectHandler
                 EventTargetId: request.TargetCombatantId),
             TriggeredEffectActionSource.FromEnemyAction(actor.Id, action.Id));
 
+        // An enemy action is an ACTION in the same sense a card play is: everything it sets in motion,
+        // however many hits it makes, is one action. Rules written "once per action" claim inside this scope,
+        // and the action announces what it turned out to be when it closes.
+        combat.BeginActionScope();
+        var actorId = actor.Id;
+
         if (action.Effects.Count > 0)
         {
             var ctx = new EnemyActionContext(action);
@@ -48,10 +54,6 @@ public sealed class ExecuteEnemyActionEffectHandler
 
         if (action.Program is { } program)
         {
-            // An enemy action is an ACTION in the same sense a card play is: everything its program does,
-            // however many hits it makes, happens once. Rules written "once per action" claim inside this
-            // scope (see CombatState.TryClaimOnceThisAction).
-            combat.BeginActionScope();
             EffectProgramExecutor.Execute(
                 program,
                 new EnemyActionContext(action),
@@ -59,7 +61,11 @@ public sealed class ExecuteEnemyActionEffectHandler
                 combat,
                 onComplete: null,
                 registry: registry.EffectNodeExecutors,
-                onTerminal: (_, c) => c.EndActionScope());
+                onTerminal: (_, c) => CombatCardPlayProcessor.CloseAction(c, actorId));
+        }
+        else
+        {
+            combat.EnqueueContinuation(c => CombatCardPlayProcessor.CloseAction(c, actorId));
         }
     }
 }

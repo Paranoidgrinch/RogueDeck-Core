@@ -60,6 +60,7 @@ public static class StatusTriggerPrograms
             [TriggerEvent.RoundStarted] = For<RoundStartedTriggeredEffectContext>(),
             [TriggerEvent.RoundEnded] = For<RoundEndedTriggeredEffectContext>(),
             [TriggerEvent.StatusApplicationPrevented] = For<StatusApplicationBlockedTriggeredEffectContext>(),
+            [TriggerEvent.ActionResolved] = For<ActionResolvedTriggeredEffectContext>(),
         };
 
     public static StatusTriggerProgram Get(TriggerEvent ev) => ByEvent[ev];

@@ -87,18 +87,43 @@ public sealed class CombatState
     // status tick or a turn-boundary program. Nested, because an action's program can start another action:
     // the inner one gets its own ledger and closing it hands the outer its ledger back. Transient bookkeeping
     // within one action, so it is deliberately not part of the snapshot or the state hash.
-    private readonly Stack<HashSet<string>> _actionScopes = new();
+    private readonly Stack<ActionScope> _actionScopes = new();
 
-    internal void BeginActionScope() => _actionScopes.Push(new HashSet<string>(StringComparer.Ordinal));
-
-    internal void EndActionScope()
+    // Each open action keeps its own ledger of once-per-action claims, and remembers whether it has yet
+    // struck an opponent — which is the whole question the Citation status asks of a resolved action.
+    private sealed class ActionScope
     {
-        if (_actionScopes.Count > 0)
-            _actionScopes.Pop();
+        public readonly HashSet<string> Claims = new(StringComparer.Ordinal);
+        public bool DealtDamage;
     }
 
+    internal void BeginActionScope() => _actionScopes.Push(new ActionScope());
+
+    // Closes the action and reports what it was: an ACTOR and whether it struck an opponent. Callers raise the
+    // event, so the engine says nothing about an action whose actor has meanwhile left the fight.
+    internal bool EndActionScope(out bool dealtDamage)
+    {
+        dealtDamage = false;
+        if (_actionScopes.Count == 0)
+            return false;
+        dealtDamage = _actionScopes.Pop().DealtDamage;
+        return true;
+    }
+
+    internal void EndActionScope() => EndActionScope(out _);
+
     public bool TryClaimOnceThisAction(string key) =>
-        _actionScopes.Count > 0 && _actionScopes.Peek().Add(key);
+        _actionScopes.Count > 0 && _actionScopes.Peek().Claims.Add(key);
+
+    // Recorded by the damage handler for ordinary hits an action lands on the other side. Block absorbing the
+    // hit does not make the action non-damaging — the design is explicit that it still counts — and a status
+    // ticking is not the doing of whichever action applied that status, which is why only damage raised
+    // INSIDE an open action scope is recorded at all.
+    internal void NoteActionDealtDamage()
+    {
+        if (_actionScopes.Count > 0)
+            _actionScopes.Peek().DealtDamage = true;
+    }
 
     public int NextStatusInstanceNumber { get; private set; } = 1;
 

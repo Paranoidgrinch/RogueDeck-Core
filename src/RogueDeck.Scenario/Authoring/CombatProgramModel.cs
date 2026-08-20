@@ -107,7 +107,7 @@ public sealed record CombatSelectorSpec(
 // target (health / resource / status stacks vs a constant), or a target-state predicate (has status / alive /
 // downed / exists). Anything richer (and/or/not, computed right operand) classifies "advanced" → JSON escape.
 public sealed record CombatConditionSpec(
-    string Kind = "compare",                                   // compare | hasStatus | isAlive | downed | exists | intends | advanced
+    string Kind = "compare",                                   // compare | hasStatus | isAlive | downed | exists | intends | actionDealtDamage | advanced
     string SelectorKey = "source",                             // the inspected target
     string ValueKind = "currentHealth",                        // compare left: currentHealth/maxHealth/missingHealth/healthPercentage/currentResource/statusStacks/counter
     ComparisonOperator Op = ComparisonOperator.GreaterOrEqual,
@@ -956,6 +956,7 @@ public static class CombatProgramModel
             "downed" => new TargetDownedExpression<TContext>(selector),
             "exists" => new TargetExistsExpression<TContext>(selector),
             "intends" => new TargetIntendsExpression<TContext>(selector, spec.Id),
+            "actionDealtDamage" => new ActionDealtDamageExpression<TContext>(),
             _ => new ComparisonExpression<TContext>(
                 ConditionLeftValue<TContext>(selector, spec.ValueKind, spec.Id),
                 spec.Op,
@@ -976,6 +977,8 @@ public static class CombatProgramModel
                 return new CombatConditionSpec("downed", key);
             case TargetIntendsExpression<TContext> e when KeyFor(e.Selector) is { } key:
                 return new CombatConditionSpec("intends", key, Id: e.Kind);
+            case ActionDealtDamageExpression<TContext>:
+                return new CombatConditionSpec("actionDealtDamage");
             case TargetExistsExpression<TContext> e when KeyFor(e.Selector) is { } key:
                 return new CombatConditionSpec("exists", key);
             case ComparisonExpression<TContext> c

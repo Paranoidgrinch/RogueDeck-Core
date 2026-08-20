@@ -107,6 +107,10 @@ public static class StatusDataRebuild
             // A prevention is reported on the combatant it happened TO, and the status that paid for it is
             // usually not the one reacting — so the bearer scope asks that the reacting status be on that
             // combatant, and Anywhere lets a rule watch preventions on either side of the fight.
+            TriggerEvent.ActionResolved => TriggeredProgramContextAdapters.ActionResolved.Define(
+                id, Program<ActionResolvedTriggeredEffectContext>(data),
+                filters: Scoped<ActionResolvedTriggeredEffectContext>(c => c.Combat,
+                    new ActionResolvedActorHasStatusTriggerFilter(statusId))),
             TriggerEvent.StatusApplicationPrevented => TriggeredProgramContextAdapters.StatusApplicationBlocked.Define(
                 id, Program<StatusApplicationBlockedTriggeredEffectContext>(data),
                 filters: Scoped<StatusApplicationBlockedTriggeredEffectContext>(c => c.Combat,

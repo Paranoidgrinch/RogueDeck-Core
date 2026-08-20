@@ -158,6 +158,12 @@ public sealed class CombatCardPlayProcessor
         }
         var outputScaled = scaleNum < scaleDen;
 
+        // Open the action here, before anything the card does: everything it sets in motion — its legacy
+        // effect list AND its program — belongs to this one action, and the action is what "once per action"
+        // and "was that a damaging action?" are asked about.
+        combat.BeginActionScope();
+        var actor = source.Id;
+
         foreach (var effectRequest in effectRequests)
             combat.EnqueueEffect(outputScaled
                 ? CardOutputScaling.ScaleRequest(effectRequest, scaleNum, scaleDen)
@@ -181,10 +187,6 @@ public sealed class CombatCardPlayProcessor
         if (card.Program is { } program)
         {
             var buildContext = CreateCardPlayBuildContext(combat, card.Id, source, targetCombatantId);
-
-            // Open the action's once-per-action ledger around the whole program, so every hit the program
-            // produces — including the ones its own repeat/replay nodes produce — counts as this one action.
-            combat.BeginActionScope();
 
             Action<EffectProgramExecutionState, CombatState>? onTerminal = null;
             if (cardInstanceId is not null)
@@ -241,16 +243,30 @@ public sealed class CombatCardPlayProcessor
                 onTerminal: (state, c) =>
                 {
                     placeCard?.Invoke(state, c);
-                    c.EndActionScope();
+                    CloseAction(c, actor);
                 });
         }
-        else if (cardInstanceId is not null)
+        else
         {
-            combat.EnqueueEffect(new MoveCardToZoneEffectRequest(
-                source.Id,
-                cardInstanceId.Value,
-                card.PlayedCardDestinationZone));
+            if (cardInstanceId is not null)
+                combat.EnqueueEffect(new MoveCardToZoneEffectRequest(
+                    source.Id,
+                    cardInstanceId.Value,
+                    card.PlayedCardDestinationZone));
+
+            // A card with no program is still an action: close it behind whatever its effect list enqueued.
+            combat.EnqueueContinuation(c => CloseAction(c, actor));
         }
+    }
+
+    // Closes an action and announces what it was. Silent when the actor has meanwhile left the fight, and
+    // silent when no scope was open (a defensive guard: the close must never invent an action).
+    internal static void CloseAction(CombatState combat, CombatantId actor)
+    {
+        if (!combat.EndActionScope(out var dealtDamage))
+            return;
+        if (combat.TryGetCombatant(actor, out _))
+            combat.EnqueueEvent(new ActionResolvedCombatEvent(actor, dealtDamage));
     }
 
     internal static IReadOnlyList<CalculatedResourceCost> CalculateCostsInternal(

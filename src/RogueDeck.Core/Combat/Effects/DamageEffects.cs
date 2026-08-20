@@ -166,6 +166,16 @@ public sealed class DealDamageEffectHandler : EffectRequestHandler<DealDamageEff
             StandardCombatLogTypes.DamageDealt,
             $"Dealt {healthDamage} damage to '{dealDamage.TargetCombatantId}' and blocked {blockedDamage} damage.");
 
+        // An action that lands an ordinary hit on the other side is a DAMAGING action, which is what decides
+        // whether Citation bites when it resolves. Block soaking the hit changes nothing; a status ticking is
+        // not an action at all, and raises this outside any open scope.
+        if (dealDamage.Kind == DamageKind.Direct &&
+            dealDamage.SourceCombatantId is { } strikerId &&
+            combat.TryGetCombatant(strikerId, out var striker) && striker is not null &&
+            combat.TryGetCombatant(dealDamage.TargetCombatantId, out var struck) && struck is not null &&
+            striker.TeamId != struck.TeamId)
+            combat.NoteActionDealtDamage();
+
         combat.EnqueueEvent(
             new DamageDealtCombatEvent(
                 TargetCombatantId: dealDamage.TargetCombatantId,

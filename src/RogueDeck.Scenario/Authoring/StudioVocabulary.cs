@@ -222,6 +222,7 @@ public static class StudioVocabulary
         ("isAlive", "is alive", "True when the chosen unit is alive."),
         ("downed", "is downed", "True when the chosen unit is downed."),
         ("exists", "exists", "True when the selection picks at least one unit."),
+        ("actionDealtDamage", "that action struck", "True when the action that just resolved landed an ordinary hit on the other side — Block soaking it still counts. Only meaningful in an 'action resolved' trigger."),
         ("intends", "intends to…", "True when the chosen unit is about to take an action of that kind (Attack, Defend, Buff, Debuff, Special) — what its telegraph shows. False when it is not going to act, or when the host shows no telegraph."),
     ];
 
@@ -292,6 +293,7 @@ public static class StudioVocabulary
         ["StatusTriggerScope.Bearer"] = "the bearer",
         ["StatusTriggerScope.Anywhere"] = "anyone",
         ["TriggerEvent.StatusApplicationPrevented"] = "a status application is refused",
+        ["TriggerEvent.ActionResolved"] = "an action finishes",
         ["DamageKind.Direct"] = "an ordinary hit",
         ["DamageKind.DamageOverTime"] = "HP loss over time",
         ["DamageKind.Reflected"] = "reflected back",
@@ -353,6 +355,7 @@ public static class StudioVocabulary
         ["StatusTriggerScope.Bearer"] = "The event has to be about the combatant wearing this status.",
         ["StatusTriggerScope.Anywhere"] = "The status only keeps the rule alive: it fires for whoever the event is about, as long as somebody still wears it. What a lasting card effect needs when it watches the enemies.",
         ["TriggerEvent.StatusApplicationPrevented"] = "Fires when a prohibition refuses an incoming status application.",
+        ["TriggerEvent.ActionResolved"] = "Fires when the bearer finishes one action — a card it played, or an action it took — with everything that action set in motion behind it. The event knows whether the action struck the other side.",
         ["DamageKind.Direct"] = "A normal hit: Strength, Weak and every other modifier that restricts to ordinary hits changes it.",
         ["DamageKind.DamageOverTime"] = "HP loss from a lingering effect (poison, paperwork). Modifiers restricted to ordinary hits leave it alone.",
         ["DamageKind.Reflected"] = "Damage bounced back at an attacker (thorns).",

@@ -1982,6 +1982,17 @@ public sealed class TargetIntendsExpression<TContext> : ICombatExpression<TConte
     }
 }
 
+// "Did the action that just resolved strike the other side?" — the question Citation asks of an action.
+//
+// Only meaningful inside an action-resolved trigger; anywhere else there is no action to judge and the answer
+// is false, which reads as "not a damaging action" and is the safe way round for a rule that punishes them.
+public sealed class ActionDealtDamageExpression<TContext> : ICombatExpression<TContext, bool>
+    where TContext : class
+{
+    public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat) =>
+        context.SourceContext is ActionResolvedTriggeredEffectContext resolved && resolved.CombatEvent.DealtDamage;
+}
+
 public sealed class TriggerEventCardInstanceExpression<TContext>
     : ICardInstanceExpression<TContext>
     where TContext : class

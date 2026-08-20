@@ -192,6 +192,7 @@ public static class CombatJson
          .Register("eventStatusIs", typeof(TriggerEventStatusIsExpression<>))
          .Register("claimOnceThisAction", typeof(ClaimOnceThisActionExpression<>))
          .Register("intends", typeof(TargetIntendsExpression<>))
+         .Register("actionDealtDamage", typeof(ActionDealtDamageExpression<>))
          .Register("iterationTargetHasStatus", typeof(IterationTargetHasStatusExpression<>));
 
         // Card-instance expressions (resolve a specific card instance to act on).
