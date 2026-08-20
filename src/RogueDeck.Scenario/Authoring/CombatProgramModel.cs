@@ -247,6 +247,12 @@ public sealed record CombatNodeModel(
     public static CombatNodeModel Sequence(IReadOnlyList<CombatNodeModel> children) =>
         new("sequence", Children: children);
 
+    // Like a sequence, but each step waits for the previous one to have HAPPENED before it runs. A plain
+    // sequence starts all of its steps at once, which is right for a list of independent effects and wrong
+    // for anything that reads what the step before it did ("apply 2 Seal; if that Ratified the target, …").
+    public static CombatNodeModel CausalSequence(IReadOnlyList<CombatNodeModel> children) =>
+        new("causalSequence", Children: children);
+
     public static CombatNodeModel ForEach(string selectorKey, CombatNodeModel body) =>
         new("forEachTarget", SelectorKey: selectorKey, Children: new[] { body });
 
@@ -510,6 +516,7 @@ public static class CombatProgramModel
     public static readonly IReadOnlyList<(string Kind, string Label)> CompositeKinds =
     [
         ("sequence", "in sequence…"),
+        ("causalSequence", "one after another…"),
         ("forEachTarget", "for each target…"),
         ("forEachCardInZone", "for each card in zone…"),
         ("repeat", "repeat…"),
@@ -594,6 +601,7 @@ public static class CombatProgramModel
         "summonCombatant" => new("summonCombatant", "source", CombatAmountSpec.FromConst(20),
             TeamId: "enemies", SummonDefinitionId: "skeleton", SummonDisplayName: "Skeleton"),
         "sequence" => CombatNodeModel.Sequence(new[] { NewNode("dealDamage") }),
+        "causalSequence" => CombatNodeModel.CausalSequence(new[] { NewNode("dealDamage") }),
         "forEachTarget" => CombatNodeModel.ForEach("allEnemies", NewNode("dealDamage")),
         "forEachCardInZone" => CombatNodeModel.ForEachCard("source", CardZone.Hand, NewNode("transformCard")),
         "repeat" => CombatNodeModel.Repeat(CombatAmountSpec.FromConst(2), NewNode("dealDamage")),
@@ -669,8 +677,11 @@ public static class CombatProgramModel
 
         if (wasComposite && isComposite)
         {
-            if (kind == "sequence")
-                return CombatNodeModel.Sequence(node.ChildrenOrEmpty.Count > 0 ? node.ChildrenOrEmpty : new[] { NewNode("dealDamage") });
+            if (kind is "sequence" or "causalSequence")
+            {
+                var steps = node.ChildrenOrEmpty.Count > 0 ? node.ChildrenOrEmpty : new[] { NewNode("dealDamage") };
+                return kind == "sequence" ? CombatNodeModel.Sequence(steps) : CombatNodeModel.CausalSequence(steps);
+            }
             var body = node.ChildrenOrEmpty.Count > 0 ? node.ChildrenOrEmpty[0] : NewNode("dealDamage");
             return kind switch
             {
@@ -819,7 +830,9 @@ public static class CombatProgramModel
             "maxResource" => new CombatantMaxResourceExpression<TContext>(SelectorFor(spec.SelectorKey), new ResourceId(spec.ReadId)),
             "missingResource" => new CombatantMissingResourceExpression<TContext>(SelectorFor(spec.SelectorKey), new ResourceId(spec.ReadId)),
             "defensivePool" => new CombatantDefensivePoolExpression<TContext>(SelectorFor(spec.SelectorKey), new DefensivePoolId(spec.ReadId)),
-            "zoneCards" => new CombatantZoneCardCountExpression<TContext>(SelectorFor(spec.SelectorKey), spec.Zone),
+            "zoneCards" => new CombatantZoneCardCountExpression<TContext>(
+                SelectorFor(spec.SelectorKey), spec.Zone,
+                string.IsNullOrEmpty(spec.ReadId) ? null : new TagId(spec.ReadId)),
             "statusStacks" => new CombatantStatusStacksExpression<TContext>(SelectorFor(spec.SelectorKey), new StatusDefinitionId(spec.ReadId)),
             "statusDuration" => new CombatantStatusDurationExpression<TContext>(SelectorFor(spec.SelectorKey), new StatusDefinitionId(spec.ReadId)),
             "statusCharges" => new CombatantStatusChargesExpression<TContext>(SelectorFor(spec.SelectorKey), new StatusDefinitionId(spec.ReadId)),
@@ -899,7 +912,7 @@ public static class CombatProgramModel
             CombatantMaxResourceExpression<TContext> e => StateReadAmount("maxResource", e.Selector, e.ResourceId.value),
             CombatantMissingResourceExpression<TContext> e => StateReadAmount("missingResource", e.Selector, e.ResourceId.value),
             CombatantDefensivePoolExpression<TContext> e => StateReadAmount("defensivePool", e.Selector, e.PoolId.value),
-            CombatantZoneCardCountExpression<TContext> e => StateReadAmount("zoneCards", e.Selector, zone: e.Zone),
+            CombatantZoneCardCountExpression<TContext> e => StateReadAmount("zoneCards", e.Selector, e.Tag?.value ?? "", zone: e.Zone),
             CombatantStatusStacksExpression<TContext> e => StateReadAmount("statusStacks", e.Selector, e.StatusId.value),
             CombatantStatusDurationExpression<TContext> e => StateReadAmount("statusDuration", e.Selector, e.StatusId.value),
             CombatantStatusChargesExpression<TContext> e => StateReadAmount("statusCharges", e.Selector, e.StatusId.value),
@@ -1012,6 +1025,9 @@ public static class CombatProgramModel
         {
             case "sequence":
                 return new SequenceEffectNode<TContext>(
+                    model.ChildrenOrEmpty.Select(BuildNode<TContext>).ToArray());
+            case "causalSequence":
+                return new CausalSequenceEffectNode<TContext>(
                     model.ChildrenOrEmpty.Select(BuildNode<TContext>).ToArray());
             case "forEachTarget":
                 return new ForEachTargetEffectNode<TContext>(SelectorFor(model.PrimarySelector), BuildBody<TContext>(model));
@@ -1273,6 +1289,10 @@ public static class CombatProgramModel
             case SequenceEffectNode<TContext> s:
                 return ClassifyChildren<TContext>(s.Children) is { } children
                     ? CombatNodeModel.Sequence(children)
+                    : null;
+            case CausalSequenceEffectNode<TContext> s:
+                return ClassifyChildren<TContext>(s.Children) is { } causalChildren
+                    ? CombatNodeModel.CausalSequence(causalChildren)
                     : null;
             case ForEachTargetEffectNode<TContext> f
                 when f.MaxIterations == ForEachTargetEffectNode<TContext>.DefaultMaxIterations:

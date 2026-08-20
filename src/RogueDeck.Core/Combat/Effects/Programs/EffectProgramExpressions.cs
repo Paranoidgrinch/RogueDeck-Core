@@ -1111,13 +1111,19 @@ public sealed class CombatantZoneCardCountExpression<TContext> : ICombatExpressi
     public ICombatantTargetSelector Selector { get; }
     public CardZone Zone { get; }
 
+    // Count only the cards whose DEFINITION carries this tag — "for each Junk card in your hand". Null counts
+    // the whole zone, as before.
+    public TagId? Tag { get; }
+
     public CombatantZoneCardCountExpression(
         ICombatantTargetSelector selector,
-        CardZone zone)
+        CardZone zone,
+        TagId? tag = null)
     {
         ArgumentNullException.ThrowIfNull(selector);
         Selector = ScalarTargetExpression.RequireSingleSelector(selector);
         Zone = zone;
+        Tag = tag;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
@@ -1127,7 +1133,14 @@ public sealed class CombatantZoneCardCountExpression<TContext> : ICombatExpressi
         if (targets.Count == 0) return 0;
         var id = ScalarTargetExpression.RequireSingle(targets);
         if (!combat.TryGetCombatant(id, out var c) || c is null) return 0;
-        return combat.GetCardZones(id).GetCardsInZone(Zone).Count;
+        var cards = combat.GetCardZones(id).GetCardsInZone(Zone);
+        if (Tag is not { } tag)
+            return cards.Count;
+        if (combat.DefinitionRegistry is not { } registry)
+            return 0;
+        return cards.Count(card =>
+            registry.CardDefinitions.TryGetValue(card.DefinitionId, out var definition)
+            && definition.Tags.Contains(tag));
     }
 }
 

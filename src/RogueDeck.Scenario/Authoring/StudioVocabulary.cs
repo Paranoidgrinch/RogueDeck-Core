@@ -121,7 +121,8 @@ public static class StudioVocabulary
         ["setCombatResult"] = "End the combat immediately with the given result.",
         ["removeTemporaryRule"] = "Remove a temporary combat rule by its id.",
         ["summonCombatant"] = "Create a brand-new unit on a team, with a name, max health, an optional grid cell and starting statuses.",
-        ["sequence"] = "Run several steps one after another.",
+        ["sequence"] = "Run several steps together — they all start at once, so none of them can see what the others did.",
+        ["causalSequence"] = "Run several steps in order, each waiting for the one before it to have HAPPENED. Use this whenever a step reads what an earlier step did.",
         ["forEachTarget"] = "Run the steps once for each selected unit (that unit becomes the step's focus).",
         ["forEachCardInZone"] = "Run the steps once for each card in a zone (optionally only cards of one definition).",
         ["repeat"] = "Run the steps a number of times (the amount).",
@@ -149,8 +150,8 @@ public static class StudioVocabulary
         ("Movement (grid)", ["moveCombatant", "swapPositions"]),
         ("Combat control", ["setCombatantCounter", "setCombatantLifecycleState", "changeCombatantTeam",
             "setCombatResult", "removeTemporaryRule", "summonCombatant"]),
-        ("Control flow", ["sequence", "forEachTarget", "forEachCardInZone", "repeat", "repeatUntil",
-            "randomTargets", "conditional"]),
+        ("Control flow", ["sequence", "causalSequence", "forEachTarget", "forEachCardInZone", "repeat",
+            "repeatUntil", "randomTargets", "conditional"]),
     ];
 
     public static readonly IReadOnlyList<(string Group, IReadOnlyList<string> Kinds)> AmountKindGroups =
@@ -426,7 +427,8 @@ public static class StudioVocabulary
         var amount = node.Amount is { } a ? AmountText(a) : "";
         return node.Kind switch
         {
-            "sequence" => string.Join("; then ", node.ChildrenOrEmpty.Select(Describe)),
+            "sequence" => string.Join("; and ", node.ChildrenOrEmpty.Select(Describe)),
+            "causalSequence" => string.Join("; then ", node.ChildrenOrEmpty.Select(Describe)),
             "forEachTarget" => $"for each of {target}: {DescribeBody(node)}",
             "forEachCardInZone" => $"for each card in {EnumDisplayLoose(node.FromZone.ToString())}: {DescribeBody(node)}",
             "repeat" => $"{amount}× ({DescribeBody(node)})",

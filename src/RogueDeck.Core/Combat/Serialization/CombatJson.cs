@@ -286,6 +286,7 @@ public static class CombatJson
          .Register("node.playCard", typeof(PlayCardNode<>))
          // Composite / control-flow nodes (nest child nodes).
          .Register("node.sequence", typeof(SequenceEffectNode<>))
+         .Register("node.causalSequence", typeof(CausalSequenceEffectNode<>))
          .Register("node.conditional", typeof(ConditionalEffectNode<>))
          .Register("node.forEachTarget", typeof(ForEachTargetEffectNode<>))
          .Register("node.forEachCardInZone", typeof(ForEachCardInZoneNode<>))

@@ -87,7 +87,15 @@ public class StudioVocabularyTests
             StudioVocabulary.Describe(CombatNodeModel.Repeat(CombatAmountSpec.FromConst(2),
                 new CombatNodeModel("gainBlock", "source", CombatAmountSpec.FromConst(5)))));
 
+        // A plain sequence starts its steps together ("and"); a causal one runs them in order ("then").
         Assert.Equal("heal self / the acting unit for 4; then deal 6 damage to every enemy",
+            StudioVocabulary.Describe(CombatNodeModel.CausalSequence(new[]
+            {
+                new CombatNodeModel("heal", "source", CombatAmountSpec.FromConst(4)),
+                new CombatNodeModel("dealDamage", "allEnemies", CombatAmountSpec.FromConst(6)),
+            })));
+
+        Assert.Equal("heal self / the acting unit for 4; and deal 6 damage to every enemy",
             StudioVocabulary.Describe(CombatNodeModel.Sequence(new[]
             {
                 new CombatNodeModel("heal", "source", CombatAmountSpec.FromConst(4)),
