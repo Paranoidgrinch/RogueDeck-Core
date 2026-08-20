@@ -281,6 +281,13 @@ public static class StudioVocabulary
         ["MovementMode.AwayFromEnemies"] = "away from the enemies",
         ["MovementMode.PushFromSource"] = "push away from me",
         ["MovementMode.PullToSource"] = "pull toward me",
+        ["StatusData.Prevention"] = "Prohibition",
+        ["StatusPreventionScope.UnwantedByBearer"] = "what the bearer would not want",
+        ["StatusPreventionScope.Debuffs"] = "debuffs",
+        ["StatusPreventionScope.Buffs"] = "buffs",
+        ["StatusTriggerScope.Bearer"] = "the bearer",
+        ["StatusTriggerScope.Anywhere"] = "anyone",
+        ["TriggerEvent.StatusApplicationPrevented"] = "a status application is refused",
         ["DamageKind.Direct"] = "an ordinary hit",
         ["DamageKind.DamageOverTime"] = "HP loss over time",
         ["DamageKind.Reflected"] = "reflected back",
@@ -336,6 +343,10 @@ public static class StudioVocabulary
 
     private static readonly IReadOnlyDictionary<string, string> EnumDescriptions = new Dictionary<string, string>
     {
+        ["StatusData.Prevention"] = "While this status is worn, statuses applied to its bearer are eaten stack for stack until it runs out. 'What the bearer would not want' means debuffs on your side and buffs on the enemy's — one status that denies both. A prohibition never refuses itself.",
+        ["StatusTriggerScope.Bearer"] = "The event has to be about the combatant wearing this status.",
+        ["StatusTriggerScope.Anywhere"] = "The status only keeps the rule alive: it fires for whoever the event is about, as long as somebody still wears it. What a lasting card effect needs when it watches the enemies.",
+        ["TriggerEvent.StatusApplicationPrevented"] = "Fires when a prohibition refuses an incoming status application.",
         ["DamageKind.Direct"] = "A normal hit: Strength, Weak and every other modifier that restricts to ordinary hits changes it.",
         ["DamageKind.DamageOverTime"] = "HP loss from a lingering effect (poison, paperwork). Modifiers restricted to ordinary hits leave it alone.",
         ["DamageKind.Reflected"] = "Damage bounced back at an attacker (thorns).",

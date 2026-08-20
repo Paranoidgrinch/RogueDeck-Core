@@ -44,6 +44,13 @@ public sealed record StatusData
     // telegraph they read an enemy's intents. Null = the ordinary view.
     public DisclosureData? Disclosure { get; init; }
 
+    // "Prohibition": what the bearer refuses to have applied to it, and how much of an application each of its
+    // stacks pays for. The Bureaucrat's Censure. Null = the bearer accepts everything, and null is kept out of
+    // the wire format so documents written before the field existed round-trip byte-identically.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public StatusPreventionData? Prevention { get; init; }
+
     public static StatusData From(StatusBlueprint status)
     {
         ArgumentNullException.ThrowIfNull(status);
@@ -66,6 +73,9 @@ public sealed record StatusData
             Disclosure = status.Disclosure is { } sight
                 ? new DisclosureData(sight.DrawPileCards, sight.IntentLookahead)
                 : null,
+            Prevention = status.Prevention is { } refusal
+                ? new StatusPreventionData(refusal.Scope, refusal.StacksPerStack)
+                : null,
         };
     }
 
@@ -87,6 +97,9 @@ public sealed record StatusData
             Disclosure = Disclosure is { } sight
                 ? new DisclosureSpec(sight.DrawPileCards, sight.IntentLookahead)
                 : null,
+            Prevention = Prevention is { } refusal
+                ? new StatusPreventionSpec(refusal.Scope, refusal.StacksPerStack)
+                : null,
         };
         foreach (var tag in Tags)
             status.Tags.Add(new TagId(tag));
@@ -100,7 +113,22 @@ public sealed record StatusData
 // serialized as context-free CombatJson (a {kind,value} tree). The event names which trigger context the program
 // is deserialized under; the program itself is context-agnostic on the wire. Escapes (non-serializable effects)
 // are dropped upstream, so anything stored here round-trips.
-public sealed record StatusTriggerData(string Event, JsonElement Program);
+public sealed record StatusTriggerData(
+    string Event,
+    JsonElement Program,
+    // Whose event this trigger listens to. Bearer (the default, and everything authored before this existed)
+    // means the event has to be about the combatant wearing the status. Anywhere means the status is only the
+    // rule's licence: it fires for whoever the event is about, for as long as any combatant still wears it —
+    // what a persistent card effect on the player needs when what it watches happens on the enemies.
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    StatusTriggerScope Scope = StatusTriggerScope.Bearer);
+
+public enum StatusTriggerScope
+{
+    Bearer,
+    Anywhere
+}
 
 // How long statuses applied to this status' bearer are postponed, and which of them wait at all (null polarity
 // = everything). The engine face is IncomingStatusDelaySpec.
@@ -109,6 +137,11 @@ public sealed record IncomingStatusDelayData(int Turns, StatusPolarity? Polarity
 // What the bearer may see beyond the ordinary view: cards off the top of their own draw pile, and enemy
 // actions past the current telegraph. The engine face is DisclosureSpec.
 public sealed record DisclosureData(int DrawPileCards = 0, int IntentLookahead = 0);
+
+// What the bearer refuses and what each of its stacks buys. The engine face is StatusPreventionSpec.
+public sealed record StatusPreventionData(
+    StatusPreventionScope Scope = StatusPreventionScope.UnwantedByBearer,
+    int StacksPerStack = 1);
 
 // A status' death-prevention interceptor as data: the HP to survive at, plus the effects to run when it fires.
 public sealed record StatusDeathPreventionData(int SurvivingHealth, IReadOnlyList<InterceptorEffectData> Effects);

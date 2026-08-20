@@ -42,6 +42,10 @@ public sealed class StatusDefinition
     // draw pile, and how many enemy actions ahead their telegraph reaches. Null = the ordinary view.
     public DisclosureSpec? Disclosure { get; }
 
+    // "Prohibition": while this status is on a combatant, it eats the stacks of statuses applied TO that
+    // combatant, spending itself stack for stack. Null = applications land untouched.
+    public StatusPreventionSpec? Prevention { get; }
+
     internal void Freeze() => _tags = _tags.ToImmutableHashSet();
 
     public StatusDefinition(
@@ -60,7 +64,8 @@ public sealed class StatusDefinition
         StatusStackingBehavior stackingBehavior = StatusStackingBehavior.CreateSeparateInstance,
         IEnumerable<PassiveModifierSpec>? passiveModifiers = null,
         IncomingStatusDelaySpec? incomingStatusDelay = null,
-        DisclosureSpec? disclosure = null)
+        DisclosureSpec? disclosure = null,
+        StatusPreventionSpec? prevention = null)
     {
         if (string.IsNullOrWhiteSpace(displayNameKey))
             throw new ArgumentException("Display name key cannot be empty.", nameof(displayNameKey));
@@ -84,7 +89,36 @@ public sealed class StatusDefinition
         PassiveModifiers = passiveModifiers?.ToImmutableArray() ?? ImmutableArray<PassiveModifierSpec>.Empty;
         IncomingStatusDelay = incomingStatusDelay;
         Disclosure = disclosure;
+        Prevention = prevention;
     }
+}
+
+// Which incoming statuses a prohibition eats, and how much of one each of its stacks pays for.
+//
+// Scope answers "which applications does this refuse?". Debuffs/Buffs name a polarity outright.
+// UnwantedByBearer is the side-relative reading a prohibition usually wants: on a player-team combatant it
+// refuses Debuffs, on any other team it refuses Buffs — one status id that denies hostile debuffs on you and
+// helpful buffs on your enemies, without the content having to keep two mirrored ids.
+//
+// StacksPerStack is how many incoming stacks one stack of the prohibition pays for (1 = stack for stack).
+// A prohibition never refuses an application of ITSELF, so it can always be re-applied.
+public enum StatusPreventionScope
+{
+    UnwantedByBearer,
+    Debuffs,
+    Buffs
+}
+
+public sealed record StatusPreventionSpec(
+    StatusPreventionScope Scope = StatusPreventionScope.UnwantedByBearer,
+    int StacksPerStack = 1)
+{
+    public bool Refuses(StatusPolarity incoming, bool bearerIsOnPlayerTeam) => Scope switch
+    {
+        StatusPreventionScope.Debuffs => incoming == StatusPolarity.Debuff,
+        StatusPreventionScope.Buffs => incoming == StatusPolarity.Buff,
+        _ => incoming == (bearerIsOnPlayerTeam ? StatusPolarity.Debuff : StatusPolarity.Buff),
+    };
 }
 
 // How long an incoming status waits, and which kinds wait at all. A null polarity delays everything; the

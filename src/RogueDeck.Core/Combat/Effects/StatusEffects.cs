@@ -784,35 +784,21 @@ public sealed record ModifyStatusStacksEffectRequest(
 
 public sealed class ModifyStatusStacksEffectHandler : EffectRequestHandler<ModifyStatusStacksEffectRequest>
 {
-    protected override void Resolve(
-        CombatState combat,
-        CombatDefinitionRegistry registry,
-        ModifyStatusStacksEffectRequest request)
+    // The stack change itself, applied to a status instance in place and reported the way the handler does.
+    // Shared so a collaborator that must change stacks SYNCHRONOUSLY — a status-application interceptor
+    // spending a prohibition, which the next application in the same drain has to see already spent — makes
+    // exactly the same state change and raises exactly the same events as the ordinary request path.
+    internal static ModifyStatusStacksOutcome ApplyDelta(
+        CombatState combat, CombatantState target, StatusInstance status, int delta)
     {
-        var target = combat.GetCombatant(request.TargetCombatantId);
-        var status = target.Statuses.FirstOrDefault(s => s.DefinitionId == request.StatusDefinitionId);
-
-        if (status is null)
-        {
-            if (request.OutcomeSlot is { } emptySlot)
-                emptySlot.Value = new ModifyStatusStacksOutcome(0, 0, 0, WasChanged: false, WasRemoved: false);
-            return;
-        }
-
         var oldStacks = status.Stacks;
-        var rawNew = (long)oldStacks + request.Delta;
-        var newStacks = (int)Math.Max(0, Math.Min(int.MaxValue, rawNew));
+        var newStacks = (int)Math.Max(0, Math.Min(int.MaxValue, (long)oldStacks + delta));
         var actualDelta = newStacks - oldStacks;
 
         if (actualDelta == 0)
-        {
-            if (request.OutcomeSlot is { } noOpSlot)
-                noOpSlot.Value = new ModifyStatusStacksOutcome(oldStacks, oldStacks, 0, WasChanged: false, WasRemoved: false);
-            return;
-        }
+            return new ModifyStatusStacksOutcome(oldStacks, oldStacks, 0, WasChanged: false, WasRemoved: false);
 
         status.SetStacks(newStacks);
-
         var wasRemoved = newStacks == 0 && oldStacks > 0;
 
         if (wasRemoved)
@@ -832,8 +818,27 @@ public sealed class ModifyStatusStacksEffectHandler : EffectRequestHandler<Modif
                 target.Id, status.Id, status.DefinitionId, oldStacks, newStacks));
         }
 
-        if (request.OutcomeSlot is { } slot)
-            slot.Value = new ModifyStatusStacksOutcome(oldStacks, newStacks, actualDelta, WasChanged: true, WasRemoved: wasRemoved);
+        return new ModifyStatusStacksOutcome(oldStacks, newStacks, actualDelta, WasChanged: true, WasRemoved: wasRemoved);
+    }
+
+    protected override void Resolve(
+        CombatState combat,
+        CombatDefinitionRegistry registry,
+        ModifyStatusStacksEffectRequest request)
+    {
+        var target = combat.GetCombatant(request.TargetCombatantId);
+        var status = target.Statuses.FirstOrDefault(s => s.DefinitionId == request.StatusDefinitionId);
+
+        if (status is null)
+        {
+            if (request.OutcomeSlot is { } emptySlot)
+                emptySlot.Value = new ModifyStatusStacksOutcome(0, 0, 0, WasChanged: false, WasRemoved: false);
+            return;
+        }
+
+        var outcome = ApplyDelta(combat, target, status, request.Delta);
+        if (request.OutcomeSlot is { } outcomeSlot)
+            outcomeSlot.Value = outcome;
     }
 }
 

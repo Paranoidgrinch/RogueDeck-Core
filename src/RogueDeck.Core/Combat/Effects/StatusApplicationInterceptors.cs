@@ -97,3 +97,74 @@ public sealed class ArtifactStatusApplicationInterceptor : IStatusApplicationInt
         return InterceptionResult.Block;
     }
 }
+
+// A "prohibition": a status that eats what is applied to its bearer, paying for it stack by stack.
+//
+// The Bureaucrat's Censure is the shape this exists for — "when a negative Status would be applied, prevent up
+// to X stacks and reduce Censure by the number of stacks prevented" — so prevention is PARTIAL: three stacks of
+// Fear meeting one Censure lands as two stacks of Fear and spends the Censure, rather than the all-or-nothing
+// block an Artifact charge gives. What it refuses is read from the status' own StatusPreventionSpec, and a
+// prohibition never refuses an application of itself, so it can always be re-applied.
+//
+// The spend is applied SYNCHRONOUSLY (not enqueued): a second application resolving later in the same drain
+// has to see the stacks already gone, or one Censure would pay for two statuses. It still raises the ordinary
+// stacks-changed / expired events, so mirrors and reactions see it like any other stack loss.
+public sealed class DeclarativeStatusPreventionInterceptor : IStatusApplicationInterceptor
+{
+    public string ModifierId => "standard.declarative_status_prevention";
+
+    // After Artifact (100): a full block costs nothing, so let it happen before a prohibition pays for one.
+    public int Priority => 200;
+
+    public InterceptionResult TryIntercept(StatusApplicationInterceptionContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        var incomingStacks = Math.Max(1, context.Request.Stacks);
+        var bearer = context.TargetCombatant;
+        var onPlayerTeam = bearer.TeamId == StandardCombatIds.PlayerTeam;
+
+        // Deterministic order: the oldest matching instance pays first.
+        foreach (var candidate in bearer.Statuses)
+        {
+            if (candidate.DefinitionId == context.Request.StatusDefinitionId)
+                continue; // a prohibition never refuses itself
+            if (candidate.Stacks <= 0)
+                continue;
+            if (!context.Registry.TryGetStatus(candidate.DefinitionId, out var definition) ||
+                definition?.Prevention is not { } prevention)
+                continue;
+            if (!prevention.Refuses(context.StatusDefinition.Polarity, onPlayerTeam))
+                continue;
+
+            var perStack = Math.Max(1, prevention.StacksPerStack);
+            var affordable = candidate.Stacks * perStack;
+            var prevented = Math.Min(affordable, incomingStacks);
+            if (prevented <= 0)
+                continue;
+
+            // Round up: a stack that pays for part of an incoming stack is still spent.
+            var spent = (prevented + perStack - 1) / perStack;
+
+            context.Combat.AddLogEntry(
+                StandardCombatLogTypes.StatusApplicationBlocked,
+                $"'{candidate.DefinitionId}' prevented {prevented} stack(s) of '{context.Request.StatusDefinitionId}' " +
+                $"on '{bearer.Id}'.");
+
+            context.Combat.EnqueueEvent(new StatusApplicationBlockedCombatEvent(
+                TargetCombatantId: bearer.Id,
+                BlockedStatusDefinitionId: context.Request.StatusDefinitionId,
+                BlockingStatusInstanceId: candidate.Id,
+                BlockingStatusDefinitionId: candidate.DefinitionId));
+
+            ModifyStatusStacksEffectHandler.ApplyDelta(context.Combat, bearer, candidate, -spent);
+
+            var remaining = incomingStacks - prevented;
+            return remaining <= 0
+                ? InterceptionResult.Block
+                : InterceptionResult.Replace(context.Request with { Stacks = remaining });
+        }
+
+        return InterceptionResult.Allow;
+    }
+}

@@ -27,6 +27,10 @@ public sealed class StatusBlueprint
     // "Full disclosure": extra sight for the bearer (own draw pile, enemy telegraph depth). Null = ordinary.
     public DisclosureSpec? Disclosure { get; init; }
 
+    // "Prohibition": while a combatant bears this status, statuses applied TO it are eaten stack for stack
+    // until the prohibition runs out. Null = applications land untouched.
+    public StatusPreventionSpec? Prevention { get; init; }
+
     public StatusBlueprint(string id)
     {
         if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("Status id cannot be empty.", nameof(id));
@@ -43,7 +47,7 @@ public sealed class StatusBlueprint
             DefinitionId, new PackageId(PackageId), NameKey, DescriptionKey,
             polarity: Polarity, usesStacks: UsesStacks, usesDuration: UsesDuration, usesCharges: UsesCharges,
             stackingBehavior: StackingBehavior, passiveModifiers: PassiveModifiers,
-            incomingStatusDelay: IncomingStatusDelay, disclosure: Disclosure);
+            incomingStatusDelay: IncomingStatusDelay, disclosure: Disclosure, prevention: Prevention);
         foreach (var tag in Tags) def.Tags.Add(tag);
         return def;
     }

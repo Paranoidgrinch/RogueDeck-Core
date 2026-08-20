@@ -107,6 +107,8 @@
                     <div class="editor-choice">
                         <div class="run-bar">
                             <span class="muted">On</span> @EnumSelect(ev, e => SetTriggerEvent(index, trigIndex, e))
+                            <span class="muted" title="Bearer: the event must be about whoever wears this status. Anywhere: the status only keeps the rule alive — it fires for whoever the event is about.">about</span>
+                            @EnumSelect(trigger.Scope, sc => SetTriggerScope(index, trigIndex, sc))
                             <button class="mini" @onclick="() => RemoveTrigger(index, trigIndex)">✕ trigger</button>
                         </div>
                         <div class="fx-body">
@@ -187,6 +189,26 @@
                 else
                 {
                     <button class="mini" @onclick="() => SetDisclosure(index, new DisclosureData(1, 1))">+ disclosure</button>
+                }
+            </div>
+
+            <div class="editor-effects">
+                <span class="muted">@StudioVocabulary.FieldLabel("StatusData.Prevention"):</span>
+                @if (status.Prevention is { } refusal)
+                {
+                    <div class="run-bar">
+                        <span class="muted">refuses</span> @EnumSelect(refusal.Scope, sc => SetPrevention(index, refusal with { Scope = sc }))
+                        <label title="How many incoming stacks one stack of this status pays for.">stacks paid per stack
+                            <input type="number" value="@refusal.StacksPerStack" style="width:4rem"
+                                   @onchange="e => SetPrevention(index, refusal with { StacksPerStack = Math.Max(1, AsInt(e.Value, refusal.StacksPerStack)) })" />
+                        </label>
+                        <button class="mini" @onclick="() => SetPrevention(index, null)">✕ remove</button>
+                    </div>
+                    <div class="muted">@StudioVocabulary.FieldDescription("StatusData.Prevention")</div>
+                }
+                else
+                {
+                    <button class="mini" @onclick="() => SetPrevention(index, new StatusPreventionData())">+ prohibition</button>
                 }
             </div>
 
@@ -385,6 +407,17 @@
     // "Full disclosure": extra sight for the bearer.
     private Task SetDisclosure(int index, DisclosureData? data) =>
         Edit(index, s => s with { Disclosure = data });
+
+    private Task SetPrevention(int index, StatusPreventionData? data) =>
+        Edit(index, s => s with { Prevention = data });
+
+    private Task SetTriggerScope(int index, int trigIndex, StatusTriggerScope scope) =>
+        Edit(index, s =>
+        {
+            var triggers = s.Triggers.ToList();
+            triggers[trigIndex] = triggers[trigIndex] with { Scope = scope };
+            return s with { Triggers = triggers };
+        });
 
     private static StatusPolarity? AsPolarity(object? value) =>
         AsString(value) is { } text && Enum.TryParse<StatusPolarity>(text, out var polarity) ? polarity : null;

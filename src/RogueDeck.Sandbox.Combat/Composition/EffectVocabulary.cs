@@ -46,4 +46,7 @@ public enum TriggerEvent
     CardsDrawn,     // when the bearer draws cards (fires after the draw, so the hand already holds them)
     RoundStarted,   // at the start of each round
     RoundEnded,     // at the end of each round
+    // when a status the bearer carries refuses an incoming application (Censure eating a debuff). The event
+    // reports what was refused and which status paid for it.
+    StatusApplicationPrevented,
 }

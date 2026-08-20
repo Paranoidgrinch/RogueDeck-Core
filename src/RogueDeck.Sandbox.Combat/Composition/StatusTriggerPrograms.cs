@@ -59,6 +59,7 @@ public static class StatusTriggerPrograms
             [TriggerEvent.CardsDrawn] = For<CardsDrawnTriggeredEffectContext>(),
             [TriggerEvent.RoundStarted] = For<RoundStartedTriggeredEffectContext>(),
             [TriggerEvent.RoundEnded] = For<RoundEndedTriggeredEffectContext>(),
+            [TriggerEvent.StatusApplicationPrevented] = For<StatusApplicationBlockedTriggeredEffectContext>(),
         };
 
     public static StatusTriggerProgram Get(TriggerEvent ev) => ByEvent[ev];

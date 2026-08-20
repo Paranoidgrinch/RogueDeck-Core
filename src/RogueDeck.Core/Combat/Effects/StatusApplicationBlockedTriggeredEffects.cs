@@ -41,6 +41,19 @@ public sealed record StatusApplicationBlockedBlockingStatusTriggerFilter(
     }
 }
 
+// "The combatant this prevention happened to carries the reacting status" — the bearer scope for a status
+// trigger on the prevention event, matching the *HasStatus filters of every other trigger event.
+public sealed record StatusApplicationBlockedTargetHasStatusTriggerFilter(StatusDefinitionId StatusDefinitionId)
+    : ITriggeredProgramFilter<StatusApplicationBlockedTriggeredEffectContext>
+{
+    public bool Matches(StatusApplicationBlockedTriggeredEffectContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        return context.TargetCombatant.Statuses.Any(status => status.DefinitionId == StatusDefinitionId);
+    }
+}
+
 public static class StatusApplicationBlockedTriggeredEffectTargetResolver
 {
     public static CombatantTargetSelectionContext CreateSelectionContext(
