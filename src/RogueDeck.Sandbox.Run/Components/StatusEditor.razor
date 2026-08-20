@@ -129,6 +129,36 @@
             </div>
 
             <div class="editor-effects">
+                <span class="muted">@StudioVocabulary.FieldLabel("StatusData.IncomingStatusDelay"):</span>
+                @if (status.IncomingStatusDelay is { } delay)
+                {
+                    <div class="run-bar">
+                        <label>waits
+                            <input type="number" value="@delay.Turns" style="width:4rem"
+                                   @onchange="e => SetIncomingDelay(index, delay with { Turns = Math.Max(0, AsInt(e.Value, delay.Turns)) })" />
+                            turn(s)
+                        </label>
+                        <label>applies to
+                            <select value="@(delay.Polarity?.ToString() ?? "any")"
+                                    @onchange="e => SetIncomingDelay(index, delay with { Polarity = AsPolarity(e.Value) })">
+                                <option value="any">any status</option>
+                                @foreach (var polarity in Enum.GetValues<StatusPolarity>())
+                                {
+                                    <option value="@polarity">@polarity</option>
+                                }
+                            </select>
+                        </label>
+                        <button class="mini" @onclick="() => SetIncomingDelay(index, null)">✕ remove</button>
+                    </div>
+                    <div class="muted">@StudioVocabulary.FieldDescription("StatusData.IncomingStatusDelay")</div>
+                }
+                else
+                {
+                    <button class="mini" @onclick="() => SetIncomingDelay(index, new IncomingStatusDelayData(1, StatusPolarity.Debuff))">+ postpone incoming statuses</button>
+                }
+            </div>
+
+            <div class="editor-effects">
                 <span class="muted">Debuff block:</span>
                 @if (status.DebuffBlock is { } db)
                 {
@@ -315,6 +345,13 @@
 
     private Task SetDebuffBlock(int index, StatusDebuffBlockData? data) =>
         Edit(index, s => s with { DebuffBlock = data });
+
+    // "Due notice": statuses applied to the bearer wait before they take effect.
+    private Task SetIncomingDelay(int index, IncomingStatusDelayData? data) =>
+        Edit(index, s => s with { IncomingStatusDelay = data });
+
+    private static StatusPolarity? AsPolarity(object? value) =>
+        AsString(value) is { } text && Enum.TryParse<StatusPolarity>(text, out var polarity) ? polarity : null;
 
     // Shared editor for an interceptor's constant-valued effect lines (both death-prevention and debuff-block hold
     // one). Each line = kind × target × amount, plus a status id / duration (apply/remove) and polarity (cleanse).
