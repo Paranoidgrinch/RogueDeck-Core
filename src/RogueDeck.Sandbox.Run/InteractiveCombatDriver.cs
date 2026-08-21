@@ -77,7 +77,8 @@ public sealed class InteractiveCombatDriver : ICombatDriver, IReplayResettable, 
                     ? hero.Health.Current
                     : 0;
                 Changed?.Invoke();
-                return new CombatDriveResult(combat.Result, heroHp);
+                return new CombatDriveResult(combat.Result, heroHp, Units: null,
+                    HeroCounters: HeroCounterResults.Read(combat.State, combat.HeroId));
             }
 
             if (_script.TryTake<CombatPlayEntry>(out var play))

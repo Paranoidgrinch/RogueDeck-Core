@@ -39,7 +39,10 @@ public sealed record CombatResolvedRunEvent(
     CombatResult Result,
     int HeroHpRemaining,
     int DamageTaken,
-    IReadOnlyList<string>? Tags = null
+    IReadOnlyList<string>? Tags = null,
+    // What the hero tallied inside the fight (its counters at the final state) — the bridge a relic crosses
+    // when it counts in combat and pays in the run. Null ⇒ nothing tallied; an unknown counter reads 0.
+    IReadOnlyDictionary<string, int>? Counters = null
 ) : IRunEvent, INodeTaggedRunEvent
 {
     IReadOnlyList<string> INodeTaggedRunEvent.NodeTags => Tags ?? [];

@@ -37,7 +37,30 @@ public sealed record CombatDriveResult(
     int HeroHpRemaining,
     // Per-unit final state for each projected board unit (positional combat P5c), keyed by the ally combatant id.
     // Null / empty ⇒ a single-hero fight; the resolver reconciles these back onto the run roster.
-    IReadOnlyList<UnitDriveResult>? Units = null);
+    IReadOnlyList<UnitDriveResult>? Units = null,
+    // What the hero TALLIED in the fight: its counters as they stood when the fight ended. A relic that pays
+    // "5 Gold per Salvage" or "after a combat in which you Archived 2 cards" counts inside the fight (a counter
+    // on the hero is the only place a combat rule can keep a running total) and collects outside it, so the
+    // tally has to cross the seam. Null ⇒ nothing tallied; an unknown counter reads 0, never an error.
+    IReadOnlyDictionary<string, int>? HeroCounters = null);
+
+// Reads the hero's counters off a finished CombatState in the run layer's own vocabulary (plain strings), so
+// every driver hands the run the same tally. Public for the same reason UnitDriveResults is: an out-of-assembly
+// driver has to be able to report it too.
+public static class HeroCounterResults
+{
+    public static IReadOnlyDictionary<string, int> Read(CombatState state, CombatantId heroId)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        if (!state.TryGetCombatant(heroId, out var hero) || hero is null || hero.Counters.Count == 0)
+            return new Dictionary<string, int>();
+
+        var counters = new Dictionary<string, int>(hero.Counters.Count, StringComparer.Ordinal);
+        foreach (var (id, value) in hero.Counters)
+            counters[id.ToString()] = value;
+        return counters;
+    }
+}
 
 // The outcome of a fielded board unit after a fight: its remaining HP, whether it survived, its final grid cell,
 // and the statuses left on it — enough for the run→combat bridge to reconcile the survivor back onto
@@ -105,7 +128,8 @@ public sealed class ScriptedCombatDriver : ICombatDriver
             : 0;
 
         return new CombatDriveResult(
-            report.Result, remaining, UnitDriveResults.Read(report.FinalState, playthrough.Blueprint.Allies));
+            report.Result, remaining, UnitDriveResults.Read(report.FinalState, playthrough.Blueprint.Allies),
+            HeroCounterResults.Read(report.FinalState, heroId));
     }
 }
 
@@ -152,7 +176,8 @@ public sealed class AutoPlayCombatDriver : ICombatDriver
             ? hero.Health.Current
             : 0;
         return new CombatDriveResult(
-            combat.Result, remaining, UnitDriveResults.Read(combat.State, playthrough.Blueprint.Allies));
+            combat.Result, remaining, UnitDriveResults.Read(combat.State, playthrough.Blueprint.Allies),
+            HeroCounterResults.Read(combat.State, compiled.Hero.CombatantId));
     }
 
     private static CombatantId? FirstAliveEnemy(InteractiveCombat combat, CompiledScenario compiled)
@@ -218,7 +243,8 @@ public sealed class PartyAutoPlayCombatDriver : ICombatDriver
         var heroId = compiled.Hero.CombatantId;
         var heroHp = party.State.TryGetCombatant(heroId, out var hero) && hero is not null ? hero.Health.Current : 0;
         return new CombatDriveResult(
-            party.Result, heroHp, UnitDriveResults.Read(party.State, playthrough.Blueprint.Allies));
+            party.Result, heroHp, UnitDriveResults.Read(party.State, playthrough.Blueprint.Allies),
+            HeroCounterResults.Read(party.State, heroId));
     }
 
     private static CombatantId? FirstAliveEnemy(CombatState state, CompiledScenario compiled)
@@ -276,7 +302,7 @@ public sealed class CombatNodeResolver : INodeResolver
         run.AddLog(StandardRunLogTypes.CombatResolved,
             $"Node '{node.Id}': {result.Result}, hero {result.HeroHpRemaining} HP (took {damageTaken}).");
         run.RaiseEvent(new CombatResolvedRunEvent(
-            node.Id, result.Result, result.HeroHpRemaining, damageTaken, node.Tags));
+            node.Id, result.Result, result.HeroHpRemaining, damageTaken, node.Tags, result.HeroCounters));
 
         // Post-combat reward: on a victory, offer the node's reward (if any). Enqueued AFTER the resolved-event so a
         // relic reacting to the win queues first; the player then picks via the run's entity chooser (headless takes

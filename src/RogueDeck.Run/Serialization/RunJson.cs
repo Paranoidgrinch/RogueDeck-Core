@@ -166,7 +166,8 @@ public static class RunJson
          .Register("randomRange", typeof(RandomRangeExpression))
          .Register("card.upgradeLevel", typeof(CardUpgradeLevelExpression))
          .Register("card.memory", typeof(CardMemoryExpression))
-         .Register("event.int", typeof(EventIntValueExpression));
+         .Register("event.int", typeof(EventIntValueExpression))
+         .Register("event.combatCounter", typeof(EventCombatCounterExpression));
 
         // Condition expressions (IRunExpression<bool>).
         r.Register("bool", typeof(RunConstantBoolExpression))

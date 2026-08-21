@@ -29,6 +29,16 @@ public sealed class EventNodeHasTagExpression : IRunExpression<bool>
     public bool Evaluate(RunEvalContext context) => RunEventFields.ReadNodeHasTag(Tag, context.Event);
 }
 
+// "How much of counter X did the hero tally in the fight that just ended." Like the tag question the counter
+// name is the question, so it lives on the expression. An unknown counter reads 0 — a fight in which nothing
+// was Archived simply archived nothing — but asking outside a combatResolved event still fails loudly.
+public sealed class EventCombatCounterExpression : IRunExpression<int>
+{
+    public string Counter { get; }
+    public EventCombatCounterExpression(string counter) => Counter = counter;
+    public int Evaluate(RunEvalContext context) => RunEventFields.ReadCombatCounter(Counter, context.Event);
+}
+
 // The catalog of readable event fields, keyed by a stable string. Content may register more; the built-in
 // keys cover the standard events. A reader returns null when the event in scope is not the expected type,
 // which surfaces as a clear evaluation error.
@@ -89,6 +99,11 @@ public static class RunEventFields
             ? node.NodeTags.Contains(tag, StringComparer.Ordinal)
             : throw NoMatch("node.hasTag", runEvent);
 
+    public static int ReadCombatCounter(string counter, IRunEvent? runEvent) =>
+        runEvent is CombatResolvedRunEvent combat
+            ? combat.Counters is { } counters && counters.TryGetValue(counter, out var value) ? value : 0
+            : throw NoMatch("combat.counter", runEvent);
+
     private static InvalidOperationException NoMatch(string key, IRunEvent? runEvent) =>
         new($"Event field '{key}' was evaluated without a matching event in context (was '{runEvent?.GetType().Name ?? "none"}').");
 }
@@ -115,4 +130,8 @@ public static class RunEventValues
     // The role the node was generated for — MapNodeTags.Elite, .Shop, .Treasure, … Valid in a reaction to
     // nodeEntered or combatResolved; that is how "after you defeat an Elite" is written.
     public static IRunExpression<bool> NodeHasTag(string tag) => new EventNodeHasTagExpression(tag);
+
+    // What the hero tallied inside the fight that just ended — the counter a combat rule kept while it was
+    // being played. Valid in a reaction to combatResolved; that is how "5 Gold per Salvage" is written.
+    public static IRunExpression<int> CombatCounter(string counter) => new EventCombatCounterExpression(counter);
 }
