@@ -20,6 +20,22 @@ public sealed class GrantUnrestrictedStepRunEffectHandler : RunEffectHandler<Gra
     }
 }
 
+// A flag that the next act forgets — "the first time each Act".
+public sealed record SetActFlagRunEffect(RunFlagId Flag, bool Value = true) : IRunEffectRequest;
+
+public sealed class SetActFlagRunEffectHandler : RunEffectHandler<SetActFlagRunEffect>
+{
+    protected override void Resolve(RunState run, RunDefinitionRegistry registry, SetActFlagRunEffect request)
+    {
+        if (run.HasActFlag(request.Flag) == request.Value)
+            return;
+        run.SetActFlag(request.Flag, request.Value);
+        run.AddLog(StandardRunLogTypes.FlagChanged,
+            $"Act flag '{request.Flag}' {(request.Value ? "set" : "cleared")}.");
+        run.RaiseEvent(new RunFlagChangedRunEvent(request.Flag, request.Value));
+    }
+}
+
 public sealed record SetFlagRunEffect(RunFlagId Flag, bool Value = true) : IRunEffectRequest;
 
 public sealed class SetFlagRunEffectHandler : RunEffectHandler<SetFlagRunEffect>

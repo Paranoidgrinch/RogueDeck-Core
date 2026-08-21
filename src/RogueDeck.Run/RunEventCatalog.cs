@@ -29,6 +29,10 @@ public static class RunEventCatalog
             "Fires when the player buys something in a shop."),
         new("shopRerolled", typeof(ShopRerolledRunEvent), "a shop's stock is rerolled",
             "Fires when the player pays to redraw a shop's stock."),
+        new("actStarted", typeof(ActStartedRunEvent), "an act begins",
+            "Fires as the walk enters a new act, including the first."),
+        new("actCompleted", typeof(ActCompletedRunEvent), "an act is finished",
+            "Fires when an act's last node is done, before the next act begins."),
         new("runEnded", typeof(RunEndedRunEvent), "the run ends",
             "Fires once when the run ends, in victory or defeat."),
 

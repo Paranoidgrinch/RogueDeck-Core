@@ -24,6 +24,7 @@ public sealed class RunState
     private readonly Dictionary<RunCounterId, int> _counters = new();
     private readonly List<IRunCombatModifier> _pendingCombatModifiers = new();
     private readonly List<RewardModifierRegistration> _rewardModifiers = new();
+    private readonly HashSet<RunFlagId> _actFlags = new();
     private int _nextConsumableSeq;
     private readonly List<RunUnit> _units = new();
     private int _nextUnitSeq;
@@ -73,6 +74,23 @@ public sealed class RunState
     public bool IsPartyDefeated() => _party.All(member => member.Health.Current <= 0);
 
     public RunMap Map { get; private set; }
+
+    // The acts this run walks, in order, each with the map built for it. Laid out once when the run starts, so
+    // the later acts are as seed-deterministic as the first and a resumed run rebuilds all of them identically.
+    // A run that was never given a plan is a single unnamed act around the map it was constructed with — which
+    // is every run written before acts existed.
+    private List<RunActPlan> _acts = [];
+
+    public IReadOnlyList<RunActPlan> Acts => _acts;
+
+    // Which act the walk is in, zero-based, and the same thing as content says it: "Act 1" is the first.
+    public int ActIndex { get; private set; }
+
+    public int ActNumber => ActIndex + 1;
+
+    public string CurrentActId => _acts.Count > ActIndex ? _acts[ActIndex].Id : string.Empty;
+
+    public bool HasNextAct => ActIndex + 1 < _acts.Count;
     public int Position { get; private set; } = -1;
 
     // The starting loadout strength this run's map was generated against, when the map is procedural (MapGeneration).
@@ -394,6 +412,51 @@ public sealed class RunState
 
     public bool HasVisited(NodeId nodeId) => _visitedNodes.Contains(nodeId);
 
+    // ── Acts ───────────────────────────────────────────────────────────────────────
+
+    public void SetActPlan(IReadOnlyList<RunActPlan> acts, int actIndex = 0)
+    {
+        ArgumentNullException.ThrowIfNull(acts);
+        if (acts.Count == 0)
+            throw new ArgumentException("A run needs at least one act.", nameof(acts));
+        if (actIndex < 0 || actIndex >= acts.Count)
+            throw new ArgumentOutOfRangeException(nameof(actIndex), actIndex, "No such act in the plan.");
+        _acts = [.. acts];
+        ActIndex = actIndex;
+        Map = _acts[actIndex].Map;
+    }
+
+    // Cross into the next act: a fresh map, nothing visited on it yet, and the act's own flags forgotten. The
+    // walk starts again from that map's entry — which is why CurrentNodeId is cleared rather than carried.
+    // Everything that belongs to the RUN — the deck, the relics, the purse, the run flags — crosses untouched.
+    public bool BeginNextAct()
+    {
+        if (!HasNextAct)
+            return false;
+
+        ActIndex++;
+        Map = _acts[ActIndex].Map;
+        CurrentNodeId = null;
+        _visitedNodes.Clear();
+        _actFlags.Clear();
+        return true;
+    }
+
+    // Flags that live for one ACT. Kept apart from the run's own flags rather than scoped at the call site,
+    // because a flag's lifetime is a property of the flag, not of whoever happens to set it — and content is
+    // full of "the first time each Act", which is a promise nothing could keep while the flag outlived the act.
+    public IReadOnlyCollection<RunFlagId> ActFlags => _actFlags;
+
+    public bool HasActFlag(RunFlagId flag) => _actFlags.Contains(flag);
+
+    public void SetActFlag(RunFlagId flag, bool value)
+    {
+        if (value)
+            _actFlags.Add(flag);
+        else
+            _actFlags.Remove(flag);
+    }
+
     // ── Save & resume (engine gap #1) ──────────────────────────────────────────────
     // Snapshot the run's PERSISTENT progress for a between-nodes save, and rebuild it. A save is taken at a clean
     // interlude; state that isn't captured yet (board units, scheduled programs, pending combat / reward modifiers)
@@ -434,7 +497,12 @@ public sealed class RunState
             Programs: _installedPrograms
                 .Select(p => new RunProgramSaveData(p.Id.Value, p.SourceId!.Value.Value)).ToArray(),
             NextProgramSeq: _nextProgramSeq)
-        { MapGenerationLoadout = GeneratedMapLoadout, UnrestrictedSteps = UnrestrictedSteps };
+        {
+            MapGenerationLoadout = GeneratedMapLoadout,
+            UnrestrictedSteps = UnrestrictedSteps,
+            ActIndex = ActIndex,
+            ActFlags = _actFlags.Count > 0 ? _actFlags.Select(flag => flag.Value).ToList() : null,
+        };
     }
 
     private static RunMemberSaveData SnapshotMember(PartyMember member) => new(
@@ -507,6 +575,8 @@ public sealed class RunState
         // the program-id counter is restored so any later mint continues the sequence collision-free.
         run._nextProgramSeq = data.NextProgramSeq;
         run.UnrestrictedSteps = data.UnrestrictedSteps;
+        foreach (var flag in data.ActFlags ?? [])
+            run._actFlags.Add(new RunFlagId(flag));
         foreach (var program in data.Programs)
         {
             var sourceId = new RunProgramSourceId(program.SourceId);

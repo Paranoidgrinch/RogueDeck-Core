@@ -79,6 +79,16 @@ public sealed record RunSaveData(
     [System.Text.Json.Serialization.JsonIgnore(
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
     public int UnrestrictedSteps { get; init; }
+
+    // Which act the walk had reached, and the flags that only that act remembers. Both stay out of the wire
+    // format at their defaults, so a save from a one-act run round-trips byte-identically.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public int ActIndex { get; init; }
+
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? ActFlags { get; init; }
 }
 
 // Serialize a run save to/from JSON — the save file. Plain values only (ids / ints / strings / an enum), so no

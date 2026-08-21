@@ -334,6 +334,21 @@ public sealed class SumCardsExpression : IRunExpression<int>
 // Combine freely with the ordinary combinators (comparison/And/Or/…) to build filter predicates as data.
 // Evaluating one outside a card scope is an author error and throws.
 
+// Which act the run is in — 1 for the first, as content counts them.
+public sealed class ActNumberExpression : IRunExpression<int>
+{
+    public int Evaluate(RunEvalContext context) => context.Run.ActNumber;
+}
+
+// A flag that lives for one act. Its own expression rather than a scope on the ordinary flag, because a flag's
+// lifetime is a property of the flag and not of whoever set it.
+public sealed class ActFlagSetExpression : IRunExpression<bool>
+{
+    public RunFlagId Flag { get; }
+    public ActFlagSetExpression(RunFlagId flag) => Flag = flag;
+    public bool Evaluate(RunEvalContext context) => context.Run.HasActFlag(Flag);
+}
+
 // Whether the player is standing in a shop right now. A rule about what happens OUTSIDE a shop — recovering
 // Gold you lost, which is a thing that happens to you rather than a thing you chose to spend — has no other
 // way to tell the two apart, since a purchase and a mugging are both just Gold leaving.
@@ -606,4 +621,9 @@ public static class RunExpr
 
     // True while the player is inside a shop node.
     public static IRunExpression<bool> InShop { get; } = new InShopExpression();
+
+    // Which act the run is in, and a flag that is forgotten when the act ends.
+    public static IRunExpression<int> Act { get; } = new ActNumberExpression();
+
+    public static IRunExpression<bool> ActFlag(RunFlagId flag) => new ActFlagSetExpression(flag);
 }

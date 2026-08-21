@@ -19,10 +19,11 @@ public static class RunSetup
         // is persisted on the run so Resume rebuilds the identical map.
         var startingLoadout = new BalanceCalculator(blueprint.Balance, blueprint.Encounters)
             .LoadoutStrength(start, blueprint.Deck, characterId);
-        var map = blueprint.BuildRunMap(randomSeed, startingLoadout);
+        var acts = blueprint.BuildActPlan(randomSeed, startingLoadout);
 
         var run = new RunState(
-            id, new Core.Combat.HealthState(start.StartingHealth, start.MaxHealth), map, randomSeed);
+            id, new Core.Combat.HealthState(start.StartingHealth, start.MaxHealth), acts[0].Map, randomSeed);
+        run.SetActPlan(acts);
         if (blueprint.MapGeneration is not null)
             run.SetGeneratedMapLoadout(startingLoadout);
 
@@ -63,11 +64,45 @@ public static class RunSetup
     // per-path minimums guaranteed and its fights balanced against `startingLoadout`), else the authored Map as-is.
     // Deterministic from `seed` + `startingLoadout`, so Resume rebuilds the identical map (RunPlayback.Resume passes
     // the saved seed + RunSaveData.MapGenerationLoadout). Non-combat nodes are realized from MapGenerationSpec.NodeRefs.
-    public static RunMap BuildRunMap(this RunBlueprint blueprint, int seed, int startingLoadout)
+    public static RunMap BuildRunMap(this RunBlueprint blueprint, int seed, int startingLoadout) =>
+        Generate(blueprint, blueprint.MapGeneration, blueprint.Map, seed, startingLoadout);
+
+    // The whole run's acts, laid out at once. Doing it up front rather than act by act is what keeps a resumed
+    // run identical: every act's map is a pure function of the seed and the starting loadout, both of which the
+    // save carries, so act four is as reproducible as act one.
+    //
+    // No acts declared ⇒ one unnamed act around the blueprint's own map, which is every blueprint written
+    // before acts existed.
+    public static IReadOnlyList<RunActPlan> BuildActPlan(
+        this RunBlueprint blueprint, int seed, int startingLoadout)
     {
         ArgumentNullException.ThrowIfNull(blueprint);
-        if (blueprint.MapGeneration is not { } spec)
-            return blueprint.Map;
+        if (blueprint.Acts is not { Count: > 0 } acts)
+            return [new RunActPlan(string.Empty, blueprint.BuildRunMap(seed, startingLoadout))];
+
+        var plan = new List<RunActPlan>(acts.Count);
+        for (var index = 0; index < acts.Count; index++)
+        {
+            var act = acts[index];
+            plan.Add(new RunActPlan(act.Id, Generate(
+                blueprint,
+                act.MapGeneration ?? blueprint.MapGeneration,
+                act.Map ?? blueprint.Map,
+                // Each act draws from its own seed, so two acts that share one generation spec are still two
+                // different maps rather than the same walk twice.
+                seed + index * ActSeedStride,
+                startingLoadout)));
+        }
+        return plan;
+    }
+
+    private const int ActSeedStride = 7919;
+
+    private static RunMap Generate(
+        RunBlueprint blueprint, MapGenerationSpec? spec, RunMap authored, int seed, int startingLoadout)
+    {
+        if (spec is null)
+            return authored;
 
         var balance = new BalanceCalculator(blueprint.Balance, blueprint.Encounters);
         var generated = RuleBasedMapGenerator.Generate(

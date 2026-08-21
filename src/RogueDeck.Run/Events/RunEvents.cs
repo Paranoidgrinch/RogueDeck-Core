@@ -137,6 +137,13 @@ public sealed record ConsumableGainedRunEvent(ConsumableInstanceId InstanceId, C
 
 public sealed record ConsumableUsedRunEvent(ConsumableInstanceId InstanceId, ConsumableId Definition) : IRunEvent;
 
+// An act begins and an act is finished. "At the end of each Act" is a real moment in the design — the purse
+// that pays out, the flags that are forgotten — and until now content had to fake it by watching for the walk
+// into a boss node.
+public sealed record ActStartedRunEvent(string ActId, int ActNumber) : IRunEvent;
+
+public sealed record ActCompletedRunEvent(string ActId, int ActNumber) : IRunEvent;
+
 public sealed record RunEndedRunEvent(RunResult Result) : IRunEvent;
 
 public sealed record RunProgramInstalledRunEvent(RunProgramId ProgramId) : IRunEvent;

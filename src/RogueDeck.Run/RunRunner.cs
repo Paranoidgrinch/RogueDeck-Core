@@ -78,13 +78,39 @@ public sealed class RunRunner
             _processor.ResolvePending(run, _registry);
         }
 
-        // Two map shapes over one traversal contract: a linear map (no edges) walks its nodes in order exactly as
-        // before; a graph map (edges present) walks by player-chosen path. Both sequence each node identically —
-        // only how the NEXT node is selected differs (see ResolveNode).
-        if (run.Map.Edges.Count == 0)
-            WalkLinear(run, context);
-        else
-            WalkGraph(run, context);
+        // Announce the act the walk is in, the first one included: a rule about "each act" should need no
+        // special case for the act the run happens to open on.
+        if (!resuming)
+        {
+            run.RaiseEvent(new ActStartedRunEvent(run.CurrentActId, run.ActNumber));
+            _processor.ResolvePending(run, _registry);
+        }
+
+        // A run is one walk through its acts in order. Each act is walked exactly as a whole run used to be —
+        // two map shapes over one traversal contract: a linear map (no edges) walks its nodes in order; a graph
+        // map (edges present) walks by player-chosen path. When an act's map runs out, the act is finished and
+        // the next one begins on a fresh map, carrying everything that belongs to the RUN across.
+        while (true)
+        {
+            if (run.Map.Edges.Count == 0)
+                WalkLinear(run, context);
+            else
+                WalkGraph(run, context);
+
+            if (run.Result != RunResult.Ongoing)
+                break; // the walk stopped because the run did (a defeat)
+
+            run.AddLog(StandardRunLogTypes.RunEnded, $"Act {run.ActNumber} finished.");
+            run.RaiseEvent(new ActCompletedRunEvent(run.CurrentActId, run.ActNumber));
+            _processor.ResolvePending(run, _registry);
+
+            if (!run.BeginNextAct())
+                break;
+
+            run.AdvanceTo(-1); // a linear act starts at its own first node, not where the last one stopped
+            run.RaiseEvent(new ActStartedRunEvent(run.CurrentActId, run.ActNumber));
+            _processor.ResolvePending(run, _registry);
+        }
 
         if (run.Result == RunResult.Ongoing)
             run.SetResult(RunResult.Victory);

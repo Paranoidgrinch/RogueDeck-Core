@@ -87,6 +87,17 @@ public sealed record RunBlueprint(
     // per-path minimums and balancing each fight. Round-trips via RunJson.
     public MapGenerationSpec? MapGeneration { get; init; }
 
+    // The run's ACTS, walked in order. A run is one RunState from the first act to the last — the deck, the
+    // relics and the purse have to cross every boundary, and a save is a save of the whole run — so an act is a
+    // SEGMENT of one walk rather than a separate game: its own map, its own generation rules, its own name.
+    //
+    // Null (the default) ⇒ exactly one act, built from the Map / MapGeneration above. Every blueprint written
+    // before acts existed is that, and null is kept out of the wire format so those documents round-trip
+    // byte-identically.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<RunAct>? Acts { get; init; }
+
     // The effective starting config for a run: the chosen roster character, else the first roster character (a
     // deterministic default / an unknown id falls back here), else the single Start when there is no roster.
     public RunStart ResolveStart(string? characterId = null)
