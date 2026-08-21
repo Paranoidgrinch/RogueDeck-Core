@@ -334,6 +334,14 @@ public sealed class SumCardsExpression : IRunExpression<int>
 // Combine freely with the ordinary combinators (comparison/And/Or/…) to build filter predicates as data.
 // Evaluating one outside a card scope is an author error and throws.
 
+// Whether the player is standing in a shop right now. A rule about what happens OUTSIDE a shop — recovering
+// Gold you lost, which is a thing that happens to you rather than a thing you chose to spend — has no other
+// way to tell the two apart, since a purchase and a mugging are both just Gold leaving.
+public sealed class InShopExpression : IRunExpression<bool>
+{
+    public bool Evaluate(RunEvalContext context) => context.Run.ActiveShopShelf is not null;
+}
+
 internal static class CardScope
 {
     public static RunCardInstance Require(RunEvalContext context, string what) =>
@@ -595,4 +603,7 @@ public static class RunExpr
     public static IRunExpression<bool> And(IRunExpression<bool> l, IRunExpression<bool> r) => new AndExpression(l, r);
     public static IRunExpression<bool> Or(IRunExpression<bool> l, IRunExpression<bool> r) => new OrExpression(l, r);
     public static IRunExpression<bool> Not(IRunExpression<bool> inner) => new NotExpression(inner);
+
+    // True while the player is inside a shop node.
+    public static IRunExpression<bool> InShop { get; } = new InShopExpression();
 }

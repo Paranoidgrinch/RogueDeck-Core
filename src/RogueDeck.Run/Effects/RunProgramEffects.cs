@@ -42,6 +42,21 @@ public sealed class ComputedDamageRunEffectHandler : RunEffectHandler<ComputedDa
 
 // Enqueue a block of effects `Count` times (Count computed at resolve time; <= 0 does nothing). The block is
 // repeated whole, in order. A run-level loop primitive; ForEach-over-a-selector lands with the selector phase.
+// Move a counter by an amount worked out from the run — "pay down as much of the debt as this gain covers".
+// The flat IncrementCounterRunEffect cannot express that, and a counter is where content keeps the numbers
+// that are not resources: debt, tallies, marks.
+public sealed record ComputedCounterRunEffect(RunCounterId Counter, IRunExpression<int> Delta) : IRunEffectRequest;
+
+public sealed class ComputedCounterRunEffectHandler : RunEffectHandler<ComputedCounterRunEffect>
+{
+    protected override void Resolve(RunState run, RunDefinitionRegistry registry, ComputedCounterRunEffect request)
+    {
+        var delta = request.Delta.Evaluate(run.SelectorContext);
+        if (delta != 0)
+            run.EnqueueEffect(new IncrementCounterRunEffect(request.Counter, delta));
+    }
+}
+
 public sealed record RepeatRunEffect(IRunExpression<int> Count, IReadOnlyList<IRunEffectRequest> Effects)
     : IRunEffectRequest;
 

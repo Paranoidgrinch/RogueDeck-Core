@@ -184,7 +184,9 @@ public static class RunJson
          .Register("event.shopItemHasTag", typeof(EventShopItemHasTagExpression))
          .Register("event.shopItemIsKind", typeof(EventShopItemIsKindExpression))
          .Register("event.rewardHasTag", typeof(EventRewardHasTagExpression))
-         .Register("event.rewardIsKind", typeof(EventRewardIsKindExpression));
+         .Register("event.rewardIsKind", typeof(EventRewardIsKindExpression))
+         .Register("event.resourceIs", typeof(EventResourceIsExpression))
+         .Register("inShop", typeof(InShopExpression));
     }
 
     // Card selectors. Only the card closing is registered (no effect consumes a relic selector yet). The
@@ -235,6 +237,7 @@ public static class RunJson
          .Register("fx.setFlag", typeof(SetFlagRunEffect))
          .Register("fx.incrementCounter", typeof(IncrementCounterRunEffect))
          .Register("fx.setCounter", typeof(SetCounterRunEffect))
+         .Register("fx.computedCounter", typeof(ComputedCounterRunEffect))
          .Register("fx.addShopStock", typeof(AddShopStockRunEffect))
          .Register("fx.restockShopStock", typeof(RestockShopStockRunEffect))
          .Register("fx.uninstallProgram", typeof(UninstallRunProgramRunEffect))

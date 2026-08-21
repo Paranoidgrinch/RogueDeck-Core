@@ -71,6 +71,15 @@ public sealed class EventRewardIsKindExpression : IRunExpression<bool>
     public bool Evaluate(RunEvalContext context) => RunEventFields.ReadRewardIsKind(Kind, context.Event);
 }
 
+// "The resource this event is about is X." Every other field of a resource change is readable, but not WHICH
+// resource changed — and a rule that skims a share of every Gold gain must not fire when a Voucher arrives.
+public sealed class EventResourceIsExpression : IRunExpression<bool>
+{
+    public RunResourceId Resource { get; }
+    public EventResourceIsExpression(RunResourceId resource) => Resource = resource;
+    public bool Evaluate(RunEvalContext context) => RunEventFields.ReadResourceIs(Resource, context.Event);
+}
+
 // The catalog of readable event fields, keyed by a stable string. Content may register more; the built-in
 // keys cover the standard events. A reader returns null when the event in scope is not the expected type,
 // which surfaces as a clear evaluation error.
@@ -163,6 +172,11 @@ public static class RunEventFields
             ? string.Equals(reward.RewardKind, kind, StringComparison.Ordinal)
             : throw NoMatch("reward.isKind", runEvent);
 
+    public static bool ReadResourceIs(RunResourceId resource, IRunEvent? runEvent) =>
+        runEvent is ResourceChangedRunEvent changed
+            ? changed.Resource == resource
+            : throw NoMatch("resource.is", runEvent);
+
     private static InvalidOperationException NoMatch(string key, IRunEvent? runEvent) =>
         new($"Event field '{key}' was evaluated without a matching event in context (was '{runEvent?.GetType().Name ?? "none"}').");
 }
@@ -182,6 +196,10 @@ public static class RunEventValues
 
     public static IRunExpression<int> ResourceNewAmount { get; } = new EventIntValueExpression(RunEventFields.ResourceNewAmount);
     public static IRunExpression<int> ResourceDelta { get; } = new EventIntValueExpression(RunEventFields.ResourceDelta);
+
+    // Which resource the change was about — the question the other resource fields cannot answer.
+    public static IRunExpression<bool> ResourceIs(RunResourceId resource) =>
+        new EventResourceIsExpression(resource);
 
     public static IRunExpression<int> CounterNewValue { get; } = new EventIntValueExpression(RunEventFields.CounterNewValue);
     public static IRunExpression<int> CounterDelta { get; } = new EventIntValueExpression(RunEventFields.CounterDelta);
