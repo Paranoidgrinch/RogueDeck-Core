@@ -137,6 +137,30 @@ public sealed class RunState
         Relics.Where(relic => relic.Enabled)
               .SelectMany(relic => relic.Definition.ShopPriceRules)
               .ToList();
+
+    // …and what it adds to the shelf, the same way and for the same reason: extra stock and extra services.
+    public IReadOnlyList<ShopStockGrant> ActiveShopStockGrants =>
+        Relics.Where(relic => relic.Enabled)
+              .SelectMany(relic => relic.Definition.ShopStockGrants)
+              .ToList();
+
+    public IReadOnlyList<ShopService> ActiveShopServices =>
+        Relics.Where(relic => relic.Enabled)
+              .SelectMany(relic => relic.Definition.ShopServices)
+              .ToList();
+
+    // The shelf of the shop the player is standing in, for as long as the visit lasts. The run holds it so an
+    // EFFECT can reach it — "add one more relic to this shop" resolves through the ordinary effect processor,
+    // long after the resolver drew the shelf. Null everywhere except inside a shop node.
+    public ShopShelf? ActiveShopShelf { get; private set; }
+
+    public void BeginShopVisit(ShopShelf shelf)
+    {
+        ArgumentNullException.ThrowIfNull(shelf);
+        ActiveShopShelf = shelf;
+    }
+
+    public void EndShopVisit() => ActiveShopShelf = null;
     // The persistent player-controlled board roster (P5c). Empty ⇒ today's single-hero run.
     public IReadOnlyList<RunUnit> Units => _units;
     public IReadOnlyList<IRunEvent> EventHistory => _history;

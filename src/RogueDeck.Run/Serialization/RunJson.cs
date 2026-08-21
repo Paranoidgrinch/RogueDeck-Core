@@ -231,6 +231,8 @@ public static class RunJson
          .Register("fx.setFlag", typeof(SetFlagRunEffect))
          .Register("fx.incrementCounter", typeof(IncrementCounterRunEffect))
          .Register("fx.setCounter", typeof(SetCounterRunEffect))
+         .Register("fx.addShopStock", typeof(AddShopStockRunEffect))
+         .Register("fx.restockShopStock", typeof(RestockShopStockRunEffect))
          .Register("fx.uninstallProgram", typeof(UninstallRunProgramRunEffect))
          .Register("fx.useConsumable", typeof(UseConsumableRunEffect))
          .Register("fx.computedResource", typeof(ComputedResourceRunEffect))

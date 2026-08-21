@@ -72,15 +72,61 @@ public sealed record ShopService(
             Tags: ["removal"]);
 }
 
-// A shop's authored definition (a serializable node payload). Offers is the pool; OfferCount how many are shown at
-// once (drawn deterministically from the run RNG); an optional Reroll refreshes the display for a price; Services
-// are paid actions outside the stock (e.g. card removal). Buying an item removes it from the current display;
-// reroll draws a fresh display and clears item sold-out state (used-up services stay used).
+// One named shelf inside a shop: its own pool, its own count, and optional tags stamped on everything drawn from
+// it. A real store's stock is not one bag — "3 general cards, 4 character cards, 2 shop relics, 2 normal relics"
+// is four independent draws, and a relic that adds "one additional Normal Relic" has to be able to name WHICH
+// shelf it is adding to.
+public sealed record ShopStockGroup(
+    string Id,
+    IReadOnlyList<ShopEntry> Offers,
+    int Count,
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<string>? Tags = null);
+
+public static class ShopStockGroups
+{
+    // The shelf a shop's authored Offers/OfferCount forms. A shop that names no groups has exactly this one, so
+    // every shop written before groups existed behaves identically and a grant can still name its shelf.
+    public const string Default = "stock";
+}
+
+// A shop's authored definition (a serializable node payload). Offers is the default shelf's pool; OfferCount how
+// many of it are shown at once (drawn deterministically from the run RNG); Stock adds further named shelves; an
+// optional Reroll refreshes the whole display for a price; Services are paid actions outside the stock (e.g. card
+// removal). Buying an item removes it from the current display; reroll draws a fresh display and clears item
+// sold-out state (used-up services stay used).
 public sealed record ShopDefinition(
     IReadOnlyList<ShopEntry> Offers,
     int OfferCount,
     ShopReroll? Reroll = null,
-    IReadOnlyList<ShopService>? Services = null) : IRunNodePayload;
+    IReadOnlyList<ShopService>? Services = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<ShopStockGroup>? Stock = null) : IRunNodePayload
+{
+    // The shelves this shop actually has: the authored Offers as the default shelf (omitted when it is empty),
+    // then every named group.
+    public IReadOnlyList<ShopStockGroup> Shelves()
+    {
+        var shelves = new List<ShopStockGroup>();
+        if (Offers.Count > 0 && OfferCount > 0)
+            shelves.Add(new ShopStockGroup(ShopStockGroups.Default, Offers, OfferCount));
+        if (Stock is { } stock)
+            shelves.AddRange(stock);
+        return shelves;
+    }
+}
+
+// What a worn relic adds to a shop's shelf: `ExtraCount` more draws from the named group, carrying `Tags` so a
+// price rule can find them ("that extra relic costs 20% more" is this grant plus an ordinary +20% rule matching
+// the tag). Like a price rule it is a fact about the shop while the relic is worn, so it needs no save state.
+public sealed record ShopStockGrant(
+    string GroupId,
+    int ExtraCount = 1,
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<string>? Tags = null);
 
 // A shop node payload's reference form: name an authored shop by id (resolved via the content registry) instead
 // of embedding the ShopDefinition inline — the shop counterpart of EventRef, so a map can reference a shop as data.
@@ -107,129 +153,100 @@ public sealed class ShopNodeResolver : INodeResolver
     public NodeOutcome Resolve(NodeResolveContext context, Node node)
     {
         var shop = ResolveShop(node);
-
         var run = context.Run;
-        // The shelf is priced ONCE per display, not per round: a discount that marks one relic has to keep
-        // marking that relic all visit, and a price that flickered as the player browsed would be unreadable.
-        // A reroll draws a new shelf and prices it again; the once-per-visit rules stay spent across it.
-        var rules = run.ActiveShopPriceRules;
-        var spentRules = new HashSet<int>();
-        var display = Draw(run, shop);
-        var prices = PriceShelf(run, shop, display, rules, spentRules);
-        var soldItems = new HashSet<string>(StringComparer.Ordinal);
-        var usedServices = new HashSet<string>(StringComparer.Ordinal);
+
+        // The shelf is a live object the run holds for the length of the visit, so an effect resolving mid-visit
+        // can reach it. Filling at the top of each round is what realizes anything an effect asked for since the
+        // last one ("add a relic to this shop", "replace the unsold cards").
+        var shelf = new ShopShelf(run, shop);
+        run.BeginShopVisit(shelf);
         var purchases = 0;
 
-        for (var round = 0; round < _maxRounds; round++)
+        try
         {
-            var choices = BuildChoices(shop, display, soldItems, usedServices, prices);
-            var available = choices.Where(choice => choice.IsAvailable(run)).ToList();
-            var situation = new EventSituation("shop", "event.shop", available);
-
-            var chosen = context.Choices.Choose(situation, available, run);
-
-            // Pay the choice's costs, then run its effects, then flush — so the next round's affordability check
-            // observes the spent-down balance (and any relic reactions to the purchase have resolved).
-            foreach (var effect in chosen.PayEffects)
-                run.EnqueueEffect(effect);
-            foreach (var effect in chosen.Effects)
-                run.EnqueueEffect(effect);
-
-            if (chosen.Id == LeaveChoiceId)
+            for (var round = 0; round < _maxRounds; round++)
             {
+                shelf.Fill();
+                var choices = BuildChoices(shop, shelf);
+                var available = choices.Where(choice => choice.IsAvailable(run)).ToList();
+                var situation = new EventSituation("shop", "event.shop", available);
+
+                var chosen = context.Choices.Choose(situation, available, run);
+
+                // Pay the choice's costs, then run its effects, then flush — so the next round's affordability
+                // check observes the spent-down balance (and any relic reactions to the purchase have resolved).
+                foreach (var effect in chosen.PayEffects)
+                    run.EnqueueEffect(effect);
+                foreach (var effect in chosen.Effects)
+                    run.EnqueueEffect(effect);
+
+                if (chosen.Id == LeaveChoiceId)
+                {
+                    context.ResolvePendingEffects();
+                    break;
+                }
+
+                if (chosen.Id == RerollChoiceId)
+                {
+                    run.AddLog(StandardRunLogTypes.ShopRerolled, $"Node '{node.Id}': shop rerolled.");
+                    run.RaiseEvent(new ShopRerolledRunEvent(node.Id));
+                    context.ResolvePendingEffects();
+                    shelf.RestockAll();
+                    continue;
+                }
+
+                // Otherwise it is a purchase — an item or a service. Mark it used-up (unless a repeatable
+                // service). The slot has to be read BEFORE it is sold, since selling takes it off the shelf.
+                var service = shelf.FindService(chosen.Id);
+                var slot = shelf.FindSlot(chosen.Id);
+                var paid = slot?.Price ?? (service is null ? 0 : shelf.PriceOf(service));
+                if (service is null)
+                    shelf.MarkSold(chosen.Id);
+                else
+                    shelf.MarkServiceUsed(service);
+
+                purchases++;
+                run.AddLog(StandardRunLogTypes.ShopPurchase, $"Node '{node.Id}': bought '{chosen.Id}' for {paid}.");
+                run.RaiseEvent(new ShopItemPurchasedRunEvent(
+                    node.Id, chosen.Id,
+                    slot?.Entry.Kind ?? service?.EffectiveKind,
+                    slot?.Entry.Tags ?? service?.Tags,
+                    paid));
                 context.ResolvePendingEffects();
-                break;
             }
-
-            if (chosen.Id == RerollChoiceId)
-            {
-                run.AddLog(StandardRunLogTypes.ShopRerolled, $"Node '{node.Id}': shop rerolled.");
-                run.RaiseEvent(new ShopRerolledRunEvent(node.Id));
-                context.ResolvePendingEffects();
-                display = Draw(run, shop);
-                prices = PriceShelf(run, shop, display, rules, spentRules);
-                soldItems.Clear(); // a fresh display; used-up services stay used
-                continue;
-            }
-
-            // Otherwise it is a purchase — an item or a service. Mark it used-up (unless a repeatable service).
-            var service = shop.Services?.FirstOrDefault(s => s.Id == chosen.Id);
-            if (service is null)
-                soldItems.Add(chosen.Id);
-            else if (!service.Repeatable)
-                usedServices.Add(chosen.Id);
-
-            purchases++;
-            var item = display.FirstOrDefault(entry => entry.Id == chosen.Id);
-            var paid = prices.TryGetValue(chosen.Id, out var price) ? price : 0;
-            run.AddLog(StandardRunLogTypes.ShopPurchase, $"Node '{node.Id}': bought '{chosen.Id}' for {paid}.");
-            run.RaiseEvent(new ShopItemPurchasedRunEvent(
-                node.Id, chosen.Id,
-                item?.Kind ?? service?.EffectiveKind,
-                item?.Tags ?? service?.Tags,
-                paid));
-            context.ResolvePendingEffects();
+        }
+        finally
+        {
+            run.EndShopVisit();
         }
 
         return new NodeOutcome($"shop resolved ({purchases} purchase(s)).");
     }
 
-    // The choices offered this round: every not-yet-sold display item, every still-available service, an optional
-    // reroll, and leave. Affordability is folded into IsAvailable (like an event), so an unaffordable choice is
-    // simply not shown.
-    // Price every thing on the shelf against the rules the player is wearing — the items drawn for this display
-    // and, once, the services (which do not reroll).
-    private static Dictionary<string, int> PriceShelf(
-        RunState run,
-        ShopDefinition shop,
-        IReadOnlyList<ShopEntry> display,
-        IReadOnlyList<ShopPriceRule> rules,
-        HashSet<int> spentRules)
-    {
-        var prices = new Dictionary<string, int>(StringComparer.Ordinal);
-        foreach (var item in display)
-            prices[item.Id] = ShopPricing.Adjust(
-                item.Price, item.Id, item.Kind, item.Tags, rules, run, spentRules);
-
-        if (shop.Services is { } services)
-            foreach (var service in services)
-                prices[service.Id] = ShopPricing.Adjust(
-                    service.Price, service.Id, service.EffectiveKind, service.Tags, rules, run, spentRules);
-
-        return prices;
-    }
-
-    private static List<EventChoice> BuildChoices(
-        ShopDefinition shop,
-        IReadOnlyList<ShopEntry> display,
-        HashSet<string> soldItems,
-        HashSet<string> usedServices,
-        IReadOnlyDictionary<string, int> prices)
+    // The choices offered this round: everything still standing on the shelf, every still-available service, an
+    // optional reroll, and leave. Affordability is folded into IsAvailable (like an event), so an unaffordable
+    // choice is simply not shown.
+    private static List<EventChoice> BuildChoices(ShopDefinition shop, ShopShelf shelf)
     {
         var choices = new List<EventChoice>();
 
-        foreach (var item in display)
+        foreach (var slot in shelf.Slots)
+            choices.Add(new EventChoice(
+                slot.Entry.Id,
+                slot.Entry.Payload,
+                TextKey: slot.Entry.TextKey,
+                Costs: new[] { PayCost(slot.Entry.Currency, slot.Price) }));
+
+        foreach (var service in shelf.Services)
         {
-            if (soldItems.Contains(item.Id))
+            if (shelf.IsServiceUsed(service))
                 continue;
             choices.Add(new EventChoice(
-                item.Id,
-                item.Payload,
-                TextKey: item.TextKey,
-                Costs: new[] { PayCost(item.Currency, prices[item.Id]) }));
+                service.Id,
+                service.Effects,
+                TextKey: service.TextKey,
+                Costs: new[] { PayCost(service.Currency, shelf.PriceOf(service)) }));
         }
-
-        if (shop.Services is { } services)
-            foreach (var service in services)
-            {
-                if (!service.Repeatable && usedServices.Contains(service.Id))
-                    continue;
-                choices.Add(new EventChoice(
-                    service.Id,
-                    service.Effects,
-                    TextKey: service.TextKey,
-                    Costs: new[] { PayCost(service.Currency, prices[service.Id]) }));
-            }
 
         if (shop.Reroll is { } reroll)
             choices.Add(new EventChoice(
@@ -261,15 +278,4 @@ public sealed class ShopNodeResolver : INodeResolver
     private static RunCost PayCost(RunResourceId currency, int price) =>
         new(RunExpr.HasResource(currency, price), new[] { new ChangeResourceRunEffect(currency, -price) });
 
-    // Draw up to OfferCount distinct entries from the pool, deterministically via the run RNG. A pool no larger
-    // than OfferCount shows everything (no randomness); an empty pool shows nothing (only reroll/leave remain).
-    private static List<ShopEntry> Draw(RunState run, ShopDefinition shop)
-    {
-        var count = Math.Max(0, shop.OfferCount);
-        if (shop.Offers.Count == 0 || count == 0)
-            return new List<ShopEntry>();
-        if (shop.Offers.Count <= count)
-            return shop.Offers.ToList();
-        return RunPool.Uniform(shop.Offers.ToArray()).DrawMany(run, count).ToList();
-    }
 }

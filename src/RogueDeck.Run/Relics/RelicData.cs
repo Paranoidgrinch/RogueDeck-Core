@@ -25,6 +25,15 @@ public sealed record RelicData
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<ShopPriceRule>? ShopPriceRules { get; init; }
 
+    // …and what it adds to a shop's shelf. Same null-is-omitted bargain.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ShopStockGrant>? ShopStockGrants { get; init; }
+
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ShopService>? ShopServices { get; init; }
+
     public static RelicData From(RelicDefinition relic)
     {
         ArgumentNullException.ThrowIfNull(relic);
@@ -38,6 +47,8 @@ public sealed record RelicData
             DisplayName = relic.DisplayName,
             RunPrograms = relic.RunPrograms,
             ShopPriceRules = relic.ShopPriceRules.Count > 0 ? relic.ShopPriceRules : null,
+            ShopStockGrants = relic.ShopStockGrants.Count > 0 ? relic.ShopStockGrants : null,
+            ShopServices = relic.ShopServices.Count > 0 ? relic.ShopServices : null,
         };
     }
 
@@ -47,6 +58,8 @@ public sealed record RelicData
             .Select((rule, i) => RelicCombatTriggers.Get(rule.Trigger).Build(
                 new TriggeredEffectDefinitionId($"{Id}:combat:{i}:{rule.Trigger}"), rule.Program, rule.Priority))
             .ToList();
-        return new RelicDefinition(new RelicId(Id), DisplayName, RunPrograms, contributions, ShopPriceRules);
+        return new RelicDefinition(
+            new RelicId(Id), DisplayName, RunPrograms, contributions,
+            ShopPriceRules, ShopStockGrants, ShopServices);
     }
 }

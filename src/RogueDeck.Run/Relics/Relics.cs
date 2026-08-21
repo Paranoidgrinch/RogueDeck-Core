@@ -35,9 +35,10 @@ public sealed class TriggeredRunEffect<TEvent> : ITriggeredRunEffectDefinition
 //   (b) CombatContributions — triggered programs injected into a fight when a combat node spawns. The hook
 //       exists so the design is honest about relics that reach into combat; wiring it through the combat
 //       bridge is a deferred slice.
-//   (c) ShopPriceRules — standing bends in what a shop charges. A discount is not an event a relic reacts to,
-//       it is a fact about the shelf while the relic is worn, so the shop ASKS what the player is wearing when
-//       it prices its stock. That also means the rule needs no save state of its own: relics restore by id.
+//   (c) ShopPriceRules / ShopStockGrants / ShopServices — standing facts about a shop while the relic is worn:
+//       what it charges, what extra stock it puts out, and what extra services it offers. None of these is an
+//       event a relic reacts to, so the shop ASKS what the player is wearing when it builds its shelf. That
+//       also means none of them needs save state of its own: relics restore by id.
 public sealed class RelicDefinition
 {
     public RelicId Id { get; }
@@ -45,13 +46,17 @@ public sealed class RelicDefinition
     public IReadOnlyList<ITriggeredRunEffectDefinition> RunPrograms { get; }
     public IReadOnlyList<ITriggeredEffectDefinition> CombatContributions { get; }
     public IReadOnlyList<ShopPriceRule> ShopPriceRules { get; }
+    public IReadOnlyList<ShopStockGrant> ShopStockGrants { get; }
+    public IReadOnlyList<ShopService> ShopServices { get; }
 
     public RelicDefinition(
         RelicId id,
         string displayName,
         IReadOnlyList<ITriggeredRunEffectDefinition>? runPrograms = null,
         IReadOnlyList<ITriggeredEffectDefinition>? combatContributions = null,
-        IReadOnlyList<ShopPriceRule>? shopPriceRules = null)
+        IReadOnlyList<ShopPriceRule>? shopPriceRules = null,
+        IReadOnlyList<ShopStockGrant>? shopStockGrants = null,
+        IReadOnlyList<ShopService>? shopServices = null)
     {
         if (string.IsNullOrWhiteSpace(displayName))
             throw new ArgumentException("Relic display name cannot be empty.", nameof(displayName));
@@ -61,6 +66,8 @@ public sealed class RelicDefinition
         RunPrograms = runPrograms ?? Array.Empty<ITriggeredRunEffectDefinition>();
         CombatContributions = combatContributions ?? Array.Empty<ITriggeredEffectDefinition>();
         ShopPriceRules = shopPriceRules ?? Array.Empty<ShopPriceRule>();
+        ShopStockGrants = shopStockGrants ?? Array.Empty<ShopStockGrant>();
+        ShopServices = shopServices ?? Array.Empty<ShopService>();
     }
 }
 
