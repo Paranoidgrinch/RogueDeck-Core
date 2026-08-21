@@ -2148,6 +2148,40 @@ public sealed class CardInstanceHasMarkExpression<TContext> : ICombatExpression<
     }
 }
 
+// True iff the DEFINITION of the card resolved by the inner card-instance expression carries the given tag —
+// "is that card an Attack", "is it Junk". The definition counterpart of CardInstanceHasMarkExpression, which
+// asks the same question of a per-instance mark: a rule that points at one card usually needs both, what was
+// done to this copy and what kind of card it is. Returns false when the card, its zone, the registry or the
+// definition cannot be resolved.
+public sealed class CardInstanceHasTagExpression<TContext> : ICombatExpression<TContext, bool>
+    where TContext : class
+{
+    public ICardInstanceExpression<TContext> Card { get; }
+    public TagId Tag { get; }
+
+    public CardInstanceHasTagExpression(ICardInstanceExpression<TContext> card, TagId tag)
+    {
+        ArgumentNullException.ThrowIfNull(card);
+        Card = card;
+        Tag = tag;
+    }
+
+    public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        if (Card.Evaluate(context, combat) is not { } instanceId)
+            return false;
+        if (combat.DefinitionRegistry is not { } registry)
+            return false;
+
+        foreach (var zones in combat.CardZonesByCombatant.Values)
+            if (zones.ContainsCard(instanceId))
+                return registry.CardDefinitions.TryGetValue(zones.GetCard(instanceId).DefinitionId, out var definition)
+                    && definition.Tags.Contains(Tag);
+
+        return false;
+    }
+}
+
 // Reads a per-instance mark counter from the card resolved by the inner card-instance expression.
 // Returns 0 when the card cannot be resolved or carries no such counter.
 public sealed class CardInstanceMarkCounterExpression<TContext> : ICombatExpression<TContext, int>

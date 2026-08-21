@@ -67,6 +67,24 @@ public class DrawnCardOutcomeTests
             card => card.HasMark(Fresh));
     }
 
+    // A named card can be asked what KIND of card it is, not only what has been done to this copy: the
+    // definition-tag question is the counterpart of the per-instance mark question, and a rule pointing at one
+    // card usually needs both. Here the drawn card is marked only if it is an Attack.
+    [Fact]
+    public void A_named_card_can_be_asked_what_kind_of_card_it_is()
+    {
+        using var attacks = Start(drawCount: 1, markIndex: 0, onlyAttacks: true);
+        attacks.CombatDriver!.PlayCard(attacks.CombatDriver.Current!.Hand.First().Id, EnemyOf(attacks));
+        Assert.Null(attacks.Session!.Error);
+        Assert.Single(attacks.CombatDriver.Current!.Hand, c => c.HasMark(Fresh));
+
+        // The same rule, the same draw, a card whose definition does NOT carry the tag: nothing is marked.
+        using var plain = Start(drawCount: 1, markIndex: 0, onlyAttacks: true, tagged: false);
+        plain.CombatDriver!.PlayCard(plain.CombatDriver.Current!.Hand.First().Id, EnemyOf(plain));
+        Assert.Null(plain.Session!.Error);
+        Assert.DoesNotContain(plain.CombatDriver.Current!.Hand, c => c.HasMark(Fresh));
+    }
+
     // It round-trips as data like every other expression: a rule that names a drawn card survives a save.
     [Fact]
     public void The_expression_round_trips_as_data()
@@ -88,10 +106,10 @@ public class DrawnCardOutcomeTests
         return combat.State.Combatants.First(c => c.Id != combat.HeroId).Id;
     }
 
-    private static RunPlayback Start(int drawCount, int markIndex)
+    private static RunPlayback Start(int drawCount, int markIndex, bool onlyAttacks = false, bool tagged = true)
     {
         var play = new RunPlayback(() => { });
-        play.Start(Duel(drawCount, markIndex), seed: 1, interactive: true);
+        play.Start(Duel(drawCount, markIndex, onlyAttacks, tagged), seed: 1, interactive: true);
         Assert.Null(play.Error);
         while (play.Session!.IsAwaitingInterlude)
             play.Session.Continue();
@@ -99,13 +117,16 @@ public class DrawnCardOutcomeTests
     }
 
     // One card: draw N, then mark the one at `markIndex` of that draw.
-    private static RunBlueprint Duel(int drawCount, int markIndex)
+    private static readonly TagId Attack = new("attack");
+
+    private static RunBlueprint Duel(int drawCount, int markIndex, bool onlyAttacks = false, bool tagged = true)
     {
         var fetch = new CardData
         {
             Id = "fetch",
             NameKey = "Fetch",
             Costs = Array.Empty<ResourceCost>(),
+            Tags = tagged ? [Attack] : [],
             Program = new EffectProgram<CardPlayContext>(
                 new CausalSequenceEffectNode<CardPlayContext>(
                 [
@@ -113,10 +134,18 @@ public class DrawnCardOutcomeTests
                         CombatantTargetSelectors.Source,
                         new ConstantExpression<CardPlayContext>(drawCount),
                         resultKey: Drawn),
-                    new MarkCardInstanceNode<CardPlayContext>(
-                        CombatantTargetSelectors.Source,
-                        new DrawCardOutcomeExpression<CardPlayContext>(Drawn, markIndex),
-                        Fresh),
+                    onlyAttacks
+                        ? new ConditionalEffectNode<CardPlayContext>(
+                            new CardInstanceHasTagExpression<CardPlayContext>(
+                                new DrawCardOutcomeExpression<CardPlayContext>(Drawn, markIndex), Attack),
+                            new MarkCardInstanceNode<CardPlayContext>(
+                                CombatantTargetSelectors.Source,
+                                new DrawCardOutcomeExpression<CardPlayContext>(Drawn, markIndex),
+                                Fresh))
+                        : new MarkCardInstanceNode<CardPlayContext>(
+                            CombatantTargetSelectors.Source,
+                            new DrawCardOutcomeExpression<CardPlayContext>(Drawn, markIndex),
+                            Fresh),
                 ])),
         };
         var nip = new EnemyActionData
