@@ -43,6 +43,11 @@ public sealed record RelicData
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<ShopDebtTerms>? ShopDebtTerms { get; init; }
 
+    // Face (d): standing changes to what a reward looks like. Same null-is-omitted bargain.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<IRewardRule>? RewardRules { get; init; }
+
     public static RelicData From(RelicDefinition relic)
     {
         ArgumentNullException.ThrowIfNull(relic);
@@ -60,6 +65,7 @@ public sealed record RelicData
             ShopServices = relic.ShopServices.Count > 0 ? relic.ShopServices : null,
             ShopCreditSources = relic.ShopCreditSources.Count > 0 ? relic.ShopCreditSources : null,
             ShopDebtTerms = relic.ShopDebtTerms.Count > 0 ? relic.ShopDebtTerms : null,
+            RewardRules = relic.RewardRules.Count > 0 ? relic.RewardRules : null,
         };
     }
 
@@ -71,6 +77,6 @@ public sealed record RelicData
             .ToList();
         return new RelicDefinition(
             new RelicId(Id), DisplayName, RunPrograms, contributions,
-            ShopPriceRules, ShopStockGrants, ShopServices, ShopCreditSources, ShopDebtTerms);
+            ShopPriceRules, ShopStockGrants, ShopServices, ShopCreditSources, ShopDebtTerms, RewardRules);
     }
 }

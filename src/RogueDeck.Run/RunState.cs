@@ -160,6 +160,12 @@ public sealed class RunState
               .SelectMany(relic => relic.Definition.ShopDebtTerms)
               .ToList();
 
+    // …and what it does to a reward as the reward is being built.
+    public IReadOnlyList<IRewardRule> ActiveRewardRules =>
+        Relics.Where(relic => relic.Enabled)
+              .SelectMany(relic => relic.Definition.RewardRules)
+              .ToList();
+
     // The shelf of the shop the player is standing in, for as long as the visit lasts. The run holds it so an
     // EFFECT can reach it — "add one more relic to this shop" resolves through the ordinary effect processor,
     // long after the resolver drew the shelf. Null everywhere except inside a shop node.

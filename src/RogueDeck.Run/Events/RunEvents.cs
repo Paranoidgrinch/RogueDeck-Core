@@ -93,9 +93,45 @@ public sealed record RelicEnabledRunEvent(RelicId RelicId) : IRunEvent;
 
 public sealed record RewardGrantedRunEvent(RewardId RewardId) : IRunEvent;
 
-public sealed record RewardOfferedRunEvent(RewardId RewardId, IReadOnlyList<string> OfferIds) : IRunEvent;
+// A reward event that carries what KIND of reward it was about and what it was tagged with — "a normal card
+// reward", "a Boss reward". A relic that pays for skipping a card reward, or that only touches non-Boss
+// rewards, reads these; nothing downstream can infer them from where the reward was enqueued.
+public interface IRewardTaggedRunEvent : IRunEvent
+{
+    string? RewardKind { get; }
+    IReadOnlyList<string>? RewardTags { get; }
+}
 
-public sealed record RewardChosenRunEvent(RewardId RewardId, string OfferId) : IRunEvent;
+public sealed record RewardOfferedRunEvent(
+    RewardId RewardId,
+    IReadOnlyList<string> OfferIds,
+    string? Kind = null,
+    IReadOnlyList<string>? Tags = null) : IRunEvent, IRewardTaggedRunEvent
+{
+    string? IRewardTaggedRunEvent.RewardKind => Kind;
+    IReadOnlyList<string>? IRewardTaggedRunEvent.RewardTags => Tags;
+}
+
+public sealed record RewardChosenRunEvent(
+    RewardId RewardId,
+    string OfferId,
+    string? Kind = null,
+    IReadOnlyList<string>? Tags = null) : IRunEvent, IRewardTaggedRunEvent
+{
+    string? IRewardTaggedRunEvent.RewardKind => Kind;
+    IReadOnlyList<string>? IRewardTaggedRunEvent.RewardTags => Tags;
+}
+
+// The player was offered something and took none of it. Distinct from never having been offered anything —
+// "skip the entire reward and gain 6 Gold" is paid for exactly here.
+public sealed record RewardSkippedRunEvent(
+    RewardId RewardId,
+    string? Kind = null,
+    IReadOnlyList<string>? Tags = null) : IRunEvent, IRewardTaggedRunEvent
+{
+    string? IRewardTaggedRunEvent.RewardKind => Kind;
+    IReadOnlyList<string>? IRewardTaggedRunEvent.RewardTags => Tags;
+}
 
 public sealed record ConsumableGainedRunEvent(ConsumableInstanceId InstanceId, ConsumableId Definition) : IRunEvent;
 

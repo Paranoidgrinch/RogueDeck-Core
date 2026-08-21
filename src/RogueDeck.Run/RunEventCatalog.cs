@@ -36,6 +36,8 @@ public static class RunEventCatalog
             "Fires when a reward choice is put in front of the player."),
         new("rewardChosen", typeof(RewardChosenRunEvent), "a reward is chosen",
             "Fires when the player picks one of the offered rewards."),
+        new("rewardSkipped", typeof(RewardSkippedRunEvent), "a reward is walked away from",
+            "Fires when the player is offered a reward and takes none of it."),
         new("rewardGranted", typeof(RewardGrantedRunEvent), "a reward is granted",
             "Fires when a reward's contents are actually handed over."),
 

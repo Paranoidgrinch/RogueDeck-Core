@@ -97,6 +97,7 @@ public static class RunJson
         options.Converters.Add(new PolymorphicRunJsonConverter<IRunEffectTemplate>(registry));
         options.Converters.Add(new PolymorphicRunJsonConverter<IRunEffectRequest>(registry));
         options.Converters.Add(new PolymorphicRunJsonConverter<IRewardSource>(registry));
+        options.Converters.Add(new PolymorphicRunJsonConverter<IRewardRule>(registry));
         options.Converters.Add(new PolymorphicRunJsonConverter<MetaEffect>(registry));
         options.Converters.Add(new PolymorphicRunJsonConverter<EnemyIntentCondition>(registry));
         options.Converters.Add(new PolymorphicRunJsonConverter<IRunNodePayload>(registry));
@@ -181,7 +182,9 @@ public static class RunJson
          .Register("event.bool", typeof(EventBoolValueExpression))
          .Register("event.nodeHasTag", typeof(EventNodeHasTagExpression))
          .Register("event.shopItemHasTag", typeof(EventShopItemHasTagExpression))
-         .Register("event.shopItemIsKind", typeof(EventShopItemIsKindExpression));
+         .Register("event.shopItemIsKind", typeof(EventShopItemIsKindExpression))
+         .Register("event.rewardHasTag", typeof(EventRewardHasTagExpression))
+         .Register("event.rewardIsKind", typeof(EventRewardIsKindExpression));
     }
 
     // Card selectors. Only the card closing is registered (no effect consumes a relic selector yet). The
@@ -259,9 +262,14 @@ public static class RunJson
          .Register("fx.addComposedCard", typeof(ShredEngine.AddComposedCardRunEffect));
     }
 
-    // Reward sources. The Func-backed DelegateRewardSource is an escape.
+    // Reward sources and the standing reward rules a relic carries. The Func-backed DelegateRewardSource and
+    // DelegateRunRewardModifier are escapes and are not registered.
     private static void RegisterRewards(RunJsonRegistry r)
     {
+        r.Register("reward.addOffer", typeof(AddRewardOfferRule))
+         .Register("reward.drawMore", typeof(DrawMoreOffersRule))
+         .Register("reward.appendGrant", typeof(AppendOfferGrantRule));
+
         r.Register("reward.fixed", typeof(FixedRewardSource))
          .Register("reward.pool", typeof(PoolRewardSource));
     }

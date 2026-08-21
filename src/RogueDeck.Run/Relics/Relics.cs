@@ -40,6 +40,8 @@ public sealed class TriggeredRunEffect<TEvent> : ITriggeredRunEffectDefinition
 //       what extra services it offers, and what may settle a price besides the currency itself. None of these
 //       is an event a relic reacts to, so the shop ASKS what the player is wearing when it builds its shelf.
 //       That also means none of them needs save state of its own: relics restore by id.
+//   (d) RewardRules — the same bargain for what a reward looks like: a standing change to the offers, asked for
+//       as the reward is built rather than registered for the next N rewards.
 public sealed class RelicDefinition
 {
     public RelicId Id { get; }
@@ -51,6 +53,7 @@ public sealed class RelicDefinition
     public IReadOnlyList<ShopService> ShopServices { get; }
     public IReadOnlyList<ShopCreditSource> ShopCreditSources { get; }
     public IReadOnlyList<ShopDebtTerms> ShopDebtTerms { get; }
+    public IReadOnlyList<IRewardRule> RewardRules { get; }
 
     public RelicDefinition(
         RelicId id,
@@ -61,7 +64,8 @@ public sealed class RelicDefinition
         IReadOnlyList<ShopStockGrant>? shopStockGrants = null,
         IReadOnlyList<ShopService>? shopServices = null,
         IReadOnlyList<ShopCreditSource>? shopCreditSources = null,
-        IReadOnlyList<ShopDebtTerms>? shopDebtTerms = null)
+        IReadOnlyList<ShopDebtTerms>? shopDebtTerms = null,
+        IReadOnlyList<IRewardRule>? rewardRules = null)
     {
         if (string.IsNullOrWhiteSpace(displayName))
             throw new ArgumentException("Relic display name cannot be empty.", nameof(displayName));
@@ -75,6 +79,7 @@ public sealed class RelicDefinition
         ShopServices = shopServices ?? Array.Empty<ShopService>();
         ShopCreditSources = shopCreditSources ?? Array.Empty<ShopCreditSource>();
         ShopDebtTerms = shopDebtTerms ?? Array.Empty<ShopDebtTerms>();
+        RewardRules = rewardRules ?? Array.Empty<IRewardRule>();
     }
 }
 

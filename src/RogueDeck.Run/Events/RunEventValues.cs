@@ -55,6 +55,22 @@ public sealed class EventShopItemIsKindExpression : IRunExpression<bool>
     public bool Evaluate(RunEvalContext context) => RunEventFields.ReadShopItemIsKind(Kind, context.Event);
 }
 
+// "The reward this event is about carries tag X" / "…is of kind X". Same shape as the node- and shop-tag
+// questions. Valid in a reaction to a reward being offered, chosen, or skipped.
+public sealed class EventRewardHasTagExpression : IRunExpression<bool>
+{
+    public string Tag { get; }
+    public EventRewardHasTagExpression(string tag) => Tag = tag;
+    public bool Evaluate(RunEvalContext context) => RunEventFields.ReadRewardHasTag(Tag, context.Event);
+}
+
+public sealed class EventRewardIsKindExpression : IRunExpression<bool>
+{
+    public string Kind { get; }
+    public EventRewardIsKindExpression(string kind) => Kind = kind;
+    public bool Evaluate(RunEvalContext context) => RunEventFields.ReadRewardIsKind(Kind, context.Event);
+}
+
 // The catalog of readable event fields, keyed by a stable string. Content may register more; the built-in
 // keys cover the standard events. A reader returns null when the event in scope is not the expected type,
 // which surfaces as a clear evaluation error.
@@ -137,6 +153,16 @@ public static class RunEventFields
             ? string.Equals(purchase.Kind, kind, StringComparison.Ordinal)
             : throw NoMatch("shop.itemIsKind", runEvent);
 
+    public static bool ReadRewardHasTag(string tag, IRunEvent? runEvent) =>
+        runEvent is IRewardTaggedRunEvent reward
+            ? reward.RewardTags is { } tags && tags.Contains(tag, StringComparer.Ordinal)
+            : throw NoMatch("reward.hasTag", runEvent);
+
+    public static bool ReadRewardIsKind(string kind, IRunEvent? runEvent) =>
+        runEvent is IRewardTaggedRunEvent reward
+            ? string.Equals(reward.RewardKind, kind, StringComparison.Ordinal)
+            : throw NoMatch("reward.isKind", runEvent);
+
     private static InvalidOperationException NoMatch(string key, IRunEvent? runEvent) =>
         new($"Event field '{key}' was evaluated without a matching event in context (was '{runEvent?.GetType().Name ?? "none"}').");
 }
@@ -173,4 +199,8 @@ public static class RunEventValues
     public static IRunExpression<int> ShopCurrencyPaid { get; } = new EventIntValueExpression(RunEventFields.ShopCurrencyPaid);
     public static IRunExpression<bool> ShopItemHasTag(string tag) => new EventShopItemHasTagExpression(tag);
     public static IRunExpression<bool> ShopItemIsKind(string kind) => new EventShopItemIsKindExpression(kind);
+
+    // The reward this reaction is about — offered, chosen, or walked away from.
+    public static IRunExpression<bool> RewardHasTag(string tag) => new EventRewardHasTagExpression(tag);
+    public static IRunExpression<bool> RewardIsKind(string kind) => new EventRewardIsKindExpression(kind);
 }
