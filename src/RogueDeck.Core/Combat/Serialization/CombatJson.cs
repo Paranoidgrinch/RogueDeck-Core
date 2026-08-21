@@ -199,6 +199,7 @@ public static class CombatJson
         // Card-instance expressions (resolve a specific card instance to act on).
         r.Register("cardInstance.explicit", typeof(ExplicitCardInstanceExpression<>))
          .Register("cardInstance.createdOutcome", typeof(CreateCardOutcomeExpression<>))
+         .Register("cardInstance.drawnOutcome", typeof(DrawCardOutcomeExpression<>))
          .Register("cardInstance.played", typeof(PlayedCardInstanceExpression<>))
          .Register("cardInstance.triggerEvent", typeof(TriggerEventCardInstanceExpression<>))
          .Register("cardInstance.inZone", typeof(CardInZoneExpression<>))

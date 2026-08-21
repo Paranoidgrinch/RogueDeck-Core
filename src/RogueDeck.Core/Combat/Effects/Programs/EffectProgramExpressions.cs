@@ -1643,6 +1643,37 @@ public sealed class CreateCardOutcomeExpression<TContext>
     }
 }
 
+// The card a DrawCardsNode just drew, named by the node's result key. The exact counterpart of
+// CreateCardOutcomeExpression for the other way a card arrives: creating one hands back its instance id, and
+// so should drawing one. Without it a program can draw a replacement card and then have no way to say
+// anything ABOUT that card — the hand it landed in is ordered, but nothing can index "the newest".
+//
+// Index picks from the draw when more than one card was drawn; out of range (or a draw that came up empty,
+// because the piles were exhausted) resolves to null, and every card operation treats null as "no card".
+public sealed class DrawCardOutcomeExpression<TContext>
+    : ICardInstanceExpression<TContext>
+    where TContext : class
+{
+    public EffectResultKey<OrderedTargetOutcomes<DrawCardsOutcome>> Key { get; }
+    public int Index { get; }
+
+    public DrawCardOutcomeExpression(
+        EffectResultKey<OrderedTargetOutcomes<DrawCardsOutcome>> key,
+        int index = 0)
+    {
+        Key = key;
+        Index = index;
+    }
+
+    public CardInstanceId? Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        if (!context.TryGet(Key, out var ordered) || ordered is null || ordered.Results.Count == 0)
+            return null;
+        var ids = ordered.Results[0].Outcome.DrawnCardInstanceIds;
+        return Index >= 0 && Index < ids.Count ? ids[Index] : null;
+    }
+}
+
 public sealed class PlayedCardInstanceExpression<TContext>
     : ICardInstanceExpression<TContext>
     where TContext : class
