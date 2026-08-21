@@ -18,6 +18,13 @@ public sealed record RelicData
     // RelicCombatRuleJsonConverter; ToDefinition turns each into a TriggeredProgramDefinition via its trigger.
     public IReadOnlyList<RelicCombatRule> CombatRules { get; init; } = [];
 
+    // Face (c): the relic's standing shop discounts/surcharges, as data. Null for the great majority of relics,
+    // and null is kept out of the wire format so documents written before the field existed round-trip
+    // byte-identically.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ShopPriceRule>? ShopPriceRules { get; init; }
+
     public static RelicData From(RelicDefinition relic)
     {
         ArgumentNullException.ThrowIfNull(relic);
@@ -30,6 +37,7 @@ public sealed record RelicData
             Id = relic.Id.Value,
             DisplayName = relic.DisplayName,
             RunPrograms = relic.RunPrograms,
+            ShopPriceRules = relic.ShopPriceRules.Count > 0 ? relic.ShopPriceRules : null,
         };
     }
 
@@ -39,6 +47,6 @@ public sealed record RelicData
             .Select((rule, i) => RelicCombatTriggers.Get(rule.Trigger).Build(
                 new TriggeredEffectDefinitionId($"{Id}:combat:{i}:{rule.Trigger}"), rule.Program, rule.Priority))
             .ToList();
-        return new RelicDefinition(new RelicId(Id), DisplayName, RunPrograms, contributions);
+        return new RelicDefinition(new RelicId(Id), DisplayName, RunPrograms, contributions, ShopPriceRules);
     }
 }

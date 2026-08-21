@@ -39,6 +39,22 @@ public sealed class EventCombatCounterExpression : IRunExpression<int>
     public int Evaluate(RunEvalContext context) => RunEventFields.ReadCombatCounter(Counter, context.Event);
 }
 
+// "The thing just bought carries tag X" / "…is of kind X". Same shape as the node-tag question: the tag is the
+// question, so it rides on the expression. Valid in a reaction to a shop purchase.
+public sealed class EventShopItemHasTagExpression : IRunExpression<bool>
+{
+    public string Tag { get; }
+    public EventShopItemHasTagExpression(string tag) => Tag = tag;
+    public bool Evaluate(RunEvalContext context) => RunEventFields.ReadShopItemHasTag(Tag, context.Event);
+}
+
+public sealed class EventShopItemIsKindExpression : IRunExpression<bool>
+{
+    public string Kind { get; }
+    public EventShopItemIsKindExpression(string kind) => Kind = kind;
+    public bool Evaluate(RunEvalContext context) => RunEventFields.ReadShopItemIsKind(Kind, context.Event);
+}
+
 // The catalog of readable event fields, keyed by a stable string. Content may register more; the built-in
 // keys cover the standard events. A reader returns null when the event in scope is not the expected type,
 // which surfaces as a clear evaluation error.
@@ -55,6 +71,7 @@ public static class RunEventFields
     public const string CounterNewValue = "counter.newValue";
     public const string CounterDelta = "counter.delta";
     public const string NodeIsCombat = "node.isCombat";
+    public const string ShopPricePaid = "shop.pricePaid";
 
     private static readonly Dictionary<string, Func<IRunEvent, int?>> IntReaders = new();
     private static readonly Dictionary<string, Func<IRunEvent, bool?>> BoolReaders = new();
@@ -75,6 +92,8 @@ public static class RunEventFields
         // relics: When<NodeEnteredRunEvent>(node.isCombat, installNextCombatOpening(rule)). The entered
         // combat node consumes the pending opening itself, so nothing stacks across other node kinds.
         RegisterBool(NodeIsCombat, e => e is NodeEnteredRunEvent n ? n.NodeType == StandardRunIds.CombatNode : null);
+        // What the purchase actually cost after the price rules — the number a refund or a punchcard is about.
+        RegisterInt(ShopPricePaid, e => e is ShopItemPurchasedRunEvent s ? s.PricePaid : null);
     }
 
     public static void RegisterInt(string key, Func<IRunEvent, int?> reader) => IntReaders[key] = reader;
@@ -103,6 +122,16 @@ public static class RunEventFields
         runEvent is CombatResolvedRunEvent combat
             ? combat.Counters is { } counters && counters.TryGetValue(counter, out var value) ? value : 0
             : throw NoMatch("combat.counter", runEvent);
+
+    public static bool ReadShopItemHasTag(string tag, IRunEvent? runEvent) =>
+        runEvent is ShopItemPurchasedRunEvent purchase
+            ? purchase.Tags is { } tags && tags.Contains(tag, StringComparer.Ordinal)
+            : throw NoMatch("shop.itemHasTag", runEvent);
+
+    public static bool ReadShopItemIsKind(string kind, IRunEvent? runEvent) =>
+        runEvent is ShopItemPurchasedRunEvent purchase
+            ? string.Equals(purchase.Kind, kind, StringComparison.Ordinal)
+            : throw NoMatch("shop.itemIsKind", runEvent);
 
     private static InvalidOperationException NoMatch(string key, IRunEvent? runEvent) =>
         new($"Event field '{key}' was evaluated without a matching event in context (was '{runEvent?.GetType().Name ?? "none"}').");
@@ -134,4 +163,9 @@ public static class RunEventValues
     // What the hero tallied inside the fight that just ended — the counter a combat rule kept while it was
     // being played. Valid in a reaction to combatResolved; that is how "5 Gold per Salvage" is written.
     public static IRunExpression<int> CombatCounter(string counter) => new EventCombatCounterExpression(counter);
+
+    // The shop purchase that just happened: what it cost after every price rule, and what it was.
+    public static IRunExpression<int> ShopPricePaid { get; } = new EventIntValueExpression(RunEventFields.ShopPricePaid);
+    public static IRunExpression<bool> ShopItemHasTag(string tag) => new EventShopItemHasTagExpression(tag);
+    public static IRunExpression<bool> ShopItemIsKind(string kind) => new EventShopItemIsKindExpression(kind);
 }

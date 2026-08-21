@@ -179,7 +179,9 @@ public static class RunJson
          .Register("card.hasTag", typeof(CardHasTagExpression))
          .Register("card.isKind", typeof(CardIsKindExpression))
          .Register("event.bool", typeof(EventBoolValueExpression))
-         .Register("event.nodeHasTag", typeof(EventNodeHasTagExpression));
+         .Register("event.nodeHasTag", typeof(EventNodeHasTagExpression))
+         .Register("event.shopItemHasTag", typeof(EventShopItemHasTagExpression))
+         .Register("event.shopItemIsKind", typeof(EventShopItemIsKindExpression));
     }
 
     // Card selectors. Only the card closing is registered (no effect consumes a relic selector yet). The

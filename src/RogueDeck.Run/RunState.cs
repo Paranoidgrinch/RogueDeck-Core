@@ -130,6 +130,13 @@ public sealed class RunState
     public IReadOnlyList<IRunCombatModifier> PendingCombatModifiers => _pendingCombatModifiers;
     public int ActiveRewardModifierCount => _rewardModifiers.Count;
     public IReadOnlyList<RunConsumable> Consumables => ActiveMember.Consumables;
+
+    // What the player is wearing that bends a shop price, in relic order. A DISABLED relic charges nothing:
+    // a discount is a fact about the shelf while the relic works, not an event it already reacted to.
+    public IReadOnlyList<ShopPriceRule> ActiveShopPriceRules =>
+        Relics.Where(relic => relic.Enabled)
+              .SelectMany(relic => relic.Definition.ShopPriceRules)
+              .ToList();
     // The persistent player-controlled board roster (P5c). Empty ⇒ today's single-hero run.
     public IReadOnlyList<RunUnit> Units => _units;
     public IReadOnlyList<IRunEvent> EventHistory => _history;

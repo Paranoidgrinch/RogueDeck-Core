@@ -52,7 +52,15 @@ public sealed record EventChoiceMadeRunEvent(NodeId NodeId, string ChoiceId) : I
 
 // A shop node's transactions (party deckbuilding follow-up / shop arc). ShopItemPurchased lets a relic react to
 // a purchase ("on buy, …"); ShopRerolled marks the stock being refreshed.
-public sealed record ShopItemPurchasedRunEvent(NodeId NodeId, string ItemId) : IRunEvent;
+// A purchase, as the shelf saw it: WHAT was bought (the entry's kind and tags) and what was actually PAID after
+// every price rule bent the price. A refund relic ("refund up to 15 Gold actually paid") cannot be written from
+// the item id alone, and nothing downstream can tell a card from a relic by looking at the effects.
+public sealed record ShopItemPurchasedRunEvent(
+    NodeId NodeId,
+    string ItemId,
+    string? Kind = null,
+    IReadOnlyList<string>? Tags = null,
+    int PricePaid = 0) : IRunEvent;
 
 public sealed record ShopRerolledRunEvent(NodeId NodeId) : IRunEvent;
 

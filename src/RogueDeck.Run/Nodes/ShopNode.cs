@@ -14,7 +14,28 @@ public sealed record ShopEntry(
     RunResourceId Currency,
     int Price,
     IReadOnlyList<IRunEffectRequest> Payload,
-    string? TextKey = null);
+    string? TextKey = null,
+    // What this thing IS, for anything that prices or reacts to it: the coarse Kind ("card"/"relic"/…) and the
+    // finer Tags ("normal", "deed", "queue"). The effects behind a purchase are opaque — nothing can tell a card
+    // from a relic by looking at them — so a relic that discounts "a Normal Relic" needs the shelf to say so.
+    // Null on both ⇒ an unlabelled entry, which matches only a rule that asks nothing; null stays out of the
+    // wire format so shops authored before labels existed round-trip byte-identically.
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    string? Kind = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<string>? Tags = null);
+
+// The coarse sorts a shop entry can declare. Content is free to use others; these are the ones the standard
+// shop services and the price rules in the design docs talk about.
+public static class ShopEntryKinds
+{
+    public const string Card = "card";
+    public const string Relic = "relic";
+    public const string Consumable = "consumable";
+    public const string Service = "service";
+}
 
 // A paid reroll: spend Price of Currency to redraw the shop's display from its offer pool.
 public sealed record ShopReroll(RunResourceId Currency, int Price);
@@ -29,13 +50,26 @@ public sealed record ShopService(
     int Price,
     IReadOnlyList<IRunEffectRequest> Effects,
     bool Repeatable = false,
-    string? TextKey = null)
+    string? TextKey = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    string? Kind = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<string>? Tags = null)
 {
-    // The classic card-removal service: pay to remove one deck card the player chooses.
+    // A service is a "service" unless it says otherwise, so a price rule can name the sort without every
+    // authored service having to repeat it.
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string EffectiveKind => Kind ?? ShopEntryKinds.Service;
+
+    // The classic card-removal service: pay to remove one deck card the player chooses. Tagged "removal" because
+    // a whole family of relics prices card removal specifically.
     public static ShopService RemoveCard(RunResourceId currency, int price, string id = "remove-card") =>
         new(id, currency, price,
             new IRunEffectRequest[] { new RemoveCardsRunEffect(RunSelectors.DeckCards.ChooseByPlayer(1, "remove a card")) },
-            TextKey: "event.shop.remove-card");
+            TextKey: "event.shop.remove-card",
+            Tags: ["removal"]);
 }
 
 // A shop's authored definition (a serializable node payload). Offers is the pool; OfferCount how many are shown at
@@ -75,14 +109,20 @@ public sealed class ShopNodeResolver : INodeResolver
         var shop = ResolveShop(node);
 
         var run = context.Run;
+        // The shelf is priced ONCE per display, not per round: a discount that marks one relic has to keep
+        // marking that relic all visit, and a price that flickered as the player browsed would be unreadable.
+        // A reroll draws a new shelf and prices it again; the once-per-visit rules stay spent across it.
+        var rules = run.ActiveShopPriceRules;
+        var spentRules = new HashSet<int>();
         var display = Draw(run, shop);
+        var prices = PriceShelf(run, shop, display, rules, spentRules);
         var soldItems = new HashSet<string>(StringComparer.Ordinal);
         var usedServices = new HashSet<string>(StringComparer.Ordinal);
         var purchases = 0;
 
         for (var round = 0; round < _maxRounds; round++)
         {
-            var choices = BuildChoices(shop, display, soldItems, usedServices);
+            var choices = BuildChoices(shop, display, soldItems, usedServices, prices);
             var available = choices.Where(choice => choice.IsAvailable(run)).ToList();
             var situation = new EventSituation("shop", "event.shop", available);
 
@@ -107,6 +147,7 @@ public sealed class ShopNodeResolver : INodeResolver
                 run.RaiseEvent(new ShopRerolledRunEvent(node.Id));
                 context.ResolvePendingEffects();
                 display = Draw(run, shop);
+                prices = PriceShelf(run, shop, display, rules, spentRules);
                 soldItems.Clear(); // a fresh display; used-up services stay used
                 continue;
             }
@@ -119,8 +160,14 @@ public sealed class ShopNodeResolver : INodeResolver
                 usedServices.Add(chosen.Id);
 
             purchases++;
-            run.AddLog(StandardRunLogTypes.ShopPurchase, $"Node '{node.Id}': bought '{chosen.Id}'.");
-            run.RaiseEvent(new ShopItemPurchasedRunEvent(node.Id, chosen.Id));
+            var item = display.FirstOrDefault(entry => entry.Id == chosen.Id);
+            var paid = prices.TryGetValue(chosen.Id, out var price) ? price : 0;
+            run.AddLog(StandardRunLogTypes.ShopPurchase, $"Node '{node.Id}': bought '{chosen.Id}' for {paid}.");
+            run.RaiseEvent(new ShopItemPurchasedRunEvent(
+                node.Id, chosen.Id,
+                item?.Kind ?? service?.EffectiveKind,
+                item?.Tags ?? service?.Tags,
+                paid));
             context.ResolvePendingEffects();
         }
 
@@ -130,8 +177,34 @@ public sealed class ShopNodeResolver : INodeResolver
     // The choices offered this round: every not-yet-sold display item, every still-available service, an optional
     // reroll, and leave. Affordability is folded into IsAvailable (like an event), so an unaffordable choice is
     // simply not shown.
+    // Price every thing on the shelf against the rules the player is wearing — the items drawn for this display
+    // and, once, the services (which do not reroll).
+    private static Dictionary<string, int> PriceShelf(
+        RunState run,
+        ShopDefinition shop,
+        IReadOnlyList<ShopEntry> display,
+        IReadOnlyList<ShopPriceRule> rules,
+        HashSet<int> spentRules)
+    {
+        var prices = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var item in display)
+            prices[item.Id] = ShopPricing.Adjust(
+                item.Price, item.Id, item.Kind, item.Tags, rules, run, spentRules);
+
+        if (shop.Services is { } services)
+            foreach (var service in services)
+                prices[service.Id] = ShopPricing.Adjust(
+                    service.Price, service.Id, service.EffectiveKind, service.Tags, rules, run, spentRules);
+
+        return prices;
+    }
+
     private static List<EventChoice> BuildChoices(
-        ShopDefinition shop, IReadOnlyList<ShopEntry> display, HashSet<string> soldItems, HashSet<string> usedServices)
+        ShopDefinition shop,
+        IReadOnlyList<ShopEntry> display,
+        HashSet<string> soldItems,
+        HashSet<string> usedServices,
+        IReadOnlyDictionary<string, int> prices)
     {
         var choices = new List<EventChoice>();
 
@@ -143,7 +216,7 @@ public sealed class ShopNodeResolver : INodeResolver
                 item.Id,
                 item.Payload,
                 TextKey: item.TextKey,
-                Costs: new[] { PayCost(item.Currency, item.Price) }));
+                Costs: new[] { PayCost(item.Currency, prices[item.Id]) }));
         }
 
         if (shop.Services is { } services)
@@ -155,7 +228,7 @@ public sealed class ShopNodeResolver : INodeResolver
                     service.Id,
                     service.Effects,
                     TextKey: service.TextKey,
-                    Costs: new[] { PayCost(service.Currency, service.Price) }));
+                    Costs: new[] { PayCost(service.Currency, prices[service.Id]) }));
             }
 
         if (shop.Reroll is { } reroll)
