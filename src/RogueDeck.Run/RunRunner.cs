@@ -171,7 +171,7 @@ public sealed class RunRunner
     private bool ResolveNode(RunState run, NodeResolveContext context, Node node)
     {
         run.AddLog(StandardRunLogTypes.NodeEntered, $"Entered node '{node.Id}' ({node.Type}).");
-        run.RaiseEvent(new NodeEnteredRunEvent(node.Id, node.Type));
+        run.RaiseEvent(new NodeEnteredRunEvent(node.Id, node.Type, node.Tags));
         // Node-entered reactions resolve BEFORE the node itself does: a relic priming the fight it is
         // about to enter ("at the start of each combat…" via node.isCombat + a pending combat opening)
         // must land in THIS node's combat, not the next one.

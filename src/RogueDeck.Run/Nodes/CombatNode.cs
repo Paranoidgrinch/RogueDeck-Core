@@ -276,7 +276,7 @@ public sealed class CombatNodeResolver : INodeResolver
         run.AddLog(StandardRunLogTypes.CombatResolved,
             $"Node '{node.Id}': {result.Result}, hero {result.HeroHpRemaining} HP (took {damageTaken}).");
         run.RaiseEvent(new CombatResolvedRunEvent(
-            node.Id, result.Result, result.HeroHpRemaining, damageTaken));
+            node.Id, result.Result, result.HeroHpRemaining, damageTaken, node.Tags));
 
         // Post-combat reward: on a victory, offer the node's reward (if any). Enqueued AFTER the resolved-event so a
         // relic reacting to the win queues first; the player then picks via the run's entity chooser (headless takes

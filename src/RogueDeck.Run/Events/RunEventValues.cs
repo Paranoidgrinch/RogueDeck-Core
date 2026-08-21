@@ -18,6 +18,17 @@ public sealed class EventBoolValueExpression : IRunExpression<bool>
     public bool Evaluate(RunEvalContext context) => RunEventFields.ReadBool(FieldKey, context.Event);
 }
 
+// "The node this event happened at carries tag X." Not a key-based field like the ones above: the tag is the
+// question, so it is a property of the expression rather than of the registry. Reads any INodeTaggedRunEvent
+// (nodeEntered, combatResolved), and — like every other event field — fails loudly when the event in scope is
+// not one, so a mis-wired reaction says so instead of silently answering false.
+public sealed class EventNodeHasTagExpression : IRunExpression<bool>
+{
+    public string Tag { get; }
+    public EventNodeHasTagExpression(string tag) => Tag = tag;
+    public bool Evaluate(RunEvalContext context) => RunEventFields.ReadNodeHasTag(Tag, context.Event);
+}
+
 // The catalog of readable event fields, keyed by a stable string. Content may register more; the built-in
 // keys cover the standard events. A reader returns null when the event in scope is not the expected type,
 // which surfaces as a clear evaluation error.
@@ -73,6 +84,11 @@ public static class RunEventFields
         return reader(runEvent!) ?? throw NoMatch(key, runEvent);
     }
 
+    public static bool ReadNodeHasTag(string tag, IRunEvent? runEvent) =>
+        runEvent is INodeTaggedRunEvent node
+            ? node.NodeTags.Contains(tag, StringComparer.Ordinal)
+            : throw NoMatch("node.hasTag", runEvent);
+
     private static InvalidOperationException NoMatch(string key, IRunEvent? runEvent) =>
         new($"Event field '{key}' was evaluated without a matching event in context (was '{runEvent?.GetType().Name ?? "none"}').");
 }
@@ -95,4 +111,8 @@ public static class RunEventValues
 
     public static IRunExpression<int> CounterNewValue { get; } = new EventIntValueExpression(RunEventFields.CounterNewValue);
     public static IRunExpression<int> CounterDelta { get; } = new EventIntValueExpression(RunEventFields.CounterDelta);
+
+    // The role the node was generated for — MapNodeTags.Elite, .Shop, .Treasure, … Valid in a reaction to
+    // nodeEntered or combatResolved; that is how "after you defeat an Elite" is written.
+    public static IRunExpression<bool> NodeHasTag(string tag) => new EventNodeHasTagExpression(tag);
 }

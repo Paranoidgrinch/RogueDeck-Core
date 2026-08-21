@@ -10,7 +10,19 @@ public interface IRunEvent
 
 public sealed record RunStartedRunEvent(RunId RunId) : IRunEvent;
 
-public sealed record NodeEnteredRunEvent(NodeId NodeId, NodeType NodeType) : IRunEvent;
+// A run event that happened AT a map node, so it can carry the node's role tags ("elite", "shop", …). The
+// tags are the only thing that survives realization — a generated elite is an ordinary combat node — so a
+// relic that pays "after an Elite" reads them off the event rather than re-finding the node on the map.
+public interface INodeTaggedRunEvent : IRunEvent
+{
+    IReadOnlyList<string> NodeTags { get; }
+}
+
+public sealed record NodeEnteredRunEvent(NodeId NodeId, NodeType NodeType, IReadOnlyList<string>? Tags = null)
+    : IRunEvent, INodeTaggedRunEvent
+{
+    IReadOnlyList<string> INodeTaggedRunEvent.NodeTags => Tags ?? [];
+}
 
 // Raised on a branching map when the player (or the deterministic default) picks which node to walk to next —
 // including the initial entry node. NodeId is the chosen node. Never raised on a linear map (no forks).
@@ -26,8 +38,12 @@ public sealed record CombatResolvedRunEvent(
     NodeId NodeId,
     CombatResult Result,
     int HeroHpRemaining,
-    int DamageTaken
-) : IRunEvent;
+    int DamageTaken,
+    IReadOnlyList<string>? Tags = null
+) : IRunEvent, INodeTaggedRunEvent
+{
+    IReadOnlyList<string> INodeTaggedRunEvent.NodeTags => Tags ?? [];
+}
 
 public sealed record EventChoiceMadeRunEvent(NodeId NodeId, string ChoiceId) : IRunEvent;
 
