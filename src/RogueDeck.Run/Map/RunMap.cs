@@ -78,6 +78,32 @@ public sealed class RunMap
         return Nodes.Where(node => !hasIncoming.Contains(node.Id)).Select(node => node.Id).ToList();
     }
 
+    // How far each node is from where a walk begins, as the fewest edges that reach it. This is the map's own
+    // notion of a ROW: these maps are layered, but nothing records the rows — the layout is presentational and
+    // the generators do not even emit it — so the shape has to be read back out of the edges.
+    // A node no walk can reach has no depth at all and is simply absent.
+    public IReadOnlyDictionary<NodeId, int> Depths()
+    {
+        var depths = new Dictionary<NodeId, int>();
+        if (Edges.Count == 0)
+            return depths;
+
+        var frontier = new Queue<NodeId>();
+        foreach (var id in EntryNodeIds.Count > 0 ? EntryNodeIds : RootIds())
+            if (depths.TryAdd(id, 0))
+                frontier.Enqueue(id);
+
+        while (frontier.Count > 0)
+        {
+            var current = frontier.Dequeue();
+            var next = depths[current] + 1;
+            foreach (var id in SuccessorIds(current))
+                if (depths.TryAdd(id, next))
+                    frontier.Enqueue(id);
+        }
+        return depths;
+    }
+
     public bool TryGetNode(NodeId id, out Node? node)
     {
         node = Nodes.FirstOrDefault(candidate => candidate.Id == id);

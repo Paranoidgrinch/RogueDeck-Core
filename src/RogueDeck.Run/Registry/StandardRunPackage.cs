@@ -46,6 +46,7 @@ public sealed class StandardRunPackage : IRunPackage
             .RegisterEffectHandler(new SetFlagRunEffectHandler())
             .RegisterEffectHandler(new IncrementCounterRunEffectHandler())
             .RegisterEffectHandler(new ComputedCounterRunEffectHandler())
+            .RegisterEffectHandler(new GrantUnrestrictedStepRunEffectHandler())
             .RegisterEffectHandler(new AddShopStockRunEffectHandler())
             .RegisterEffectHandler(new RestockShopStockRunEffectHandler())
             .RegisterEffectHandler(new SetCounterRunEffectHandler())

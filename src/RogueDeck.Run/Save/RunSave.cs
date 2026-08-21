@@ -73,6 +73,12 @@ public sealed record RunSaveData(
     // but its encounter choices depend on the starting loadout). Null ⇒ an authored map, nothing to regenerate.
     // An init property with a default, so older saves and authored-map runs load unchanged.
     public int? MapGenerationLoadout { get; init; }
+
+    // Steps off the paths the player still holds. Kept out of the wire format at zero, so a save from before
+    // the relic that grants them round-trips byte-identically.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public int UnrestrictedSteps { get; init; }
 }
 
 // Serialize a run save to/from JSON — the save file. Plain values only (ids / ints / strings / an enum), so no

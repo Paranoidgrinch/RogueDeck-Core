@@ -5,6 +5,21 @@ namespace RogueDeck.Run;
 // programs observe a uniform stream. These are the primitives that memory-driven events read back through
 // RunExpr.Flag / RunExpr.Counter.
 
+// Hand the player a step that ignores the paths — "once per Act, reach any legal node in the next row". The
+// charge waits until it is actually used, so a player who walks an ordinary edge still has it.
+public sealed record GrantUnrestrictedStepRunEffect(int Steps = 1) : IRunEffectRequest;
+
+public sealed class GrantUnrestrictedStepRunEffectHandler : RunEffectHandler<GrantUnrestrictedStepRunEffect>
+{
+    protected override void Resolve(
+        RunState run, RunDefinitionRegistry registry, GrantUnrestrictedStepRunEffect request)
+    {
+        run.GrantUnrestrictedStep(request.Steps);
+        run.AddLog(StandardRunLogTypes.MapChanged,
+            $"Gained {request.Steps} step(s) off the paths (now {run.UnrestrictedSteps}).");
+    }
+}
+
 public sealed record SetFlagRunEffect(RunFlagId Flag, bool Value = true) : IRunEffectRequest;
 
 public sealed class SetFlagRunEffectHandler : RunEffectHandler<SetFlagRunEffect>

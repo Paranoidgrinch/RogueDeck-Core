@@ -377,6 +377,17 @@ public sealed class RunState
     // Enter a node on a branching-map walk: record it as current and mark it visited (B1).
     public void AdvanceToNode(NodeId nodeId)
     {
+        // Spend an unrestricted step only if this walk could not have been made along an edge. Asked BEFORE the
+        // move, because afterwards there is no way to tell a shortcut from an ordinary step.
+        if (UnrestrictedSteps > 0
+            && CurrentNodeId is { } from
+            && Map.Edges.Count > 0
+            && !Map.SuccessorIds(from).Contains(nodeId))
+        {
+            UnrestrictedSteps--;
+            AddLog(StandardRunLogTypes.NodeChosen, $"Crossed to '{nodeId}' off the paths.");
+        }
+
         CurrentNodeId = nodeId;
         _visitedNodes.Add(nodeId);
     }
@@ -423,7 +434,7 @@ public sealed class RunState
             Programs: _installedPrograms
                 .Select(p => new RunProgramSaveData(p.Id.Value, p.SourceId!.Value.Value)).ToArray(),
             NextProgramSeq: _nextProgramSeq)
-        { MapGenerationLoadout = GeneratedMapLoadout };
+        { MapGenerationLoadout = GeneratedMapLoadout, UnrestrictedSteps = UnrestrictedSteps };
     }
 
     private static RunMemberSaveData SnapshotMember(PartyMember member) => new(
@@ -495,6 +506,7 @@ public sealed class RunState
         // runtime instance id is preserved verbatim (a stateless rule references nothing across the save), and
         // the program-id counter is restored so any later mint continues the sequence collision-free.
         run._nextProgramSeq = data.NextProgramSeq;
+        run.UnrestrictedSteps = data.UnrestrictedSteps;
         foreach (var program in data.Programs)
         {
             var sourceId = new RunProgramSourceId(program.SourceId);
@@ -617,7 +629,33 @@ public sealed class RunState
         foreach (var id in Map.SuccessorIds(current))
             if (!HasVisited(id) && Map.TryGetNode(id, out var node))
                 reachable.Add(node!);
+
+        if (UnrestrictedSteps > 0)
+            foreach (var node in NextRowNodes(current))
+                if (!reachable.Contains(node))
+                    reachable.Add(node);
+
         return reachable;
+    }
+
+    // A step that ignores the paths: while one is held, every unvisited node in the next ROW is reachable, not
+    // only the ones an edge leads to. A charge is spent only when the shortcut is actually taken (see
+    // AdvanceToNode) — walking an ordinary edge keeps it for later, which is what "once per Act" has to mean.
+    public int UnrestrictedSteps { get; private set; }
+
+    public void GrantUnrestrictedStep(int steps = 1) => UnrestrictedSteps = Math.Max(0, UnrestrictedSteps + steps);
+
+    private IReadOnlyList<Node> NextRowNodes(NodeId current)
+    {
+        var depths = Map.Depths();
+        if (!depths.TryGetValue(current, out var depth))
+            return [];
+
+        var row = new List<Node>();
+        foreach (var node in Map.Nodes)
+            if (!HasVisited(node.Id) && depths.TryGetValue(node.Id, out var d) && d == depth + 1)
+                row.Add(node);
+        return row;
     }
 
     // A deterministic, run-scoped random draw mirroring CombatRandom's hashing so a seed reproduces a run.
