@@ -72,6 +72,7 @@ public static class RunEventFields
     public const string CounterDelta = "counter.delta";
     public const string NodeIsCombat = "node.isCombat";
     public const string ShopPricePaid = "shop.pricePaid";
+    public const string ShopCurrencyPaid = "shop.currencyPaid";
 
     private static readonly Dictionary<string, Func<IRunEvent, int?>> IntReaders = new();
     private static readonly Dictionary<string, Func<IRunEvent, bool?>> BoolReaders = new();
@@ -94,6 +95,9 @@ public static class RunEventFields
         RegisterBool(NodeIsCombat, e => e is NodeEnteredRunEvent n ? n.NodeType == StandardRunIds.CombatNode : null);
         // What the purchase actually cost after the price rules — the number a refund or a punchcard is about.
         RegisterInt(ShopPricePaid, e => e is ShopItemPurchasedRunEvent s ? s.PricePaid : null);
+        // …and how much of the currency itself actually left the purse: credit and debt settle a price without
+        // any Gold being spent, and the refund relics are about Gold actually paid.
+        RegisterInt(ShopCurrencyPaid, e => e is ShopItemPurchasedRunEvent s ? s.CurrencyPaid : null);
     }
 
     public static void RegisterInt(string key, Func<IRunEvent, int?> reader) => IntReaders[key] = reader;
@@ -166,6 +170,7 @@ public static class RunEventValues
 
     // The shop purchase that just happened: what it cost after every price rule, and what it was.
     public static IRunExpression<int> ShopPricePaid { get; } = new EventIntValueExpression(RunEventFields.ShopPricePaid);
+    public static IRunExpression<int> ShopCurrencyPaid { get; } = new EventIntValueExpression(RunEventFields.ShopCurrencyPaid);
     public static IRunExpression<bool> ShopItemHasTag(string tag) => new EventShopItemHasTagExpression(tag);
     public static IRunExpression<bool> ShopItemIsKind(string kind) => new EventShopItemIsKindExpression(kind);
 }

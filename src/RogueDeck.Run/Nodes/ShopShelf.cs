@@ -26,6 +26,8 @@ public sealed class ShopShelf
     private readonly Dictionary<string, IReadOnlyList<string>> _extraTags = new(StringComparer.Ordinal);
     private readonly Dictionary<string, HashSet<string>> _replaced = new(StringComparer.Ordinal);
     private readonly List<ShopService> _services;
+    private readonly IReadOnlyList<ShopCreditSource> _credit;
+    private readonly IReadOnlyList<ShopDebtTerms> _debt;
 
     public ShopShelf(RunState run, ShopDefinition shop)
     {
@@ -33,6 +35,8 @@ public sealed class ShopShelf
         ArgumentNullException.ThrowIfNull(shop);
         _run = run;
         _rules = run.ActiveShopPriceRules;
+        _credit = run.ActiveShopCreditSources;
+        _debt = run.ActiveShopDebtTerms;
 
         // The services on offer are the shop's own plus whatever the player is wearing that brings one along
         // (a relic that sells you tea in every shop). A worn service the shop already lists is not doubled.
@@ -55,6 +59,13 @@ public sealed class ShopShelf
 
         Fill();
     }
+
+    // Nothing but the currency settles a price unless the player is carrying something that says otherwise —
+    // and while nothing does, the till works exactly as it always did.
+    public bool HasPaymentTerms => _credit.Count > 0 || _debt.Count > 0;
+
+    public ShopPayment PaymentFor(RunResourceId currency, int price) =>
+        ShopPayment.For(_run, currency, price, _credit, _debt);
 
     public IReadOnlyList<ShopSlot> Slots => _slots;
     public IReadOnlyList<ShopService> Services => _services;

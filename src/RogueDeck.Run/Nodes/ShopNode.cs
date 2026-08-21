@@ -167,7 +167,8 @@ public sealed class ShopNodeResolver : INodeResolver
             for (var round = 0; round < _maxRounds; round++)
             {
                 shelf.Fill();
-                var choices = BuildChoices(shop, shelf);
+                var payments = new Dictionary<string, ShopPayment>(StringComparer.Ordinal);
+                var choices = BuildChoices(shop, shelf, payments);
                 var available = choices.Where(choice => choice.IsAvailable(run)).ToList();
                 var situation = new EventSituation("shop", "event.shop", available);
 
@@ -200,6 +201,9 @@ public sealed class ShopNodeResolver : INodeResolver
                 var service = shelf.FindService(chosen.Id);
                 var slot = shelf.FindSlot(chosen.Id);
                 var paid = slot?.Price ?? (service is null ? 0 : shelf.PriceOf(service));
+                // Without payment terms the currency settles the whole price, which is what every shop did
+                // before credit and debt existed.
+                var currencyPaid = payments.TryGetValue(chosen.Id, out var payment) ? payment.CurrencyPaid : paid;
                 if (service is null)
                     shelf.MarkSold(chosen.Id);
                 else
@@ -211,7 +215,7 @@ public sealed class ShopNodeResolver : INodeResolver
                     node.Id, chosen.Id,
                     slot?.Entry.Kind ?? service?.EffectiveKind,
                     slot?.Entry.Tags ?? service?.Tags,
-                    paid));
+                    paid, currencyPaid));
                 context.ResolvePendingEffects();
             }
         }
@@ -226,7 +230,8 @@ public sealed class ShopNodeResolver : INodeResolver
     // The choices offered this round: everything still standing on the shelf, every still-available service, an
     // optional reroll, and leave. Affordability is folded into IsAvailable (like an event), so an unaffordable
     // choice is simply not shown.
-    private static List<EventChoice> BuildChoices(ShopDefinition shop, ShopShelf shelf)
+    private static List<EventChoice> BuildChoices(
+        ShopDefinition shop, ShopShelf shelf, Dictionary<string, ShopPayment> payments)
     {
         var choices = new List<EventChoice>();
 
@@ -235,7 +240,7 @@ public sealed class ShopNodeResolver : INodeResolver
                 slot.Entry.Id,
                 slot.Entry.Payload,
                 TextKey: slot.Entry.TextKey,
-                Costs: new[] { PayCost(slot.Entry.Currency, slot.Price) }));
+                Costs: new[] { Till(shelf, slot.Entry.Id, slot.Entry.Currency, slot.Price, payments) }));
 
         foreach (var service in shelf.Services)
         {
@@ -245,7 +250,7 @@ public sealed class ShopNodeResolver : INodeResolver
                 service.Id,
                 service.Effects,
                 TextKey: service.TextKey,
-                Costs: new[] { PayCost(service.Currency, shelf.PriceOf(service)) }));
+                Costs: new[] { Till(shelf, service.Id, service.Currency, shelf.PriceOf(service), payments) }));
         }
 
         if (shop.Reroll is { } reroll)
@@ -273,8 +278,25 @@ public sealed class ShopNodeResolver : INodeResolver
             $"Shop node '{node.Id}' payload must be a ShopDefinition or a ShopRef.", nameof(node)),
     };
 
-    // A resource cost: affordable when the balance covers it, paid by deducting it — the same shape as an event's
-    // PayResource, so a purchase serialises and re-checks affordability uniformly.
+    // What the till asks for one thing. With no payment terms in play this is the plain resource cost the shop
+    // has always used — affordable when the balance covers it, paid by deducting it. Once the player carries
+    // credit or is allowed to run a tab, the split is worked out against the state this round was built from,
+    // and the choice offers exactly that settlement.
+    private static RunCost Till(
+        ShopShelf shelf,
+        string id,
+        RunResourceId currency,
+        int price,
+        Dictionary<string, ShopPayment> payments)
+    {
+        if (!shelf.HasPaymentTerms)
+            return PayCost(currency, price);
+
+        var payment = shelf.PaymentFor(currency, price);
+        payments[id] = payment;
+        return new RunCost(new RunConstantBoolExpression(payment.Affordable), payment.Effects);
+    }
+
     private static RunCost PayCost(RunResourceId currency, int price) =>
         new(RunExpr.HasResource(currency, price), new[] { new ChangeResourceRunEffect(currency, -price) });
 

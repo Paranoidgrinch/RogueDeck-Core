@@ -60,7 +60,11 @@ public sealed record ShopItemPurchasedRunEvent(
     string ItemId,
     string? Kind = null,
     IReadOnlyList<string>? Tags = null,
-    int PricePaid = 0) : IRunEvent;
+    // What the thing COST after every price rule, and how much of the currency itself actually left the purse.
+    // The two differ once credit or debt settles part of a price, and "a share of the Gold actually paid" — the
+    // refund and warranty relics — is about the second one.
+    int PricePaid = 0,
+    int CurrencyPaid = 0) : IRunEvent;
 
 public sealed record ShopRerolledRunEvent(NodeId NodeId) : IRunEvent;
 

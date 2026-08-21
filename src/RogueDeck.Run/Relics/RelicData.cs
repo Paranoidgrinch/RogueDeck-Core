@@ -34,6 +34,15 @@ public sealed record RelicData
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<ShopService>? ShopServices { get; init; }
 
+    // …and what may settle a price besides the currency itself. Same null-is-omitted bargain.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ShopCreditSource>? ShopCreditSources { get; init; }
+
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ShopDebtTerms>? ShopDebtTerms { get; init; }
+
     public static RelicData From(RelicDefinition relic)
     {
         ArgumentNullException.ThrowIfNull(relic);
@@ -49,6 +58,8 @@ public sealed record RelicData
             ShopPriceRules = relic.ShopPriceRules.Count > 0 ? relic.ShopPriceRules : null,
             ShopStockGrants = relic.ShopStockGrants.Count > 0 ? relic.ShopStockGrants : null,
             ShopServices = relic.ShopServices.Count > 0 ? relic.ShopServices : null,
+            ShopCreditSources = relic.ShopCreditSources.Count > 0 ? relic.ShopCreditSources : null,
+            ShopDebtTerms = relic.ShopDebtTerms.Count > 0 ? relic.ShopDebtTerms : null,
         };
     }
 
@@ -60,6 +71,6 @@ public sealed record RelicData
             .ToList();
         return new RelicDefinition(
             new RelicId(Id), DisplayName, RunPrograms, contributions,
-            ShopPriceRules, ShopStockGrants, ShopServices);
+            ShopPriceRules, ShopStockGrants, ShopServices, ShopCreditSources, ShopDebtTerms);
     }
 }

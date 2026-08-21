@@ -35,10 +35,11 @@ public sealed class TriggeredRunEffect<TEvent> : ITriggeredRunEffectDefinition
 //   (b) CombatContributions — triggered programs injected into a fight when a combat node spawns. The hook
 //       exists so the design is honest about relics that reach into combat; wiring it through the combat
 //       bridge is a deferred slice.
-//   (c) ShopPriceRules / ShopStockGrants / ShopServices — standing facts about a shop while the relic is worn:
-//       what it charges, what extra stock it puts out, and what extra services it offers. None of these is an
-//       event a relic reacts to, so the shop ASKS what the player is wearing when it builds its shelf. That
-//       also means none of them needs save state of its own: relics restore by id.
+//   (c) The shop faces — ShopPriceRules / ShopStockGrants / ShopServices / ShopCreditSources / ShopDebtTerms:
+//       standing facts about a shop while the relic is worn — what it charges, what extra stock it puts out,
+//       what extra services it offers, and what may settle a price besides the currency itself. None of these
+//       is an event a relic reacts to, so the shop ASKS what the player is wearing when it builds its shelf.
+//       That also means none of them needs save state of its own: relics restore by id.
 public sealed class RelicDefinition
 {
     public RelicId Id { get; }
@@ -48,6 +49,8 @@ public sealed class RelicDefinition
     public IReadOnlyList<ShopPriceRule> ShopPriceRules { get; }
     public IReadOnlyList<ShopStockGrant> ShopStockGrants { get; }
     public IReadOnlyList<ShopService> ShopServices { get; }
+    public IReadOnlyList<ShopCreditSource> ShopCreditSources { get; }
+    public IReadOnlyList<ShopDebtTerms> ShopDebtTerms { get; }
 
     public RelicDefinition(
         RelicId id,
@@ -56,7 +59,9 @@ public sealed class RelicDefinition
         IReadOnlyList<ITriggeredEffectDefinition>? combatContributions = null,
         IReadOnlyList<ShopPriceRule>? shopPriceRules = null,
         IReadOnlyList<ShopStockGrant>? shopStockGrants = null,
-        IReadOnlyList<ShopService>? shopServices = null)
+        IReadOnlyList<ShopService>? shopServices = null,
+        IReadOnlyList<ShopCreditSource>? shopCreditSources = null,
+        IReadOnlyList<ShopDebtTerms>? shopDebtTerms = null)
     {
         if (string.IsNullOrWhiteSpace(displayName))
             throw new ArgumentException("Relic display name cannot be empty.", nameof(displayName));
@@ -68,6 +73,8 @@ public sealed class RelicDefinition
         ShopPriceRules = shopPriceRules ?? Array.Empty<ShopPriceRule>();
         ShopStockGrants = shopStockGrants ?? Array.Empty<ShopStockGrant>();
         ShopServices = shopServices ?? Array.Empty<ShopService>();
+        ShopCreditSources = shopCreditSources ?? Array.Empty<ShopCreditSource>();
+        ShopDebtTerms = shopDebtTerms ?? Array.Empty<ShopDebtTerms>();
     }
 }
 

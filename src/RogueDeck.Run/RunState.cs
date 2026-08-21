@@ -149,6 +149,17 @@ public sealed class RunState
               .SelectMany(relic => relic.Definition.ShopServices)
               .ToList();
 
+    // …and what it lets the player settle a price with besides the currency itself.
+    public IReadOnlyList<ShopCreditSource> ActiveShopCreditSources =>
+        Relics.Where(relic => relic.Enabled)
+              .SelectMany(relic => relic.Definition.ShopCreditSources)
+              .ToList();
+
+    public IReadOnlyList<ShopDebtTerms> ActiveShopDebtTerms =>
+        Relics.Where(relic => relic.Enabled)
+              .SelectMany(relic => relic.Definition.ShopDebtTerms)
+              .ToList();
+
     // The shelf of the shop the player is standing in, for as long as the visit lasts. The run holds it so an
     // EFFECT can reach it — "add one more relic to this shop" resolves through the ordinary effect processor,
     // long after the resolver drew the shelf. Null everywhere except inside a shop node.
