@@ -15,6 +15,9 @@ public class SelectedStatusTargetingTests
     private static readonly StatusDefinitionId PoisonId = new("test.debuff_poison");
     private static readonly StatusDefinitionId BurnId = new("test.debuff_burn");
 
+    // Source-bound, so each application is its own instance carrying its own source — the shape Overdue needs.
+    private static readonly StatusDefinitionId OverdueId = new("test.debuff_overdue");
+
     private sealed record Ctx;
 
     [Fact]
@@ -170,6 +173,66 @@ public class SelectedStatusTargetingTests
         new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
     }
 
+    // A source-bound status is the substrate for a threshold each enemy owns on the shared player — "2 Overdue
+    // from the same source". A rule that fires has to spend ITS OWN stacks: polarity alone would let it eat
+    // another enemy's, and every debuff on the player is a candidate.
+    [Fact]
+    public void A_pick_can_be_narrowed_to_one_kind_of_status()
+    {
+        var registry = CreateRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        ApplyStatus(combat, registry, GoblinId, PoisonId, 3);
+        ApplyStatus(combat, registry, GoblinId, BurnId, 2);
+
+        RunRemoveSelected(combat, registry,
+            new StatusSelectionSpec(StatusPolarityFilter.Debuff) { Definition = BurnId });
+
+        var remaining = Assert.Single(combat.GetCombatant(GoblinId).Statuses);
+        Assert.Equal(PoisonId, remaining.DefinitionId); // the named one went, its neighbour stayed
+    }
+
+    [Fact]
+    public void A_pick_can_be_narrowed_to_what_the_acting_source_put_there()
+    {
+        var registry = CreateRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        ApplyStatusFrom(combat, registry, GoblinId, OverdueId, 3, HeroId);   // mine
+        ApplyStatusFrom(combat, registry, GoblinId, OverdueId, 2, GoblinId); // somebody else's
+
+        RunRemoveSelected(combat, registry,
+            new StatusSelectionSpec(StatusPolarityFilter.Debuff) { Definition = OverdueId, FromActingSource = true });
+
+        // The hero is the acting source in this harness, so its own three-stack instance went and the other
+        // combatant's two-stack instance is untouched.
+        var remaining = Assert.Single(combat.GetCombatant(GoblinId).Statuses);
+        Assert.Equal(2, remaining.Stacks);
+        Assert.Equal(GoblinId, remaining.SourceCombatantId);
+    }
+
+    // Asking for "mine" when nothing here is mine must match NOTHING, not everything.
+    [Fact]
+    public void Asking_for_the_sources_own_matches_nothing_when_none_is_its_own()
+    {
+        var registry = CreateRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        ApplyStatusFrom(combat, registry, GoblinId, OverdueId, 3, GoblinId);
+
+        RunRemoveSelected(combat, registry,
+            new StatusSelectionSpec(StatusPolarityFilter.Debuff) { FromActingSource = true });
+
+        Assert.Single(combat.GetCombatant(GoblinId).Statuses); // nothing was eaten
+    }
+
+    private static void ApplyStatusFrom(
+        CombatState combat, CombatDefinitionRegistry registry, CombatantId targetId,
+        StatusDefinitionId statusId, int stacks, CombatantId source)
+    {
+        combat.EnqueueEffect(new ApplyStatusEffectRequest(
+            TargetCombatantId: targetId, StatusDefinitionId: statusId, Stacks: stacks,
+            SourceCombatantId: source));
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+    }
+
     private static void RunRemoveSelected(
         CombatState combat, CombatDefinitionRegistry registry, StatusSelectionSpec spec)
     {
@@ -187,11 +250,13 @@ public class SelectedStatusTargetingTests
         RegisterStatus(builder, DexterityId, StatusPolarity.Buff);
         RegisterStatus(builder, PoisonId, StatusPolarity.Debuff);
         RegisterStatus(builder, BurnId, StatusPolarity.Debuff);
+        RegisterStatus(builder, OverdueId, StatusPolarity.Debuff, StatusStackingBehavior.CreateSeparateInstance);
         return builder.Build();
     }
 
     private static void RegisterStatus(
-        CombatDefinitionRegistryBuilder builder, StatusDefinitionId id, StatusPolarity polarity) =>
+        CombatDefinitionRegistryBuilder builder, StatusDefinitionId id, StatusPolarity polarity,
+        StatusStackingBehavior stacking = StatusStackingBehavior.MergeWithExistingInstance) =>
         builder.RegisterStatus(new StatusDefinition(
             id,
             new PackageId("test"),
@@ -200,7 +265,7 @@ public class SelectedStatusTargetingTests
             polarity: polarity,
             usesStacks: true,
             showStacksInUi: true,
-            stackingBehavior: StatusStackingBehavior.MergeWithExistingInstance));
+            stackingBehavior: stacking));
 
     private static void ApplyStatus(
         CombatState combat, CombatDefinitionRegistry registry, CombatantId targetId, StatusDefinitionId statusId, int stacks)

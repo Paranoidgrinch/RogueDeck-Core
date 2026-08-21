@@ -1016,7 +1016,8 @@ internal sealed class StealSelectedStatusNodeExecutor : IEffectNodeExecutor
             {
                 if (from == thief)
                     continue;
-                var statusId = StatusSelection.Resolve(combat, from, typed.Selection);
+                var statusId = StatusSelection.Resolve(
+                    combat, from, typed.Selection, ctx.BuildContext.Source.SourceCombatantId);
                 if (statusId is { } id)
                     combat.EnqueueEffect(new StealStatusInstanceEffectRequest(from, thief, id));
             }
@@ -1037,7 +1038,8 @@ internal sealed class ModifySelectedStatusStacksNodeExecutor : IEffectNodeExecut
 
         foreach (var target in typed.TargetSelector.ResolveTargetsTraced(ctx, combat))
         {
-            var statusId = StatusSelection.Resolve(combat, target, typed.Selection);
+            var statusId = StatusSelection.Resolve(
+                combat, target, typed.Selection, ctx.BuildContext.Source.SourceCombatantId);
             if (statusId is { } id)
                 combat.EnqueueEffect(new ModifyStatusInstanceStacksEffectRequest(target, id, delta));
         }
@@ -1076,7 +1078,8 @@ internal sealed class RemoveSelectedStatusNodeExecutor : IEffectNodeExecutor
 
         foreach (var target in typed.TargetSelector.ResolveTargetsTraced(ctx, combat))
         {
-            var statusId = StatusSelection.Resolve(combat, target, typed.Selection);
+            var statusId = StatusSelection.Resolve(
+                combat, target, typed.Selection, ctx.BuildContext.Source.SourceCombatantId);
             if (statusId is { } id)
                 combat.EnqueueEffect(new RemoveStatusInstanceEffectRequest(target, id));
         }

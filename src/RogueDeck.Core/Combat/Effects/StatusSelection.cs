@@ -29,7 +29,21 @@ public enum StatusPick
 public sealed record StatusSelectionSpec(
     StatusPolarityFilter Polarity = StatusPolarityFilter.Any,
     StatusPick Pick = StatusPick.First,
-    int Index = 0);
+    int Index = 0)
+{
+    // Narrow the pick to one KIND of status. Polarity alone cannot say "one of my Overdue" — every debuff on
+    // the player is a candidate, and a rule that means to spend its own would eat somebody else's.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public StatusDefinitionId? Definition { get; init; }
+
+    // Narrow it to the instances THIS effect's source put there. Source-bound statuses — Overdue, Trespass —
+    // are the whole point of a threshold each enemy owns on the shared player: the rule that fires has to
+    // consume its own stacks and leave every other enemy's alone.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool FromActingSource { get; init; }
+}
 
 public static class StatusSelection
 {
@@ -43,12 +57,19 @@ public static class StatusSelection
     // Resolves the spec against a combatant's live statuses. Returns null when the combatant is absent or no
     // status matches the filter. For StatusPick.Random this advances the combat RNG step (like the random card
     // selector), so a replay reproduces the pick.
-    public static StatusInstanceId? Resolve(CombatState combat, CombatantId owner, StatusSelectionSpec spec)
+    public static StatusInstanceId? Resolve(
+        CombatState combat, CombatantId owner, StatusSelectionSpec spec, CombatantId? actingSource = null)
     {
         if (!combat.TryGetCombatant(owner, out var combatant) || combatant is null)
             return null;
 
-        var matches = combatant.Statuses.Where(s => Matches(s, spec.Polarity)).ToList();
+        var matches = combatant.Statuses
+            .Where(s => Matches(s, spec.Polarity))
+            .Where(s => spec.Definition is not { } definition || s.DefinitionId == definition)
+            // Asking for the acting source's own instances when there IS no acting source matches nothing,
+            // rather than quietly matching everything — a rule that means "mine" must never eat another's.
+            .Where(s => !spec.FromActingSource || (actingSource is { } src && s.SourceCombatantId == src))
+            .ToList();
         if (matches.Count == 0)
             return null;
 
