@@ -2048,6 +2048,49 @@ public sealed class CardCostExpression<TContext> : ICombatExpression<TContext, i
 
 // True iff the card resolved by the inner card-instance expression currently carries the given per-instance
 // mark (Misfiled / Referenced / Redacted / Counted / …). Returns false when the card cannot be resolved.
+// What a card COSTS as printed — the resource cost on its definition, before anything a fight did to this
+// copy. Content compares two cards by it ("two consecutive cards of the same Base Cost", "another card with
+// the same Base Cost and type"), which needs a number, and a per-copy discount must not change the answer:
+// the cost class is a fact about the card, not about the bargain the player happens to have on it.
+//
+// A card whose definition is not registered, or which asks for a resource it does not spend, costs nothing.
+public sealed class CardInstanceBaseCostExpression<TContext> : ICombatExpression<TContext, int>
+    where TContext : class
+{
+    public ICardInstanceExpression<TContext> Card { get; }
+    public ResourceId Resource { get; }
+
+    public CardInstanceBaseCostExpression(ICardInstanceExpression<TContext> card, ResourceId resource)
+    {
+        ArgumentNullException.ThrowIfNull(card);
+        Card = card;
+        Resource = resource;
+    }
+
+    public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        if (Card.Evaluate(context, combat) is not { } instanceId)
+            return 0;
+
+        foreach (var zones in combat.CardZonesByCombatant.Values)
+        {
+            if (!zones.ContainsCard(instanceId))
+                continue;
+            var definitionId = zones.GetCard(instanceId).DefinitionId;
+            // No registry bound (a bare state) or an unregistered definition: nothing is printed on it.
+            if (combat.DefinitionRegistry is not { } registry
+                || !registry.CardDefinitions.TryGetValue(definitionId, out var definition))
+                return 0;
+            foreach (var cost in definition.Costs)
+                if (cost.ResourceId == Resource)
+                    return cost.Amount;
+            return 0;
+        }
+
+        return 0;
+    }
+}
+
 public sealed class CardInstanceHasMarkExpression<TContext> : ICombatExpression<TContext, bool>
     where TContext : class
 {

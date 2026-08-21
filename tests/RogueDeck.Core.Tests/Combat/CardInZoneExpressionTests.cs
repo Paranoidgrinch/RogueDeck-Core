@@ -320,6 +320,43 @@ public class CardInZoneExpressionTests
         Assert.Equal([misfiled], combat.GetCardZones(HeroId).DiscardPile.Select(c => c.Id));
     }
 
+    // "Two consecutive cards of the same Base Cost", "another card with the same Base Cost and type" — content
+    // compares cards by what they COST as printed, so it needs the number off the definition. A discount this
+    // fight put on one copy must not change the answer: the cost class is a fact about the card, not about the
+    // bargain the player happens to have on it.
+    [Fact]
+    public void A_cards_base_cost_is_what_is_printed_on_it()
+    {
+        var builder = CombatTestFactory.CreateStandardBuilder();
+        builder.RegisterCard(new CardDefinitionBuilder(
+            new CardDefinitionId("costly"), new PackageId("test"), "costly.n", "costly.d")
+        {
+            Costs = { new ResourceCost(StandardCombatIds.EnergyResource, 2) },
+        });
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        combat.DefinitionRegistry = builder.Build();
+        var card = AddCard(combat, "c1", CardZone.Hand, "costly");
+        combat.GetCardZones(HeroId).GetCard(card)
+            .SetMarkCounter(StandardCombatIds.CardCostDeltaCounter, -1); // a discount on this copy
+
+        var printed = new CardInstanceBaseCostExpression<Ctx>(
+            new ExplicitCardInstanceExpression<Ctx>(card), StandardCombatIds.EnergyResource);
+
+        Assert.Equal(2, printed.Evaluate(MakeContext(combat), combat)); // what is printed, discount or not
+    }
+
+    [Fact]
+    public void A_card_that_is_nowhere_costs_nothing()
+    {
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+
+        var printed = new CardInstanceBaseCostExpression<Ctx>(
+            new ExplicitCardInstanceExpression<Ctx>(new CardInstanceId("ghost")),
+            StandardCombatIds.EnergyResource);
+
+        Assert.Equal(0, printed.Evaluate(MakeContext(combat), combat));
+    }
+
     // With no filter the body runs for every card in the zone — "exhaust your whole hand".
     [Fact]
     public void ForEachCardInZone_applies_the_body_to_all_cards_when_unfiltered()

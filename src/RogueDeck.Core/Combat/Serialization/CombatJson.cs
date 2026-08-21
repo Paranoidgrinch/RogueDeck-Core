@@ -187,6 +187,7 @@ public static class CombatJson
          .Register("targetDowned", typeof(TargetDownedExpression<>))
          .Register("targetExists", typeof(TargetExistsExpression<>))
          .Register("cardInstanceHasMark", typeof(CardInstanceHasMarkExpression<>))
+         .Register("cardInstanceBaseCost", typeof(CardInstanceBaseCostExpression<>))
          .Register("firstCardPlayedHasTag", typeof(FirstCardPlayedThisTurnHasTagExpression<>))
          .Register("eventSourceCardHasTag", typeof(TriggerEventSourceCardHasTagExpression<>))
          .Register("eventStatusIs", typeof(TriggerEventStatusIsExpression<>))
