@@ -193,6 +193,7 @@ public static class RunJson
     {
         r.Register("sel.deckCards", typeof(DeckCardsSelector))
          .Register("sel.instance", typeof(InstanceSelector))
+         .Register("sel.lastAddedCard", typeof(LastAddedCardSelector))
          .Register("sel.matching", typeof(MatchingCardSelector))
          .Register("sel.take", typeof(TakeSelector<RunCardInstance>))
          .Register("sel.random", typeof(RandomSelector<RunCardInstance>))

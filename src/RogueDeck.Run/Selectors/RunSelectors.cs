@@ -51,6 +51,16 @@ public sealed class InstanceSelector : IRunSelector<RunCardInstance>
         context.Run.Deck.Where(card => card.Id == Id).ToArray();
 }
 
+// The card the deck most recently gained, if it is still in the deck. This is how "upgrade the card you just
+// bought" is written: the effect that upgrades runs after the effect that added, in the same chain, with no
+// event and no card in scope to name it by. Empty when nothing has been added yet, or when the card has since
+// left the deck — so a chain that transforms or removes it cannot then act on a ghost.
+public sealed class LastAddedCardSelector : IRunSelector<RunCardInstance>
+{
+    public IReadOnlyList<RunCardInstance> Select(RunEvalContext context) =>
+        context.Run.LastAddedCard is { } card && context.Run.Deck.Contains(card) ? [card] : [];
+}
+
 // Every party member (party deckbuilding B3). The source a member-scoped effect selects over; narrow it with
 // the ordinary combinators (Random/ChooseByPlayer) or the data reducers below.
 public sealed class PartyMembersSelector : IRunSelector<PartyMember>
@@ -211,6 +221,9 @@ public static class RunSelectors
 
     // A specific card copy by instance id (used by ForEach templates to target "this card").
     public static IRunSelector<RunCardInstance> Instance(RunCardInstanceId id) => new InstanceSelector(id);
+
+    // The card the deck most recently gained — "the card you just got".
+    public static IRunSelector<RunCardInstance> LastAddedCard { get; } = new LastAddedCardSelector();
 
     public static IRunSelector<T> Where<T>(this IRunSelector<T> source, Func<T, bool> predicate) =>
         new WhereSelector<T>(source, predicate);

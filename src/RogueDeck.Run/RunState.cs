@@ -213,9 +213,17 @@ public sealed class RunState
         PartyMember member, CardDefinitionId card, IReadOnlyList<string>? composition = null)
     {
         ArgumentNullException.ThrowIfNull(member);
-        return member.AddDeckCard(
+        var added = member.AddDeckCard(
             new RunCardInstance(new RunCardInstanceId($"card#{++_nextCardSeq}"), card, composition));
+        LastAddedCard = added;
+        return added;
     }
+
+    // "The card you just got." A whole family of content acts on the card an offer or a purchase just handed
+    // over — upgrade it, mark it — and the effects that do so run after the one that added it, with no event and
+    // no card in scope to name it by. Remembering the last one added is the handle they need. Transient by
+    // design: it is about what just happened, so a resumed run starts with none.
+    public RunCardInstance? LastAddedCard { get; private set; }
 
     // ── Setup / mutation (used by effect handlers and node resolvers) ──────────────
 
