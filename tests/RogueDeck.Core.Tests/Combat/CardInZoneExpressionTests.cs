@@ -292,6 +292,34 @@ public class CardInZoneExpressionTests
         Assert.Equal(new CardDefinitionId("defend"), zones.GetCard(defend).DefinitionId);  // the non-Strike left alone
     }
 
+    // A MARK is what a card was done to — Misfiled, Referenced, Redacted — and it lives on the copy rather
+    // than on the kind. Marking one was already possible; finding the marked ones is what a rule that answers a
+    // mark needs, and a definition tag cannot stand in: two copies of one card can differ.
+    [Fact]
+    public void ForEachCardInZone_finds_the_marked_copies_and_not_their_unmarked_twins()
+    {
+        var registry = CombatTestFactory.CreateStandardRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        var misfiled = AddCard(combat, "m1", CardZone.Hand, "strike");
+        var clean = AddCard(combat, "c1", CardZone.Hand, "strike");
+        combat.GetCardZones(HeroId).GetCard(misfiled).AddMark(new TagId("misfiled"));
+
+        var program = new EffectProgram<Ctx>(new ForEachCardInZoneNode<Ctx>(
+            CombatantTargetSelectors.Source,
+            CardZone.Hand,
+            new MoveCardToZoneNode<Ctx>(
+                CombatantTargetSelectors.Source,
+                new IteratedCardExpression<Ctx>(),
+                CardZone.DiscardPile),
+            markFilter: new TagId("misfiled")));
+
+        EffectProgramExecutor.Execute(program, MakeContext(combat), combat);
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+
+        Assert.Equal([clean], combat.GetCardZones(HeroId).Hand.Select(c => c.Id));
+        Assert.Equal([misfiled], combat.GetCardZones(HeroId).DiscardPile.Select(c => c.Id));
+    }
+
     // With no filter the body runs for every card in the zone — "exhaust your whole hand".
     [Fact]
     public void ForEachCardInZone_applies_the_body_to_all_cards_when_unfiltered()

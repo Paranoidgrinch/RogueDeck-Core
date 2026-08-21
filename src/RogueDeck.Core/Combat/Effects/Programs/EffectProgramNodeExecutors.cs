@@ -445,6 +445,9 @@ internal sealed class ForEachCardInZoneNodeExecutor : IEffectNodeExecutor
             cards = cards.Where(c => definitions.TryGetValue(c.DefinitionId, out var definition)
                 && definition.Tags.Contains(tag));
         }
+        // The mark is on the INSTANCE, so this asks the copy, not its kind.
+        if (typed.MarkFilter is { } mark)
+            cards = cards.Where(c => c.Marks.Contains(mark));
         var matches = cards.Select(c => c.Id);
         if (typed.TakeFirst is { } takeFirst)
             matches = matches.Take(takeFirst);

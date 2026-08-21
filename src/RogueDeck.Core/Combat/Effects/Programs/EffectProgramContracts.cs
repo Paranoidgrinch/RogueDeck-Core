@@ -143,6 +143,12 @@ public interface IForEachCardInZoneNodeCore : IEffectNode
     CardZone Zone { get; }
     CardDefinitionId? DefinitionFilter { get; }
     TagId? TagFilter { get; }
+
+    // A per-instance MARK, not a definition tag: the mark is what a card was done TO — Misfiled, Referenced,
+    // Redacted — and it travels with the copy rather than belonging to the kind. Marking a card was already
+    // possible; finding the marked ones is what this adds, and every rule that answers a mark needs it.
+    TagId? MarkFilter { get; }
+
     int? TakeFirst { get; }
     IEffectNode Body { get; }
     int MaxIterations { get; }

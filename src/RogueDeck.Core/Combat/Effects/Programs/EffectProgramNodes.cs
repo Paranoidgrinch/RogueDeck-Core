@@ -293,6 +293,11 @@ public sealed class ForEachCardInZoneNode<TContext> : IForEachCardInZoneNodeCore
     public CardZone Zone { get; }
     public CardDefinitionId? DefinitionFilter { get; }
     public TagId? TagFilter { get; }
+    // Null stays out of the wire format so every program written before marks could be searched round-trips
+    // byte-identically — the older filters beside it predate that rule and still write their nulls.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public TagId? MarkFilter { get; }
     public int? TakeFirst { get; }
     public IEffectNode<TContext> Body { get; }
     public int MaxIterations { get; }
@@ -312,7 +317,8 @@ public sealed class ForEachCardInZoneNode<TContext> : IForEachCardInZoneNodeCore
         CardDefinitionId? definitionFilter = null,
         int maxIterations = DefaultMaxIterations,
         TagId? tagFilter = null,
-        int? takeFirst = null)
+        int? takeFirst = null,
+        TagId? markFilter = null)
     {
         ArgumentNullException.ThrowIfNull(ownerSelector);
         ArgumentNullException.ThrowIfNull(body);
@@ -331,6 +337,7 @@ public sealed class ForEachCardInZoneNode<TContext> : IForEachCardInZoneNodeCore
         Body = body;
         DefinitionFilter = definitionFilter;
         TagFilter = tagFilter;
+        MarkFilter = markFilter;
         TakeFirst = takeFirst;
         MaxIterations = maxIterations;
     }
