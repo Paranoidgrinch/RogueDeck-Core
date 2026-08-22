@@ -1115,15 +1115,25 @@ public sealed class CombatantZoneCardCountExpression<TContext> : ICombatExpressi
     // the whole zone, as before.
     public TagId? Tag { get; }
 
+    // Count only the cards carrying this PER-INSTANCE mark — "how many of your cards are still Misfiled".
+    // The sibling of Tag, asking the other question a card answers: not what kind of card it is, but what has
+    // been done to this copy. Both may be set, and then both must hold. Null stays out of the wire format so
+    // every program written before it round-trips byte-identically.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public TagId? Mark { get; }
+
     public CombatantZoneCardCountExpression(
         ICombatantTargetSelector selector,
         CardZone zone,
-        TagId? tag = null)
+        TagId? tag = null,
+        TagId? mark = null)
     {
         ArgumentNullException.ThrowIfNull(selector);
         Selector = ScalarTargetExpression.RequireSingleSelector(selector);
         Zone = zone;
         Tag = tag;
+        Mark = mark;
     }
 
     public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
@@ -1134,6 +1144,9 @@ public sealed class CombatantZoneCardCountExpression<TContext> : ICombatExpressi
         var id = ScalarTargetExpression.RequireSingle(targets);
         if (!combat.TryGetCombatant(id, out var c) || c is null) return 0;
         var cards = combat.GetCardZones(id).GetCardsInZone(Zone);
+
+        if (Mark is { } mark)
+            cards = cards.Where(card => card.HasMark(mark)).ToList();
         if (Tag is not { } tag)
             return cards.Count;
         if (combat.DefinitionRegistry is not { } registry)
