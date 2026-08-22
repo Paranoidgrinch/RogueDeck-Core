@@ -87,6 +87,13 @@ public static class StandardCombatIds
     // when the card is played, so it is a one-shot price on one card rather than a standing discount.
     // Content sets it with the ordinary SetCardInstanceMarkCounter op; nothing else attaches meaning to it.
     public static readonly CounterId CardCostDeltaCounter = new("standard.card_cost_delta");
+
+    // A reserved per-instance mark that keeps THIS COPY of a card in hand when its owner's turn ends — "the
+    // card it gave back stays until you use it", which neither of the existing tools can say. The definition
+    // flag RetainInHandOnTurnEnd prices every copy of the card alike, and the RetainHand status tag holds the
+    // WHOLE hand back; this is the per-instance counterpart, the same shape as CardCostDeltaCounter against
+    // the printed cost. Content sets it with the ordinary MarkCardInstance op, and removes it the same way.
+    public static readonly TagId RetainedCardMark = new("standard.retained_card");
 }
 
 

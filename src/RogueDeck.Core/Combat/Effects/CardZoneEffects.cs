@@ -388,6 +388,11 @@ public sealed class MoveHandCardsOnTurnEndEffectHandler
         CombatDefinitionRegistry registry,
         CardInstance card)
     {
+        // A copy marked as retained stays put whatever its definition says — the per-instance counterpart of
+        // the definition flag below.
+        if (card.Marks.Contains(StandardCombatIds.RetainedCardMark))
+            return CardZone.Hand;
+
         var definition = registry.GetCard(card.DefinitionId);
 
         if (definition.RetainInHandOnTurnEnd)

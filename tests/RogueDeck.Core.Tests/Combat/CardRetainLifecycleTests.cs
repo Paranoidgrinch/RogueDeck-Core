@@ -207,6 +207,52 @@ public class CardRetainLifecycleTests
         return definition;
     }
 
+    // The per-instance counterpart of the definition flag: ONE copy of an ordinary card is held back, while
+    // its identical twin discards. Neither of the older tools can say this — the flag prices every copy alike
+    // and the retain-hand status tag holds the whole hand.
+    [Fact]
+    public void TurnEndDiscardKeepsAMarkedCopyInHandWhileItsTwinDiscards()
+    {
+        var registry = CombatTestFactory.CreateStandardRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+
+        var markedCard = AddCardToZone(combat, HeroId, StandardCombatIds.StrikeCard, CardZone.Hand);
+        var twin = AddCardToZone(combat, HeroId, StandardCombatIds.StrikeCard, CardZone.Hand);
+
+        markedCard.AddMark(StandardCombatIds.RetainedCardMark);
+
+        var processor = new CombatTurnProcessor();
+        processor.StartCurrentTurn(combat, registry);
+        processor.EndCurrentTurn(combat, registry);
+
+        var zones = combat.GetCardZones(HeroId);
+
+        Assert.Same(markedCard, Assert.Single(zones.Hand));
+        Assert.Equal(CardZone.Hand, markedCard.Zone);
+        Assert.Same(twin, Assert.Single(zones.DiscardPile));
+        Assert.Equal(CardZone.DiscardPile, twin.Zone);
+    }
+
+    // Taking the mark off puts the copy back under the ordinary rule, so the retention really is one-shot
+    // when content wants it to be.
+    [Fact]
+    public void AnUnmarkedCopyDiscardsAgain()
+    {
+        var registry = CombatTestFactory.CreateStandardRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+
+        var card = AddCardToZone(combat, HeroId, StandardCombatIds.StrikeCard, CardZone.Hand);
+        card.AddMark(StandardCombatIds.RetainedCardMark);
+        card.RemoveMark(StandardCombatIds.RetainedCardMark);
+
+        var processor = new CombatTurnProcessor();
+        processor.StartCurrentTurn(combat, registry);
+        processor.EndCurrentTurn(combat, registry);
+
+        Assert.Empty(combat.GetCardZones(HeroId).Hand);
+        Assert.Equal(CardZone.DiscardPile, card.Zone);
+    }
+
     private static CardInstance AddCardToZone(
         CombatState combat,
         CombatantId ownerId,
