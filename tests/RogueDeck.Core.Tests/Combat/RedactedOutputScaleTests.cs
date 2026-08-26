@@ -111,4 +111,54 @@ public class RedactedOutputScaleTests
 
         Assert.Equal(6, combat.GetCombatant(GoblinId).Health.Current); // full 6 damage
     }
+
+    // The mark is a FRACTION, not a discount: an inscription that says "half again as much" writes 3/2 the
+    // same way a redaction writes 1/2, and the play reads both the same way.
+    [Fact]
+    public void A_widening_mark_amplifies_the_same_play_a_narrowing_one_would_reduce()
+    {
+        var registry = CombatTestFactory.CreateStandardRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        GiveEnergy(combat);
+        combat.GetCombatant(GoblinId).Health.SetMax(40);
+        combat.GetCombatant(GoblinId).Health.SetCurrent(40);
+
+        var revised = AddToHand(combat, StandardCombatIds.StrikeCard);   // Strike = 6 damage
+        revised.SetMarkCounter(StandardCombatIds.CardOutputScaleNumeratorCounter, 3);
+        revised.SetMarkCounter(StandardCombatIds.CardOutputScaleDenominatorCounter, 2);
+
+        new CombatCardPlayProcessor().PlayCardInstance(combat, registry,
+            new CardInstancePlayRequest(revised.Id, HeroId, GoblinId));
+
+        Assert.Equal(31, combat.GetCombatant(GoblinId).Health.Current); // 6 → 9
+        // Still one-shot, in both directions.
+        Assert.Equal(0, revised.GetMarkCounter(StandardCombatIds.CardOutputScaleDenominatorCounter));
+    }
+
+    // A card asked to go where it already is stays put — unless the request is about POSITION. "Fetch the
+    // partner to the top of the draw pile" has nowhere else to fetch from.
+    [Fact]
+    public void Moving_a_card_to_the_top_of_the_pile_it_is_already_in_reorders_it()
+    {
+        var registry = CombatTestFactory.CreateStandardRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        var zones = combat.GetCardZones(HeroId);
+
+        var first = new CardInstance(combat.CreateNextCardInstanceId(), StandardCombatIds.StrikeCard, HeroId, CardZone.DrawPile);
+        var second = new CardInstance(combat.CreateNextCardInstanceId(), StandardCombatIds.DefendCard, HeroId, CardZone.DrawPile);
+        zones.AddCard(first);
+        zones.AddCard(second);
+        Assert.Equal(first.Id, zones.GetCardsInZone(CardZone.DrawPile)[0].Id);
+
+        combat.EnqueueEffect(new MoveCardToZoneEffectRequest(
+            HeroId, second.Id, CardZone.DrawPile, Placement: ZonePlacement.Top));
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+
+        Assert.Equal(second.Id, zones.GetCardsInZone(CardZone.DrawPile)[0].Id);
+
+        // Bottom keeps the historical no-op, so nothing authored before placements existed shifts under it.
+        combat.EnqueueEffect(new MoveCardToZoneEffectRequest(HeroId, second.Id, CardZone.DrawPile));
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+        Assert.Equal(second.Id, zones.GetCardsInZone(CardZone.DrawPile)[0].Id);
+    }
 }

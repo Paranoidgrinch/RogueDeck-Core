@@ -160,8 +160,14 @@ public sealed class MoveCardToZoneEffectHandler : EffectRequestHandler<MoveCardT
 
         var fromZone = card.Zone;
 
+        // A card asked to go where it already is normally stays put — but "put it on TOP" is a request about
+        // POSITION, not about zones, and the tutor that says it (an inscription fetching its partner to the
+        // top of the draw pile) has nowhere else to fetch from. So an explicit Top repositions; Bottom keeps
+        // the historical no-op, so nothing authored before placements existed changes under it.
         if (fromZone == request.ToZone)
         {
+            if (request.Placement == ZonePlacement.Top)
+                zones.MoveCardToZone(request.CardInstanceId, request.ToZone, request.Placement);
             if (request.OutcomeSlot is { } noOpSlot)
                 noOpSlot.Value = new MoveCardToZoneOutcome(
                     request.CardInstanceId, fromZone, fromZone, WasMoved: false);

@@ -139,9 +139,13 @@ public sealed class CombatCardPlayProcessor
                 CardInstanceId: cardInstanceId));
 
         // Redacted substrate: if the played instance carries a next-play output-scale mark, read + consume it
-        // ONCE here (a one-shot reduction), then apply the fraction to BOTH card execution paths — the legacy
-        // effect-request list (below) and the on-play Program (via its execution context). It narrows only
+        // ONCE here (a one-shot fraction), then apply it to BOTH card execution paths — the legacy
+        // effect-request list (below) and the on-play Program (via its execution context). It changes only
         // player-facing output (damage/Block/heal/draw/energy/status), never cost/hit-count/target-count.
+        //
+        // The fraction may narrow (Redacted's 1/2) or WIDEN (an inscription's "half again as much"), exactly as
+        // the execution context has always allowed — a mark that could only ever take something away was a
+        // limit of this one read, not of the substrate.
         var scaleNum = 1;
         var scaleDen = 1;
         if (cardInstanceId is { } scaleInstanceId)
@@ -156,7 +160,7 @@ public sealed class CombatCardPlayProcessor
                 playedCard.SetMarkCounter(StandardCombatIds.CardOutputScaleDenominatorCounter, 0);
             }
         }
-        var outputScaled = scaleNum < scaleDen;
+        var outputScaled = scaleNum != scaleDen;
 
         // A per-copy price is a promise to ONE card and is kept once: the play has been paid for by now, so
         // the mark is spent here rather than lingering into the next time this card is drawn.

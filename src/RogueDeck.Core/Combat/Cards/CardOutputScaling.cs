@@ -25,8 +25,10 @@ internal static class CardOutputScaling
         };
     }
 
+    // Rounds DOWN, in both directions, and leaves a non-positive amount alone — the same contract the program
+    // path's ScaleOutput keeps, so a card is scaled identically whichever of the two paths carries it.
     private static int Scale(int amount, int numerator, int denominator) =>
-        amount <= 0 || numerator >= denominator
+        amount <= 0 || numerator == denominator
             ? amount
             : (int)((long)amount * numerator / denominator);
 }
