@@ -1,6 +1,7 @@
 using System.Text.Json;
 using RogueDeck.Core.Combat;
 using RogueDeck.Run;
+using RogueDeck.Scenario.Authoring;
 
 namespace RogueDeck.Run.Tests;
 
@@ -167,5 +168,51 @@ public class AuthoredRunProgramTests
             [], new Dictionary<string, EventScript>(), [], [], [], new RunMap([]));
 
         Assert.DoesNotContain("\"Programs\"", RunJson.ToJson(blueprint, options));
+    }
+}
+
+// A promise about "your next combat" is queued as a pending OPENING, and the player may well save before
+// walking into that fight. The opening is nothing but its rule, so it is captured by value and comes back
+// still waiting; anything else pending still refuses the save rather than losing it.
+public class PendingOpeningSaveTests
+{
+    private static RelicCombatRule Opening(int block) => new()
+    {
+        Trigger = "turnStarted",
+        Program = CombatProgramModel.Build<TurnStartedTriggeredEffectContext>(
+            new CombatNodeModel("gainBlock", "source", CombatAmountSpec.FromConst(block))),
+    };
+
+    private static RunState NewRun() =>
+        new(new RunId("r"), new HealthState(30, 40), new RunMap(Array.Empty<Node>()));
+
+    [Fact]
+    public void A_pending_next_combat_opening_survives_the_save()
+    {
+        var run = NewRun();
+        run.AddPendingCombatModifier(new HeroOpeningRuleModifier(Opening(20)));
+
+        var json = RunSaveJson.ToJson(run.Snapshot());
+        var restored = RunState.Restore(RunSaveJson.FromJson(json), new RunMap(Array.Empty<Node>()), null);
+
+        var opening = Assert.IsType<HeroOpeningRuleModifier>(Assert.Single(restored.PendingCombatModifiers));
+        Assert.Equal("turnStarted", opening.Rule.Trigger);
+        Assert.Equal(json, RunSaveJson.ToJson(restored.Snapshot()));
+    }
+
+    [Fact]
+    public void A_pending_modifier_that_is_not_an_opening_still_refuses_to_be_lost()
+    {
+        var run = NewRun();
+        run.AddPendingCombatModifier(RunCombat.Custom((_, _) => { }));
+
+        Assert.Throws<InvalidOperationException>(() => run.Snapshot());
+    }
+
+    // A save taken with nothing pending is written exactly as it always was.
+    [Fact]
+    public void A_save_without_a_pending_opening_writes_no_section()
+    {
+        Assert.DoesNotContain("PendingOpenings", RunSaveJson.ToJson(NewRun().Snapshot()));
     }
 }

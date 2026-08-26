@@ -466,10 +466,13 @@ public sealed class RunState
 
     public RunSaveData Snapshot()
     {
-        if (_pendingCombatModifiers.Count > 0 || _rewardModifiers.Count > 0)
+        // A pending OPENING is nothing but its rule, so it saves by value and comes back waiting for the same
+        // fight — which is what lets an event promise something about "your next combat" and still be saved
+        // before walking into it. Every other pending modifier is a body that cannot be captured.
+        if (_pendingCombatModifiers.Any(m => m is not HeroOpeningRuleModifier) || _rewardModifiers.Count > 0)
             throw new InvalidOperationException(
-                "A run can only be saved at a clean interlude (no pending combat / reward modifiers — their "
-                + "bodies are not value-captured). Save between nodes.");
+                "A run can only be saved at a clean interlude (no pending combat / reward modifiers other than "
+                + "next-combat openings — their bodies are not value-captured). Save between nodes.");
 
         // Installed programs save by REFERENCE: each must carry a source id naming a registered stateless
         // reaction body. A program without one (a stateful countdown schedule) cannot be value-captured.
@@ -499,6 +502,9 @@ public sealed class RunState
             NextProgramSeq: _nextProgramSeq)
         {
             MapGenerationLoadout = GeneratedMapLoadout,
+            PendingOpenings = _pendingCombatModifiers.Count > 0
+                ? _pendingCombatModifiers.Cast<HeroOpeningRuleModifier>().Select(m => m.Rule).ToList()
+                : null,
             UnrestrictedSteps = UnrestrictedSteps,
             ActIndex = ActIndex,
             ActFlags = _actFlags.Count > 0 ? _actFlags.Select(flag => flag.Value).ToList() : null,
@@ -575,6 +581,8 @@ public sealed class RunState
         // the program-id counter is restored so any later mint continues the sequence collision-free.
         run._nextProgramSeq = data.NextProgramSeq;
         run.UnrestrictedSteps = data.UnrestrictedSteps;
+        foreach (var opening in data.PendingOpenings ?? [])
+            run.AddPendingCombatModifier(new HeroOpeningRuleModifier(opening));
         foreach (var flag in data.ActFlags ?? [])
             run._actFlags.Add(new RunFlagId(flag));
         foreach (var program in data.Programs)

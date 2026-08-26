@@ -74,6 +74,13 @@ public sealed record RunSaveData(
     // An init property with a default, so older saves and authored-map runs load unchanged.
     public int? MapGenerationLoadout { get; init; }
 
+    // The next-combat openings still waiting for a fight — what an event promised about "your next combat"
+    // before the player walked out of the room. Null (the default) when nothing is pending, so a save taken
+    // without one round-trips byte-identically.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<RelicCombatRule>? PendingOpenings { get; init; }
+
     // Steps off the paths the player still holds. Kept out of the wire format at zero, so a save from before
     // the relic that grants them round-trips byte-identically.
     [System.Text.Json.Serialization.JsonIgnore(
@@ -91,14 +98,14 @@ public sealed record RunSaveData(
     public IReadOnlyList<string>? ActFlags { get; init; }
 }
 
-// Serialize a run save to/from JSON — the save file. Plain values only (ids / ints / strings / an enum), so no
-// RunJson polymorphic converters are needed.
+// Serialize a run save to/from JSON — the save file. Plain values (ids / ints / strings / an enum), plus the
+// pending openings, whose rules route through the same key-addressed converter the blueprint uses.
 public static class RunSaveJson
 {
     private static readonly JsonSerializerOptions Options = new()
     {
         WriteIndented = true,
-        Converters = { new JsonStringEnumConverter() },
+        Converters = { new JsonStringEnumConverter(), new RelicCombatRuleJsonConverter() },
     };
 
     public static string ToJson(RunSaveData data) => JsonSerializer.Serialize(data, Options);

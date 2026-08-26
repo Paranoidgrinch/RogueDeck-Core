@@ -12,6 +12,10 @@ public sealed class HeroOpeningRuleModifier : IRunCombatModifier
 {
     private readonly RelicCombatRule _rule;
 
+    // The rule this opening is, which is the whole of it — an opening waiting for the next fight is therefore
+    // the one pending combat modifier a SAVE can capture by value (RunState.Snapshot).
+    public RelicCombatRule Rule => _rule;
+
     public HeroOpeningRuleModifier(RelicCombatRule rule)
     {
         ArgumentNullException.ThrowIfNull(rule);
