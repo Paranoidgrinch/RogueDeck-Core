@@ -91,6 +91,8 @@ public static class RunJson
         registry ??= DefaultRegistry();
         var options = new JsonSerializerOptions { WriteIndented = true };
         options.Converters.Add(new JsonStringEnumConverter());
+        // A blueprint carries combat effect programs, so it inherits their duplicate-children problem too.
+        CombatJson.WriteChildrenOnlyWhereTheyAreRead(options);
         options.Converters.Add(new PolymorphicRunJsonConverter<IRunExpression<int>>(registry));
         options.Converters.Add(new PolymorphicRunJsonConverter<IRunExpression<bool>>(registry));
         options.Converters.Add(new PolymorphicRunJsonConverter<IRunSelector<RunCardInstance>>(registry));

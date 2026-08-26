@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 namespace RogueDeck.Core.Combat;
 
@@ -98,9 +99,39 @@ public static class CombatJson
         registry ??= DefaultRegistry();
         var options = new JsonSerializerOptions { WriteIndented = true };
         options.Converters.Add(new JsonStringEnumConverter());
+        WriteChildrenOnlyWhereTheyAreRead(options);
         AddSelectorConverter(options, registry);
         AddContextConverters<TContext>(options, registry);
         return options;
+    }
+
+    // Every effect node exposes `Children` so the tree can be WALKED — a conditional's is [Then, Else], a
+    // loop's is [Body]. On the sequence nodes it is the payload itself, and their constructor reads it back;
+    // everywhere else it is a second view of children the node already names.
+    //
+    // Serializing that view as well writes each subtree TWICE per level, which squares with depth: a nested
+    // conditional 12 deep serializes 4096 copies of its leaves. One authored boss rule reached 311,624 nodes
+    // and 15 MB that way — the tree itself is about forty nodes. So `Children` is written only by the types
+    // whose constructor takes it; on the others the walkable view stays a runtime concept.
+    //
+    // Reading is unaffected in both directions: the property is read-only on those types, so a document that
+    // still carries the duplicates loads exactly as before.
+    public static void WriteChildrenOnlyWhereTheyAreRead(JsonSerializerOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        options.TypeInfoResolver = (options.TypeInfoResolver ?? new DefaultJsonTypeInfoResolver())
+            .WithAddedModifier(static info =>
+            {
+                if (info.Kind != JsonTypeInfoKind.Object || !typeof(IEffectNode).IsAssignableFrom(info.Type))
+                    return;
+                if (info.Type.GetConstructors().Any(c => c.GetParameters()
+                        .Any(p => string.Equals(p.Name, "children", StringComparison.OrdinalIgnoreCase))))
+                    return;
+
+                for (var i = info.Properties.Count - 1; i >= 0; i--)
+                    if (string.Equals(info.Properties[i].Name, "Children", StringComparison.Ordinal))
+                        info.Properties.RemoveAt(i);
+            });
     }
 
     // Target selectors are context-independent (non-generic); add this converter once per options.
