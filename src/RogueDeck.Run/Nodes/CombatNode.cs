@@ -355,7 +355,12 @@ public sealed class CombatNodeResolver : INodeResolver
         {
             hero.Deck.Clear();
             foreach (var card in run.Deck)
-                hero.Deck.Add(new DeckEntry(_deckMapper(card), 1));
+                // A copy's run TAGS are dealt with it as per-instance marks: what the run did to one card
+                // between fights ("this one is misfiled", "this one is sealed") has to be findable inside the
+                // fight, or a rule could only ever speak about card DEFINITIONS. Untagged copies are unchanged.
+                hero.Deck.Add(new DeckEntry(
+                    _deckMapper(card), 1,
+                    card.Tags.Count == 0 ? null : card.Tags.Select(tag => new TagId(tag.Value)).ToList()));
         }
 
         // Relic combat-injection face (b): each acquired ENABLED relic's combat contributions become triggered

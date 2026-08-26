@@ -72,7 +72,8 @@ internal static class ScenarioCombatFactory
         foreach (var entry in blueprint.Deck)
             for (var copy = 0; copy < entry.Count; copy++)
                 zones.AddCard(new CardInstance(
-                    combat.CreateNextCardInstanceId(), entry.Card, blueprint.CombatantId, CardZone.DrawPile));
+                    combat.CreateNextCardInstanceId(), entry.Card, blueprint.CombatantId, CardZone.DrawPile,
+                    initialMarks: entry.Marks));
     }
 
     // Deterministically shuffle a combatant's draw pile (Fisher–Yates seeded by the combat's random seed),

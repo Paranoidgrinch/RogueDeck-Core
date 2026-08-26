@@ -142,7 +142,11 @@ public sealed record ResourceSpec(ResourceId Resource, int Current, int Max);
 // the standard package installs for Energy. Registered by ScenarioBlueprint.Compile().
 public sealed record ResourceRefillSpec(ResourceId Resource, int Max);
 public sealed record StartingStatusSpec(StatusDefinitionId Status, int Stacks = 0, int DurationTurns = 0, int Charges = 0);
-public sealed record DeckEntry(CardDefinitionId Card, int Count = 1);
+// One card in a combatant's deck. `Marks` are per-instance marks every copy this entry deals starts with —
+// how a card that arrived carrying something (a run card the player had marked between fights, a copy an
+// event set aside) is dealt into the fight still carrying it. Empty = an ordinary copy, as before.
+public sealed record DeckEntry(
+    CardDefinitionId Card, int Count = 1, IReadOnlyList<TagId>? Marks = null);
 
 // A temporary triggered rule to install on the combatant when the combat opens — e.g. a consumable's "next combat
 // starts with X" opening: a OneShot turnStarted program that fires once at the hero's first turn start (after
