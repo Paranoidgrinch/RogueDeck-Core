@@ -56,6 +56,7 @@ public sealed class StandardRunPackage : IRunPackage
             .RegisterEffectHandler(new ComputedDamageRunEffectHandler())
             .RegisterEffectHandler(new RepeatRunEffectHandler())
             .RegisterEffectHandler(new RemoveCardsRunEffectHandler())
+            .RegisterEffectHandler(new RestoreRemovedCardRunEffectHandler())
             .RegisterEffectHandler(new DuplicateCardsRunEffectHandler())
             .RegisterEffectHandler(new UpgradeCardsRunEffectHandler())
             .RegisterEffectHandler(new TagCardsRunEffectHandler())

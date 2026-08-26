@@ -37,6 +37,8 @@ public sealed class RemoveCardsRunEffectHandler : RunEffectHandler<RemoveCardsRu
         {
             if (!run.RemoveDeckCard(card.Id))
                 continue;
+            // The run remembers what it no longer has, so content that offers a card BACK knows what it was.
+            run.RememberRemovedCard(RemovedCardRecord.Of(card));
             run.AddLog(StandardRunLogTypes.CardRemoved, $"Removed card '{card.DefinitionId}' ({card.Id}).");
             run.RaiseEvent(new CardRemovedFromDeckRunEvent(card.Id, card.DefinitionId));
         }

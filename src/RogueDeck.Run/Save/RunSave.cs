@@ -81,6 +81,12 @@ public sealed record RunSaveData(
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<RelicCombatRule>? PendingOpenings { get; init; }
 
+    // What the run has removed from the deck and could still give back (RemovedCardRecord). Null (the default)
+    // when nothing has been removed, so a save taken before anything left the deck round-trips byte-identically.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<RunCardSaveData>? RemovedCards { get; init; }
+
     // Steps off the paths the player still holds. Kept out of the wire format at zero, so a save from before
     // the relic that grants them round-trips byte-identically.
     [System.Text.Json.Serialization.JsonIgnore(

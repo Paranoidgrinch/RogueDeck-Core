@@ -249,7 +249,34 @@ public sealed class RunState
     // from a run-scoped sequence so a replayed run reproduces them.
     // ── Single-hero accessors (delegate to the primary member; run-scoped instance ids stay here) ──────────────
 
-    public RunCardInstance AddDeckCard(CardDefinitionId card) => AddDeckCardTo(ActiveMember, card);
+    public RunCardInstance AddDeckCard(CardDefinitionId card, IReadOnlyList<string>? composition = null) =>
+        AddDeckCardTo(ActiveMember, card, composition);
+
+    // ── The removed history ───────────────────────────────────────────────────────────────────────────────
+    //
+    // What the run no longer has, and what it was: a game whose events offer to give a card back has to know
+    // which card, how far it had been improved and what was written on it. Written by RemoveCardsRunEffect,
+    // read and struck out by RestoreRemovedCardRunEffect, and carried through a save like the deck itself.
+    private readonly List<RemovedCardRecord> _removedCards = new();
+
+    public IReadOnlyList<RemovedCardRecord> RemovedCards => _removedCards;
+
+    public void RememberRemovedCard(RemovedCardRecord record)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        _removedCards.Add(record);
+    }
+
+    // A card can be recovered ONCE: giving it back strikes its entry out. Removes the first entry equal to
+    // this one, so two identical removals stay two chances.
+    public bool ForgetRemovedCard(RemovedCardRecord record)
+    {
+        var index = _removedCards.IndexOf(record);
+        if (index < 0)
+            return false;
+        _removedCards.RemoveAt(index);
+        return true;
+    }
 
     public bool RemoveDeckCard(RunCardInstanceId id) => ActiveMember.RemoveDeckCard(id);
 
@@ -502,6 +529,12 @@ public sealed class RunState
             NextProgramSeq: _nextProgramSeq)
         {
             MapGenerationLoadout = GeneratedMapLoadout,
+            RemovedCards = _removedCards.Count > 0
+                ? _removedCards.Select(r => new RunCardSaveData(
+                    r.Definition.value, r.UpgradeLevel, r.Tags.Select(t => t.Value).ToArray(),
+                    new Dictionary<string, int>())
+                { Composition = r.Composition }).ToArray()
+                : null,
             PendingOpenings = _pendingCombatModifiers.Count > 0
                 ? _pendingCombatModifiers.Cast<HeroOpeningRuleModifier>().Select(m => m.Rule).ToList()
                 : null,
@@ -583,6 +616,10 @@ public sealed class RunState
         run.UnrestrictedSteps = data.UnrestrictedSteps;
         foreach (var opening in data.PendingOpenings ?? [])
             run.AddPendingCombatModifier(new HeroOpeningRuleModifier(opening));
+        foreach (var removed in data.RemovedCards ?? [])
+            run.RememberRemovedCard(new RemovedCardRecord(
+                new CardDefinitionId(removed.DefinitionId), removed.UpgradeLevel,
+                removed.Tags.Select(t => new RunCardTagId(t)).ToArray(), removed.Composition));
         foreach (var flag in data.ActFlags ?? [])
             run._actFlags.Add(new RunFlagId(flag));
         foreach (var program in data.Programs)
