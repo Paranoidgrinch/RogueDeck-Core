@@ -310,6 +310,10 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
             builder.RegisterEvent(new EventId(id), script);
         foreach (var (id, shop) in blueprint.Shops)
             builder.RegisterShop(new ShopId(id), shop);
+        // The authored run programs, so an event's fx.installProgramById finds its body — and so a saved run
+        // carrying one can re-link it on restore.
+        foreach (var (id, program) in blueprint.Programs ?? new Dictionary<string, ITriggeredRunEffectDefinition>())
+            builder.RegisterProgramDefinition(new RunProgramSourceId(id), program);
 
         // The Shred Engine's content: the workbench resolver offers registered shreds/recipes, and the
         // per-fight injection resolves a composed card's parts from here — an unregistered shred would make

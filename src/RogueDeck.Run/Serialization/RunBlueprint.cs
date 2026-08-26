@@ -31,6 +31,18 @@ public sealed record RunBlueprint(
     // event that grants one by id resolves it. An init property, like Statuses, to keep constructions unchanged.
     public IReadOnlyList<RelicData> Relics { get; init; } = [];
 
+    // The run programs the CONTENT authors, by id: lasting consequences an event (or any other effect) installs
+    // with fx.installProgramById. A relic carries its programs itself, but a consequence handed out by an event
+    // belongs to no relic — and an effect that embedded the body would be neither serializable nor saveable — so
+    // the body lives here once and is named where it is installed. Registered into the content catalog, which is
+    // also what lets a saved run re-link an installed program on restore.
+    //
+    // Null (the default) ⇒ no authored programs, and null stays out of the wire format so every document written
+    // before this section round-trips byte-identically.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyDictionary<string, ITriggeredRunEffectDefinition>? Programs { get; init; }
+
     // Custom combat resources (energy-like) the hero carries into every fight — an id + max + optional per-turn
     // refill. Injected into each combat's hero by the run→combat bridge. An init property, like Statuses/Relics.
     public IReadOnlyList<CombatResourceData> CombatResources { get; init; } = [];

@@ -38,6 +38,7 @@ public sealed class StandardRunPackage : IRunPackage
             .RegisterEffectHandler(new DrawEffectsRunEffectHandler())
             .RegisterEffectHandler(new DrawManyEffectsRunEffectHandler())
             .RegisterEffectHandler(new InstallRunProgramRunEffectHandler())
+            .RegisterEffectHandler(new InstallProgramByIdRunEffectHandler())
             .RegisterEffectHandler(new UninstallRunProgramRunEffectHandler())
             .RegisterEffectHandler(new AddMapNodeRunEffectHandler())
             .RegisterEffectHandler(new RemoveMapNodeRunEffectHandler())

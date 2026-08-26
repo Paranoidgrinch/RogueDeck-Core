@@ -224,3 +224,36 @@ public static class RunPrograms
         return templates;
     }
 }
+
+// Install a program whose BODY is authored ONCE, in the content catalog, and named here by id. This is what
+// makes a lasting consequence handed out by an EVENT (rather than by a relic) both serializable and saveable:
+// the effect carries a name instead of a body, so it round-trips through RunJson, and the installed program
+// carries the same name as its source id, so a saved run re-links it on restore like any relic program.
+//
+// The instance id IS the source id: a consequence like "your next fight is audited" is either pending or it is
+// not, so installing an already-installed program is a silent no-op rather than a duplicate-id fault — and a
+// one-shot body can name itself in an UninstallRunProgramRunEffect to step down when it has fired.
+public sealed record InstallProgramByIdRunEffect(RunProgramSourceId Source) : IRunEffectRequest;
+
+public sealed class InstallProgramByIdRunEffectHandler : RunEffectHandler<InstallProgramByIdRunEffect>
+{
+    protected override void Resolve(
+        RunState run, RunDefinitionRegistry registry, InstallProgramByIdRunEffect request)
+    {
+        if (run.Content is null)
+            throw new InvalidOperationException(
+                $"Cannot install program '{request.Source}' by id: the run has no content catalog.");
+        if (!run.Content.TryGetProgramDefinition(request.Source, out var reaction))
+            throw new InvalidOperationException(
+                $"No program definition is registered for source id '{request.Source}'. Author it in the "
+                + "blueprint's Programs section (or register it with RunContentRegistryBuilder.RegisterProgramDefinition).");
+
+        var id = new RunProgramId(request.Source.Value);
+        if (run.InstalledPrograms.Any(program => program.Id == id))
+            return;
+
+        run.InstallProgram(new InstalledRunProgram(id, reaction, request.Source));
+        run.AddLog(StandardRunLogTypes.ProgramInstalled, $"Installed run program '{id}' (by id).");
+        run.RaiseEvent(new RunProgramInstalledRunEvent(id));
+    }
+}

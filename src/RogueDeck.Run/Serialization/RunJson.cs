@@ -225,8 +225,9 @@ public static class RunJson
     }
 
     // Data effects. Nested effect lists, expressions, selectors and pools recurse through their converters.
-    // Effects that embed code or content objects (AddRelic/InstallProgram/ExpandRunEffect/ForEachCard/
-    // AddRewardModifier/AddCombatModifier) are escapes and are not registered.
+    // Effects that embed code or content objects (AddRelic/InstallRunProgram/ExpandRunEffect/ForEachCard/
+    // AddRewardModifier/AddCombatModifier) are escapes and are not registered — a program installed as DATA
+    // names its body in the catalog instead (fx.installProgramById).
     private static void RegisterEffects(RunJsonRegistry r)
     {
         r.Register("fx.changeResource", typeof(ChangeResourceRunEffect))
@@ -250,6 +251,7 @@ public static class RunJson
          .Register("fx.setActFlag", typeof(SetActFlagRunEffect))
          .Register("fx.addShopStock", typeof(AddShopStockRunEffect))
          .Register("fx.restockShopStock", typeof(RestockShopStockRunEffect))
+         .Register("fx.installProgramById", typeof(InstallProgramByIdRunEffect))
          .Register("fx.uninstallProgram", typeof(UninstallRunProgramRunEffect))
          .Register("fx.useConsumable", typeof(UseConsumableRunEffect))
          .Register("fx.computedResource", typeof(ComputedResourceRunEffect))

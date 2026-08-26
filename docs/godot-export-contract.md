@@ -64,6 +64,7 @@ Top level: a single JSON object, **PascalCase** property names, enums as **strin
 | `Map` | `Nodes` (id, type, payload ref), `Edges` (from→to), `EntryNodeIds`, `Layout` (authored x/y per node) |
 | `Statuses` | authored status definitions |
 | `Relics` | relics as data: run-triggered programs + combat rules |
+| `Programs` | id → run program body, installed by `fx.installProgramById` (a lasting consequence that belongs to no relic — e.g. an event's "your next fight is audited"). Absent when the game authors none |
 | `CombatResources` | run-global energy-like resources |
 | `Consumables` | consumable kinds |
 | `Start` | hero name, HP, starting deck/relics/consumables/resources, board units, party |
