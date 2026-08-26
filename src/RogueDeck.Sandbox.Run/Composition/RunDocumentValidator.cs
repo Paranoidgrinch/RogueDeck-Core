@@ -312,6 +312,11 @@ public static class RunDocumentValidator
         if (spec.MinWidth < 1 || spec.MaxWidth < spec.MinWidth)
             problems.Add($"{MapRulesTab}: {scope}row widths are invalid — need 1 <= MinWidth <= MaxWidth.");
 
+        // A fight that names its own payout must be a fight the act can actually field.
+        foreach (var id in spec.VictoryRewardsByEncounter.Keys)
+            if (!encounterIds.Contains(id))
+                problems.Add($"{MapRulesTab}: {scope}a victory reward is authored for encounter '{id}', which is not defined.");
+
         var appearing = spec.AppearingKinds();
 
         var eventKeys = new HashSet<string>(blueprint.Events.Keys, StringComparer.Ordinal);

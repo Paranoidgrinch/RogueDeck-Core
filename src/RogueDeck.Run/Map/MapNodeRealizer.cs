@@ -24,7 +24,11 @@ public static class MapNodeRealizer
                 if (encounter is not { } id)
                     throw new InvalidOperationException(
                         $"A {kind} node has no encounter to run; add candidates for {kind} to MapGeneration.Encounters.");
-                return new NodeContent(StandardRunIds.CombatNode, spec.VictoryRewards.TryGetValue(kind, out var reward)
+                // The fight's OWN payout if it names one (a boss and its three relics), else its role's.
+                var reward = spec.VictoryRewardsByEncounter.TryGetValue(id.Value, out var own)
+                    ? own
+                    : spec.VictoryRewards.GetValueOrDefault(kind);
+                return new NodeContent(StandardRunIds.CombatNode, reward is not null
                     ? new EncounterRef(id, reward.Source, new RewardId($"{reward.RewardIdPrefix}:{id.Value}"),
                         reward.PickCount)
                     : new EncounterRef(id), Tags(kind));

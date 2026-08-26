@@ -85,6 +85,14 @@ public sealed record MapGenerationSpec
     public IReadOnlyDictionary<MapNodeKind, MapVictoryReward> VictoryRewards { get; init; } =
         new Dictionary<MapNodeKind, MapVictoryReward>();
 
+    // What ONE named encounter pays out, overriding its role's entry above. A role-wide table cannot express
+    // "this boss hands you one of ITS three relics" — every boss of the act would hand out the same pool — and
+    // that is how designs usually treat their bosses. Keyed by encounter id; the most specific reward wins, so
+    // an entry here states the WHOLE payout for that fight (its gold and cards included), not an addition to
+    // the role's. Empty (the default) ⇒ every fight pays what its role pays, exactly as before.
+    public IReadOnlyDictionary<string, MapVictoryReward> VictoryRewardsByEncounter { get; init; } =
+        new Dictionary<string, MapVictoryReward>();
+
     // Which authored content a NON-combat generated node references, by role → id: a Shop id, a Workbench id, or an
     // Event id (Event / Rest / Treasure roles all resolve to an authored event by default). Combat / Elite / Boss
     // nodes ignore this — their encounter is drawn from Encounters. A role that can appear (a gate or a positive
