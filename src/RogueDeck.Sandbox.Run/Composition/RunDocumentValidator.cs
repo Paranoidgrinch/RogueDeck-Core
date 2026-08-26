@@ -199,9 +199,16 @@ public static class RunDocumentValidator
         if (blueprint.MapGeneration is { } spec)
             CheckMapGeneration(problems, spec, encounterIds, blueprint);
 
+        // Every ACT carries its own generation rules, and a later act's spec is exactly as able to point at a
+        // deleted encounter as the first one's. An act without a spec of its own falls back to the blueprint's,
+        // which the check above already covered.
+        foreach (var act in blueprint.Acts ?? [])
+            if (act.MapGeneration is { } actSpec)
+                CheckMapGeneration(problems, actSpec, encounterIds, blueprint, $"act '{act.Id}' — ");
+
         // Sanity: a run with no map has nothing to play — unless the map is generated per run (then the authored
-        // Map is legitimately empty and MapGeneration provides the nodes).
-        if (blueprint.Map.Nodes.Count == 0 && blueprint.MapGeneration is null)
+        // Map is legitimately empty and MapGeneration provides the nodes), or the acts each bring their own.
+        if (blueprint.Map.Nodes.Count == 0 && blueprint.MapGeneration is null && !ActsProvideMaps(blueprint))
             problems.Add($"{RunTab}: the map is empty — add at least one node to play the run.");
 
         // Branching-map graph structure (forward-only DAG, valid edge endpoints, reachability). Only bites when
@@ -257,15 +264,17 @@ public static class RunDocumentValidator
 
         // A generation-based game must actually produce a map. When the rules look clean (no Map Rules problem
         // above), generate one from a fixed seed to catch any residual runtime gap the static checks miss. A shipped
-        // game whose map cannot be built is unplayable.
-        if (blueprint.MapGeneration is not null
-            && !problems.Any(p => p.StartsWith(MapRulesTab + ":", StringComparison.Ordinal)))
+        // game whose map cannot be built is unplayable. EVERY act is built, not just the first — an act the player
+        // only reaches after two hours must not be the one that cannot be laid out.
+        var generates = blueprint.MapGeneration is not null
+            || (blueprint.Acts ?? []).Any(a => a.MapGeneration is not null);
+        if (generates && !problems.Any(p => p.StartsWith(MapRulesTab + ":", StringComparison.Ordinal)))
         {
             try
             {
                 var loadout = new BalanceCalculator(blueprint.Balance, blueprint.Encounters)
                     .LoadoutStrength(blueprint.ResolveStart(null), blueprint.Deck);
-                _ = blueprint.BuildRunMap(1, loadout);
+                _ = blueprint.BuildActPlan(1, loadout);
             }
             catch (Exception ex)
             {
@@ -292,13 +301,16 @@ public static class RunDocumentValidator
     // Boss always, plus any kind with a per-path minimum or a positive branch weight) has content the generator can
     // place — an encounter distribution for combat roles, a resolvable NodeRefs id otherwise. There is no
     // feasibility check: gates are always insertable, so any Rows ≥ 1 spec builds.
+    // `scope` names the act the spec belongs to (empty for the blueprint's own), so a problem says WHICH act's
+    // rules broke while keeping the tab prefix a tab can still filter on.
     private static void CheckMapGeneration(
-        List<string> problems, MapGenerationSpec spec, HashSet<string> encounterIds, RunBlueprint blueprint)
+        List<string> problems, MapGenerationSpec spec, HashSet<string> encounterIds, RunBlueprint blueprint,
+        string scope = "")
     {
         if (spec.Rows < 1)
-            problems.Add($"{MapRulesTab}: Rows must be at least 1.");
+            problems.Add($"{MapRulesTab}: {scope}Rows must be at least 1.");
         if (spec.MinWidth < 1 || spec.MaxWidth < spec.MinWidth)
-            problems.Add($"{MapRulesTab}: row widths are invalid — need 1 <= MinWidth <= MaxWidth.");
+            problems.Add($"{MapRulesTab}: {scope}row widths are invalid — need 1 <= MinWidth <= MaxWidth.");
 
         var appearing = spec.AppearingKinds();
 
@@ -316,16 +328,16 @@ public static class RunDocumentValidator
             {
                 var candidates = spec.Encounters.For(kind);
                 if (candidates.Count == 0)
-                    problems.Add($"{MapRulesTab}: role {kind} can appear but has no encounter candidates — add some to the distribution.");
+                    problems.Add($"{MapRulesTab}: {scope}role {kind} can appear but has no encounter candidates — add some to the distribution.");
                 foreach (var entry in candidates)
                     if (!encounterIds.Contains(entry.Encounter.Value))
-                        problems.Add($"{MapRulesTab}: role {kind} draws unknown encounter '{entry.Encounter.Value}'.");
+                        problems.Add($"{MapRulesTab}: {scope}role {kind} draws unknown encounter '{entry.Encounter.Value}'.");
             }
             else
             {
                 if (!spec.NodeRefs.TryGetValue(kind, out var refId) || string.IsNullOrEmpty(refId))
                 {
-                    problems.Add($"{MapRulesTab}: role {kind} can appear but has no NodeRefs entry to realize it.");
+                    problems.Add($"{MapRulesTab}: {scope}role {kind} can appear but has no NodeRefs entry to realize it.");
                     continue;
                 }
                 var (known, what) = kind switch
@@ -335,10 +347,15 @@ public static class RunDocumentValidator
                     _ => (eventKeys.Contains(refId), "event"),
                 };
                 if (!known)
-                    problems.Add($"{MapRulesTab}: role {kind} references {what} '{refId}', which has no definition.");
+                    problems.Add($"{MapRulesTab}: {scope}role {kind} references {what} '{refId}', which has no definition.");
             }
         }
     }
+
+    // Whether the acts bring their own maps, so an empty authored Map is not a missing map.
+    private static bool ActsProvideMaps(RunBlueprint blueprint) =>
+        blueprint.Acts is { Count: > 0 } acts
+        && acts.All(a => a.MapGeneration is not null || a.Map is { Nodes.Count: > 0 });
 
     private static void CheckPresentation(
         List<string> problems, string tab, string kind,

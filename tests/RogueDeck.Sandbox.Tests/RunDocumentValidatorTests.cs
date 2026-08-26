@@ -497,4 +497,58 @@ public class RunDocumentValidatorTests
             RunDocumentValidator.Validate(bp),
             p => p.StartsWith("Map Rules:", StringComparison.Ordinal) && p.Contains("Shop") && p.Contains("NodeRefs"));
     }
+
+    // ── Per-act generation rules ────────────────────────────────────────────────────
+    // A multi-act game keeps its rules per act, so the gate has to read every act's spec: the second act is the
+    // one nobody sees until an hour in, and a broken spec there is a run that cannot continue.
+
+    [Fact]
+    public void Flags_a_later_acts_rules_and_names_the_act()
+    {
+        var generated = Generated();
+        var broken = generated.MapGeneration! with
+        {
+            Encounters = new EncounterDistribution
+            {
+                ByRole = new Dictionary<MapNodeKind, IReadOnlyList<EncounterPoolEntry>>
+                {
+                    [MapNodeKind.Combat] = new[] { new EncounterPoolEntry(new EncounterId("fight")) },
+                    [MapNodeKind.Boss] = new[] { new EncounterPoolEntry(new EncounterId("phantom")) },
+                },
+            },
+        };
+        var bp = generated with
+        {
+            Acts = new[]
+            {
+                new RunAct("act-one", generated.MapGeneration),
+                new RunAct("act-two", broken),
+            },
+        };
+
+        Assert.Contains(
+            RunDocumentValidator.Validate(bp),
+            p => p.StartsWith("Map Rules:", StringComparison.Ordinal)
+                && p.Contains("act 'act-two'") && p.Contains("phantom"));
+        Assert.NotEmpty(RunDocumentValidator.ValidateForExport(bp));
+    }
+
+    [Fact]
+    public void A_two_act_blueprint_whose_acts_carry_their_own_rules_passes_the_export_gate()
+    {
+        var generated = Generated();
+        var bp = generated with
+        {
+            // No blueprint-level spec at all: the acts are the only rules, and an empty authored map is right.
+            MapGeneration = null,
+            Acts = new[]
+            {
+                new RunAct("act-one", generated.MapGeneration),
+                new RunAct("act-two", generated.MapGeneration! with { Rows = 6 }),
+            },
+        };
+
+        Assert.Empty(RunDocumentValidator.ValidateForExport(bp));
+        Assert.DoesNotContain(RunDocumentValidator.Validate(bp), p => p.Contains("the map is empty"));
+    }
 }
