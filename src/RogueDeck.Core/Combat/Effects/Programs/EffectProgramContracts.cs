@@ -286,6 +286,8 @@ public interface IApplyStatusNodeCore : INativeEffectOperationNode
     int EvaluateStacks(IEffectExecutionContextCore ctx, CombatState combat);
     int DurationTurns { get; }
     int Charges { get; }
+    // The one prohibition that may not refuse this application. Null = the ordinary case.
+    StatusDefinitionId? UnrefusableBy { get; }
     EffectResultKey<OrderedTargetOutcomes<ApplyStatusOutcome>>? ResultKey { get; }
     Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(ApplyStatusEffectRequest);
 }

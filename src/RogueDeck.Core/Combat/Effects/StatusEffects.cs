@@ -20,7 +20,12 @@ public sealed record ApplyStatusEffectRequest(
     ApplyStatusOutcomeSlot? OutcomeSlot = null,
     // Tracks how many times this request has been replaced by an interceptor.
     // When it reaches MaxInterceptionDepth, the chain is skipped to prevent loops.
-    int InterceptionDepth = 0
+    int InterceptionDepth = 0,
+    // The one prohibition this application is not subject to — the mirror of StatusPreventionSpec.Only.
+    // A prohibition names the single status it refuses; this names the single prohibition that may not
+    // refuse THIS application, which is what an injunction against a licence is: the licence still exists
+    // and is still spendable elsewhere, but not against this.
+    StatusDefinitionId? UnrefusableBy = null
 ) : IEffectRequest;
 
 public sealed class ApplyStatusEffectHandler : EffectRequestHandler<ApplyStatusEffectRequest>

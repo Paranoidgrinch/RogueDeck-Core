@@ -130,6 +130,8 @@ public sealed class DeclarativeStatusPreventionInterceptor : IStatusApplicationI
         {
             if (candidate.DefinitionId == context.Request.StatusDefinitionId)
                 continue; // a prohibition never refuses itself
+            if (context.Request.UnrefusableBy == candidate.DefinitionId)
+                continue; // …and this application has been declared beyond this prohibition's reach
             if (candidate.Stacks <= 0)
                 continue;
             if (!context.Registry.TryGetStatus(candidate.DefinitionId, out var definition) ||

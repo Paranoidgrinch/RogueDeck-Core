@@ -359,6 +359,17 @@ public sealed class ApplyStatusNode<TContext> : IApplyStatusNodeCore, IEffectNod
     public ICombatExpression<TContext, int> Stacks { get; }
     public int DurationTurns { get; }
     public int Charges { get; }
+
+    // The one prohibition that may not refuse this application — the mirror of a prohibition's own "the one
+    // status I refuse". An injunction against a licence does not remove the licence or make it unspendable
+    // everywhere; it says that THIS application is beyond it.
+    //
+    // Written only when it is set, so every document authored before the field existed round-trips
+    // byte-identically.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public StatusDefinitionId? UnrefusableBy { get; }
+
     public EffectResultKey<OrderedTargetOutcomes<ApplyStatusOutcome>>? ResultKey { get; }
 
     public IReadOnlyList<IEffectNode<TContext>> Children => [];
@@ -370,7 +381,8 @@ public sealed class ApplyStatusNode<TContext> : IApplyStatusNodeCore, IEffectNod
         int durationTurns = 0,
         int charges = 0,
         EffectResultKey<OrderedTargetOutcomes<ApplyStatusOutcome>>? resultKey = null,
-        ICombatantTargetSelector? sourceSelector = null)
+        ICombatantTargetSelector? sourceSelector = null,
+        StatusDefinitionId? unrefusableBy = null)
     {
         ArgumentNullException.ThrowIfNull(targetSelector);
         ArgumentNullException.ThrowIfNull(stacks);
@@ -388,6 +400,7 @@ public sealed class ApplyStatusNode<TContext> : IApplyStatusNodeCore, IEffectNod
         Charges = charges;
         ResultKey = resultKey;
         SourceSelector = sourceSelector;
+        UnrefusableBy = unrefusableBy;
     }
 
     public ProducedResult? GetProducedResult() =>

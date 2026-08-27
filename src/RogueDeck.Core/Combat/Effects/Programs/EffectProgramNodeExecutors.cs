@@ -926,7 +926,8 @@ internal sealed class ApplyStatusNodeExecutor : IEffectNodeExecutor
                 Stacks: stacks,
                 DurationTurns: typed.DurationTurns,
                 Charges: typed.Charges,
-                OutcomeSlot: slots?[i]));
+                OutcomeSlot: slots?[i],
+                UnrefusableBy: typed.UnrefusableBy));
 
         if (typed.ResultKey is { } key)
         {
