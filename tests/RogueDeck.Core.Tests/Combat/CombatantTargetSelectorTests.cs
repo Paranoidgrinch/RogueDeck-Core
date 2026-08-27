@@ -474,6 +474,35 @@ public class CombatantTargetSelectorTests
         Assert.Equal(GoblinId, Assert.Single(targets));
     }
 
+    // A fallen body still wears the mark that says which body it was, and a revival mechanic has to be able
+    // to address it by that mark. Off by default, because every other reader means "who is standing there".
+    [Fact]
+    public void WithStatusSelectorKeepsAFallenCombatantOnlyWhenAskedTo()
+    {
+        var builder = CombatTestFactory.CreateStandardBuilder();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndTwoGoblins();
+
+        var statusId = new StatusDefinitionId("test.fallen_marker");
+        RegisterStackingStatus(builder, statusId, StatusPolarity.Neutral);
+        var registry = builder.Build();
+
+        ApplyStatus(combat, registry, SecondGoblinId, statusId, stacks: 1);
+        DealDamage(combat, registry, SecondGoblinId, amount: 999);
+        Assert.False(combat.GetCombatant(SecondGoblinId).IsAlive);
+
+        var context = CreateContext(combat, HeroId);
+
+        Assert.Empty(CombatantTargetSelectors
+            .WithStatus(CombatantTargetSelectors.AllCombatants, statusId)
+            .ResolveTargets(context));
+
+        var fallen = CombatantTargetSelectors
+            .WithStatus(CombatantTargetSelectors.AllCombatants, statusId, includeFallen: true);
+
+        Assert.Equal(SecondGoblinId, Assert.Single(fallen.ResolveTargets(context)));
+        Assert.True(fallen.MayIncludeDownedTargets);
+    }
+
     private static CombatantTargetSelectionContext CreateContext(
         CombatState combat,
         CombatantId sourceId,

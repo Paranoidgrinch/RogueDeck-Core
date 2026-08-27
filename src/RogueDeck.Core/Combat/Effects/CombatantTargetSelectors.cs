@@ -297,11 +297,17 @@ public sealed record DamagedCombatantsTargetSelector(ICombatantTargetSelector In
     }
 }
 
+// IncludeFallen keeps a combatant that has gone down but still carries the status — the address a revival
+// mechanic needs, since a fallen body is still the one wearing the mark that says which body it was. It is
+// off by default, because every other reader of this selector means "who is standing there now".
 public sealed record CombatantsWithStatusTargetSelector(
     ICombatantTargetSelector Inner,
-    StatusDefinitionId StatusDefinitionId)
+    StatusDefinitionId StatusDefinitionId,
+    bool IncludeFallen = false)
     : ICombatantTargetSelector
 {
+    public bool MayIncludeDownedTargets => IncludeFallen;
+
     public IReadOnlyCollection<CombatantId> ResolveTargets(CombatantTargetSelectionContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -313,7 +319,7 @@ public sealed record CombatantsWithStatusTargetSelector(
                 : null)
             .Where(combatant =>
                 combatant is not null &&
-                combatant.IsAlive &&
+                (IncludeFallen || combatant.IsAlive) &&
                 combatant.Statuses.Any(status => status.DefinitionId == StatusDefinitionId))
             .Select(combatant => combatant!.Id)
             .ToArray();
@@ -719,9 +725,10 @@ public static class CombatantTargetSelectors
 
     public static ICombatantTargetSelector WithStatus(
         ICombatantTargetSelector inner,
-        StatusDefinitionId statusDefinitionId)
+        StatusDefinitionId statusDefinitionId,
+        bool includeFallen = false)
     {
-        return new CombatantsWithStatusTargetSelector(inner, statusDefinitionId);
+        return new CombatantsWithStatusTargetSelector(inner, statusDefinitionId, includeFallen);
     }
 
     public static ICombatantTargetSelector WithoutStatus(
