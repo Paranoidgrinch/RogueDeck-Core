@@ -82,6 +82,8 @@ public class CombatJsonSelectorTests
         RoundTrips(new DownedCombatantsTargetSelector(marked));
         RoundTrips(new LowestHealthCombatantTargetSelector(marked));
         RoundTrips(new HighestHealthCombatantTargetSelector(marked));
+        RoundTrips(new LowestStatusStacksCombatantTargetSelector(marked, new StatusDefinitionId("claim")));
+        RoundTrips(new HighestStatusStacksCombatantTargetSelector(marked, new StatusDefinitionId("claim")));
         RoundTrips(new LowestHealthPercentageCombatantTargetSelector(marked));
         RoundTrips(new HighestHealthPercentageCombatantTargetSelector(marked));
     }

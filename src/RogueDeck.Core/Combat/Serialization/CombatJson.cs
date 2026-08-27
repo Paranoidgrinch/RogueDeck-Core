@@ -273,6 +273,8 @@ public static class CombatJson
          .Register("sel.downed", typeof(DownedCombatantsTargetSelector))
          .Register("sel.lowestHealth", typeof(LowestHealthCombatantTargetSelector))
          .Register("sel.highestHealth", typeof(HighestHealthCombatantTargetSelector))
+         .Register("sel.lowestStatusStacks", typeof(LowestStatusStacksCombatantTargetSelector))
+         .Register("sel.highestStatusStacks", typeof(HighestStatusStacksCombatantTargetSelector))
          .Register("sel.lowestHealthPercentage", typeof(LowestHealthPercentageCombatantTargetSelector))
          .Register("sel.highestHealthPercentage", typeof(HighestHealthPercentageCombatantTargetSelector))
          // Positional (2D-grid) selectors (P1) — additive; resolve empty in a flat (position-less) combat.

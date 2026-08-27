@@ -412,6 +412,68 @@ public class CombatantTargetSelectorTests
 
         Assert.Equal(composableTargets, convenienceTargets);
     }
+    // "The one of these holding the fewest / most of a status" — how a rule picks a holder by how much
+    // standing they have. A combatant not carrying the status at all counts as zero, which is the point: the
+    // party with none is exactly the one "the enemy with the fewest Claims" means.
+    [Fact]
+    public void LowestStatusStacksPicksTheHolderWithTheLeastAndCountsNoneAsZero()
+    {
+        var combat = CombatTestFactory.CreateCombatWithHeroAndTwoGoblins();
+        var claim = new StatusDefinitionId("test.claim");
+        combat.GetCombatant(GoblinId).AddStatus(new StatusInstance(
+            new StatusInstanceId("s1"), claim, GoblinId, stacks: 2));
+
+        var context = CreateContext(combat, HeroId);
+
+        // The second goblin carries none at all, so it is the one with the fewest.
+        var targets = CombatantTargetSelectors
+            .LowestStatusStacks(CombatantTargetSelectors.AllEnemiesOfSource, claim)
+            .ResolveTargets(context);
+
+        Assert.Equal(SecondGoblinId, Assert.Single(targets));
+    }
+
+    [Fact]
+    public void HighestStatusStacksPicksTheHolderWithTheMost()
+    {
+        var combat = CombatTestFactory.CreateCombatWithHeroAndTwoGoblins();
+        var claim = new StatusDefinitionId("test.claim");
+        combat.GetCombatant(GoblinId).AddStatus(new StatusInstance(
+            new StatusInstanceId("s1"), claim, GoblinId, stacks: 1));
+        combat.GetCombatant(SecondGoblinId).AddStatus(new StatusInstance(
+            new StatusInstanceId("s2"), claim, SecondGoblinId, stacks: 3));
+
+        var context = CreateContext(combat, HeroId);
+
+        var targets = CombatantTargetSelectors
+            .HighestStatusStacks(CombatantTargetSelectors.AllEnemiesOfSource, claim)
+            .ResolveTargets(context);
+
+        Assert.Equal(SecondGoblinId, Assert.Single(targets));
+    }
+
+    // Stacks are summed across instances, because a source-bound status is many instances of one fact.
+    [Fact]
+    public void StatusStacksAreSummedAcrossInstances()
+    {
+        var combat = CombatTestFactory.CreateCombatWithHeroAndTwoGoblins();
+        var claim = new StatusDefinitionId("test.claim");
+        combat.GetCombatant(GoblinId).AddStatus(new StatusInstance(
+            new StatusInstanceId("s1"), claim, GoblinId, stacks: 2));
+        combat.GetCombatant(GoblinId).AddStatus(new StatusInstance(
+            new StatusInstanceId("s2"), claim, GoblinId, stacks: 2));
+        combat.GetCombatant(SecondGoblinId).AddStatus(new StatusInstance(
+            new StatusInstanceId("s3"), claim, SecondGoblinId, stacks: 3));
+
+        var context = CreateContext(combat, HeroId);
+
+        var targets = CombatantTargetSelectors
+            .HighestStatusStacks(CombatantTargetSelectors.AllEnemiesOfSource, claim)
+            .ResolveTargets(context);
+
+        Assert.Equal(GoblinId, Assert.Single(targets));
+    }
+
     private static CombatantTargetSelectionContext CreateContext(
         CombatState combat,
         CombatantId sourceId,

@@ -343,6 +343,68 @@ public sealed record LowestHealthCombatantTargetSelector(ICombatantTargetSelecto
     }
 }
 
+// "The one of these holding the fewest / most of a status" — the shape a resource that lives on combatants
+// needs when a rule has to pick a holder by how much of it they have. Act III's whole social economy is
+// written this way: the enemy with the fewest Claims gains one, the enemy with the most is heard first, a
+// boundary moves a Claim to an ally with fewer. A combatant not carrying the status at all counts as zero,
+// which is the point — the party with no standing is exactly the one these rules single out.
+//
+// Ties break by id so a replay reproduces the pick without touching the combat RNG.
+public sealed record LowestStatusStacksCombatantTargetSelector(
+    ICombatantTargetSelector Inner,
+    StatusDefinitionId StatusDefinitionId) : ICombatantTargetSelector
+{
+    public TargetSelectorCardinality Cardinality => TargetSelectorCardinality.ZeroOrOne;
+
+    public IReadOnlyCollection<CombatantId> ResolveTargets(CombatantTargetSelectionContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(Inner);
+
+        return StatusStacksOrdering.Order(context, Inner, StatusDefinitionId, ascending: true);
+    }
+}
+
+public sealed record HighestStatusStacksCombatantTargetSelector(
+    ICombatantTargetSelector Inner,
+    StatusDefinitionId StatusDefinitionId) : ICombatantTargetSelector
+{
+    public TargetSelectorCardinality Cardinality => TargetSelectorCardinality.ZeroOrOne;
+
+    public IReadOnlyCollection<CombatantId> ResolveTargets(CombatantTargetSelectionContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(Inner);
+
+        return StatusStacksOrdering.Order(context, Inner, StatusDefinitionId, ascending: false);
+    }
+}
+
+internal static class StatusStacksOrdering
+{
+    public static IReadOnlyCollection<CombatantId> Order(
+        CombatantTargetSelectionContext context,
+        ICombatantTargetSelector inner,
+        StatusDefinitionId statusDefinitionId,
+        bool ascending)
+    {
+        var living = inner.ResolveTargets(context)
+            .Select(targetId => context.Combat.TryGetCombatant(targetId, out var combatant) ? combatant : null)
+            .Where(combatant => combatant is not null && combatant.IsAlive)
+            .Select(combatant => combatant!);
+
+        var ordered = ascending
+            ? living.OrderBy(Stacks).ThenBy(c => c.Id.ToString(), StringComparer.Ordinal)
+            : living.OrderByDescending(Stacks).ThenBy(c => c.Id.ToString(), StringComparer.Ordinal);
+
+        return ordered.Select(c => c.Id).Take(1).ToArray();
+
+        int Stacks(CombatantState combatant) => combatant.Statuses
+            .Where(status => status.DefinitionId == statusDefinitionId)
+            .Sum(status => status.Stacks);
+    }
+}
+
 public sealed record HighestHealthCombatantTargetSelector(ICombatantTargetSelector Inner)
     : ICombatantTargetSelector
 {
@@ -675,6 +737,18 @@ public static class CombatantTargetSelectors
     public static ICombatantTargetSelector LowestHealth(ICombatantTargetSelector inner)
     {
         return new LowestHealthCombatantTargetSelector(inner);
+    }
+
+    public static ICombatantTargetSelector LowestStatusStacks(
+        ICombatantTargetSelector inner, StatusDefinitionId statusDefinitionId)
+    {
+        return new LowestStatusStacksCombatantTargetSelector(inner, statusDefinitionId);
+    }
+
+    public static ICombatantTargetSelector HighestStatusStacks(
+        ICombatantTargetSelector inner, StatusDefinitionId statusDefinitionId)
+    {
+        return new HighestStatusStacksCombatantTargetSelector(inner, statusDefinitionId);
     }
 
     public static ICombatantTargetSelector HighestHealth(ICombatantTargetSelector inner)
