@@ -1742,10 +1742,19 @@ public sealed class ChosenCardInZoneExpression<TContext>
     public CardZone Zone { get; }
     public string Purpose { get; }
 
-    public ChosenCardInZoneExpression(CardZone zone, string purpose = "choose a card")
+    // Cards the choice must NOT offer. The card being played is still in its owner's hand while its own
+    // program runs, so "discard a card" offers the card doing the asking — which for anything that reads what
+    // was chosen ("pay with it", "copy it") is a trap rather than a decision. Null offers the whole zone.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public TagId? ExcludeTag { get; }
+
+    public ChosenCardInZoneExpression(
+        CardZone zone, string purpose = "choose a card", TagId? excludeTag = null)
     {
         Zone = zone;
         Purpose = purpose;
+        ExcludeTag = excludeTag;
     }
 
     public CardInstanceId? Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
@@ -1755,6 +1764,10 @@ public sealed class ChosenCardInZoneExpression<TContext>
             return null;
 
         var cards = combat.GetCardZones(ownerId).GetCardsInZone(Zone);
+        if (ExcludeTag is { } excluded && combat.DefinitionRegistry is { } registry)
+            cards = cards.Where(card =>
+                !registry.CardDefinitions.TryGetValue(card.DefinitionId, out var definition)
+                || !definition.Tags.Contains(excluded)).ToList();
         if (cards.Count == 0)
             return null;
 

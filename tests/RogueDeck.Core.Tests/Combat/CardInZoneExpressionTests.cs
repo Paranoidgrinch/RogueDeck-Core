@@ -106,6 +106,37 @@ public class CardInZoneExpressionTests
         Assert.Equal(2, combat.GetCardZones(HeroId).Hand.Count);
     }
 
+    // The card being played is still in its owner's hand while its own program runs, so "discard a card"
+    // offers the card doing the asking. For anything that then reads what was chosen — pays with it, copies
+    // it — that is a trap and not a decision, so a choice may say what it will not offer.
+    [Fact]
+    public void A_chosen_card_can_refuse_to_offer_a_kind_of_card()
+    {
+        var builder = CombatTestFactory.CreateStandardBuilder();
+        builder.RegisterCard(new CardDefinitionBuilder(
+            new CardDefinitionId("the_asking_card"), new PackageId("test"), "asking.n", "asking.d")
+        {
+            Tags = { new TagId("asking") },
+        });
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        combat.DefinitionRegistry = builder.Build();
+        AddCard(combat, "asking", CardZone.Hand, "the_asking_card");
+        var other = AddCard(combat, "h2", CardZone.Hand);
+        combat.SetCardChooser(new PicksFirst());
+
+        var chosen = new ChosenCardInZoneExpression<Ctx>(
+            CardZone.Hand, "offer a card", excludeTag: new TagId("asking"));
+
+        Assert.Equal(other, chosen.Evaluate(MakeContext(combat), combat));
+    }
+
+    private sealed class PicksFirst : ICombatCardChooser
+    {
+        public IReadOnlyList<CardInstanceId> ChooseCards(
+            IReadOnlyList<CardInstance> candidates, int count, string purpose) =>
+            candidates.Take(count).Select(c => c.Id).ToArray();
+    }
+
     [Fact]
     public void A_chosen_card_falls_back_to_the_first_candidate_with_no_chooser()
     {
