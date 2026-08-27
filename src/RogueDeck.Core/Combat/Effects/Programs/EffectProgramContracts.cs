@@ -280,6 +280,8 @@ public interface IRefillResourceNodeCore : INativeEffectOperationNode
 public interface IApplyStatusNodeCore : INativeEffectOperationNode
 {
     ICombatantTargetSelector TargetSelector { get; }
+    // Who the status is FROM, when it is not simply from whoever is acting. Null = the acting source.
+    ICombatantTargetSelector? SourceSelector { get; }
     StatusDefinitionId StatusDefinitionId { get; }
     int EvaluateStacks(IEffectExecutionContextCore ctx, CombatState combat);
     int DurationTurns { get; }

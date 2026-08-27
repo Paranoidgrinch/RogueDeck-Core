@@ -898,11 +898,20 @@ internal sealed class ApplyStatusNodeExecutor : IEffectNodeExecutor
             ? targetList.Select(_ => new ApplyStatusOutcomeSlot()).ToList()
             : null;
 
+        // The status is from whoever is acting unless the node names someone else — and a named source that
+        // resolves to nobody (the enemy whose law it is has died) falls back to the acting source rather than
+        // silently applying a status from no one.
+        var attributedTo = typed.SourceSelector is { } sourceSelector
+            ? sourceSelector.ResolveTargetsTraced(ctx, combat).FirstOrDefault() is { } named && named != default
+                ? named
+                : ctx.BuildContext.Source.SourceCombatantId
+            : ctx.BuildContext.Source.SourceCombatantId;
+
         for (var i = 0; i < targetList.Count; i++)
             combat.EnqueueEffect(new ApplyStatusEffectRequest(
                 TargetCombatantId: targetList[i],
                 StatusDefinitionId: typed.StatusDefinitionId,
-                SourceCombatantId: ctx.BuildContext.Source.SourceCombatantId,
+                SourceCombatantId: attributedTo,
                 SourceCardId: ctx.BuildContext.Source.SourceCardId,
                 Stacks: stacks,
                 DurationTurns: typed.DurationTurns,

@@ -340,7 +340,21 @@ public sealed class ApplyStatusNode<TContext> : IApplyStatusNodeCore, IEffectNod
     where TContext : class
 {
     public ICombatantTargetSelector TargetSelector { get; }
-    public IEnumerable<ICombatantTargetSelector> GetTargetSelectors() => [TargetSelector];
+
+    // Who the status is FROM. Null means the acting source, which is what almost every application wants: a
+    // card's status comes from whoever played it, an attack's from whoever swung. A rule that fires on the
+    // OTHER side's action needs to say otherwise — Act III's Local Laws answer a card the player just played,
+    // and the Trespass they apply is owed to the enemy whose law it is, not to the player who broke it. A
+    // source-bound status ("at 3 Trespass from the same source") is only as good as who it names.
+    //
+    // Written only when it is set, so every document authored before the field existed round-trips
+    // byte-identically.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public ICombatantTargetSelector? SourceSelector { get; }
+
+    public IEnumerable<ICombatantTargetSelector> GetTargetSelectors() =>
+        SourceSelector is null ? [TargetSelector] : [TargetSelector, SourceSelector];
     public StatusDefinitionId StatusDefinitionId { get; }
     public ICombatExpression<TContext, int> Stacks { get; }
     public int DurationTurns { get; }
@@ -355,7 +369,8 @@ public sealed class ApplyStatusNode<TContext> : IApplyStatusNodeCore, IEffectNod
         ICombatExpression<TContext, int> stacks,
         int durationTurns = 0,
         int charges = 0,
-        EffectResultKey<OrderedTargetOutcomes<ApplyStatusOutcome>>? resultKey = null)
+        EffectResultKey<OrderedTargetOutcomes<ApplyStatusOutcome>>? resultKey = null,
+        ICombatantTargetSelector? sourceSelector = null)
     {
         ArgumentNullException.ThrowIfNull(targetSelector);
         ArgumentNullException.ThrowIfNull(stacks);
@@ -372,6 +387,7 @@ public sealed class ApplyStatusNode<TContext> : IApplyStatusNodeCore, IEffectNod
         DurationTurns = durationTurns;
         Charges = charges;
         ResultKey = resultKey;
+        SourceSelector = sourceSelector;
     }
 
     public ProducedResult? GetProducedResult() =>
