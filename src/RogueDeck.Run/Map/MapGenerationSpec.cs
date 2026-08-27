@@ -119,6 +119,15 @@ public sealed record MapGenerationSpec
     public IReadOnlyDictionary<string, int> NodeRefMinimumDepthPercent { get; init; } =
         new Dictionary<string, int>();
 
+    // How DEEP into the act a ROLE may first appear, as a percentage of the act's depth. The same idea as
+    // NodeRefMinimumDepthPercent one level up: that one says which DOOR may open where, this one says which
+    // KIND of room may stand where. Without it the act's difficulty curve is an accident of the gate order —
+    // a shop can be the very first room (where nobody has any gold yet) and an elite the fourth (with the
+    // starting deck). Per-path minimums still win: where a row can honour no allowed kind, the earliest one is
+    // placed anyway rather than leaving a promise unkept. Empty (the default) leaves generation byte-identical.
+    public IReadOnlyDictionary<MapNodeKind, int> RoleMinimumDepthPercent { get; init; } =
+        new Dictionary<MapNodeKind, int>();
+
     // The kinds a gate funnel can be, in a fixed order (used to lay gates out and to iterate deterministically).
     // Boss is the fixed top row and is never a per-path gate.
     public static readonly IReadOnlyList<MapNodeKind> GateKinds = new[]
@@ -178,6 +187,11 @@ public sealed record MapGenerationSpec
             if (percent is < 0 or > 100)
                 throw new ArgumentOutOfRangeException(nameof(NodeRefMinimumDepthPercent), percent,
                     $"The earliest depth for ref '{nodeRef}' must be a percentage (0-100).");
+
+        foreach (var (role, percent) in RoleMinimumDepthPercent)
+            if (percent is < 0 or > 100)
+                throw new ArgumentOutOfRangeException(nameof(RoleMinimumDepthPercent), percent,
+                    $"The earliest depth for the {role} role must be a percentage (0-100).");
     }
 
     private static readonly IReadOnlyDictionary<MapNodeKind, int> EmptyCounts = new Dictionary<MapNodeKind, int>();

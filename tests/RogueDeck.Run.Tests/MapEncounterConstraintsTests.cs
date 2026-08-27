@@ -194,6 +194,68 @@ public class MapEncounterConstraintsTests
         Assert.True(deepest > 10, "the generated map should be taller than the act's branch backbone");
     }
 
+    // The same gate one level up: a ROLE the act says starts deeper never stands in the opening rooms — not as
+    // a funnel the generator laid, and not as a branch row's own draw either. Without it an act's curve is an
+    // accident of the gate order, and a shop can be the first room of a run that has no gold yet.
+    [Fact]
+    public void A_role_gated_by_depth_never_stands_in_the_opening_rooms()
+    {
+        var spec = new MapGenerationSpec
+        {
+            Rows = 6,
+            MinWidth = 2,
+            MaxWidth = 4,
+            MinEnemiesPerPath = 4,
+            PerPathMinimums = new Dictionary<MapNodeKind, int>
+            {
+                [MapNodeKind.Combat] = 4,
+                [MapNodeKind.Elite] = 2,
+                [MapNodeKind.Shop] = 2,
+            },
+            // The lanes WANT to open on a shop or an elite; only the depth rule stops them.
+            KindWeights = new Dictionary<MapNodeKind, int>
+            {
+                [MapNodeKind.Combat] = 2,
+                [MapNodeKind.Shop] = 3,
+                [MapNodeKind.Elite] = 3,
+            },
+            RoleMinimumDepthPercent = new Dictionary<MapNodeKind, int>
+            {
+                [MapNodeKind.Shop] = 30,
+                [MapNodeKind.Elite] = 50,
+            },
+            Encounters = new EncounterDistribution
+            {
+                ByRole = new Dictionary<MapNodeKind, IReadOnlyList<EncounterPoolEntry>>
+                {
+                    [MapNodeKind.Combat] = Pool("fight.", 60),
+                    [MapNodeKind.Elite] = Pool("elite.", 20),
+                    [MapNodeKind.Boss] = Pool("boss.", 5),
+                },
+            },
+            NodeRefs = new Dictionary<MapNodeKind, string> { [MapNodeKind.Shop] = "shop" },
+        };
+
+        var gatedSeen = 0;
+        for (var seed = 1; seed <= 40; seed++)
+        {
+            var generated = RuleBasedMapGenerator.Generate(spec, seed, 0, EmptyBalance(), Realize);
+            Assert.Empty(MapConstraintValidator.Validate(generated, spec)); // the promises still hold
+            var rows = generated.Map.Nodes.Max(n => Row(n.Id)) + 1;
+            foreach (var node in generated.Map.Nodes)
+            {
+                var role = generated.Roles[node.Id];
+                if (!spec.RoleMinimumDepthPercent.TryGetValue(role, out var earliest))
+                    continue;
+                gatedSeen++;
+                Assert.True(Row(node.Id) * 100 / (rows - 2) >= earliest,
+                    $"a {role} stood at row {Row(node.Id)} of {rows}, earlier than the act allows ({earliest}%)");
+            }
+        }
+
+        Assert.True(gatedSeen > 0, "no gated room was ever placed, so the gate proved nothing");
+    }
+
     // A generated node id is "r{row}c{col}" (MapWiring.Id).
     private static int Row(NodeId id) =>
         int.Parse(id.Value[1..id.Value.IndexOf('c')], System.Globalization.CultureInfo.InvariantCulture);

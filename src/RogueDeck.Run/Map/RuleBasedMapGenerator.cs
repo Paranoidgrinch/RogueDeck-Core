@@ -131,7 +131,7 @@ public static class RuleBasedMapGenerator
         MapGenerationSpec spec, Branches branches, IReadOnlyDictionary<MapNodeKind, int> gateCounts, int wireSeed,
         ContentRealization? realization = null)
     {
-        var plan = AssembleRowPlan(branches.Widths.Length, gateCounts);
+        var plan = AssembleRowPlan(spec, branches.Widths.Length, gateCounts);
         var wire = new MapGenRandom(wireSeed);
         var contentRng = realization is null ? null : new MapGenRandom(realization.ContentSeed);
 
@@ -154,6 +154,12 @@ public static class RuleBasedMapGenerator
             for (var c = 0; c < width; c++)
             {
                 var kind = row.IsGate ? row.GateKind : branches.Kinds[row.BranchIndex][c];
+                // A branch row's kind is drawn long before the plan exists — and the plan is where a row's real
+                // depth is decided, since the gates inserted around it are most of the act. So the act's
+                // "not this shallow" rule is applied HERE, against the assembled plan, and a room standing too
+                // early becomes a fight: the same honest filler the ceilings rewrite to.
+                if (!row.IsGate && DepthPercent(ri, plan.Count) < spec.RoleMinimumDepthPercent.GetValueOrDefault(kind))
+                    kind = MapNodeKind.Combat;
                 var id = new NodeId(MapWiring.Id(ri, c));
                 if (realization is null)
                 {
@@ -209,47 +215,63 @@ public static class RuleBasedMapGenerator
     private readonly record struct RowPlanRow(bool IsGate, MapNodeKind GateKind, int BranchIndex);
 
     private static IReadOnlyList<RowPlanRow> AssembleRowPlan(
-        int branchCount, IReadOnlyDictionary<MapNodeKind, int> gateCounts)
+        MapGenerationSpec spec, int branchCount, IReadOnlyDictionary<MapNodeKind, int> gateCounts)
     {
         var gates = FlattenGates(gateCounts);
         var plan = new List<RowPlanRow> { new(false, default, 0) }; // row 0 = the first branch (entries)
 
         // Spread the gates as evenly as possible among the remaining branch rows.
         var tail = branchCount - 1 + gates.Count;
-        var gateIndex = 0;
+        var rows = 1 + tail + 1; // + the boss leaf
+        var remaining = gates.ToList();
+        var gatesPlaced = 0;
         var branchIndex = 1;
         for (var slot = 0; slot < tail; slot++)
         {
-            var isGate = gateIndex < gates.Count
+            var isGate = gatesPlaced < gates.Count
                 && ((slot + 1) * gates.Count / tail) > (slot * gates.Count / tail);
             if (isGate)
-                plan.Add(new RowPlanRow(true, gates[gateIndex++], branchIndex));
+            {
+                // Which promise this funnel keeps is decided by HOW DEEP it sits: the first kind still owed that
+                // the act allows this shallow, in the order the flattening spread them. With no depths authored
+                // that is always the first one left, which is exactly the old behaviour.
+                var depth = rows <= 2 ? 100 : (plan.Count) * 100 / (rows - 2);
+                var pick = remaining.FindIndex(
+                    kind => depth >= spec.RoleMinimumDepthPercent.GetValueOrDefault(kind));
+                if (pick < 0)
+                    pick = 0; // nothing is allowed here yet, and a promise outranks its flavour
+                plan.Add(new RowPlanRow(true, remaining[pick], branchIndex));
+                remaining.RemoveAt(pick);
+                gatesPlaced++;
+            }
             else
+            {
                 plan.Add(new RowPlanRow(false, default, branchIndex++));
+            }
         }
 
         plan.Add(new RowPlanRow(true, MapNodeKind.Boss, 0)); // the single boss leaf
         return plan;
     }
 
-    // A flat gate order that round-robins the kinds (so like gates don't clump), in the fixed GateKinds order.
+    // A flat gate order in which every kind is spread across the WHOLE act rather than taking its turn until it
+    // runs out. Round-robin looked even and was not: with eight fights promised and one of everything else, the
+    // rare kinds all fell in the opening passes and the act ended in a wall of seven identical fights with
+    // nothing to recover at. Each copy is placed at its own share of the sequence ((i + ½)/n), so a kind
+    // promised eight times appears every eighth gate and a kind promised once appears in the middle.
     private static IReadOnlyList<MapNodeKind> FlattenGates(IReadOnlyDictionary<MapNodeKind, int> gateCounts)
     {
-        var remaining = new Dictionary<MapNodeKind, int>(gateCounts);
-        var gates = new List<MapNodeKind>();
-        bool any;
-        do
+        var placed = new List<(double At, int Order, MapNodeKind Kind)>();
+        for (var order = 0; order < MapGenerationSpec.GateKinds.Count; order++)
         {
-            any = false;
-            foreach (var kind in MapGenerationSpec.GateKinds)
-                if (remaining.GetValueOrDefault(kind) > 0)
-                {
-                    gates.Add(kind);
-                    remaining[kind]--;
-                    any = true;
-                }
-        } while (any);
-        return gates;
+            var kind = MapGenerationSpec.GateKinds[order];
+            var count = gateCounts.GetValueOrDefault(kind);
+            for (var i = 0; i < count; i++)
+                placed.Add(((i + 0.5) / count, order, kind));
+        }
+        // Ties (two kinds wanting the same share) fall in the fixed GateKinds order, so the layout stays
+        // deterministic for a seed.
+        return [.. placed.OrderBy(g => g.At).ThenBy(g => g.Order).Select(g => g.Kind)];
     }
 
     // ── Per-path ceilings ────────────────────────────────────────────────────────────────────────────────
