@@ -262,6 +262,19 @@ public static class CombatJson
          .Register("sel.alliesWithStatus", typeof(AllAlliesOfSourceWithStatusCombatantTargetSelector))
          .Register("sel.enemiesWithStatus", typeof(AllEnemiesOfSourceWithStatusCombatantTargetSelector))
          .Register("sel.union", typeof(UnionCombatantTargetSelector))
+         // Wrapping selectors — the ones that narrow another selector's result. They were buildable in code
+         // long before they were writable in a document, which meant a serialized program could not say "the
+         // enemy that carries this mark" at all: every scalar read needs an at-most-one selector, and `first`
+         // is the only sanctioned way to get one out of a list.
+         .Register("sel.first", typeof(FirstCombatantTargetSelector))
+         .Register("sel.except", typeof(ExceptCombatantTargetSelector))
+         .Register("sel.withoutStatus", typeof(CombatantsWithoutStatusTargetSelector))
+         .Register("sel.damaged", typeof(DamagedCombatantsTargetSelector))
+         .Register("sel.downed", typeof(DownedCombatantsTargetSelector))
+         .Register("sel.lowestHealth", typeof(LowestHealthCombatantTargetSelector))
+         .Register("sel.highestHealth", typeof(HighestHealthCombatantTargetSelector))
+         .Register("sel.lowestHealthPercentage", typeof(LowestHealthPercentageCombatantTargetSelector))
+         .Register("sel.highestHealthPercentage", typeof(HighestHealthPercentageCombatantTargetSelector))
          // Positional (2D-grid) selectors (P1) — additive; resolve empty in a flat (position-less) combat.
          .Register("sel.adjacent", typeof(AdjacentToSourceCombatantTargetSelector))
          .Register("sel.sameColumn", typeof(SameColumnAsSourceCombatantTargetSelector))

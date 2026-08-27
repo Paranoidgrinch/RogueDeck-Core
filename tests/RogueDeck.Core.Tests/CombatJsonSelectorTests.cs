@@ -64,4 +64,39 @@ public class CombatJsonSelectorTests
         RoundTrips(new NearestEnemyOfSourceCombatantTargetSelector());
         RoundTrips(new OpposingInColumnCombatantTargetSelector());
     }
+
+    // The wrapping selectors: buildable in code long before they were writable in a document. `first` is the
+    // one that mattered — it is the only sanctioned way to read a single combatant out of a list selector, so
+    // without it no serialized program could say "the enemy that carries this mark".
+    [Fact]
+    public void Wrapping_selectors_round_trip()
+    {
+        var marked = new AllEnemiesOfSourceWithStatusCombatantTargetSelector(new StatusDefinitionId("mark"));
+
+        RoundTrips(new FirstCombatantTargetSelector(marked));
+        RoundTrips(new ExceptCombatantTargetSelector(
+            new AllAlliesOfSourceCombatantTargetSelector(), new SourceCombatantTargetSelector()));
+        RoundTrips(new CombatantsWithoutStatusTargetSelector(
+            new AllAlliesOfSourceCombatantTargetSelector(), new StatusDefinitionId("mark")));
+        RoundTrips(new DamagedCombatantsTargetSelector(marked));
+        RoundTrips(new DownedCombatantsTargetSelector(marked));
+        RoundTrips(new LowestHealthCombatantTargetSelector(marked));
+        RoundTrips(new HighestHealthCombatantTargetSelector(marked));
+        RoundTrips(new LowestHealthPercentageCombatantTargetSelector(marked));
+        RoundTrips(new HighestHealthPercentageCombatantTargetSelector(marked));
+    }
+
+    [Fact]
+    public void A_wrapping_selector_reconstructs_what_it_wraps()
+    {
+        ICombatantTargetSelector selector = new FirstCombatantTargetSelector(
+            new AllEnemiesOfSourceWithStatusCombatantTargetSelector(new StatusDefinitionId("mark")));
+
+        var back = CombatJson.FromJson<ICombatantTargetSelector>(
+            CombatJson.ToJson(selector, Options), Options);
+
+        var first = Assert.IsType<FirstCombatantTargetSelector>(back);
+        var inner = Assert.IsType<AllEnemiesOfSourceWithStatusCombatantTargetSelector>(first.Inner);
+        Assert.Equal(new StatusDefinitionId("mark"), inner.StatusDefinitionId);
+    }
 }
