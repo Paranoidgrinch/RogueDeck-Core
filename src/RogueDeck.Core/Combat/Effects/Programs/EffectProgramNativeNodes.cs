@@ -434,18 +434,29 @@ public sealed class RemoveSelectedStatusNode<TContext> : IRemoveSelectedStatusNo
     where TContext : class
 {
     public ICombatantTargetSelector TargetSelector { get; }
-    public IEnumerable<ICombatantTargetSelector> GetTargetSelectors() => [TargetSelector];
+
+    // Whose instances the selection's "from the acting source" means. See ModifySelectedStatusStacksNode.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public ICombatantTargetSelector? SourceSelector { get; }
+
+    public IEnumerable<ICombatantTargetSelector> GetTargetSelectors() =>
+        SourceSelector is null ? [TargetSelector] : [TargetSelector, SourceSelector];
     public StatusSelectionSpec Selection { get; }
 
     public IReadOnlyList<IEffectNode<TContext>> Children => [];
 
-    public RemoveSelectedStatusNode(ICombatantTargetSelector targetSelector, StatusSelectionSpec selection)
+    public RemoveSelectedStatusNode(
+        ICombatantTargetSelector targetSelector,
+        StatusSelectionSpec selection,
+        ICombatantTargetSelector? sourceSelector = null)
     {
         ArgumentNullException.ThrowIfNull(targetSelector);
         ArgumentNullException.ThrowIfNull(selection);
 
         TargetSelector = targetSelector;
         Selection = selection;
+        SourceSelector = sourceSelector;
     }
 }
 
@@ -455,7 +466,19 @@ public sealed class ModifySelectedStatusStacksNode<TContext> : IModifySelectedSt
     where TContext : class
 {
     public ICombatantTargetSelector TargetSelector { get; }
-    public IEnumerable<ICombatantTargetSelector> GetTargetSelectors() => [TargetSelector];
+
+    // Whose instances the selection's `FromActingSource` means. Unset it means whoever is acting, which is
+    // right for a rule that spends its OWN stacks — Act II's Delinquency collecting the debt it is owed.
+    // It is wrong for a rule that fires on somebody else's moment: Act III's Wergild comes due at the end of
+    // the PLAYER's turn, and each creditor has to clear its own demand and leave the other creditors' alone.
+    //
+    // Written only when it is set, so documents from before the field existed round-trip byte-identically.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public ICombatantTargetSelector? SourceSelector { get; }
+
+    public IEnumerable<ICombatantTargetSelector> GetTargetSelectors() =>
+        SourceSelector is null ? [TargetSelector] : [TargetSelector, SourceSelector];
     public StatusSelectionSpec Selection { get; }
     public ICombatExpression<TContext, int> Delta { get; }
 
@@ -464,7 +487,8 @@ public sealed class ModifySelectedStatusStacksNode<TContext> : IModifySelectedSt
     public ModifySelectedStatusStacksNode(
         ICombatantTargetSelector targetSelector,
         StatusSelectionSpec selection,
-        ICombatExpression<TContext, int> delta)
+        ICombatExpression<TContext, int> delta,
+        ICombatantTargetSelector? sourceSelector = null)
     {
         ArgumentNullException.ThrowIfNull(targetSelector);
         ArgumentNullException.ThrowIfNull(selection);
@@ -473,6 +497,7 @@ public sealed class ModifySelectedStatusStacksNode<TContext> : IModifySelectedSt
         TargetSelector = targetSelector;
         Selection = selection;
         Delta = delta;
+        SourceSelector = sourceSelector;
     }
 
     public IEnumerable<IResultKeyConsumer> GetExpressionConsumers() => Delta.GetAllConsumers();

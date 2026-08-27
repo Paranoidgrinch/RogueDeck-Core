@@ -1049,16 +1049,28 @@ internal sealed class StealSelectedStatusNodeExecutor : IEffectNodeExecutor
 
 internal sealed class ModifySelectedStatusStacksNodeExecutor : IEffectNodeExecutor
 {
+    // Whose instances "from the acting source" picks. A named source that resolves to nobody selects nothing
+    // rather than falling back to the actor, so a rule about a party that is gone touches no stacks at all.
+    internal static CombatantId? SelectedStatusSource(
+        ICombatantTargetSelector? selector, IEffectExecutionContextCore ctx, CombatState combat)
+    {
+        if (selector is null)
+            return ctx.BuildContext.Source.SourceCombatantId;
+
+        var named = selector.ResolveTargetsTraced(ctx, combat).FirstOrDefault();
+        return named == default ? null : named;
+    }
+
     public void Execute(IEffectNode node, IEffectExecutionContextCore ctx, CombatState combat,
         Action<CombatState>? onComplete, Action<IEffectNode, CombatState, Action<CombatState>?> dispatch)
     {
         var typed = (IModifySelectedStatusStacksNodeCore)node;
         var delta = typed.EvaluateDelta(ctx, combat);
+        var actingSource = SelectedStatusSource(typed.SourceSelector, ctx, combat);
 
         foreach (var target in typed.TargetSelector.ResolveTargetsTraced(ctx, combat))
         {
-            var statusId = StatusSelection.Resolve(
-                combat, target, typed.Selection, ctx.BuildContext.Source.SourceCombatantId);
+            var statusId = StatusSelection.Resolve(combat, target, typed.Selection, actingSource);
             if (statusId is { } id)
                 combat.EnqueueEffect(new ModifyStatusInstanceStacksEffectRequest(target, id, delta));
         }
@@ -1094,11 +1106,11 @@ internal sealed class RemoveSelectedStatusNodeExecutor : IEffectNodeExecutor
         Action<CombatState>? onComplete, Action<IEffectNode, CombatState, Action<CombatState>?> dispatch)
     {
         var typed = (IRemoveSelectedStatusNodeCore)node;
+        var actingSource = ModifySelectedStatusStacksNodeExecutor.SelectedStatusSource(typed.SourceSelector, ctx, combat);
 
         foreach (var target in typed.TargetSelector.ResolveTargetsTraced(ctx, combat))
         {
-            var statusId = StatusSelection.Resolve(
-                combat, target, typed.Selection, ctx.BuildContext.Source.SourceCombatantId);
+            var statusId = StatusSelection.Resolve(combat, target, typed.Selection, actingSource);
             if (statusId is { } id)
                 combat.EnqueueEffect(new RemoveStatusInstanceEffectRequest(target, id));
         }

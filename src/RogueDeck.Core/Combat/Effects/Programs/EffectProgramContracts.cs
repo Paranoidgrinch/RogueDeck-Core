@@ -311,6 +311,9 @@ public interface IRemoveStatusesByPolarityNodeCore : INativeEffectOperationNode
 public interface IRemoveSelectedStatusNodeCore : INativeEffectOperationNode
 {
     ICombatantTargetSelector TargetSelector { get; }
+    // Whose instances "from the acting source" means, when it does not mean whoever is acting. Null = the
+    // acting source.
+    ICombatantTargetSelector? SourceSelector { get; }
     StatusSelectionSpec Selection { get; }
     Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(RemoveStatusInstanceEffectRequest);
 }
@@ -321,6 +324,9 @@ public interface IRemoveSelectedStatusNodeCore : INativeEffectOperationNode
 public interface IModifySelectedStatusStacksNodeCore : INativeEffectOperationNode
 {
     ICombatantTargetSelector TargetSelector { get; }
+    // Whose instances "from the acting source" means, when it does not mean whoever is acting. Null = the
+    // acting source.
+    ICombatantTargetSelector? SourceSelector { get; }
     StatusSelectionSpec Selection { get; }
     int EvaluateDelta(IEffectExecutionContextCore ctx, CombatState combat);
     Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(ModifyStatusInstanceStacksEffectRequest);

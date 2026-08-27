@@ -62,6 +62,50 @@ public class EncounterTriggerTortureTests
         return new EncounterTriggerData("CardPlayed", json);
     }
 
+    // "When the player plays a card, BOTH parties file a writ of their own." The pair is what makes the
+    // question interesting: two source-bound debts on one player, and a rule that must settle exactly one.
+    private static EncounterTriggerData OnCardPlayedBothPartiesFile()
+    {
+        var lawgiver = CombatantTargetSelectors.AllEnemiesOfSourceWithStatus(new StatusDefinitionId("lawgiver"));
+        var clerk = CombatantTargetSelectors.WithoutStatus(
+            CombatantTargetSelectors.AllEnemiesOfSource, new StatusDefinitionId("lawgiver"));
+
+        var program = new EffectProgram<CardPlayedTriggeredEffectContext>(
+            new CausalSequenceEffectNode<CardPlayedTriggeredEffectContext>(
+            [
+                new ApplyStatusNode<CardPlayedTriggeredEffectContext>(
+                    CombatantTargetSelectors.Source, new StatusDefinitionId("writ"),
+                    new ConstantExpression<CardPlayedTriggeredEffectContext>(1), sourceSelector: lawgiver),
+                new ApplyStatusNode<CardPlayedTriggeredEffectContext>(
+                    CombatantTargetSelectors.Source, new StatusDefinitionId("writ"),
+                    new ConstantExpression<CardPlayedTriggeredEffectContext>(1), sourceSelector: clerk),
+            ]));
+
+        var json = JsonSerializer.SerializeToElement(program, CombatJson.CreateOptions<CardPlayedTriggeredEffectContext>());
+        return new EncounterTriggerData("CardPlayed", json);
+    }
+
+    // A card that settles what is owed to ONE named party and leaves the other party's writ standing. The
+    // rule fires on the PLAYER's play, so "from the acting source" would mean the player's own writs — which
+    // is why the node has to be told whose instances it means.
+    private static CardData Settle() => new()
+    {
+        Id = "settle",
+        NameKey = "settle",
+        Costs = Array.Empty<ResourceCost>(),
+        Program = new EffectProgram<CardPlayContext>(
+            new ModifySelectedStatusStacksNode<CardPlayContext>(
+                CombatantTargetSelectors.Source,
+                new StatusSelectionSpec(StatusPolarityFilter.Debuff)
+                {
+                    Definition = new StatusDefinitionId("writ"),
+                    FromActingSource = true,
+                },
+                new ConstantExpression<CardPlayContext>(-1),
+                sourceSelector: CombatantTargetSelectors.AllEnemiesOfSourceWithStatus(
+                    new StatusDefinitionId("lawgiver")))),
+    };
+
     // A pair of enemies, one of them the lawgiver, and a debuff whose whole point is who it is owed to.
     private static RunBlueprint Bench(bool attributed)
     {
@@ -97,7 +141,7 @@ public class EncounterTriggerTortureTests
             new[] { "strike", "strike" }.Select(id => new CardDefinitionId(id)).ToList(),
             new Dictionary<string, EventScript>(),
             new[] { bench },
-            new[] { Strike() },
+            new[] { Strike(), Settle() },
             new[] { Nip() },
             new RunMap(new[]
             {
@@ -246,6 +290,57 @@ public class EncounterTriggerTortureTests
 
             Assert.DoesNotContain(play.CombatDriver.Current!.State.GetCombatant(combat.HeroId).Statuses,
                 s => s.DefinitionId.value == "writ");
+        }
+    }
+
+    // Settling what is owed to ONE party leaves the other party's debt exactly where it was. Without saying
+    // whose instances it means, the rule would look for the player's own writs — the player is who is acting
+    // — and find none, so nothing would ever be settled at all.
+    [Fact]
+    public void A_rule_can_settle_what_is_owed_to_one_named_party()
+    {
+        var play = new RunPlayback(() => { });
+        play.Start(Bench(attributed: true) with
+        {
+            Deck = [new CardDefinitionId("strike"), new CardDefinitionId("settle")],
+            Encounters =
+            [
+                new EncounterDefinition(
+                    new EncounterId("duel"),
+                    [
+                        new EncounterEnemy("auditor", 40, [new EnemyActionDefinitionId("nip")],
+                            [new StartingStatusSpec(new StatusDefinitionId("lawgiver"), 1)], "Auditor"),
+                        new EncounterEnemy("clerk", 40, [new EnemyActionDefinitionId("nip")], null, "Clerk"),
+                    ],
+                    [new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3)],
+                    triggeredEffects: [OnCardPlayedBothPartiesFile()]),
+            ],
+        }, seed: 1, interactive: true);
+        Assert.Null(play.Error);
+        while (play.Session!.IsAwaitingInterlude)
+            play.Session.Continue();
+
+        using (play)
+        {
+            var combat = play.CombatDriver!.Current!;
+            var enemies = combat.State.Combatants.Where(c => c.Id != combat.HeroId).ToList();
+            var lawgiver = enemies.First(c => c.Statuses.Any(s => s.DefinitionId.value == "lawgiver")).Id;
+            var clerk = enemies.First(c => c.Id != lawgiver).Id;
+
+            play.CombatDriver.PlayCard(combat.Hand.First(c => c.DefinitionId.value == "strike").Id, lawgiver);
+            var hero = play.CombatDriver.Current!.State.GetCombatant(combat.HeroId);
+            Assert.Equal(2, hero.Statuses.Count(s => s.DefinitionId.value == "writ"));
+
+            play.CombatDriver.PlayCard(
+                play.CombatDriver.Current!.Hand.First(c => c.DefinitionId.value == "settle").Id, lawgiver);
+            Assert.Null(play.Session.Error);
+
+            // The settle card also fires the bench's rule, so each party has filed twice and one of the
+            // lawgiver's has been paid: two writs owed to the clerk, one to the lawgiver.
+            var writs = play.CombatDriver.Current!.State.GetCombatant(combat.HeroId)
+                .Statuses.Where(s => s.DefinitionId.value == "writ").ToList();
+            Assert.Equal(2, writs.Count(w => w.SourceCombatantId == clerk && w.Stacks > 0));
+            Assert.Equal(1, writs.Where(w => w.SourceCombatantId == lawgiver).Sum(w => w.Stacks));
         }
     }
 }
