@@ -898,14 +898,24 @@ internal sealed class ApplyStatusNodeExecutor : IEffectNodeExecutor
             ? targetList.Select(_ => new ApplyStatusOutcomeSlot()).ToList()
             : null;
 
-        // The status is from whoever is acting unless the node names someone else — and a named source that
-        // resolves to nobody (the enemy whose law it is has died) falls back to the acting source rather than
-        // silently applying a status from no one.
-        var attributedTo = typed.SourceSelector is { } sourceSelector
-            ? sourceSelector.ResolveTargetsTraced(ctx, combat).FirstOrDefault() is { } named && named != default
-                ? named
-                : ctx.BuildContext.Source.SourceCombatantId
-            : ctx.BuildContext.Source.SourceCombatantId;
+        // The status is from whoever is acting unless the node names someone else. A NAMED source that
+        // resolves to nobody — the enemy whose law it is has died — applies nothing at all: a rule that says
+        // "this is owed to that party" has no author once that party is gone, and falling back to the acting
+        // source would file the debt against whoever tripped the rule, which for a rule that answers a card
+        // play is the player.
+        var attributedTo = ctx.BuildContext.Source.SourceCombatantId;
+        if (typed.SourceSelector is { } sourceSelector)
+        {
+            var named = sourceSelector.ResolveTargetsTraced(ctx, combat).FirstOrDefault();
+            if (named == default)
+            {
+                if (onComplete is not null)
+                    combat.EnqueueContinuation(onComplete);
+                return;
+            }
+
+            attributedTo = named;
+        }
 
         for (var i = 0; i < targetList.Count; i++)
             combat.EnqueueEffect(new ApplyStatusEffectRequest(

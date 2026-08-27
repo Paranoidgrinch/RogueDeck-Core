@@ -214,4 +214,38 @@ public class EncounterTriggerTortureTests
 
         return (play, combat.HeroId, enemies);
     }
+
+    // And when the party the rule names is not there to be owed anything, the rule files nothing. Attributing
+    // it to whoever acted instead would hand the player a debt owed to themselves.
+    [Fact]
+    public void A_rule_files_nothing_on_behalf_of_a_party_that_is_gone()
+    {
+        var play = new RunPlayback(() => { });
+        // The lawgiver is not in this fight at all: the marker status exists, nobody wears it.
+        play.Start(Bench(attributed: true) with
+        {
+            Encounters =
+            [
+                new EncounterDefinition(
+                    new EncounterId("duel"),
+                    [new EncounterEnemy("clerk", 40, [new EnemyActionDefinitionId("nip")], null, "Clerk")],
+                    [new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3)],
+                    triggeredEffects: [OnCardPlayedTheLawgiverFilesAWrit(attributed: true)]),
+            ],
+        }, seed: 1, interactive: true);
+        Assert.Null(play.Error);
+        while (play.Session!.IsAwaitingInterlude)
+            play.Session.Continue();
+
+        using (play)
+        {
+            var combat = play.CombatDriver!.Current!;
+            var clerk = combat.State.Combatants.First(c => c.Id != combat.HeroId).Id;
+            play.CombatDriver.PlayCard(combat.Hand.First(c => c.DefinitionId.value == "strike").Id, clerk);
+            Assert.Null(play.Session.Error);
+
+            Assert.DoesNotContain(play.CombatDriver.Current!.State.GetCombatant(combat.HeroId).Statuses,
+                s => s.DefinitionId.value == "writ");
+        }
+    }
 }
