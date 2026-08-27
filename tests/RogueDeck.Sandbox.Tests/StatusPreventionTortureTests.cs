@@ -31,7 +31,7 @@ public class StatusPreventionTortureTests
         StackingBehavior = StatusStackingBehavior.MergeWithExistingInstance,
     };
 
-    private static RunBlueprint Duel(bool watchAnywhere = false)
+    private static RunBlueprint Duel(bool watchAnywhere = false, IReadOnlyList<string>? hand = null)
     {
         // The enemy's whole turn: put three Doubt on the player.
         var accuse = new EnemyActionData
@@ -47,6 +47,15 @@ public class StatusPreventionTortureTests
         {
             NameKey = "Censure",
             Prevention = new StatusPreventionData(StatusPreventionScope.UnwantedByBearer),
+        };
+
+        // A NARROW prohibition: a licence against one named status and nothing else. Act III's Safe-Conduct is
+        // protection against Trespass; a safe conduct that also ate every other debuff would quietly be the
+        // best defensive status in the game.
+        var licence = Plain("licence", StatusPolarity.Buff) with
+        {
+            NameKey = "Licence",
+            Prevention = new StatusPreventionData(StatusPreventionScope.Debuffs, 1, Only: "doubt"),
         };
 
         // A "Rite": while anybody wears it, every refusal anywhere in the fight is counted on the hero.
@@ -79,7 +88,8 @@ public class StatusPreventionTortureTests
         },
             new[] { new ResourceSpec(StandardCombatIds.EnergyResource, 9, 9) });
 
-        var deck = new[] { "self_censure", "self_censure", "enemy_censure", "embolden", "witness_rite" }
+        // The opening hand is the deck, so a test that wants other cards in it names them.
+        var deck = (hand ?? new[] { "self_censure", "self_censure", "enemy_censure", "embolden", "witness_rite" })
             .Select(id => new CardDefinitionId(id)).ToList();
 
         return new RunBlueprint(
@@ -92,6 +102,8 @@ public class StatusPreventionTortureTests
                 Card("enemy_censure", new CombatNodeModel("applyStatus", "eventTarget", CombatAmountSpec.FromConst(1), StatusId: "censure")),
                 Card("embolden", new CombatNodeModel("applyStatus", "eventTarget", CombatAmountSpec.FromConst(2), StatusId: "strength")),
                 Card("witness_rite", new CombatNodeModel("applyStatus", "source", CombatAmountSpec.FromConst(1), StatusId: "witness")),
+                Card("self_licence", new CombatNodeModel("applyStatus", "source", CombatAmountSpec.FromConst(2), StatusId: "licence")),
+                Card("self_vex", new CombatNodeModel("applyStatus", "source", CombatAmountSpec.FromConst(2), StatusId: "vex")),
             },
             new[] { accuse },
             new RunMap(new[]
@@ -99,7 +111,12 @@ public class StatusPreventionTortureTests
                 new Node(new NodeId("duel"), StandardRunIds.CombatNode, new EncounterRef(new EncounterId("duel"))),
             }))
         {
-            Statuses = new[] { censure, witness, Plain("doubt", StatusPolarity.Debuff), Plain("strength", StatusPolarity.Buff) },
+            Statuses = new[]
+            {
+                censure, licence, witness,
+                Plain("doubt", StatusPolarity.Debuff), Plain("vex", StatusPolarity.Debuff),
+                Plain("strength", StatusPolarity.Buff),
+            },
             Start = new RunStart { HeroName = "Filer", MaxHealth = 60, StartingHealth = 60 },
         };
     }
@@ -203,6 +220,58 @@ public class StatusPreventionTortureTests
             fight.Play_("embolden");
 
             Assert.Equal(1, fight.Hero.GetCounter(new CounterId("refusals")));
+        }
+    }
+
+    // The licence names one status, so it refuses that one and stands untouched in front of every other.
+    [Fact]
+    public void A_licence_refuses_the_one_status_it_names()
+    {
+        var fight = Start(Duel(hand: ["self_licence", "self_vex", "self_censure"]));
+        using (fight.Play)
+        {
+            fight.Play_("self_licence");
+            Assert.Equal(2, Fight.Stacks(fight.Hero, "licence"));
+
+            // 3 Doubt into 2 Licence: 2 eaten, 1 lands, and the licence is spent for exactly that.
+            fight.Play.CombatDriver!.EndTurn();
+            Assert.Null(fight.Play.Session!.Error);
+
+            Assert.Equal(1, Fight.Stacks(fight.Hero, "doubt"));
+            Assert.Equal(0, Fight.Stacks(fight.Hero, "licence"));
+        }
+    }
+
+    [Fact]
+    public void A_licence_does_not_pay_for_a_debuff_it_does_not_name()
+    {
+        var fight = Start(Duel(hand: ["self_licence", "self_vex", "self_censure"]));
+        using (fight.Play)
+        {
+            fight.Play_("self_licence");
+            fight.Play_("self_vex");
+
+            // Not its business: the vex lands in full and the licence is still there for the Doubt.
+            Assert.Equal(2, Fight.Stacks(fight.Hero, "vex"));
+            Assert.Equal(2, Fight.Stacks(fight.Hero, "licence"));
+        }
+    }
+
+    // Broad and narrow prohibitions on the same bearer: the oldest matching instance pays, and the licence is
+    // only a matching instance for the status it names.
+    [Fact]
+    public void A_broad_prohibition_pays_for_what_the_licence_will_not()
+    {
+        var fight = Start(Duel(hand: ["self_licence", "self_censure", "self_vex"]));
+        using (fight.Play)
+        {
+            fight.Play_("self_licence");
+            fight.Play_("self_censure");
+            fight.Play_("self_vex");
+
+            Assert.Equal(0, Fight.Stacks(fight.Hero, "vex"));   // Censure ate both stacks
+            Assert.Equal(0, Fight.Stacks(fight.Hero, "censure"));
+            Assert.Equal(2, Fight.Stacks(fight.Hero, "licence")); // and the licence never opened its purse
         }
     }
 }

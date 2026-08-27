@@ -111,7 +111,12 @@ public enum StatusPreventionScope
 
 public sealed record StatusPreventionSpec(
     StatusPreventionScope Scope = StatusPreventionScope.UnwantedByBearer,
-    int StacksPerStack = 1)
+    int StacksPerStack = 1,
+    // A prohibition that refuses ONE named status rather than a whole polarity. Null = the broad reading
+    // Censure wants ("anything I would not want"); a named id is the narrow one a licence wants — Act III's
+    // Safe-Conduct is protection against Trespass and against nothing else, and a safe conduct that also ate
+    // Doubt and Panic would quietly be the best defensive status in the game.
+    StatusDefinitionId? Only = null)
 {
     public bool Refuses(StatusPolarity incoming, bool bearerIsOnPlayerTeam) => Scope switch
     {
@@ -119,6 +124,11 @@ public sealed record StatusPreventionSpec(
         StatusPreventionScope.Buffs => incoming == StatusPolarity.Buff,
         _ => incoming == (bearerIsOnPlayerTeam ? StatusPolarity.Debuff : StatusPolarity.Buff),
     };
+
+    // The full question the interceptor asks: the polarity has to match AND, when this prohibition names one
+    // status, the incoming application has to be that status.
+    public bool Refuses(StatusDefinitionId incomingDefinition, StatusPolarity incoming, bool bearerIsOnPlayerTeam) =>
+        (Only is not { } only || only == incomingDefinition) && Refuses(incoming, bearerIsOnPlayerTeam);
 }
 
 // How long an incoming status waits, and which kinds wait at all. A null polarity delays everything; the

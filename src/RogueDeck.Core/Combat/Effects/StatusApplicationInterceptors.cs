@@ -135,7 +135,8 @@ public sealed class DeclarativeStatusPreventionInterceptor : IStatusApplicationI
             if (!context.Registry.TryGetStatus(candidate.DefinitionId, out var definition) ||
                 definition?.Prevention is not { } prevention)
                 continue;
-            if (!prevention.Refuses(context.StatusDefinition.Polarity, onPlayerTeam))
+            if (!prevention.Refuses(
+                    context.Request.StatusDefinitionId, context.StatusDefinition.Polarity, onPlayerTeam))
                 continue;
 
             var perStack = Math.Max(1, prevention.StacksPerStack);

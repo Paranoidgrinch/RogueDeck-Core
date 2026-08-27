@@ -74,7 +74,7 @@ public sealed record StatusData
                 ? new DisclosureData(sight.DrawPileCards, sight.IntentLookahead)
                 : null,
             Prevention = status.Prevention is { } refusal
-                ? new StatusPreventionData(refusal.Scope, refusal.StacksPerStack)
+                ? new StatusPreventionData(refusal.Scope, refusal.StacksPerStack, refusal.Only?.value)
                 : null,
         };
     }
@@ -98,7 +98,8 @@ public sealed record StatusData
                 ? new DisclosureSpec(sight.DrawPileCards, sight.IntentLookahead)
                 : null,
             Prevention = Prevention is { } refusal
-                ? new StatusPreventionSpec(refusal.Scope, refusal.StacksPerStack)
+                ? new StatusPreventionSpec(refusal.Scope, refusal.StacksPerStack,
+                    refusal.Only is null ? null : new StatusDefinitionId(refusal.Only))
                 : null,
         };
         foreach (var tag in Tags)
@@ -141,7 +142,12 @@ public sealed record DisclosureData(int DrawPileCards = 0, int IntentLookahead =
 // What the bearer refuses and what each of its stacks buys. The engine face is StatusPreventionSpec.
 public sealed record StatusPreventionData(
     StatusPreventionScope Scope = StatusPreventionScope.UnwantedByBearer,
-    int StacksPerStack = 1);
+    int StacksPerStack = 1,
+    // The one status this prohibition refuses, when it refuses only one. Null = the whole polarity, and null
+    // is kept out of the wire format so documents written before the field existed round-trip byte-identically.
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    string? Only = null);
 
 // A status' death-prevention interceptor as data: the HP to survive at, plus the effects to run when it fires.
 public sealed record StatusDeathPreventionData(int SurvivingHealth, IReadOnlyList<InterceptorEffectData> Effects);
