@@ -107,6 +107,18 @@ public sealed record MapGenerationSpec
     public IReadOnlyDictionary<MapNodeKind, IReadOnlyList<string>> NodeRefPools { get; init; } =
         new Dictionary<MapNodeKind, IReadOnlyList<string>>();
 
+    // How DEEP into the act one authored ref may first appear, as a percentage of the act's own depth (0 = from
+    // the entry row on, 100 = only the last row before the boss). A design that gates its doors by stage — "the
+    // Librarian at the end of the aisle, earliest stage 8" — cannot say that with NodeRefPools alone: a pool
+    // draws with no notion of where the node sits, so the deepest room can open on the first step. Keyed by REF
+    // id rather than by kind, because the gate belongs to the content, not to the role. Refs with no entry may
+    // appear anywhere. A percentage rather than a row index because the generated map is TALLER than the act's
+    // branch backbone (gate funnels are inserted into it), so a row number authored against the design's stage
+    // count would land at the wrong depth. Where a row can honour no ref of a pool at all, the gate yields: a
+    // node is never left without content. Empty (the default) leaves generation byte-identical.
+    public IReadOnlyDictionary<string, int> NodeRefMinimumDepthPercent { get; init; } =
+        new Dictionary<string, int>();
+
     // The kinds a gate funnel can be, in a fixed order (used to lay gates out and to iterate deterministically).
     // Boss is the fixed top row and is never a per-path gate.
     public static readonly IReadOnlyList<MapNodeKind> GateKinds = new[]
@@ -161,6 +173,11 @@ public sealed record MapGenerationSpec
         foreach (var lane in LaneProfiles)
             if (lane.KindWeights.Count == 0)
                 throw new ArgumentException($"Lane '{lane.Name}' has no kind weights.", nameof(LaneProfiles));
+
+        foreach (var (nodeRef, percent) in NodeRefMinimumDepthPercent)
+            if (percent is < 0 or > 100)
+                throw new ArgumentOutOfRangeException(nameof(NodeRefMinimumDepthPercent), percent,
+                    $"The earliest depth for ref '{nodeRef}' must be a percentage (0-100).");
     }
 
     private static readonly IReadOnlyDictionary<MapNodeKind, int> EmptyCounts = new Dictionary<MapNodeKind, int>();

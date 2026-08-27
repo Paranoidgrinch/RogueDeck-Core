@@ -175,7 +175,7 @@ public static class RuleBasedMapGenerator
                     }
 
                     var encounter = SelectEncounter(effectiveKind, ri, spec, realization, contentRng!, usedEncounters);
-                    var nodeRef = SelectNodeRef(effectiveKind, spec, contentRng!, usedRefs);
+                    var nodeRef = SelectNodeRef(effectiveKind, spec, ri, plan.Count, contentRng!, usedRefs);
                     var realized = realization.Content(effectiveKind, new MapCoord(ri, c), encounter, nodeRef);
                     builder.AddNode(id, realized.Type, realized.Payload, realized.Tags);
                     kind = effectiveKind;
@@ -341,21 +341,42 @@ public static class RuleBasedMapGenerator
     // holds distinct events/treasures/rests). Returns null for combat roles and for kinds with no pool (the realizer
     // then falls back to the single NodeRefs[kind]); consumes RNG only when a pool is actually drawn, so an empty
     // NodeRefPools leaves generation byte-identical.
+    //
+    // A ref may also be gated by DEPTH (NodeRefMinimumDepthPercent): a door the design only opens late in the act
+    // is filtered out of the shallow rows. If a row can honour nothing in the pool, the gate yields — the node has
+    // to be SOMETHING, and an empty room is worse than an early one.
     private static string? SelectNodeRef(
-        MapNodeKind kind, MapGenerationSpec spec, MapGenRandom rng, ISet<string> used)
+        MapNodeKind kind, MapGenerationSpec spec, int row, int rows, MapGenRandom rng, ISet<string> used)
     {
         if (IsCombatRole(kind))
             return null;
         if (!spec.NodeRefPools.TryGetValue(kind, out var pool) || pool.Count == 0)
             return null;
 
-        var available = pool.Where(r => !used.Contains(r)).ToList();
+        var eligible = pool;
+        if (spec.NodeRefMinimumDepthPercent.Count > 0)
+        {
+            var depth = DepthPercent(row, rows);
+            var deep = pool
+                .Where(r => depth >= spec.NodeRefMinimumDepthPercent.GetValueOrDefault(r))
+                .ToList();
+            if (deep.Count > 0)
+                eligible = deep;
+        }
+
+        var available = eligible.Where(r => !used.Contains(r)).ToList();
         if (available.Count == 0)
-            available = pool.ToList(); // pool exhausted → allow reuse
+            available = eligible.ToList(); // pool exhausted → allow reuse
         var picked = available[rng.Next(available.Count)];
         used.Add(picked);
         return picked;
     }
+
+    // How far into the act a row sits, as the percentage NodeRefMinimumDepthPercent is authored against. Row 0 is
+    // the entry and the last row is the boss, so the deepest row a DOOR can sit on is rows - 2, and that row is
+    // 100%. A map with no room between the two is entirely "deep" — nothing is gated out of a map that short.
+    private static int DepthPercent(int row, int rows) =>
+        rows <= 2 ? 100 : Math.Clamp(row * 100 / (rows - 2), 0, 100);
 
     private static bool IsCombatRole(MapNodeKind kind) =>
         kind is MapNodeKind.Combat or MapNodeKind.MultiCombat or MapNodeKind.Elite

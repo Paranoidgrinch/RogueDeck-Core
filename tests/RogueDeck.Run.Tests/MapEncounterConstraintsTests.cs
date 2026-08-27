@@ -134,4 +134,67 @@ public class MapEncounterConstraintsTests
         Assert.All(eventRefs, r => Assert.StartsWith("event.", r));
         Assert.Equal(eventRefs.Count, eventRefs.Distinct().Count()); // pool >> nodes ⇒ all distinct
     }
+
+    // A door the design only opens late in the act ("earliest stage 8") must not be the first room of the run.
+    [Fact]
+    public void A_depth_gated_ref_never_opens_in_the_shallow_half_of_the_act()
+    {
+        var refs = Enumerable.Range(0, 20).Select(i => $"event.{i}").ToArray();
+        var spec = new MapGenerationSpec
+        {
+            Rows = 10,
+            MinWidth = 2,
+            MaxWidth = 4,
+            MinEnemiesPerPath = 2,
+            PerPathMinimums = new Dictionary<MapNodeKind, int> { [MapNodeKind.Event] = 3 },
+            KindWeights = new Dictionary<MapNodeKind, int>
+            {
+                [MapNodeKind.Combat] = 3,
+                [MapNodeKind.Event] = 3,
+            },
+            Encounters = new EncounterDistribution
+            {
+                ByRole = new Dictionary<MapNodeKind, IReadOnlyList<EncounterPoolEntry>>
+                {
+                    [MapNodeKind.Combat] = Pool("fight.", 60),
+                    [MapNodeKind.Boss] = Pool("boss.", 5),
+                },
+            },
+            NodeRefPools = new Dictionary<MapNodeKind, IReadOnlyList<string>>
+            {
+                [MapNodeKind.Event] = refs,
+            },
+            // Half the doors are late doors; the other half may open anywhere, so the gate always has somewhere
+            // to yield to and never has to be waived.
+            NodeRefMinimumDepthPercent = refs.Where((_, i) => i % 2 == 0).ToDictionary(r => r, _ => 70),
+        };
+
+        var deepest = 0;
+        var seen = 0;
+        for (var seed = 1; seed <= 40; seed++)
+        {
+            var generated = RuleBasedMapGenerator.Generate(spec, seed, 0, EmptyBalance(), Realize);
+            var rows = generated.Map.Nodes.Max(n => Row(n.Id)) + 1;
+            deepest = Math.Max(deepest, rows);
+            foreach (var node in generated.Map.Nodes)
+            {
+                if (generated.Roles[node.Id] != MapNodeKind.Event)
+                    continue;
+                var payload = (string)node.Payload;
+                if (!spec.NodeRefMinimumDepthPercent.ContainsKey(payload))
+                    continue;
+                seen++;
+                // rows - 2 is the deepest row a door can sit on (the last row is the boss), and that row is 100%.
+                Assert.True(Row(node.Id) * 100 / (rows - 2) >= 70,
+                    $"'{payload}' opened at row {Row(node.Id)} of {rows}");
+            }
+        }
+
+        Assert.True(seen > 0, "no gated door was ever placed, so the gate proved nothing");
+        Assert.True(deepest > 10, "the generated map should be taller than the act's branch backbone");
+    }
+
+    // A generated node id is "r{row}c{col}" (MapWiring.Id).
+    private static int Row(NodeId id) =>
+        int.Parse(id.Value[1..id.Value.IndexOf('c')], System.Globalization.CultureInfo.InvariantCulture);
 }
