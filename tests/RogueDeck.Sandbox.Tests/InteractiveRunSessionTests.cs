@@ -106,4 +106,51 @@ public class InteractiveRunSessionTests
         Assert.True(session.IsComplete);
         Assert.Null(session.Error);
     }
+
+    // A shop parks its question from INSIDE the visit, and the visit ends as the park unwinds the resolver —
+    // so unless the session grabs the shelf on its way out, a UI has nothing to draw but the choices. And a
+    // shop's choices are only the AFFORDABLE ones: a player with no gold would see an empty room rather than a
+    // shelf full of things to save up for.
+    [Fact]
+    public void A_parked_shop_publishes_the_shelf_it_asked_from_including_what_is_unaffordable()
+    {
+        var shop = new ShopDefinition([], OfferCount: 0, Stock:
+        [
+            new ShopStockGroup("wares",
+            [
+                new ShopEntry("buy-cheap", Gold, 10, [new ChangeResourceRunEffect(Gold, 0)], "A cheap thing"),
+                new ShopEntry("buy-dear", Gold, 500, [new ChangeResourceRunEffect(Gold, 0)], "A dear thing"),
+            ], 2),
+        ]);
+
+        var content = new RunContentRegistryBuilder().RegisterShop(new ShopId("shop"), shop).Build();
+        var defs = new RunDefinitionRegistryBuilder();
+        new StandardRunPackage(new AutoPlayCombatDriver(), content).RegisterDefinitions(defs);
+        var registry = defs.Build();
+
+        var map = new RunMap(new[]
+        {
+            new Node(new NodeId("n1"), StandardRunIds.ShopNode, new ShopRef(new ShopId("shop"))),
+        });
+
+        RunState MakeRun()
+        {
+            var run = new RunState(new RunId("run"), new HealthState(30, 40), map);
+            run.SetResource(Gold, 20); // enough for one of the two
+            return run;
+        }
+
+        using var session = new InteractiveRunSession(MakeRun, registry, content);
+        session.Start();
+
+        Assert.True(session.IsAwaitingChoice);
+        // Only the cheap one can be bought…
+        Assert.Contains(session.PendingChoices, c => c.Id == "buy-cheap");
+        Assert.DoesNotContain(session.PendingChoices, c => c.Id == "buy-dear");
+        // …and both are on the shelf the player is looking at, with their prices.
+        Assert.NotNull(session.PendingShopShelf);
+        Assert.Equal(
+            new[] { ("buy-cheap", 10), ("buy-dear", 500) },
+            session.PendingShopShelf!.Slots.Select(s => (s.Entry.Id, s.Price)).ToArray());
+    }
 }

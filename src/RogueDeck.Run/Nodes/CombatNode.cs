@@ -57,7 +57,15 @@ public static class HeroCounterResults
 
         var counters = new Dictionary<string, int>(hero.Counters.Count, StringComparer.Ordinal);
         foreach (var (id, value) in hero.Counters)
-            counters[id.ToString()] = value;
+        {
+            // A nameless counter is a content bug (an id that was never given its name), and it used to reach
+            // here as an ArgumentNullException from the dictionary — which reads as an engine crash at the end
+            // of the fight, naming neither the counter nor the card. Say what it is instead.
+            if (string.IsNullOrEmpty(id.value))
+                throw new InvalidOperationException(
+                    "A combatant counter has no name; some content wrote a counter with an unset CounterId.");
+            counters[id.value] = value;
+        }
         return counters;
     }
 }

@@ -27,6 +27,10 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
     public IReadOnlyList<EventChoice> PendingChoices { get; private set; } = Array.Empty<EventChoice>();
     public EntitySelectionRequest? PendingEntities { get; private set; }
 
+    // The shop shelf as it stood when a shop parked its question — what is standing out, and at what price,
+    // including what the player cannot currently afford. Null unless the parked situation is a shop's.
+    public ShopShelf? PendingShopShelf { get; private set; }
+
     // A branching-map path decision: the reachable next nodes the player must pick between (empty = none pending).
     public IReadOnlyList<Node> PendingNodeChoices { get; private set; } = Array.Empty<Node>();
     public bool IsAwaitingNodeChoice => PendingNodeChoices.Count > 0;
@@ -78,6 +82,7 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
         PendingSituation = null;
         PendingChoices = Array.Empty<EventChoice>();
         PendingEntities = null;
+        PendingShopShelf = null;
         PendingNodeChoices = Array.Empty<Node>();
         PendingInterlude = false;
         Error = null;
@@ -103,6 +108,10 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
         }
         catch (Exception ex)
         {
+            // The message alone is what the UI shows, and a stack is what a bug hunt needs — so a run walked
+            // with ROGUEDECK_TRACE set prints the whole exception to stderr on its way into the string.
+            if (Environment.GetEnvironmentVariable("ROGUEDECK_TRACE") is not null)
+                Console.Error.WriteLine(ex);
             Error = $"{ex.GetType().Name}: {ex.Message}";
             IsComplete = true;
         }
@@ -127,6 +136,11 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
             _script.ThrowIfMismatched(nameof(Choose));
             PendingSituation = situation;
             PendingChoices = available;
+            // A shop asks its question from inside the visit, and the visit ends as the park unwinds the
+            // resolver — so the shelf has to be published HERE, while it still stands. Without it a UI can only
+            // show the choices, and a shop's choices are the affordable ones: a broke player saw an empty room
+            // instead of a shelf full of things to save up for.
+            PendingShopShelf = run.ActiveShopShelf;
             throw new ReplayParkedException();
         }
     }
