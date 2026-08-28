@@ -64,6 +64,16 @@ public sealed class ReplayScript
 
     internal void Reset() => _cursor = 0;
 
+    // Forget everything recorded so far. Only a caller that has moved the replay BASELINE forward may do this
+    // (see InteractiveRunSession's checkpoint): the entries dropped here are the answers the new baseline
+    // already contains, and dropping them is the whole point — a script that only ever grows makes every
+    // later answer more expensive than the one before it.
+    internal void Clear()
+    {
+        _entries.Clear();
+        _cursor = 0;
+    }
+
     internal bool AtEnd => _cursor >= _entries.Count;
 
     // Consume the next entry only when it is of the expected kind — prompts are answered strictly in order, so a

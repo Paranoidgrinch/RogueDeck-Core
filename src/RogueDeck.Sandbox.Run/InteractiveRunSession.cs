@@ -10,7 +10,7 @@ namespace RogueDeck.Sandbox.Run;
 // the replay synchronously and raise Changed once at the end.
 public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChooser, IRunInterlude, IDisposable
 {
-    private readonly Func<RunState> _makeRun;
+    private Func<RunState> _makeRun;
     private readonly RunDefinitionRegistry _registry;
     private readonly RunContentRegistry? _content;
     private readonly ReplayScript _script;
@@ -19,6 +19,7 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
     private readonly MetaState? _meta;
     private readonly IReadOnlyList<MetaRule>? _metaRules;
     private readonly RunEntityLabeler? _labeler;
+    private readonly Func<RunSaveData, RunState>? _restore;
     private RunState _run;
     private bool _disposed;
 
@@ -49,6 +50,10 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
 
     // makeRun must build the run's INITIAL state afresh on every call (a new RunState from the blueprint+seed, or
     // a new restore of the same save) — replay determinism depends on every attempt starting identically.
+    //
+    // restore, when supplied, rebuilds a run from a SAVE the same way — and that is what lets the baseline move
+    // forward at an interlude instead of standing at the run's start forever (see Continue). Without it the
+    // session still works; every answer just carries the whole run behind it.
     public InteractiveRunSession(
         Func<RunState> makeRun,
         RunDefinitionRegistry registry,
@@ -57,7 +62,8 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
         IReadOnlyList<IReplayResettable>? resettables = null,
         MetaState? meta = null,
         IReadOnlyList<MetaRule>? metaRules = null,
-        RunEntityLabeler? labeler = null)
+        RunEntityLabeler? labeler = null,
+        Func<RunSaveData, RunState>? restore = null)
     {
         ArgumentNullException.ThrowIfNull(makeRun);
         ArgumentNullException.ThrowIfNull(registry);
@@ -70,6 +76,7 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
         _meta = meta;
         _metaRules = metaRules;
         _labeler = labeler;
+        _restore = restore;
         _run = makeRun(); // so Run is never null before Start
     }
 
@@ -193,7 +200,39 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
     {
         if (!PendingInterlude)
             return;
+        // The interlude is the run's one quiescent point, and continuing past it is the moment its past stops
+        // mattering: everything answered so far is IN the snapshot. So the baseline moves HERE — the script
+        // starts empty again and the next answer replays one node's worth of run instead of the whole walk.
+        // A resumed run continues past exactly the node it was saved at (RunRunner.WalkGraph's resume arm),
+        // which is what Continue means — so the rebase IS the answer, and nothing is recorded.
+        if (TryCheckpoint())
+            return;
         _script.Advance(new InterludeContinueEntry());
+    }
+
+    // Move the replay baseline to the parked run. False when this run cannot be captured (a pending combat or
+    // reward modifier whose body is not value-capturable — RunState.Snapshot says so by throwing), and then the
+    // caller records the answer as before: a run that cannot checkpoint is slow, never wrong.
+    private bool TryCheckpoint()
+    {
+        if (_restore is null)
+            return false;
+        RunSaveData save;
+        try
+        {
+            save = _run.Snapshot();
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+        _makeRun = () => _restore(save);
+        _script.Clear();
+        // Replay from the new baseline at once and adopt whatever it parks at, rather than predicting it. The
+        // resumed run stands past the interlude — at the next node's question — which is exactly where
+        // continuing was supposed to leave the player.
+        Replay();
+        return true;
     }
 
     // IRunChoiceProvider — a branching map's path decision. RunRunner only asks when there is more than one

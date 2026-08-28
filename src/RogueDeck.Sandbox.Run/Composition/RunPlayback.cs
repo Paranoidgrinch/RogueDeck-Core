@@ -205,8 +205,12 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
                 .ToDictionary(p => p.Key, p => p.Value.FlavorText!);
             var labeler = new RogueDeck.Sandbox.Run.RunEntityLabeler(
                 CardNames, RelicNames, ResourceNames, ShredNames, cardDescriptions, relicDescriptions);
+            // The session may move its replay baseline forward at every interlude, and this is how it rebuilds a
+            // run from the snapshot it takes there — the same restore Resume performs, so a checkpointed run
+            // stands where a saved-and-continued one would.
             var session = new InteractiveRunSession(
-                () => makeRun(content), registry, content, script, resettables, meta, metaRules, labeler);
+                () => makeRun(content), registry, content, script, resettables, meta, metaRules, labeler,
+                restore: save => RestoreInItsAct(blueprint, save, content));
             session.Changed += onChanged;
             if (metaStore is { } store && meta is { } profile)
                 session.Changed += () =>

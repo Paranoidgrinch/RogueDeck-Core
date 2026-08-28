@@ -153,4 +153,104 @@ public class InteractiveRunSessionTests
             new[] { ("buy-cheap", 10), ("buy-dear", 500) },
             session.PendingShopShelf!.Slots.Select(s => (s.Entry.Id, s.Price)).ToArray());
     }
+
+    // ── The interlude checkpoint ──────────────────────────────────────────────────────────────────────────
+    //
+    // Every answer re-executes the run from its replay baseline, so a baseline that never moves makes each
+    // answer more expensive than the one before it — by the third act of a real game, unplayably so. The
+    // interlude is the run's one quiescent point, so continuing past it moves the baseline there.
+    //
+    // What has to be true for that to be allowed: the run afterwards is the SAME run. This drives it both
+    // ways over the same map and asserts three things — the baseline really moved (the initial state is not
+    // rebuilt any more), what happened before the checkpoint survived it, and the run ends identically.
+    [Fact]
+    public void Continuing_past_an_interlude_moves_the_replay_baseline_without_changing_the_run()
+    {
+        var shrine = new EventScriptBuilder("shrine")
+            .Situation("shrine", "An ancient shrine.", s => s
+                .Choice("take", c => c.TextKey("Take the offering").Effect(new ChangeResourceRunEffect(Gold, 7)))
+                .Choice("leave", c => c.TextKey("Leave")))
+            .Build();
+        var content = new RunContentRegistryBuilder().RegisterEvent(new EventId("shrine"), shrine).Build();
+        var defs = new RunDefinitionRegistryBuilder();
+        new StandardRunPackage(new AutoPlayCombatDriver(), content).RegisterDefinitions(defs);
+        var registry = defs.Build();
+
+        // Three event nodes: two interludes, so the baseline moves twice.
+        var map = new RunMap(new[]
+        {
+            new Node(new NodeId("n1"), StandardRunIds.EventNode, new EventRef(new EventId("shrine"))),
+            new Node(new NodeId("n2"), StandardRunIds.EventNode, new EventRef(new EventId("shrine"))),
+            new Node(new NodeId("n3"), StandardRunIds.EventNode, new EventRef(new EventId("shrine"))),
+        });
+
+        var builtFromScratch = 0;
+        RunState MakeRun()
+        {
+            builtFromScratch++;
+            return new RunState(new RunId("run"), new HealthState(30, 40), map);
+        }
+
+        using var session = new InteractiveRunSession(
+            MakeRun, registry, content, restore: save => RunState.Restore(save, map, content));
+        session.Start();
+
+        session.Pick("take");
+        Assert.True(session.IsAwaitingInterlude);
+        Assert.Equal(7, session.Run.GetResource(Gold));
+
+        session.Continue();
+        var rebuildsBeforeTheSecondNode = builtFromScratch;
+
+        // The gold taken BEFORE the checkpoint is in the snapshot, so it is still here after it.
+        Assert.True(session.IsAwaitingChoice);
+        Assert.Equal(7, session.Run.GetResource(Gold));
+
+        // …and from here on the run's start is never rebuilt again: the answers replay from the checkpoint.
+        session.Pick("take");
+        session.Continue();
+        session.Pick("take");
+        Assert.Equal(rebuildsBeforeTheSecondNode, builtFromScratch);
+
+        Assert.True(session.IsComplete);
+        Assert.Null(session.Error);
+        Assert.Equal(21, session.Run.GetResource(Gold));
+    }
+
+    // The same three nodes with no checkpointer at all — the slow path every other caller still uses. Its
+    // outcome is the yardstick the test above is measured against: same picks, same ending, same gold.
+    [Fact]
+    public void A_run_without_a_checkpointer_ends_exactly_as_a_checkpointed_one_does()
+    {
+        var shrine = new EventScriptBuilder("shrine")
+            .Situation("shrine", "An ancient shrine.", s => s
+                .Choice("take", c => c.TextKey("Take the offering").Effect(new ChangeResourceRunEffect(Gold, 7)))
+                .Choice("leave", c => c.TextKey("Leave")))
+            .Build();
+        var content = new RunContentRegistryBuilder().RegisterEvent(new EventId("shrine"), shrine).Build();
+        var defs = new RunDefinitionRegistryBuilder();
+        new StandardRunPackage(new AutoPlayCombatDriver(), content).RegisterDefinitions(defs);
+        var registry = defs.Build();
+
+        var map = new RunMap(new[]
+        {
+            new Node(new NodeId("n1"), StandardRunIds.EventNode, new EventRef(new EventId("shrine"))),
+            new Node(new NodeId("n2"), StandardRunIds.EventNode, new EventRef(new EventId("shrine"))),
+            new Node(new NodeId("n3"), StandardRunIds.EventNode, new EventRef(new EventId("shrine"))),
+        });
+
+        using var session = new InteractiveRunSession(
+            () => new RunState(new RunId("run"), new HealthState(30, 40), map), registry, content);
+        session.Start();
+
+        session.Pick("take");
+        session.Continue();
+        session.Pick("take");
+        session.Continue();
+        session.Pick("take");
+
+        Assert.True(session.IsComplete);
+        Assert.Null(session.Error);
+        Assert.Equal(21, session.Run.GetResource(Gold));
+    }
 }
