@@ -475,5 +475,16 @@ public sealed class SetHealthEffectHandler : EffectRequestHandler<SetHealthEffec
         combat.AddLogEntry(
             StandardCombatLogTypes.HealthSet,
             $"HP of '{request.TargetCombatantId}' set to {newValue} (was {previousValue}).");
+
+        // ★ A body at zero is down, however it got there. Until this, only DAMAGE could say so
+        // (MarkCombatantDownedOnZeroHealthHandler), so every other way of emptying a health pool left a
+        // combatant standing at 0 that nothing could remove — and, if it was the last enemy, a fight that
+        // could not end. Found by a walk: the Grandmother Clause pays 5 HP for each courtesy the player keeps,
+        // and paying the last of them left her at 0/350 for the eighty-eight turns until the walker gave up.
+        if (newValue == 0 && target.IsAlive)
+            combat.EnqueueEffect(
+                new SetCombatantLifecycleStateEffectRequest(
+                    CombatantId: request.TargetCombatantId,
+                    LifecycleState: CombatantLifecycleState.Downed));
     }
 }
