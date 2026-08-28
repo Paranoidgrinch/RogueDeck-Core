@@ -227,6 +227,72 @@ public class QueueTortureTests
         }
     }
 
+    // ★ A card that resolves the Queue can itself be PUT in the Queue — "Queue a card from your hand" does
+    // not ask what the card does. That card is still in the Queue while its own program runs (it leaves only
+    // when the program finishes), so without a guard it finds itself waiting, starts itself again, and the
+    // process dies of a stack overflow. Found by a playtest walk: Skeleton Staff queueing Night Docket.
+    [Fact]
+    public void A_queue_card_that_is_itself_queued_does_not_resolve_itself()
+    {
+        var fight = Start(Staffed(["staff", "docket", "counter"]));
+        using (fight.Play)
+        {
+            var enemyHealth = fight.Enemy.Health.Current;
+            Queue(fight, "docket");
+            Assert.Single(fight.Queue);
+
+            fight.Play.CombatDriver!.EndTurn();
+            Assert.Null(fight.Play.Session!.Error);
+
+            // It resolved once, found nothing but itself to resolve, and left.
+            Assert.Empty(fight.Queue);
+            Assert.Equal(enemyHealth, fight.Enemy.Health.Current);
+        }
+    }
+
+    // And what it DOES reach is the next card down — resolved exactly once, not again by the window that was
+    // already walking the same Queue.
+    [Fact]
+    public void A_queued_queue_card_resolves_the_next_card_down_exactly_once()
+    {
+        var fight = Start(Staffed(["staff", "docket", "deferred"]));
+        using (fight.Play)
+        {
+            var enemyHealth = fight.Enemy.Health.Current;
+            Queue(fight, "docket");
+            fight.Play_("deferred");
+            Assert.Equal(2, fight.Queue.Count);
+
+            fight.Play.CombatDriver!.EndTurn();
+            Assert.Null(fight.Play.Session!.Error);
+
+            Assert.Empty(fight.Queue);
+            Assert.Equal(enemyHealth - 13, fight.Enemy.Health.Current);
+        }
+    }
+
+    // The duel plus "staff": "Queue a card from your hand", which is how a card that is not QueueOnPlay ends
+    // up waiting in the Queue.
+    private static RunBlueprint Staffed(IReadOnlyList<string> deck)
+    {
+        var blueprint = Duel(deck);
+        var staff = Card("staff",
+            new CombatNodeModel("queueCard", "source",
+                Card: new CombatCardSpec("chosen", CardZone.Hand),
+                HasCardTarget: true, ToSelectorKey: "eventTarget"));
+        return blueprint with { Cards = [.. blueprint.Cards!, staff] };
+    }
+
+    private static void Queue(Fight fight, string definitionId)
+    {
+        fight.Play_("staff");
+        var offered = fight.Play.CombatDriver!.PendingCardChoice;
+        Assert.NotNull(offered);
+        fight.Play.CombatDriver.SupplyCardChoice(
+            [offered!.First(c => c.DefinitionId.value == definitionId).Id]);
+        Assert.Null(fight.Play.Session!.Error);
+    }
+
     [Fact]
     public void A_queued_card_whose_target_has_left_the_fight_fizzles()
     {

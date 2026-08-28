@@ -24,7 +24,13 @@ public static class QueueResolution
         if (count <= 0 || !combat.TryGetCombatant(ownerId, out _))
             return;
 
-        var waiting = combat.GetCardZones(ownerId).Queue.Take(count).Select(card => card.Id).ToList();
+        // A card that is CURRENTLY resolving is skipped over rather than counted: it is still in the Queue,
+        // but it is already being run, so "your oldest Queued card" means the oldest one that is not this one.
+        var waiting = combat.GetCardZones(ownerId).Queue
+            .Where(card => !combat.IsResolvingQueuedCard(card.Id))
+            .Take(count)
+            .Select(card => card.Id)
+            .ToList();
         if (waiting.Count == 0)
             return;
 
@@ -40,8 +46,10 @@ public static class QueueResolution
             var cardId = waiting[index];
             var zones = combat.GetCardZones(ownerId);
 
-            // Something may have taken the card out of the Queue since the snapshot; skip it.
-            if (!zones.ContainsCard(cardId) || zones.GetCard(cardId).Zone != CardZone.QueuePile)
+            // Something may have taken the card out of the Queue since the snapshot — or a window opened
+            // inside this one already started it. Either way it is not this window's to resolve; skip it.
+            if (!zones.ContainsCard(cardId) || zones.GetCard(cardId).Zone != CardZone.QueuePile
+                || combat.IsResolvingQueuedCard(cardId))
             {
                 index++;
                 continue;
@@ -78,6 +86,7 @@ public static class QueueResolution
             // A resolution is its own action, like the play that queued it: a once-per-action rule that fires
             // inside it must not be sharing a ledger with whatever ran before.
             combat.BeginActionScope();
+            combat.BeginQueuedCardResolution(cardId);
             EffectProgramExecutor.Execute(
                 program,
                 new EffectExecutionContext<CardPlayContext>(new CardPlayContext(card, cardId), buildContext),
@@ -87,6 +96,7 @@ public static class QueueResolution
                 onTerminal: (_, c) =>
                 {
                     c.EndActionScope();
+                    c.EndQueuedCardResolution(cardId);
                     Finish(c, ownerId, cardId, card);
                     ResolveFrom(c, registry, ownerId, waiting, next);
                 });

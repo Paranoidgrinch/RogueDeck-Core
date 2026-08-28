@@ -131,6 +131,22 @@ public sealed class CombatState
             _actionScopes.Peek().DealtDamage = true;
     }
 
+    // A queued card is still IN the Queue while its own program runs — it leaves only once that program has
+    // finished (QueueResolution.Finish). So a resolution window opened from inside that program would find the
+    // very card that is running and start it again, and again: Night Docket resolves the oldest Queued card,
+    // and anything that queues a card from hand (Skeleton Staff, Priority Docket) can put Night Docket itself
+    // in the Queue. That is a stack overflow, which no combat can survive and no rule should be able to cause.
+    // A card resolves once per window: while it is running it is not a candidate for another one.
+    private readonly HashSet<CardInstanceId> _resolvingQueuedCards = new();
+
+    internal void BeginQueuedCardResolution(CardInstanceId cardId) => _resolvingQueuedCards.Add(cardId);
+
+    internal void EndQueuedCardResolution(CardInstanceId cardId) => _resolvingQueuedCards.Remove(cardId);
+
+    // True while this card's queued resolution is still running. Public because the Queue's own rules are the
+    // only reader, and they live in another file.
+    public bool IsResolvingQueuedCard(CardInstanceId cardId) => _resolvingQueuedCards.Contains(cardId);
+
     public int NextStatusInstanceNumber { get; private set; } = 1;
 
     public int NextCardInstanceNumber { get; private set; } = 1;
