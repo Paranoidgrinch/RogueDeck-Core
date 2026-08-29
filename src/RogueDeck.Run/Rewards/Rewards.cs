@@ -114,6 +114,11 @@ public sealed record OfferRewardRunEffect : IRunEffectRequest
 
 public sealed class OfferRewardRunEffectHandler : RunEffectHandler<OfferRewardRunEffect>
 {
+    // "reward" for a reward that says nothing about itself — every purpose a frontend already knows keeps the
+    // spelling it had — and "reward-<kind>" for one that does.
+    private static string PurposeOf(OfferRewardRunEffect request) =>
+        request.Kind is { Length: > 0 } kind ? $"reward-{kind}" : "reward";
+
     protected override void Resolve(RunState run, RunDefinitionRegistry registry, OfferRewardRunEffect request)
     {
         var offers = request.Source.Generate(run).ToList();
@@ -132,8 +137,12 @@ public sealed class OfferRewardRunEffectHandler : RunEffectHandler<OfferRewardRu
         var pick = Math.Clamp(request.PickCount, 0, offers.Count);
         // The chooser picks; with no chooser (non-interactive run) the first `pick` offers are taken. A
         // reward is declinable — allowSkip lets an interactive player take nothing (skip a card reward).
+        //
+        // A reward that knows what it IS says so in the purpose, so a frontend can announce a relic as a relic.
+        // Three screens in a row — the purse, the card pick, the boss's own relic — asked under the one word
+        // "reward", which is how a boss relic could arrive with nothing to say it was one.
         var chosen = run.EntityChooser is { } chooser
-            ? chooser.ChooseEntities(offers, pick, "reward", allowSkip: true)
+            ? chooser.ChooseEntities(offers, pick, PurposeOf(request), allowSkip: true)
             : offers.Take(pick).ToList();
 
         foreach (var offer in chosen)

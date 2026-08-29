@@ -73,6 +73,121 @@ public class RewardLabelingTortureTests
         };
     }
 
+    // The same shape a boss pays out in: one bundle that opens a card pick AND a relic pick. Both nested
+    // rewards SAY what they are, which is the only way anything downstream can tell them apart.
+    private static RunBlueprint SpoilsThatOpenARelic()
+    {
+        var jab = new CardData
+        {
+            Id = "paper-cut",
+            NameKey = "Paper Cut",
+            Costs = [new ResourceCost(StandardCombatIds.EnergyResource, 1)],
+            Program = CombatProgramModel.Build<CardPlayContext>(
+                new CombatNodeModel("dealDamage", "eventTarget", CombatAmountSpec.FromConst(6))),
+        };
+        var charm = new RelicData { Id = "brass-charm", DisplayName = "Brass Charm" };
+
+        var spoils = new FixedRewardSource(
+        [
+            new RewardOffer("spoils",
+            [
+                new ChangeResourceRunEffect(StandardRunIds.Gold, 90),
+                new OfferRewardRunEffect(new RewardId("spoils-cards"),
+                    new FixedRewardSource([new RewardOffer("card-paper-cut",
+                        [new AddCardToDeckRunEffect(new CardDefinitionId("paper-cut"))])]), 1)
+                    { Kind = RewardKinds.Card },
+                new OfferRewardRunEffect(new RewardId("spoils-relic"),
+                    new FixedRewardSource([new RewardOffer("relic-brass-charm",
+                        [new AddRelicByIdRunEffect(new RelicId("brass-charm"))])]), 1)
+                    { Kind = RewardKinds.Relic },
+            ]),
+        ]);
+        var chest = new EventScript("start",
+        [
+            new EventSituation("start", "The boss is down.",
+            [
+                new EventChoice("open", [new OfferRewardRunEffect(new RewardId("spoils"), spoils, 1)], TextKey: "Take it"),
+            ]),
+        ]);
+
+        return new RunBlueprint(
+            [new CardDefinitionId("paper-cut")],
+            new Dictionary<string, EventScript> { ["chest"] = chest },
+            [],
+            [jab],
+            [],
+            new RunMap([new Node(new NodeId("chest"), StandardRunIds.EventNode, new EventRef(new EventId("chest")))]))
+        {
+            Relics = [charm],
+            Start = new RunStart
+            {
+                HeroName = "Filer",
+                MaxHealth = 30,
+                StartingHealth = 30,
+                Resources = new Dictionary<string, int> { [StandardRunIds.Gold.Value] = 0 },
+            },
+            Presentation = new PresentationManifest
+            {
+                Relics = new Dictionary<string, EntityPresentation>
+                {
+                    ["brass-charm"] = new() { FlavorText = "It remembers the drawer it came from." },
+                },
+            },
+        };
+    }
+
+    // A boss pays a purse, a card and its own relic, and the player meets all three under one word. Two things
+    // have to be true for the relic to arrive as a relic: the bundle that announces it must not call it a card,
+    // and the pick itself must say which sort of reward is on the table — a frontend has nothing else to read.
+    [Fact]
+    public void A_relic_reward_is_announced_as_a_relic_and_not_as_a_card()
+    {
+        var play = new RunPlayback(() => { });
+        play.Start(SpoilsThatOpenARelic(), seed: 1, interactive: true);
+        var session = play.Session!;
+        Assert.Null(play.Error);
+        using (play)
+        {
+            session.Pick("open");
+            Assert.Null(session.Error);
+
+            // The bundle names both of the doors it opens, and they are not the same door.
+            Assert.True(session.IsAwaitingEntities);
+            var bundle = Assert.Single(session.PendingEntities!.Displays);
+            Assert.Contains("a card reward", bundle);
+            Assert.Contains("a relic", bundle);
+            session.PickEntities([0]);
+
+            // The card pick, then the relic pick — each under a purpose that says which it is.
+            Assert.True(session.IsAwaitingEntities);
+            Assert.Equal($"reward-{RewardKinds.Card}", session.PendingEntities!.Purpose);
+            session.PickEntities([0]);
+
+            Assert.True(session.IsAwaitingEntities);
+            var relic = session.PendingEntities!;
+            Assert.Equal($"reward-{RewardKinds.Relic}", relic.Purpose);
+            Assert.Equal("Brass Charm", Assert.Single(relic.Displays));
+            Assert.Equal("It remembers the drawer it came from.", Assert.Single(relic.Descriptions));
+            session.PickEntities([0]);
+            Assert.Null(session.Error);
+            Assert.Contains(session.Run.Relics, r => r.Id.Value == "brass-charm");
+        }
+    }
+
+    // A reward that says nothing about itself keeps the purpose every frontend already answers to.
+    [Fact]
+    public void An_unlabelled_reward_still_asks_under_the_plain_word()
+    {
+        var play = new RunPlayback(() => { });
+        play.Start(SpoilsAtAnEvent(), seed: 1, interactive: true);
+        var session = play.Session!;
+        using (play)
+        {
+            session.Pick("open");
+            Assert.Equal("reward", session.PendingEntities!.Purpose);
+        }
+    }
+
     [Fact]
     public void Reward_picks_show_readable_names_not_raw_ids()
     {

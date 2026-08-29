@@ -80,7 +80,19 @@ public sealed class RunEntityLabeler
         HealRunEffect heal => $"Heal {heal.Amount}",
         ShredEngine.AddShredRunEffect shred =>
             $"{shred.Count}× {(_shreds.TryGetValue(shred.ShredId, out var s) ? s : Prettify(shred.ShredId))}",
-        OfferRewardRunEffect => "a card reward",
+        // A reward that opens ANOTHER reward — the boss's purse leads to a card pick and then to its relic.
+        // What the nested pick will hold is not knowable from here (its source has not been generated yet, and
+        // generating it would roll the run's dice early), so the offer has to SAY what it is: that is exactly
+        // what Kind is for. Unnamed, it is announced as a further reward rather than as a card, because
+        // "a card reward" was a guess, and on every boss in a game that hands out relics it was the wrong one.
+        OfferRewardRunEffect offer => offer.Kind switch
+        {
+            RewardKinds.Card => "a card reward",
+            RewardKinds.Relic => "a relic",
+            RewardKinds.Consumable => "a consumable",
+            { Length: > 0 } other => $"a {other} reward",
+            _ => "a further reward",
+        },
         _ => string.Empty,
     };
 
