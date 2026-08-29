@@ -216,6 +216,7 @@ public static class RunJson
     {
         r.Register("tpl.literal", typeof(LiteralEffectTemplate))
          .Register("tpl.gainResource", typeof(GainResourceTemplate))
+         .Register("tpl.changeCounter", typeof(ChangeCounterTemplate))
          .Register("tpl.heal", typeof(HealTemplate))
          .Register("tpl.damage", typeof(DamageTemplate))
          .Register("tpl.upgradeThisCard", typeof(UpgradeThisCardTemplate))

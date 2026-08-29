@@ -91,6 +91,15 @@ public sealed record GainResourceTemplate(RunResourceId Resource, IRunExpression
         new ChangeResourceRunEffect(Resource, Amount.Evaluate(context));
 }
 
+// The counter twin of GainResourceTemplate. A counter change computed from the event — "half of the Gold you
+// just paid" — has to be built HERE, at dispatch, for the same reason a resource change does: a
+// ComputedCounterRunEffect queued from a trigger drains after the event is gone and can no longer read it.
+public sealed record ChangeCounterTemplate(RunCounterId Counter, IRunExpression<int> Amount) : IRunEffectTemplate
+{
+    public IRunEffectRequest Build(RunEvalContext context) =>
+        new IncrementCounterRunEffect(Counter, Amount.Evaluate(context));
+}
+
 public sealed record HealTemplate(IRunExpression<int> Amount) : IRunEffectTemplate
 {
     public IRunEffectRequest Build(RunEvalContext context) => new HealRunEffect(Amount.Evaluate(context));
@@ -150,6 +159,8 @@ public static class RunEffectTemplates
     public static IRunEffectTemplate Literal(IRunEffectRequest effect) => new LiteralEffectTemplate(effect);
     public static IRunEffectTemplate GainResource(RunResourceId resource, IRunExpression<int> amount) =>
         new GainResourceTemplate(resource, amount);
+    public static IRunEffectTemplate ChangeCounter(RunCounterId counter, IRunExpression<int> amount) =>
+        new ChangeCounterTemplate(counter, amount);
     public static IRunEffectTemplate Heal(IRunExpression<int> amount) => new HealTemplate(amount);
     public static IRunEffectTemplate Damage(IRunExpression<int> amount) => new DamageTemplate(amount);
     public static IRunEffectTemplate UpgradeThisCard(int levels = 1) => new UpgradeThisCardTemplate(levels);

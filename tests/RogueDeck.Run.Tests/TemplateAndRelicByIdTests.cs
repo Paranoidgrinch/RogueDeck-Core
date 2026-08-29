@@ -36,6 +36,7 @@ public class TemplateAndRelicByIdTests
         {
             RunEffectTemplates.Literal(new ChangeResourceRunEffect(Gold, 5)),
             RunEffectTemplates.GainResource(Gold, RunExpr.MissingHealth),
+            RunEffectTemplates.ChangeCounter(new RunCounterId("debt"), RunExpr.MissingHealth),
             RunEffectTemplates.Heal(RunExpr.Const(3)),
             RunEffectTemplates.Damage(CardValue.UpgradeLevel),
             RunEffectTemplates.UpgradeThisCard(2),

@@ -73,6 +73,47 @@ public class DeclarativeProgramTests
         Assert.Equal(4, run.GetResource(Gold));
     }
 
+    // The counter twin: "record half of what that fight cost you" is the same shape as gaining gold from the
+    // event, and a counter is where a run keeps a promise it has to pay later.
+    [Fact]
+    public void A_counter_template_reads_the_event_at_dispatch()
+    {
+        var registry = BuildRegistry();
+        var debt = new RunCounterId("debt");
+        var run = NewRun();
+        run.InstallProgram(new InstalledRunProgram(
+            new RunProgramId("tally"),
+            RunPrograms.On<CombatResolvedRunEvent>(
+                RunEffectTemplates.ChangeCounter(debt, RunEventValues.CombatDamageTaken))));
+
+        Play(run, registry, Fight(CombatResult.Victory, 9));
+        Assert.Equal(9, run.GetCounter(debt));
+    }
+
+    // ★ WHY THE TEMPLATES EXIST, stated as the failure they prevent. A trigger is evaluated in two moments: its
+    // condition at DISPATCH, with the event in scope, and its plain effects afterwards, when the queue drains
+    // and the event is gone. So an effect that computes its own amount from the event — rather than a template
+    // that computed it at dispatch — asks a question nobody is left to answer, and throws.
+    //
+    // This is a trap without a shape: the program reads correctly and serializes correctly, and only dies on
+    // the run where the relic carrying it is actually worn. Eight of Bureaucrats & Broomsticks' Shop relics
+    // carried it undetected, because nothing in that game could sell a Shop relic.
+    [Fact]
+    public void A_queued_effect_can_no_longer_read_the_event()
+    {
+        var registry = BuildRegistry();
+        var run = NewRun();
+        run.InstallProgram(new InstalledRunProgram(
+            new RunProgramId("late-payer"),
+            RunPrograms.On<CombatResolvedRunEvent>(
+                new ComputedResourceRunEffect(Gold, RunEventValues.CombatDamageTaken))));
+
+        var thrown = Assert.Throws<InvalidOperationException>(
+            () => Play(run, registry, Fight(CombatResult.Victory, 4)));
+        Assert.Contains("without a matching event", thrown.Message, StringComparison.Ordinal);
+        Assert.Equal(0, run.GetResource(Gold));
+    }
+
     [Fact]
     public void When_condition_gates_the_effects()
     {
