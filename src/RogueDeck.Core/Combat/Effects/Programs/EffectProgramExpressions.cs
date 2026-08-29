@@ -2058,7 +2058,65 @@ public sealed class TriggerEventCardInstanceExpression<TContext>
     where TContext : class
 {
     public CardInstanceId? Evaluate(EffectExecutionContext<TContext> context, CombatState combat) =>
-        context.SourceContext is CardPlayedTriggeredEffectContext c ? c.CombatEvent.CardInstanceId : null;
+        context.SourceContext switch
+        {
+            CardPlayedTriggeredEffectContext played => played.CombatEvent.CardInstanceId,
+            // The other events that are ABOUT one card: a card that moved zones, and the two named moves
+            // (exhaust, banish) that report the same event. A rule triggered by one of them means "that
+            // card" when it says the card, exactly as a play trigger does — without this it would have to
+            // guess the card back out of a zone by position, which the pile order does not promise.
+            CardMovedToZoneTriggeredEffectContext moved => moved.CombatEvent.CardInstanceId,
+            CardExhaustedTriggeredEffectContext exhausted => exhausted.CombatEvent.CardInstanceId,
+            CardBanishedTriggeredEffectContext banished => banished.CombatEvent.CardInstanceId,
+            // A creation names a SET — "add two Junk to your hand" — so the card it means is the first one
+            // made, which is what "the first card that enters your hand" asks for anyway.
+            CardInstanceCreatedTriggeredEffectContext created =>
+                created.CombatEvent.CardInstanceIds.Count > 0
+                    ? created.CombatEvent.CardInstanceIds.First()
+                    : null,
+            _ => null,
+        };
+}
+
+// "Which way did the card move?" — true when the card-move event that fired this trigger names the given zone
+// as where the card LANDED, or, with From, as where it came from.
+//
+// The question a move trigger has to be able to ask before it does anything: a card leaving your hand and a
+// card arriving in it are the same event, and every rule about one of them is wrong about the other. Reading
+// the card's CURRENT zone instead would answer the same in the common case and differently in the ones that
+// matter — a card that was already in the zone and only changed position, or a rule that asks about the zone
+// a card has already left. So this reads the event, and is silent (false) wherever there is no move event.
+public sealed class TriggerEventCardZoneExpression<TContext> : ICombatExpression<TContext, bool>
+    where TContext : class
+{
+    public CardZone Zone { get; }
+    public bool From { get; }
+
+    public TriggerEventCardZoneExpression(CardZone zone, bool from = false)
+    {
+        Zone = zone;
+        From = from;
+    }
+
+    public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        var move = context.SourceContext switch
+        {
+            CardMovedToZoneTriggeredEffectContext moved => moved.CombatEvent,
+            CardExhaustedTriggeredEffectContext exhausted => exhausted.CombatEvent,
+            CardBanishedTriggeredEffectContext banished => banished.CombatEvent,
+            _ => null,
+        };
+
+        if (move is not null)
+            return (From ? move.FromZone : move.ToZone) == Zone;
+
+        // A card that was MADE also arrives somewhere, and answers the same question about where it landed —
+        // but it came from nowhere, so it is never the card that left a zone.
+        return !From
+            && context.SourceContext is CardInstanceCreatedTriggeredEffectContext created
+            && created.CombatEvent.ToZone == Zone;
+    }
 }
 
 // Reads a card's resource cost (e.g. energy) from its definition. The card is identified by an inner

@@ -64,6 +64,18 @@ public sealed record CardMovedToZoneFromZoneTriggerFilter(CardZone FromZone)
     }
 }
 
+// Bearer filter for a status trigger: only the card owner's own statuses may react to its card moving.
+public sealed record CardMovedToZoneOwnerHasStatusTriggerFilter(StatusDefinitionId StatusDefinitionId)
+    : ITriggeredProgramFilter<CardMovedToZoneTriggeredEffectContext>
+{
+    public bool Matches(CardMovedToZoneTriggeredEffectContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        return context.SourceCombatant.Statuses.Any(status => status.DefinitionId == StatusDefinitionId);
+    }
+}
+
 public static class CardMovedToZoneTriggeredEffectTargetResolver
 {
     public static TriggeredEffectActionBuildContext CreateActionBuildContext(

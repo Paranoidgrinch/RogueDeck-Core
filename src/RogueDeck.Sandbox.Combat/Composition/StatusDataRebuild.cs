@@ -100,6 +100,14 @@ public static class StatusDataRebuild
                 id, Program<CardsDrawnTriggeredEffectContext>(data),
                 filters: Scoped<CardsDrawnTriggeredEffectContext>(c => c.Combat,
                     new CardsDrawnSourceHasStatusTriggerFilter(statusId))),
+            TriggerEvent.CardMovedToZone => TriggeredProgramContextAdapters.CardMovedToZone.Define(
+                id, Program<CardMovedToZoneTriggeredEffectContext>(data),
+                filters: Scoped<CardMovedToZoneTriggeredEffectContext>(c => c.Combat,
+                    new CardMovedToZoneOwnerHasStatusTriggerFilter(statusId))),
+            TriggerEvent.CardInstanceCreated => TriggeredProgramContextAdapters.CardInstanceCreated.Define(
+                id, Program<CardInstanceCreatedTriggeredEffectContext>(data),
+                filters: Scoped<CardInstanceCreatedTriggeredEffectContext>(c => c.Combat,
+                    new CardInstanceCreatedOwnerHasStatusTriggerFilter(statusId))),
             TriggerEvent.RoundStarted => TriggeredProgramContextAdapters.RoundStarted.Define(
                 id, Program<RoundStartedTriggeredEffectContext>(data)),
             TriggerEvent.RoundEnded => TriggeredProgramContextAdapters.RoundEnded.Define(

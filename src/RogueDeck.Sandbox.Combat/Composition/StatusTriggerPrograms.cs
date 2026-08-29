@@ -57,6 +57,8 @@ public static class StatusTriggerPrograms
             [TriggerEvent.StatusStacksChanged] = For<StatusStacksChangedTriggeredEffectContext>(),
             [TriggerEvent.BlockGained] = For<BlockGainedTriggeredEffectContext>(),
             [TriggerEvent.CardsDrawn] = For<CardsDrawnTriggeredEffectContext>(),
+            [TriggerEvent.CardMovedToZone] = For<CardMovedToZoneTriggeredEffectContext>(),
+            [TriggerEvent.CardInstanceCreated] = For<CardInstanceCreatedTriggeredEffectContext>(),
             [TriggerEvent.RoundStarted] = For<RoundStartedTriggeredEffectContext>(),
             [TriggerEvent.RoundEnded] = For<RoundEndedTriggeredEffectContext>(),
             [TriggerEvent.StatusApplicationPrevented] = For<StatusApplicationBlockedTriggeredEffectContext>(),

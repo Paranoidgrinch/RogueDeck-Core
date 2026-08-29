@@ -102,6 +102,27 @@ public class CombatJsonExpressionTests
         Assert.IsType<AndExpression<CardPlayContext>>(or.Left);
     }
 
+    // Both halves of the move question — the zone and which end of the move it is about — have to survive the
+    // document, because a rule that came back reading the wrong end is a rule that fires on every card leaving
+    // the hand instead of the one arriving in it.
+    [Fact]
+    public void The_card_move_zone_question_round_trips()
+    {
+        foreach (var expr in new[]
+        {
+            new TriggerEventCardZoneExpression<CardPlayContext>(CardZone.Hand),
+            new TriggerEventCardZoneExpression<CardPlayContext>(CardZone.Hand, from: true),
+        })
+        {
+            RoundTripsBool(expr);
+            var back = Assert.IsType<TriggerEventCardZoneExpression<CardPlayContext>>(
+                CombatJson.FromJson<ICombatExpression<CardPlayContext, bool>>(
+                    CombatJson.ToJson<ICombatExpression<CardPlayContext, bool>>(expr, Options), Options));
+            Assert.Equal(CardZone.Hand, back.Zone);
+            Assert.Equal(expr.From, back.From);
+        }
+    }
+
     [Fact]
     public void The_divide_by_zero_policy_enum_is_preserved()
     {

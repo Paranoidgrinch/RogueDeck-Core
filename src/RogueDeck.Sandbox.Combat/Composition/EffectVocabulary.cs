@@ -44,6 +44,13 @@ public enum TriggerEvent
     StatusStacksChanged, // when a status on the bearer is adjusted up or down (not applied or removed)
     BlockGained,    // when the bearer gains Block
     CardsDrawn,     // when the bearer draws cards (fires after the draw, so the hand already holds them)
+    // when one of the bearer's cards moves between zones — the per-card counterpart of CardsDrawn, and the
+    // only way to hear a card ARRIVE somewhere it was not drawn into. The event names both zones, so the
+    // program says which move it means (eventCardZone); the draw step does not report through it.
+    CardMovedToZone,
+    // when a card is MADE for the bearer — the other way a card arrives somewhere without being drawn or
+    // moved. The event names the pile it was made into, and the first of the cards made.
+    CardInstanceCreated,
     RoundStarted,   // at the start of each round
     RoundEnded,     // at the end of each round
     // when a status the bearer carries refuses an incoming application (Censure eating a debuff). The event

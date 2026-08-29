@@ -28,6 +28,18 @@ public sealed class CardInstanceCreatedCount
     }
 }
 
+// Bearer filter for a status trigger: only the owner's own statuses may react to a card being made for them.
+public sealed record CardInstanceCreatedOwnerHasStatusTriggerFilter(StatusDefinitionId StatusDefinitionId)
+    : ITriggeredProgramFilter<CardInstanceCreatedTriggeredEffectContext>
+{
+    public bool Matches(CardInstanceCreatedTriggeredEffectContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        return context.OwnerCombatant.Statuses.Any(status => status.DefinitionId == StatusDefinitionId);
+    }
+}
+
 public sealed record CardInstanceCreatedCardDefinitionTriggerFilter(CardDefinitionId CardDefinitionId)
     : ITriggeredProgramFilter<CardInstanceCreatedTriggeredEffectContext>
 {

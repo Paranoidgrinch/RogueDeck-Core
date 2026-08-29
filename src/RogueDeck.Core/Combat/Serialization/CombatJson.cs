@@ -223,6 +223,7 @@ public static class CombatJson
          .Register("firstCardPlayedHasTag", typeof(FirstCardPlayedThisTurnHasTagExpression<>))
          .Register("eventSourceCardHasTag", typeof(TriggerEventSourceCardHasTagExpression<>))
          .Register("eventStatusIs", typeof(TriggerEventStatusIsExpression<>))
+         .Register("eventCardZone", typeof(TriggerEventCardZoneExpression<>))
          .Register("claimOnceThisAction", typeof(ClaimOnceThisActionExpression<>))
          .Register("intends", typeof(TargetIntendsExpression<>))
          .Register("actionDealtDamage", typeof(ActionDealtDamageExpression<>))

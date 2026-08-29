@@ -333,6 +333,8 @@ public static class StudioVocabulary
         ["TriggerEvent.StatusStacksChanged"] = "a status on the bearer is adjusted up or down",
         ["TriggerEvent.BlockGained"] = "the bearer gains Block",
         ["TriggerEvent.CardsDrawn"] = "the bearer draws cards",
+        ["TriggerEvent.CardMovedToZone"] = "one of the bearer's cards moves between piles",
+        ["TriggerEvent.CardInstanceCreated"] = "a card is made for the bearer",
         ["StatusData.IncomingStatusDelay"] = "Postpone incoming statuses",
         ["StatusData.Disclosure"] = "Show the bearer more",
         ["TriggerEvent.RoundStarted"] = "a round starts",
