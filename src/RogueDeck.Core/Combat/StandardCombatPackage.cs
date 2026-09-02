@@ -66,6 +66,7 @@ public sealed class StandardCombatPackage : ICombatPackage
 
         registry.RegisterStatusApplicationInterceptor(new ArtifactStatusApplicationInterceptor());
         registry.RegisterStatusApplicationInterceptor(new DeclarativeStatusPreventionInterceptor());
+        registry.RegisterStatusApplicationInterceptor(new DeclarativeStatusAmplificationInterceptor());
 
         registry.RegisterCard(CreateStrike());
         registry.RegisterCard(CreateDefend());
@@ -134,6 +135,7 @@ public sealed class StandardCombatPackage : ICombatPackage
         registry.RegisterCombatEventHandler(new TrackCardsPlayedThisTurnHandler());
         registry.RegisterCombatEventHandler(new TrackDamageDealtThisTurnHandler());
         registry.RegisterCombatEventHandler(new TrackResourceGainedThisTurnHandler());
+        registry.RegisterCombatEventHandler(new TrackResourceSpentThisTurnHandler());
         registry.RegisterCombatEventHandler(new ConsumeFreeNextCardOnCardPlayedHandler());
         registry.RegisterCombatEventHandler(new TriggeredDamageOnDamageDealtHandler());
         registry.RegisterCombatEventHandler(new MarkCombatantDownedOnZeroHealthHandler());
@@ -149,6 +151,7 @@ public sealed class StandardCombatPackage : ICombatPackage
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.Healed.CreateHandler());
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.StatusApplied.CreateHandler());
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.StatusApplicationBlocked.CreateHandler());
+        registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.StatusApplicationAmplified.CreateHandler());
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.ActionResolved.CreateHandler());
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.StatusesRemovedByPolarity.CreateHandler());
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.StatusRemoved.CreateHandler());

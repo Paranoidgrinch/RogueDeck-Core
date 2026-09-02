@@ -123,6 +123,12 @@ public static class StatusDataRebuild
                 id, Program<StatusApplicationBlockedTriggeredEffectContext>(data),
                 filters: Scoped<StatusApplicationBlockedTriggeredEffectContext>(c => c.Combat,
                     new StatusApplicationBlockedTargetHasStatusTriggerFilter(statusId))),
+            // An amplification is reported on the combatant it happened TO, exactly like a prevention, so the
+            // bearer scope asks that the reacting status be on that combatant and Anywhere watches both sides.
+            TriggerEvent.StatusApplicationAmplified => TriggeredProgramContextAdapters.StatusApplicationAmplified.Define(
+                id, Program<StatusApplicationAmplifiedTriggeredEffectContext>(data),
+                filters: Scoped<StatusApplicationAmplifiedTriggeredEffectContext>(c => c.Combat,
+                    new StatusApplicationAmplifiedTargetHasStatusTriggerFilter(statusId))),
             _ => throw new InvalidOperationException($"Trigger event '{ev}' is not supported for a status trigger."),
         };
     }

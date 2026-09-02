@@ -144,6 +144,17 @@ public static class TriggeredProgramContextAdapters
             },
             StatusApplicationBlockedTriggeredEffectTargetResolver.CreateActionBuildContext);
 
+    public static readonly TriggeredProgramAdapter<StatusApplicationAmplifiedCombatEvent, StatusApplicationAmplifiedTriggeredEffectContext>
+        StatusApplicationAmplified = new(
+            (combat, registry, e) =>
+            {
+                if (!combat.TryGetCombatant(e.TargetCombatantId, out var target)) return null;
+                CombatantState? applier = null;
+                if (e.SourceCombatantId is { } sid && combat.TryGetCombatant(sid, out var s)) applier = s;
+                return new StatusApplicationAmplifiedTriggeredEffectContext(combat, registry, e, target!, applier);
+            },
+            StatusApplicationAmplifiedTriggeredEffectTargetResolver.CreateActionBuildContext);
+
     public static readonly TriggeredProgramAdapter<StatusesRemovedByPolarityCombatEvent, StatusesRemovedByPolarityTriggeredEffectContext>
         StatusesRemovedByPolarity = new(
             (combat, registry, e) =>

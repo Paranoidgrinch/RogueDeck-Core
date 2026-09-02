@@ -173,3 +173,86 @@ public sealed class DeclarativeStatusPreventionInterceptor : IStatusApplicationI
         return InterceptionResult.Allow;
     }
 }
+
+// An "amplification": the mirror of a prohibition. A status that makes the NEXT application to its bearer
+// land larger, and is spent doing it.
+//
+// Act IV's Inscribed is the shape this exists for — being written into the register magnifies whatever
+// happens to you next, in BOTH directions — so the interesting decision belongs to the bearer: spend the
+// register on a blessing of your own, or let it magnify the next curse. Amplification is therefore
+// polarity-blind by default, unlike a prohibition, which is polarity-bound by nature.
+//
+// It runs AFTER prevention (priority 300 vs 200), so a refused application is never enlarged into existence;
+// the enlarged application goes back through the chain, where a prohibition meets it at its true size. The
+// spend is SYNCHRONOUS for the same reason prevention's is: a second application resolving later in the same
+// drain has to see the stacks already gone, or one stack of the register would pay for two applications.
+public sealed class DeclarativeStatusAmplificationInterceptor : IStatusApplicationInterceptor
+{
+    public string ModifierId => "standard.declarative_status_amplification";
+
+    // After Artifact (100) and prevention (200): what is refused is never amplified.
+    public int Priority => 300;
+
+    public InterceptionResult TryIntercept(StatusApplicationInterceptionContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        // An application already made larger is left alone — one amplification per application, however many
+        // stacks of the register the bearer is holding.
+        if (context.Request.Amplified)
+            return InterceptionResult.Allow;
+
+        // Amplification is a question about stacks: an application that carries none (a pure duration or
+        // charge grant) has nothing to enlarge.
+        var incomingStacks = context.Request.Stacks;
+        if (incomingStacks <= 0)
+            return InterceptionResult.Allow;
+
+        var bearer = context.TargetCombatant;
+        var onPlayerTeam = bearer.TeamId == StandardCombatIds.PlayerTeam;
+
+        // Deterministic order: the oldest matching instance is spent first.
+        foreach (var candidate in bearer.Statuses)
+        {
+            if (candidate.DefinitionId == context.Request.StatusDefinitionId)
+                continue; // an amplification never enlarges an application of itself
+            if (candidate.Stacks <= 0)
+                continue;
+            if (!context.Registry.TryGetStatus(candidate.DefinitionId, out var definition) ||
+                definition?.Amplification is not { } amplification)
+                continue;
+            if (!amplification.Amplifies(
+                    context.Request.StatusDefinitionId, context.StatusDefinition.Polarity, onPlayerTeam))
+                continue;
+
+            var spent = Math.Min(candidate.Stacks, Math.Max(1, amplification.StacksSpent));
+            var added = Math.Max(0, amplification.AddStacks);
+            if (added <= 0)
+                continue;
+
+            var resulting = incomingStacks + added;
+
+            context.Combat.AddLogEntry(
+                StandardCombatLogTypes.StatusApplicationAmplified,
+                $"'{candidate.DefinitionId}' amplified {incomingStacks} stack(s) of " +
+                $"'{context.Request.StatusDefinitionId}' on '{bearer.Id}' to {resulting}.");
+
+            context.Combat.EnqueueEvent(new StatusApplicationAmplifiedCombatEvent(
+                TargetCombatantId: bearer.Id,
+                AmplifiedStatusDefinitionId: context.Request.StatusDefinitionId,
+                AmplifiedStatusPolarity: context.StatusDefinition.Polarity,
+                AddedStacks: added,
+                ResultingStacks: resulting,
+                AmplifyingStatusInstanceId: candidate.Id,
+                AmplifyingStatusDefinitionId: candidate.DefinitionId,
+                SourceCombatantId: context.Request.SourceCombatantId));
+
+            ModifyStatusStacksEffectHandler.ApplyDelta(context.Combat, bearer, candidate, -spent);
+
+            return InterceptionResult.Replace(
+                context.Request with { Stacks = resulting, Amplified = true });
+        }
+
+        return InterceptionResult.Allow;
+    }
+}

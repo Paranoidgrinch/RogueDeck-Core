@@ -893,6 +893,7 @@ public static class CombatProgramModel
             "cardsPlayedThisTurn" => new CardsPlayedThisTurnExpression<TContext>(SelectorFor(spec.SelectorKey)),
             "damageDealtThisTurn" => new DamageDealtThisTurnExpression<TContext>(SelectorFor(spec.SelectorKey)),
             "resourceGainedThisTurn" => new ResourceGainedThisTurnExpression<TContext>(SelectorFor(spec.SelectorKey)),
+            "resourceSpentThisTurn" => new ResourceSpentThisTurnExpression<TContext>(SelectorFor(spec.SelectorKey)),
             "coord" => new CombatantCoordExpression<TContext>(SelectorFor(spec.SelectorKey), spec.Axis),
             "countTargets" => new CountTargetsExpression<TContext>(SelectorFor(spec.ReadSelectorOrDefault)),
             "sumOverTargets" => new SumOverTargetsExpression<TContext>(SelectorFor(spec.ReadSelectorOrDefault), BuildAmount<TContext>(spec.LeftOrDefault)),
@@ -972,6 +973,7 @@ public static class CombatProgramModel
             CardsPlayedThisTurnExpression<TContext> e => StateReadAmount("cardsPlayedThisTurn", e.Selector),
             DamageDealtThisTurnExpression<TContext> e => StateReadAmount("damageDealtThisTurn", e.Selector),
             ResourceGainedThisTurnExpression<TContext> e => StateReadAmount("resourceGainedThisTurn", e.Selector),
+            ResourceSpentThisTurnExpression<TContext> e => StateReadAmount("resourceSpentThisTurn", e.Selector),
             CombatantCoordExpression<TContext> e => StateReadAmount("coord", e.Selector, axis: e.Axis),
             CountTargetsExpression<TContext> e => SelectorSpecFor(e.Selector) is { } cs
                 ? new CombatAmountSpec("countTargets", ReadSelector: cs) : CombatAmountSpec.Advanced,

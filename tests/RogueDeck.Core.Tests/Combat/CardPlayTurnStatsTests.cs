@@ -213,6 +213,75 @@ public class CardPlayTurnStatsTests
         Assert.Empty(stats.CardsPlayedByTagThisTurn);
     }
 
+    // What a turn COST is the other half of what it produced, and it is read off the cost actually paid — the
+    // question Act IV's Weighed asks at the end of every turn ("you were required to spend exactly this
+    // much").
+    [Fact]
+    public void PlayingCardsRecordsWhatTheTurnCost()
+    {
+        var registry = CombatTestFactory.CreateStandardRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+
+        var hero = combat.GetCombatant(HeroId);
+        EnsureEnergy(hero, current: 3, max: 3);
+
+        var processor = new CombatCardPlayProcessor();
+
+        Assert.Equal(0, combat.GetCardPlayTurnStats(HeroId).ResourceSpentThisTurn);
+
+        // Defends, not Strikes: what the turn cost is the question, and a dead goblin ends the combat before
+        // the turn can be started again.
+        foreach (var _ in Enumerable.Range(0, 2))
+        {
+            var defend = AddCardToZone(combat, HeroId, StandardCombatIds.DefendCard, CardZone.Hand);
+            processor.PlayCardInstance(
+                combat, registry, new CardInstancePlayRequest(defend.Id, HeroId));
+        }
+
+        // Two Defends at one Energy each: the turn has cost two.
+        Assert.Equal(2, combat.GetCardPlayTurnStats(HeroId).ResourceSpentThisTurn);
+
+        new CombatTurnProcessor().StartCurrentTurn(combat, registry);
+
+        Assert.Equal(0, combat.GetCardPlayTurnStats(HeroId).ResourceSpentThisTurn);
+    }
+
+    // A tax on playing cards is part of what the turn cost: the number is the cost PAID, after every
+    // modifier, which is exactly why Act IV's tax and its measure are one decision rather than two.
+    [Fact]
+    public void WhatTheTurnCostCountsATaxOnTheCard()
+    {
+        var builder = CombatTestFactory.CreateStandardBuilder();
+
+        var burden = new StatusDefinition(
+            new StatusDefinitionId("test.burden"),
+            new PackageId("test"),
+            displayNameKey: "status.burden.name",
+            descriptionKey: "status.burden.description",
+            polarity: StatusPolarity.Debuff,
+            usesStacks: true,
+            showStacksInUi: true,
+            stackingBehavior: StatusStackingBehavior.MergeWithExistingInstance,
+            passiveModifiers: [new PassiveModifierSpec(
+                PassiveModifierPipeline.CardCost, PassiveModifierOperation.AddFlat, 1)]);
+
+        builder.RegisterStatus(burden);
+        var registry = builder.Build();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+
+        EnsureEnergy(combat.GetCombatant(HeroId), current: 5, max: 5);
+
+        new CombatEffectResolver().Resolve(
+            combat, registry, new ApplyStatusEffectRequest(HeroId, burden.Id, Stacks: 1));
+
+        var strike = AddCardToZone(combat, HeroId, StandardCombatIds.StrikeCard, CardZone.Hand);
+        new CombatCardPlayProcessor().PlayCardInstance(
+            combat, registry,
+            new CardInstancePlayRequest(strike.Id, HeroId, TargetCombatantId: GoblinId));
+
+        Assert.Equal(2, combat.GetCardPlayTurnStats(HeroId).ResourceSpentThisTurn);
+    }
+
     [Fact]
     public void StandardCombatPackageRegistersCardPlayTurnStatsHandlers()
     {
@@ -225,6 +294,10 @@ public class CardPlayTurnStatsTests
         Assert.Contains(
             registry.GetCombatEventHandlers(typeof(CardPlayedCombatEvent)),
             handler => handler is TrackCardsPlayedThisTurnHandler);
+
+        Assert.Contains(
+            registry.GetCombatEventHandlers(typeof(CardCostPaidCombatEvent)),
+            handler => handler is TrackResourceSpentThisTurnHandler);
     }
 
     private static void EnsureEnergy(

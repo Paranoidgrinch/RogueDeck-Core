@@ -974,6 +974,9 @@ public sealed class EventAmountExpression<TContext> : ICombatExpression<TContext
             DamageReceivedTriggeredEffectContext received => received.CombatEvent.HealthDamage,
             DamageDealtTriggeredEffectContext dealt => dealt.CombatEvent.HealthDamage,
             ResourceGainedTriggeredEffectContext gained => gained.CombatEvent.GainedAmount,
+            // A cost payment reports what the play actually cost, every named resource added up — which is
+            // how a rule hears that a card was paid for at all, and how much a tax on it came to.
+            CardCostPaidTriggeredEffectContext paid => paid.CombatEvent.Costs.Sum(cost => cost.Amount),
             BlockGainedTriggeredEffectContext blocked => blocked.CombatEvent.GainedAmount,
             // A stack change reports its DELTA: negative when the status lost stacks, positive when it gained
             // them. That sign is the whole question for a rule that only cares about decay ("whenever another
@@ -1513,6 +1516,29 @@ public sealed class ResourceGainedThisTurnExpression<TContext> : ICombatExpressi
         var targets = Selector.ResolveTargets(selCtx);
         if (targets.Count == 0) return 0;
         return combat.GetCardPlayTurnStats(ScalarTargetExpression.RequireSingle(targets)).ResourceGainedThisTurn;
+    }
+}
+
+// What the target has spent on card costs this turn — the question a rule asks when a turn has to come to a
+// required total ("spend exactly 3 Energy this turn"). It reads the paid cost, so a tax on a card is part of
+// what the turn cost and a discount is too.
+public sealed class ResourceSpentThisTurnExpression<TContext> : ICombatExpression<TContext, int>
+    where TContext : class
+{
+    public ICombatantTargetSelector Selector { get; }
+
+    public ResourceSpentThisTurnExpression(ICombatantTargetSelector selector)
+    {
+        ArgumentNullException.ThrowIfNull(selector);
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
+    }
+
+    public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        var selCtx = context.GetTargetSelectionContext();
+        var targets = Selector.ResolveTargets(selCtx);
+        if (targets.Count == 0) return 0;
+        return combat.GetCardPlayTurnStats(ScalarTargetExpression.RequireSingle(targets)).ResourceSpentThisTurn;
     }
 }
 

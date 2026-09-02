@@ -20,6 +20,13 @@ public sealed class CombatantCardPlayTurnStats
 
     public int ResourceGainedThisTurn { get; private set; }
 
+    // How much the combatant has SPENT paying card costs this turn — the mirror of ResourceGainedThisTurn,
+    // and the only honest answer to "what did this turn actually cost you": it is summed from the cost
+    // ACTUALLY paid, after every cost modifier, so a tax that raised a card's price is inside the number and
+    // a discount that lowered it is too. Every resource a cost names counts; a cost paid in something other
+    // than energy is still expenditure.
+    public int ResourceSpentThisTurn { get; private set; }
+
     // Definition of the first card played this turn, or null if none yet.
     public CardDefinitionId? FirstCardPlayedDefinitionId { get; private set; }
 
@@ -92,6 +99,12 @@ public sealed class CombatantCardPlayTurnStats
             ResourceGainedThisTurn = checked(ResourceGainedThisTurn + amount);
     }
 
+    public void RecordResourceSpent(int amount)
+    {
+        if (amount > 0)
+            ResourceSpentThisTurn = checked(ResourceSpentThisTurn + amount);
+    }
+
     public void Reset()
     {
         // Retain this turn's play profile as "last turn" before clearing, for habit/prediction mechanics.
@@ -106,6 +119,7 @@ public sealed class CombatantCardPlayTurnStats
         CardsPlayedThisTurn = 0;
         DamageDealtThisTurn = 0;
         ResourceGainedThisTurn = 0;
+        ResourceSpentThisTurn = 0;
         FirstCardPlayedDefinitionId = null;
         _cardsPlayedByDefinitionThisTurn.Clear();
         _cardsPlayedByTagThisTurn.Clear();
@@ -177,5 +191,24 @@ public sealed class TrackResourceGainedThisTurnHandler
 
         combat.GetCardPlayTurnStats(combatEvent.CombatantId)
               .RecordResourceGained(combatEvent.GainedAmount);
+    }
+}
+
+// A card's cost being paid is the one moment the engine knows what a play actually cost, after every
+// modifier has had its say — so it is where expenditure is counted. A free play reports a zero cost and
+// therefore adds nothing.
+public sealed class TrackResourceSpentThisTurnHandler
+    : CombatEventHandler<CardCostPaidCombatEvent>
+{
+    protected override void Handle(
+        CombatState combat,
+        CombatDefinitionRegistry registry,
+        CardCostPaidCombatEvent combatEvent)
+    {
+        if (!combat.TryGetCombatant(combatEvent.SourceCombatantId, out _))
+            return;
+
+        combat.GetCardPlayTurnStats(combatEvent.SourceCombatantId)
+              .RecordResourceSpent(combatEvent.Costs.Sum(cost => cost.Amount));
     }
 }

@@ -51,6 +51,14 @@ public sealed record StatusData
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public StatusPreventionData? Prevention { get; init; }
 
+    // "Amplification": what the bearer has the next application to it enlarged by, and what that costs the
+    // amplifier. The mirror of Prevention — Act IV's Inscribed. Null = applications land at the size they
+    // were sent, and null is kept out of the wire format so documents written before the field existed
+    // round-trip byte-identically.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public StatusAmplificationData? Amplification { get; init; }
+
     public static StatusData From(StatusBlueprint status)
     {
         ArgumentNullException.ThrowIfNull(status);
@@ -76,6 +84,9 @@ public sealed record StatusData
             Prevention = status.Prevention is { } refusal
                 ? new StatusPreventionData(refusal.Scope, refusal.StacksPerStack, refusal.Only?.value)
                 : null,
+            Amplification = status.Amplification is { } louder
+                ? new StatusAmplificationData(louder.Scope, louder.AddStacks, louder.StacksSpent, louder.Only?.value)
+                : null,
         };
     }
 
@@ -100,6 +111,10 @@ public sealed record StatusData
             Prevention = Prevention is { } refusal
                 ? new StatusPreventionSpec(refusal.Scope, refusal.StacksPerStack,
                     refusal.Only is null ? null : new StatusDefinitionId(refusal.Only))
+                : null,
+            Amplification = Amplification is { } louder
+                ? new StatusAmplificationSpec(louder.Scope, louder.AddStacks, louder.StacksSpent,
+                    louder.Only is null ? null : new StatusDefinitionId(louder.Only))
                 : null,
         };
         foreach (var tag in Tags)
@@ -145,6 +160,17 @@ public sealed record StatusPreventionData(
     int StacksPerStack = 1,
     // The one status this prohibition refuses, when it refuses only one. Null = the whole polarity, and null
     // is kept out of the wire format so documents written before the field existed round-trip byte-identically.
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    string? Only = null);
+
+// What the bearer has the next application to it enlarged by, and what that costs. The engine face is
+// StatusAmplificationSpec.
+public sealed record StatusAmplificationData(
+    StatusAmplificationScope Scope = StatusAmplificationScope.Any,
+    int AddStacks = 1,
+    int StacksSpent = 1,
+    // The one status this amplification enlarges, when it enlarges only one. Null = everything in scope.
     [property: System.Text.Json.Serialization.JsonIgnore(
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     string? Only = null);

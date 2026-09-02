@@ -56,6 +56,9 @@ public enum TriggerEvent
     // when a status the bearer carries refuses an incoming application (Censure eating a debuff). The event
     // reports what was refused and which status paid for it.
     StatusApplicationPrevented,
+    // when an amplification the bearer carries makes an incoming application LARGER (Act IV's register). The
+    // event reports what grew, its polarity, by how much, and which status paid.
+    StatusApplicationAmplified,
     // when the bearer finishes an ACTION — one card it played, or one action it took. The event says whether
     // that action struck the other side, which is what tells a damaging action from a utility one.
     ActionResolved,

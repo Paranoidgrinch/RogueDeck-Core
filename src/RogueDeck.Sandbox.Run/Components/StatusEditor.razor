@@ -213,6 +213,30 @@
             </div>
 
             <div class="editor-effects">
+                <span class="muted">@StudioVocabulary.FieldLabel("StatusData.Amplification"):</span>
+                @if (status.Amplification is { } louder)
+                {
+                    <div class="run-bar">
+                        <span class="muted">enlarges</span> @EnumSelect(louder.Scope, sc => SetAmplification(index, louder with { Scope = sc }))
+                        <label title="How many extra stacks one spent stack of this status buys.">stacks added
+                            <input type="number" value="@louder.AddStacks" style="width:4rem"
+                                   @onchange="e => SetAmplification(index, louder with { AddStacks = Math.Max(0, AsInt(e.Value, louder.AddStacks)) })" />
+                        </label>
+                        <label title="How many stacks of this status one amplification costs.">stacks spent
+                            <input type="number" value="@louder.StacksSpent" style="width:4rem"
+                                   @onchange="e => SetAmplification(index, louder with { StacksSpent = Math.Max(1, AsInt(e.Value, louder.StacksSpent)) })" />
+                        </label>
+                        <button class="mini" @onclick="() => SetAmplification(index, null)">✕ remove</button>
+                    </div>
+                    <div class="muted">@StudioVocabulary.FieldDescription("StatusData.Amplification")</div>
+                }
+                else
+                {
+                    <button class="mini" @onclick="() => SetAmplification(index, new StatusAmplificationData())">+ amplification</button>
+                }
+            </div>
+
+            <div class="editor-effects">
                 <span class="muted">Debuff block:</span>
                 @if (status.DebuffBlock is { } db)
                 {
@@ -410,6 +434,9 @@
 
     private Task SetPrevention(int index, StatusPreventionData? data) =>
         Edit(index, s => s with { Prevention = data });
+
+    private Task SetAmplification(int index, StatusAmplificationData? data) =>
+        Edit(index, s => s with { Amplification = data });
 
     private Task SetTriggerScope(int index, int trigIndex, StatusTriggerScope scope) =>
         Edit(index, s =>

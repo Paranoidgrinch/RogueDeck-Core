@@ -46,6 +46,11 @@ public sealed class StatusDefinition
     // combatant, spending itself stack for stack. Null = applications land untouched.
     public StatusPreventionSpec? Prevention { get; }
 
+    // "Amplification": the mirror of a prohibition. While this status is on a combatant, the NEXT status
+    // applied TO that combatant lands larger, and the amplifier is spent doing it. Null = applications land
+    // at the size they were sent.
+    public StatusAmplificationSpec? Amplification { get; }
+
     internal void Freeze() => _tags = _tags.ToImmutableHashSet();
 
     public StatusDefinition(
@@ -65,7 +70,8 @@ public sealed class StatusDefinition
         IEnumerable<PassiveModifierSpec>? passiveModifiers = null,
         IncomingStatusDelaySpec? incomingStatusDelay = null,
         DisclosureSpec? disclosure = null,
-        StatusPreventionSpec? prevention = null)
+        StatusPreventionSpec? prevention = null,
+        StatusAmplificationSpec? amplification = null)
     {
         if (string.IsNullOrWhiteSpace(displayNameKey))
             throw new ArgumentException("Display name key cannot be empty.", nameof(displayNameKey));
@@ -90,6 +96,7 @@ public sealed class StatusDefinition
         IncomingStatusDelay = incomingStatusDelay;
         Disclosure = disclosure;
         Prevention = prevention;
+        Amplification = amplification;
     }
 }
 
@@ -129,6 +136,43 @@ public sealed record StatusPreventionSpec(
     // status, the incoming application has to be that status.
     public bool Refuses(StatusDefinitionId incomingDefinition, StatusPolarity incoming, bool bearerIsOnPlayerTeam) =>
         (Only is not { } only || only == incomingDefinition) && Refuses(incoming, bearerIsOnPlayerTeam);
+}
+
+// Which incoming applications an amplification makes larger, and by how much.
+//
+// This is the receiving side of the scale, and the counterpart of a prohibition: a prohibition subtracts from
+// what lands on its bearer and pays for it stack by stack, an amplification ADDS to what lands and pays the
+// same way. Scope reads exactly as a prohibition's does — Any is the reading Act IV's register wants, where
+// being written down makes the next thing that happens to you bigger whether you wanted it or not, so the
+// bearer can spend it deliberately on a blessing rather than let it magnify the next curse.
+//
+// AddStacks is what one spent stack buys; StacksSpent is how many stacks one amplification costs. An
+// amplification never enlarges an application of ITSELF, and never fires twice on the same application: the
+// enlarged application is marked (ApplyStatusEffectRequest.Amplified) and passes through untouched.
+public enum StatusAmplificationScope
+{
+    Any,
+    Debuffs,
+    Buffs,
+    UnwantedByBearer
+}
+
+public sealed record StatusAmplificationSpec(
+    StatusAmplificationScope Scope = StatusAmplificationScope.Any,
+    int AddStacks = 1,
+    int StacksSpent = 1,
+    // The one status this amplification enlarges, when it enlarges only one. Null = everything in scope.
+    StatusDefinitionId? Only = null)
+{
+    public bool Amplifies(StatusDefinitionId incomingDefinition, StatusPolarity incoming, bool bearerIsOnPlayerTeam) =>
+        (Only is not { } only || only == incomingDefinition) && Scope switch
+        {
+            StatusAmplificationScope.Debuffs => incoming == StatusPolarity.Debuff,
+            StatusAmplificationScope.Buffs => incoming == StatusPolarity.Buff,
+            StatusAmplificationScope.UnwantedByBearer =>
+                incoming == (bearerIsOnPlayerTeam ? StatusPolarity.Debuff : StatusPolarity.Buff),
+            _ => true,
+        };
 }
 
 // How long an incoming status waits, and which kinds wait at all. A null polarity delays everything; the

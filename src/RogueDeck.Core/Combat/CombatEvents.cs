@@ -155,6 +155,22 @@ public sealed record BlockGainedCombatEvent(
     CardDefinitionId? SourceCardId = null
 ) : ICombatEvent;
 
+// An amplification enlarged an application on its bearer and paid for it. The counterpart of the blocked
+// event: it names what grew, by how much, and which status was spent growing it — so a rule can answer the
+// AMPLIFIED application specifically (Act IV's register writes one glyph for a blessing made larger and
+// another for a curse made larger, and the two are only distinguishable here).
+public sealed record StatusApplicationAmplifiedCombatEvent(
+    CombatantId TargetCombatantId,
+    StatusDefinitionId AmplifiedStatusDefinitionId,
+    StatusPolarity AmplifiedStatusPolarity,
+    int AddedStacks,
+    int ResultingStacks,
+    StatusInstanceId AmplifyingStatusInstanceId,
+    StatusDefinitionId AmplifyingStatusDefinitionId,
+    // Who applied the status that was enlarged, when the application named a source.
+    CombatantId? SourceCombatantId = null
+) : ICombatEvent;
+
 public sealed record StatusApplicationBlockedCombatEvent(
     CombatantId TargetCombatantId,
     StatusDefinitionId BlockedStatusDefinitionId,

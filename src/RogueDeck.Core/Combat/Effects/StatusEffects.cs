@@ -25,7 +25,11 @@ public sealed record ApplyStatusEffectRequest(
     // A prohibition names the single status it refuses; this names the single prohibition that may not
     // refuse THIS application, which is what an injunction against a licence is: the licence still exists
     // and is still spendable elsewhere, but not against this.
-    StatusDefinitionId? UnrefusableBy = null
+    StatusDefinitionId? UnrefusableBy = null,
+    // Whether an amplification has already enlarged this application. An enlarged application is re-run
+    // through the interceptor chain (so a prohibition still meets its true size), and this mark is what
+    // stops a second amplifier — or the same one's next stack — from enlarging it again.
+    bool Amplified = false
 ) : IEffectRequest;
 
 public sealed class ApplyStatusEffectHandler : EffectRequestHandler<ApplyStatusEffectRequest>

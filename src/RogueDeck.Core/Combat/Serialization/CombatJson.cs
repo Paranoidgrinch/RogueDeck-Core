@@ -203,6 +203,7 @@ public static class CombatJson
          .Register("cardsPlayedLastTurnWithTag", typeof(CardsPlayedLastTurnWithTagExpression<>))
          .Register("damageDealtThisTurn", typeof(DamageDealtThisTurnExpression<>))
          .Register("resourceGainedThisTurn", typeof(ResourceGainedThisTurnExpression<>))
+         .Register("resourceSpentThisTurn", typeof(ResourceSpentThisTurnExpression<>))
          .Register("cardCost", typeof(CardCostExpression<>))
          .Register("cardInstanceMarkCounter", typeof(CardInstanceMarkCounterExpression<>))
          .Register("iterationTargetStatusStacks", typeof(IterationTargetStatusStacksExpression<>))

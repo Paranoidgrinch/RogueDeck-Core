@@ -35,6 +35,7 @@ public static class StandardCombatLogTypes
 
     public const string StatusApplied = "StatusApplied";
     public const string StatusApplicationBlocked = "StatusApplicationBlocked";
+    public const string StatusApplicationAmplified = "StatusApplicationAmplified";
     public const string StatusMerged = "StatusMerged";
     public const string StatusStacksChanged = "StatusStacksChanged";
     public const string StatusDurationReduced = "StatusDurationReduced";
