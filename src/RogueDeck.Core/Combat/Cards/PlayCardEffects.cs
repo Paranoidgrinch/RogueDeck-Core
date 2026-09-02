@@ -57,6 +57,17 @@ public sealed class PlayCardEffectHandler : EffectRequestHandler<PlayCardEffectR
             return;
         }
 
+        // …and neither is a card a rule forbids right now. Stun is the plain case — "you lose this turn" is
+        // only true if the turn's cards actually stay in hand — and this is the path the host, the playtest
+        // walker and Godot all play through, so a validator that is not asked here is a validator that does
+        // not exist. Refusal no-ops like an unaffordable cost rather than throwing.
+        if (!CombatCardPlayProcessor.IsCardPlayAllowed(
+                combat, registry, card, player, request.TargetCombatantId, request.CardInstanceId))
+        {
+            NoOp(request);
+            return;
+        }
+
         var costs = CombatCardPlayProcessor.CalculateCostsInternal(
             combat, registry, card, player, request.TargetCombatantId, request.CardInstanceId);
 

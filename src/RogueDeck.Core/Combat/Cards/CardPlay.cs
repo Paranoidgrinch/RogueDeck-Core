@@ -317,6 +317,31 @@ public sealed class CombatCardPlayProcessor
     }
 
 
+    // Whether every registered validator lets this play through.
+    //
+    // A validator REFUSES by throwing, which is right for the strict path (playing a card that a rule forbids
+    // is a programming error there) and wrong for the effect-request path, where the same refusal has to leave
+    // the card in hand and the session standing. So the effect path asks this question first: the refusal is
+    // caught here and answered as "no", exactly as an unaffordable cost is.
+    internal static bool IsCardPlayAllowed(
+        CombatState combat,
+        CombatDefinitionRegistry registry,
+        CardDefinition card,
+        CombatantState source,
+        CombatantId? requestedTargetId,
+        CardInstanceId? cardInstanceId)
+    {
+        try
+        {
+            ValidateCardPlay(combat, registry, card, source, requestedTargetId, cardInstanceId);
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
     private static void ValidateCardPlay(
         CombatState combat,
         CombatDefinitionRegistry registry,
