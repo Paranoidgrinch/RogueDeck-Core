@@ -1970,6 +1970,41 @@ public sealed class TriggerEventSourceCardHasTagExpression<TContext> : ICombatEx
     }
 }
 
+// Which status a triggering event is about, when it is about one at all. Written once because three things
+// ask it — the "is it this status?" test, the "what polarity was it?" test, and the node that copies it —
+// and a fourth would otherwise spell the same list of contexts a fourth time.
+public static class TriggerEventStatus
+{
+    public static StatusDefinitionId? Of(object? sourceContext) => sourceContext switch
+    {
+        StatusAppliedTriggeredEffectContext applied => applied.CombatEvent.StatusDefinitionId,
+        StatusRemovedTriggeredEffectContext removed => removed.CombatEvent.StatusDefinitionId,
+        StatusMergedTriggeredEffectContext merged => merged.CombatEvent.StatusDefinitionId,
+        StatusStacksChangedTriggeredEffectContext changed => changed.CombatEvent.StatusDefinitionId,
+        StatusExpiredTriggeredEffectContext expired => expired.CombatEvent.StatusDefinitionId,
+        StatusApplicationBlockedTriggeredEffectContext blocked => blocked.CombatEvent.BlockedStatusDefinitionId,
+        // An amplification is about the status that GREW; which status paid for it is a separate question,
+        // asked by TriggerEventAmplifierIsExpression.
+        StatusApplicationAmplifiedTriggeredEffectContext amplified =>
+            amplified.CombatEvent.AmplifiedStatusDefinitionId,
+        _ => null,
+    };
+}
+
+// True when the application that fired this trigger was a COPY — a forgery, a duplicated seal. The question
+// a copying rule must ask before it copies, or it will hear its own work and answer it (§3.4).
+public sealed class TriggerEventIsReplicatedExpression<TContext> : ICombatExpression<TContext, bool>
+    where TContext : class
+{
+    public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat) =>
+        context.SourceContext switch
+        {
+            StatusAppliedTriggeredEffectContext applied => applied.CombatEvent.Replicated,
+            StatusMergedTriggeredEffectContext merged => merged.CombatEvent.Replicated,
+            _ => false,
+        };
+}
+
 // True when the status the triggering event is about is the named one — "did THIS status move?".
 // A status-borne rule cannot otherwise tell which status changed, because the event is not addressable from
 // the program; the alternative is the per-status counter mirror, which needs one counter per status watched.
@@ -1983,22 +2018,7 @@ public sealed class TriggerEventStatusIsExpression<TContext> : ICombatExpression
 
     public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
     {
-        var statusId = context.SourceContext switch
-        {
-            StatusAppliedTriggeredEffectContext applied => applied.CombatEvent.StatusDefinitionId,
-            StatusRemovedTriggeredEffectContext removed => removed.CombatEvent.StatusDefinitionId,
-            StatusMergedTriggeredEffectContext merged => merged.CombatEvent.StatusDefinitionId,
-            StatusStacksChangedTriggeredEffectContext changed => changed.CombatEvent.StatusDefinitionId,
-            StatusExpiredTriggeredEffectContext expired => expired.CombatEvent.StatusDefinitionId,
-            StatusApplicationBlockedTriggeredEffectContext blocked => blocked.CombatEvent.BlockedStatusDefinitionId,
-            // An amplification is about the status that GREW; which status paid for it is a separate
-            // question, asked by TriggerEventAmplifierIsExpression.
-            StatusApplicationAmplifiedTriggeredEffectContext amplified =>
-                amplified.CombatEvent.AmplifiedStatusDefinitionId,
-            _ => (StatusDefinitionId?)null,
-        };
-
-        return statusId == Status;
+        return TriggerEventStatus.Of(context.SourceContext) == Status;
     }
 }
 
@@ -2022,16 +2042,7 @@ public sealed class TriggerEventStatusPolarityIsExpression<TContext> : ICombatEx
         if (context.SourceContext is StatusApplicationAmplifiedTriggeredEffectContext amplified)
             return amplified.CombatEvent.AmplifiedStatusPolarity == Polarity;
 
-        var statusId = context.SourceContext switch
-        {
-            StatusAppliedTriggeredEffectContext applied => applied.CombatEvent.StatusDefinitionId,
-            StatusRemovedTriggeredEffectContext removed => removed.CombatEvent.StatusDefinitionId,
-            StatusMergedTriggeredEffectContext merged => merged.CombatEvent.StatusDefinitionId,
-            StatusStacksChangedTriggeredEffectContext changed => changed.CombatEvent.StatusDefinitionId,
-            StatusExpiredTriggeredEffectContext expired => expired.CombatEvent.StatusDefinitionId,
-            StatusApplicationBlockedTriggeredEffectContext blocked => blocked.CombatEvent.BlockedStatusDefinitionId,
-            _ => (StatusDefinitionId?)null,
-        };
+        var statusId = TriggerEventStatus.Of(context.SourceContext);
 
         return statusId is { } id
             && combat.DefinitionRegistry is { } registry

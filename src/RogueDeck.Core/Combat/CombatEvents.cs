@@ -189,7 +189,10 @@ public sealed record StatusAppliedCombatEvent(
     int DurationTurns,
     int Charges,
     CombatantId? SourceCombatantId = null,
-    CardDefinitionId? SourceCardId = null
+    CardDefinitionId? SourceCardId = null,
+    // Whether this application was a COPY of another one. A copy may be answered like any other application;
+    // what it may not do is feed the rule that made it.
+    bool Replicated = false
 ) : ICombatEvent;
 
 // A postponed status has finished waiting and is now in force. It is deliberately NOT a second StatusApplied:
@@ -213,7 +216,9 @@ public sealed record StatusMergedCombatEvent(
     int DurationTurns,
     int Charges,
     CombatantId? SourceCombatantId = null,
-    CardDefinitionId? SourceCardId = null
+    CardDefinitionId? SourceCardId = null,
+    // As StatusAppliedCombatEvent: whether the application that merged here was a copy.
+    bool Replicated = false
 ) : ICombatEvent;
 
 public sealed record StatusesRemovedByPolarityCombatEvent(

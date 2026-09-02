@@ -197,6 +197,8 @@ public sealed class StandardCombatPackage : ICombatPackage
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(RefillResourceNode<>), new RefillResourceNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(ApplyStatusNode<>), new ApplyStatusNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(RemoveStatusNode<>), new RemoveStatusNodeExecutor());
+        registry.RegisterEffectNodeExecutorOpenGeneric(
+            typeof(ApplyTriggerEventStatusNode<>), new ApplyTriggerEventStatusNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(RemoveStatusesByPolarityNode<>), new RemoveStatusesByPolarityNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(ModifyStatusStacksNode<>), new ModifyStatusStacksNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(ModifyStatusDurationNode<>), new ModifyStatusDurationNodeExecutor());

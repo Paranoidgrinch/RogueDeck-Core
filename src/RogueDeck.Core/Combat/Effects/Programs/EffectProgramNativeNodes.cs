@@ -413,6 +413,53 @@ public sealed class ApplyStatusNode<TContext> : IApplyStatusNodeCore, IEffectNod
         Stacks.Evaluate((EffectExecutionContext<TContext>)ctx, combat);
 }
 
+// Applies the status the triggering event was about — a copy of what just happened, to whoever the node
+// names. The whole of Act IV's False-Seal Forger is this node plus the questions it is guarded with: the
+// forgery is convincing precisely because it is the same thing again, one stack larger.
+//
+// The copy is MARKED when Replicated is set, which is what keeps a copier from feeding itself: the mark
+// rides on the applied/merged event, and a rule that only answers unmarked applications never answers its
+// own forgery. (§3.3/§3.4 of Act IV's audit are exactly this rule, written for content.)
+public sealed class ApplyTriggerEventStatusNode<TContext> : IApplyTriggerEventStatusNodeCore, IEffectNode<TContext>
+    where TContext : class
+{
+    public ICombatantTargetSelector TargetSelector { get; }
+
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public ICombatantTargetSelector? SourceSelector { get; }
+
+    public ICombatExpression<TContext, int> Stacks { get; }
+
+    public bool Replicated { get; }
+
+    public IEnumerable<ICombatantTargetSelector> GetTargetSelectors() =>
+        SourceSelector is null ? [TargetSelector] : [TargetSelector, SourceSelector];
+
+    public IReadOnlyList<IEffectNode<TContext>> Children => [];
+
+    public ApplyTriggerEventStatusNode(
+        ICombatantTargetSelector targetSelector,
+        ICombatExpression<TContext, int> stacks,
+        bool replicated = false,
+        ICombatantTargetSelector? sourceSelector = null)
+    {
+        ArgumentNullException.ThrowIfNull(targetSelector);
+        ArgumentNullException.ThrowIfNull(stacks);
+
+        TargetSelector = targetSelector;
+        Stacks = stacks;
+        Replicated = replicated;
+        SourceSelector = sourceSelector;
+    }
+
+    public int EvaluateStacks(IEffectExecutionContextCore ctx, CombatState combat) =>
+        Stacks.Evaluate((EffectExecutionContext<TContext>)ctx, combat);
+
+    public StatusDefinitionId? ResolveStatus(IEffectExecutionContextCore ctx) =>
+        TriggerEventStatus.Of(((EffectExecutionContext<TContext>)ctx).SourceContext);
+}
+
 public sealed class RemoveStatusNode<TContext> : IRemoveStatusNodeCore, IEffectNode<TContext>
     where TContext : class
 {

@@ -29,7 +29,15 @@ public sealed record ApplyStatusEffectRequest(
     // Whether an amplification has already enlarged this application. An enlarged application is re-run
     // through the interceptor chain (so a prohibition still meets its true size), and this mark is what
     // stops a second amplifier — or the same one's next stack — from enlarging it again.
-    bool Amplified = false
+    bool Amplified = false,
+    // Whether this application is a COPY of another one — a forgery, a duplicate seal, a mirrored filing.
+    //
+    // A copy is an ordinary application in every way that matters at the table: it lands, it is refused or
+    // enlarged like any other, and rules may answer it. What it must never do is start another copy chain,
+    // or count as the ORIGINAL application a chain is measured from — which is a question only the copier can
+    // ask, and only if the application says what it is. The mark rides on the applied/merged events for
+    // exactly that.
+    bool Replicated = false
 ) : IEffectRequest;
 
 public sealed class ApplyStatusEffectHandler : EffectRequestHandler<ApplyStatusEffectRequest>
@@ -148,6 +156,13 @@ public sealed class ApplyStatusEffectHandler : EffectRequestHandler<ApplyStatusE
                     resultingCharges: existingStatus.Charges,
                     interceptingModifierId: null, replacementRequestType: null);
 
+                // A merge reports the source of THIS application, not of the instance it merged into. The two
+                // are different questions — "who did this to me?" and "whose status is this?" — and only the
+                // first is what an event is for. Reporting the instance's owner meant every rule that asks
+                // whether somebody ELSE just applied something got the wrong body the moment the status was
+                // already there, which is most of the time. The instance keeps its own source, untouched, for
+                // rules that ask about standing (Act III's source-bound Trespass reads the STATUS, not the
+                // event); an application that names no source still falls back to it.
                 combat.EnqueueEvent(
                     new StatusMergedCombatEvent(
                         TargetCombatantId: applyStatus.TargetCombatantId,
@@ -156,8 +171,9 @@ public sealed class ApplyStatusEffectHandler : EffectRequestHandler<ApplyStatusE
                         Stacks: existingStatus.Stacks,
                         DurationTurns: existingStatus.DurationTurns,
                         Charges: existingStatus.Charges,
-                        SourceCombatantId: existingStatus.SourceCombatantId,
-                        SourceCardId: existingStatus.SourceCardId));
+                        SourceCombatantId: applyStatus.SourceCombatantId ?? existingStatus.SourceCombatantId,
+                        SourceCardId: applyStatus.SourceCardId ?? existingStatus.SourceCardId,
+                        Replicated: applyStatus.Replicated));
 
                 return;
             }
@@ -227,7 +243,8 @@ public sealed class ApplyStatusEffectHandler : EffectRequestHandler<ApplyStatusE
                 DurationTurns: newStatus.DurationTurns,
                 Charges: newStatus.Charges,
                 SourceCombatantId: newStatus.SourceCombatantId,
-                SourceCardId: newStatus.SourceCardId));
+                SourceCardId: newStatus.SourceCardId,
+                Replicated: applyStatus.Replicated));
     }
 
     // The longest delay any status in force on the target imposes on this kind of application.

@@ -725,3 +725,20 @@ public sealed class EffectProgram<TContext>
         }
     }
 }
+
+// "Apply the status this event was about" — the copying node. It carries no status id of its own: which
+// status it applies is read from the triggering event, which is the only way a rule can answer an
+// application it did not make with an application of the same thing.
+public interface IApplyTriggerEventStatusNodeCore : INativeEffectOperationNode
+{
+    ICombatantTargetSelector TargetSelector { get; }
+    ICombatantTargetSelector? SourceSelector { get; }
+    int EvaluateStacks(IEffectExecutionContextCore ctx, CombatState combat);
+    // Which status the triggering event was about — read through the node, because only it knows the
+    // context type the trigger fired under. Null when the event is about no status at all.
+    StatusDefinitionId? ResolveStatus(IEffectExecutionContextCore ctx);
+    // Whether the copy announces itself as a copy. A rule that copies must mark what it made, or it will
+    // hear its own forgery and copy that in turn.
+    bool Replicated { get; }
+    Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(ApplyStatusEffectRequest);
+}

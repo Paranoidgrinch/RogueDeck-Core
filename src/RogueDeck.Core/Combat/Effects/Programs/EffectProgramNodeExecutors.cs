@@ -1121,6 +1121,53 @@ internal sealed class RemoveSelectedStatusNodeExecutor : IEffectNodeExecutor
     }
 }
 
+internal sealed class ApplyTriggerEventStatusNodeExecutor : IEffectNodeExecutor
+{
+    public void Execute(IEffectNode node, IEffectExecutionContextCore ctx, CombatState combat,
+        Action<CombatState>? onComplete, Action<IEffectNode, CombatState, Action<CombatState>?> dispatch)
+    {
+        var typed = (IApplyTriggerEventStatusNodeCore)node;
+
+        // Which status the event was about. A trigger context that carries no status — a turn boundary, a
+        // card play — has nothing to copy, and the node quietly does nothing rather than inventing one.
+        var statusId = typed.ResolveStatus(ctx);
+        if (statusId is not { } copied)
+        {
+            onComplete?.Invoke(combat);
+            return;
+        }
+
+        var stacks = ctx.ScaleOutput(typed.EvaluateStacks(ctx, combat));
+        var targetList = typed.TargetSelector.ResolveTargetsTraced(ctx, combat).ToList();
+
+        var attributedTo = ctx.BuildContext.Source.SourceCombatantId;
+        if (typed.SourceSelector is { } sourceSelector)
+        {
+            var named = sourceSelector.ResolveTargetsTraced(ctx, combat).FirstOrDefault();
+            if (named == default)
+            {
+                if (onComplete is not null)
+                    combat.EnqueueContinuation(onComplete);
+                return;
+            }
+
+            attributedTo = named;
+        }
+
+        foreach (var target in targetList)
+            combat.EnqueueEffect(new ApplyStatusEffectRequest(
+                TargetCombatantId: target,
+                StatusDefinitionId: copied,
+                SourceCombatantId: attributedTo,
+                SourceCardId: ctx.BuildContext.Source.SourceCardId,
+                Stacks: stacks,
+                Replicated: typed.Replicated));
+
+        if (onComplete is not null)
+            combat.EnqueueContinuation(onComplete);
+    }
+}
+
 internal sealed class RemoveStatusNodeExecutor : IEffectNodeExecutor
 {
     public void Execute(IEffectNode node, IEffectExecutionContextCore ctx, CombatState combat,
