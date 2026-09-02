@@ -58,6 +58,12 @@ public static class EncounterTriggerRebuild
                 id, Program<RoundStartedTriggeredEffectContext>(data)),
             TriggerEvent.RoundEnded => TriggeredProgramContextAdapters.RoundEnded.Define(
                 id, Program<RoundEndedTriggeredEffectContext>(data)),
+            TriggerEvent.StatusApplicationPrevented => TriggeredProgramContextAdapters.StatusApplicationBlocked.Define(
+                id, Program<StatusApplicationBlockedTriggeredEffectContext>(data)),
+            TriggerEvent.StatusApplicationAmplified => TriggeredProgramContextAdapters.StatusApplicationAmplified.Define(
+                id, Program<StatusApplicationAmplifiedTriggeredEffectContext>(data)),
+            TriggerEvent.ActionResolved => TriggeredProgramContextAdapters.ActionResolved.Define(
+                id, Program<ActionResolvedTriggeredEffectContext>(data)),
             _ => throw new InvalidOperationException($"Trigger event '{ev}' is not supported for an encounter trigger."),
         };
     }

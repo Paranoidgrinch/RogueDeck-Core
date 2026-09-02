@@ -1991,11 +1991,71 @@ public sealed class TriggerEventStatusIsExpression<TContext> : ICombatExpression
             StatusStacksChangedTriggeredEffectContext changed => changed.CombatEvent.StatusDefinitionId,
             StatusExpiredTriggeredEffectContext expired => expired.CombatEvent.StatusDefinitionId,
             StatusApplicationBlockedTriggeredEffectContext blocked => blocked.CombatEvent.BlockedStatusDefinitionId,
+            // An amplification is about the status that GREW; which status paid for it is a separate
+            // question, asked by TriggerEventAmplifierIsExpression.
+            StatusApplicationAmplifiedTriggeredEffectContext amplified =>
+                amplified.CombatEvent.AmplifiedStatusDefinitionId,
             _ => (StatusDefinitionId?)null,
         };
 
         return statusId == Status;
     }
+}
+
+// True when the status the triggering event is about has the given polarity — "did something NEGATIVE just
+// land on you?", "was that a blessing?".
+//
+// The sibling of TriggerEventStatusIsExpression, and the one a rule wants when it answers a KIND of thing
+// rather than a named one: naming every status a rule might have to notice ages badly, and a rule about
+// "any negative status" written as a list of ids is wrong the moment a new debuff is authored. The polarity
+// is read off the definition, except where the event carries it outright.
+public sealed class TriggerEventStatusPolarityIsExpression<TContext> : ICombatExpression<TContext, bool>
+    where TContext : class
+{
+    public StatusPolarity Polarity { get; }
+
+    public TriggerEventStatusPolarityIsExpression(StatusPolarity polarity) => Polarity = polarity;
+
+    public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        // An amplification reports the polarity of what grew, so it needs no lookup.
+        if (context.SourceContext is StatusApplicationAmplifiedTriggeredEffectContext amplified)
+            return amplified.CombatEvent.AmplifiedStatusPolarity == Polarity;
+
+        var statusId = context.SourceContext switch
+        {
+            StatusAppliedTriggeredEffectContext applied => applied.CombatEvent.StatusDefinitionId,
+            StatusRemovedTriggeredEffectContext removed => removed.CombatEvent.StatusDefinitionId,
+            StatusMergedTriggeredEffectContext merged => merged.CombatEvent.StatusDefinitionId,
+            StatusStacksChangedTriggeredEffectContext changed => changed.CombatEvent.StatusDefinitionId,
+            StatusExpiredTriggeredEffectContext expired => expired.CombatEvent.StatusDefinitionId,
+            StatusApplicationBlockedTriggeredEffectContext blocked => blocked.CombatEvent.BlockedStatusDefinitionId,
+            _ => (StatusDefinitionId?)null,
+        };
+
+        return statusId is { } id
+            && combat.DefinitionRegistry is { } registry
+            && registry.TryGetStatus(id, out var definition)
+            && definition is not null
+            && definition.Polarity == Polarity;
+    }
+}
+
+// True when the status that PAID for an enlargement is the named one — "was it the register that made this
+// bigger, or was it my own forgery?".
+//
+// This is the loop guard a copying rule needs: a bonus a rule created must not be the thing that feeds the
+// same rule again, and the only way to tell the two apart is to ask which amplifier was spent.
+public sealed class TriggerEventAmplifierIsExpression<TContext> : ICombatExpression<TContext, bool>
+    where TContext : class
+{
+    public StatusDefinitionId Status { get; }
+
+    public TriggerEventAmplifierIsExpression(StatusDefinitionId status) => Status = status;
+
+    public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat) =>
+        context.SourceContext is StatusApplicationAmplifiedTriggeredEffectContext amplified
+        && amplified.CombatEvent.AmplifyingStatusDefinitionId == Status;
 }
 
 // "Is this the first time this rule has been reached during the current action?" — and CLAIMS that first
