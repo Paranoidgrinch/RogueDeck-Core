@@ -226,6 +226,7 @@ public static class CombatJson
          .Register("eventStatusIs", typeof(TriggerEventStatusIsExpression<>))
          .Register("eventStatusPolarityIs", typeof(TriggerEventStatusPolarityIsExpression<>))
          .Register("eventAmplifierIs", typeof(TriggerEventAmplifierIsExpression<>))
+         .Register("eventPreventerIs", typeof(TriggerEventPreventerIsExpression<>))
          .Register("eventIsReplicated", typeof(TriggerEventIsReplicatedExpression<>))
          .Register("eventCardZone", typeof(TriggerEventCardZoneExpression<>))
          .Register("claimOnceThisAction", typeof(ClaimOnceThisActionExpression<>))

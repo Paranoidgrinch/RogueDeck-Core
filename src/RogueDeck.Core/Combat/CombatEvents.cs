@@ -218,7 +218,12 @@ public sealed record StatusMergedCombatEvent(
     CombatantId? SourceCombatantId = null,
     CardDefinitionId? SourceCardId = null,
     // As StatusAppliedCombatEvent: whether the application that merged here was a copy.
-    bool Replicated = false
+    bool Replicated = false,
+    // How many stacks THIS application added, as opposed to `Stacks`, which is what the instance now holds.
+    // A rule that answers an application by its size — "gain favour equal to the stacks gained" — cannot use
+    // the total: a second blessing of one stack on top of three would read as four. On a fresh application
+    // the two are the same number, which is why only the merge carries the extra field.
+    int AppliedStacks = 0
 ) : ICombatEvent;
 
 public sealed record StatusesRemovedByPolarityCombatEvent(

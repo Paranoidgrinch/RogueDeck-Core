@@ -173,7 +173,8 @@ public sealed class ApplyStatusEffectHandler : EffectRequestHandler<ApplyStatusE
                         Charges: existingStatus.Charges,
                         SourceCombatantId: applyStatus.SourceCombatantId ?? existingStatus.SourceCombatantId,
                         SourceCardId: applyStatus.SourceCardId ?? existingStatus.SourceCardId,
-                        Replicated: applyStatus.Replicated));
+                        Replicated: applyStatus.Replicated,
+                        AppliedStacks: effectiveStacks));
 
                 return;
             }

@@ -983,6 +983,12 @@ public sealed class EventAmountExpression<TContext> : ICombatExpression<TContext
             // status on the holder loses one or more stacks").
             StatusStacksChangedTriggeredEffectContext changed =>
                 changed.CombatEvent.NewStacks - changed.CombatEvent.OldStacks,
+            // A status application reports HOW MUCH it landed. A fresh instance holds exactly what arrived;
+            // a merge has to say so separately, because what the instance now holds includes everything that
+            // was already there. Both answer the same question — "how big was that?" — which is what a rule
+            // measuring an application against itself needs.
+            StatusAppliedTriggeredEffectContext applied => applied.CombatEvent.Stacks,
+            StatusMergedTriggeredEffectContext merged => merged.CombatEvent.AppliedStacks,
             _ => 0,
         };
 }
@@ -2067,6 +2073,24 @@ public sealed class TriggerEventAmplifierIsExpression<TContext> : ICombatExpress
     public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat) =>
         context.SourceContext is StatusApplicationAmplifiedTriggeredEffectContext amplified
         && amplified.CombatEvent.AmplifyingStatusDefinitionId == Status;
+}
+
+// True when the prohibition that REFUSED this application is the given status — the mirror of
+// TriggerEventAmplifierIsExpression, and asked for the same reason.
+//
+// What was refused is TriggerEventStatusIsExpression's question. Which prohibition did the refusing is this
+// one, and a rule that answers its own refusals needs it: "when my chisel strikes a blessing out, cut a
+// doubt in its place" must not fire because somebody else's ward happened to turn the same blessing away.
+public sealed class TriggerEventPreventerIsExpression<TContext> : ICombatExpression<TContext, bool>
+    where TContext : class
+{
+    public StatusDefinitionId Status { get; }
+
+    public TriggerEventPreventerIsExpression(StatusDefinitionId status) => Status = status;
+
+    public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat) =>
+        context.SourceContext is StatusApplicationBlockedTriggeredEffectContext blocked
+        && blocked.CombatEvent.BlockingStatusDefinitionId == Status;
 }
 
 // "Is this the first time this rule has been reached during the current action?" — and CLAIMS that first
