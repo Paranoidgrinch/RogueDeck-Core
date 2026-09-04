@@ -63,11 +63,15 @@ public sealed class PartyInteractiveCombatDriver : ICombatDriver, IReplayResetta
         if (!compiled.SimultaneousTeamTurns)
             return new PartyAutoPlayCombatDriver().Drive(playthrough);
 
+        // Deferred for the same reason as the solo driver: the opening hands are a moment rules speak at,
+        // and a prompt raised there needs its chooser installed and the fight published first.
         var combat = new PartyCombat(
-            compiled, EnemyIntentSelectors.Build(compiled), playthrough.CombatId, playthrough.RandomSeed);
+            compiled, EnemyIntentSelectors.Build(compiled), playthrough.CombatId, playthrough.RandomSeed,
+            startOpeningPhase: false);
         combat.State.SetCardChooser(_cardChooser);
         combat.State.SetOptionChooser(_optionChooser);
         Current = combat;
+        combat.StartOpeningPhase();
         var allies = playthrough.Blueprint.Allies;
         var heroId = compiled.Hero.CombatantId;
 

@@ -62,11 +62,17 @@ public sealed class InteractiveCombatDriver : ICombatDriver, IReplayResettable, 
     {
         ArgumentNullException.ThrowIfNull(playthrough);
         var compiled = playthrough.Blueprint.Compile();
+        // The opening hand is deferred until the choosers are on and the fight is published: a rule that
+        // asks the player something as the hand is dealt would otherwise be answered by the headless
+        // fallback — the first option, silently — and a park raised inside the constructor would leave the
+        // UI with no fight to render behind the prompt.
         var combat = new InteractiveCombat(
-            compiled, EnemyIntentSelectors.Build(compiled), playthrough.CombatId, playthrough.RandomSeed);
+            compiled, EnemyIntentSelectors.Build(compiled), playthrough.CombatId, playthrough.RandomSeed,
+            startOpeningTurn: false);
         combat.State.SetCardChooser(_cardChooser);
         combat.State.SetOptionChooser(_optionChooser);
         Current = combat;
+        combat.StartOpeningTurn();
 
         while (true)
         {

@@ -159,6 +159,10 @@ public static class RunJson
          .Register("missingHealth", typeof(MissingHealthExpression))
          .Register("deckSize", typeof(DeckSizeExpression))
          .Register("removedCardCount", typeof(RemovedCardCountExpression))
+         // "How many cards match this selector" — the closed card form only, which is the one a data
+         // document can carry (the selector it counts is itself data). It is what an authored branch needs
+         // to ask "does the deck hold one of these at all" before offering the thing that wants one.
+         .Register("cardCount", typeof(CountExpression<RunCardInstance>))
          .Register("relicCount", typeof(RelicCountExpression))
          .Register("consumableCount", typeof(ConsumableCountExpression))
          .Register("counter", typeof(CounterValueExpression))

@@ -26,7 +26,8 @@ public sealed class InteractiveCombat
         CompiledScenario compiled,
         Func<CombatState, CombatantId, int, EnemyActionDefinitionId?> enemyIntent,
         string combatId = "sandbox",
-        int randomSeed = 1)
+        int randomSeed = 1,
+        bool startOpeningTurn = true)
     {
         ArgumentNullException.ThrowIfNull(compiled);
         ArgumentNullException.ThrowIfNull(enemyIntent);
@@ -40,9 +41,9 @@ public sealed class InteractiveCombat
         _combat.TraceListener = _collector;
         InstallTelegraph();
 
-        // Start the hero's first turn (draws the opening hand).
-        if (_combat.TurnPhase == CombatTurnPhase.WaitingToStartTurn)
-            _turns.StartCurrentTurn(_combat, _registry);
+        // Start the hero's first turn (draws the opening hand) — unless the caller means to do it itself.
+        if (startOpeningTurn)
+            StartOpeningTurn();
     }
 
     // Resume an in-progress fight from a RESTORED CombatState (mid-combat save/resume). The combat state is
@@ -52,7 +53,8 @@ public sealed class InteractiveCombat
     public InteractiveCombat(
         CompiledScenario compiled,
         CombatState restoredState,
-        Func<CombatState, CombatantId, int, EnemyActionDefinitionId?> enemyIntent)
+        Func<CombatState, CombatantId, int, EnemyActionDefinitionId?> enemyIntent,
+        bool startOpeningTurn = true)
     {
         ArgumentNullException.ThrowIfNull(compiled);
         ArgumentNullException.ThrowIfNull(restoredState);
@@ -67,6 +69,20 @@ public sealed class InteractiveCombat
         _combat.TraceListener = _collector;
         InstallTelegraph();
 
+        if (startOpeningTurn)
+            StartOpeningTurn();
+    }
+
+    // Deal the opening hand.
+    //
+    // Split out of the constructors because the opening hand is a moment rules SPEAK AT — a relic that draws
+    // one more, a boss that takes a card into custody, a status that asks the player a question — and a rule
+    // that raises a PROMPT there can only be answered if whoever is going to answer it is already installed.
+    // A driver that owns a card or option chooser therefore builds the fight, puts its choosers on, publishes
+    // the fight so the parked state has something to render, and only then opens the turn. Everything else
+    // keeps the old shape: the constructor opens it, and a prompt falls through to the headless default.
+    public void StartOpeningTurn()
+    {
         if (_combat.TurnPhase == CombatTurnPhase.WaitingToStartTurn)
             _turns.StartCurrentTurn(_combat, _registry);
     }
