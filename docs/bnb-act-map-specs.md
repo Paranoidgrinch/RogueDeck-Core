@@ -29,6 +29,10 @@ Maps are hybrid — fixed structure, random layout each run. One `MapGenerationS
 - ✅ **No-repeat across a run** → encounter selection is now WITHOUT replacement across the whole map
   (shared used-set, balance-filtered, graceful fallback once a pool is exhausted). Keep each role's pool
   ≥ the nodes that draw it.
+- ✅ **Per-encounter earliest depth** → `MapGenerationSpec.EncounterMinimumDepthPercent`, keyed by encounter
+  id: the elite masters' "earliest depth/stage" tables name individual fights, which neither the role gate
+  (`RoleMinimumDepthPercent`) nor the weighted pool can express. Where a row can honour none of a role's
+  candidates the gate yields, so a combat node is never left without a fight.
 - ✅ **Per-path multi-encounter minimum** → new role `MapNodeKind.MultiCombat`: placed via gate funnels like
   any per-path minimum, draws from `Encounters[MultiCombat]` (list the duo/trio templates there), realizes
   as a normal combat, counts as an enemy. Set `PerPathMinimums[MultiCombat]` per act.

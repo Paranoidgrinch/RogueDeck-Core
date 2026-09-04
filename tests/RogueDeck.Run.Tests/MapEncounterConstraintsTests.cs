@@ -256,6 +256,69 @@ public class MapEncounterConstraintsTests
         Assert.True(gatedSeen > 0, "no gated room was ever placed, so the gate proved nothing");
     }
 
+    // And the gate one level DOWN: not which kind of room may stand where, but which FIGHT. An elite master's
+    // "earliest depth/stage" table names individual elites — Act IV opens its elites at a fifth of the way in
+    // and holds its Colossus back to seven tenths — and neither the role gate nor the pool can say that.
+    [Fact]
+    public void An_encounter_gated_by_depth_is_never_the_fight_an_early_room_runs()
+    {
+        var late = Pool("elite.late.", 6).ToDictionary(e => e.Encounter.Value, _ => 70);
+        var spec = new MapGenerationSpec
+        {
+            Rows = 6,
+            MinWidth = 2,
+            MaxWidth = 4,
+            MinEnemiesPerPath = 6,
+            PerPathMinimums = new Dictionary<MapNodeKind, int>
+            {
+                [MapNodeKind.Combat] = 4,
+                [MapNodeKind.Elite] = 3,
+            },
+            KindWeights = new Dictionary<MapNodeKind, int>
+            {
+                [MapNodeKind.Combat] = 2,
+                [MapNodeKind.Elite] = 3,
+            },
+            Encounters = new EncounterDistribution
+            {
+                ByRole = new Dictionary<MapNodeKind, IReadOnlyList<EncounterPoolEntry>>
+                {
+                    [MapNodeKind.Combat] = Pool("fight.", 60),
+                    // Half the act's elites are late ones, so a shallow row always has an early elite to
+                    // yield to and the gate never has to be waived.
+                    [MapNodeKind.Elite] = [.. Pool("elite.early.", 6), .. Pool("elite.late.", 6)],
+                    [MapNodeKind.Boss] = Pool("boss.", 5),
+                },
+            },
+            EncounterMinimumDepthPercent = late,
+        };
+
+        var gatedSeen = 0;
+        var earlySeen = 0;
+        for (var seed = 1; seed <= 40; seed++)
+        {
+            var generated = RuleBasedMapGenerator.Generate(spec, seed, 0, EmptyBalance(), Realize);
+            Assert.Empty(MapConstraintValidator.Validate(generated, spec)); // the promises still hold
+            var rows = generated.Map.Nodes.Max(n => Row(n.Id)) + 1;
+            foreach (var node in generated.Map.Nodes)
+            {
+                var fought = (string)node.Payload;
+                if (!spec.EncounterMinimumDepthPercent.TryGetValue(fought, out var earliest))
+                {
+                    if (fought.StartsWith("elite.early.", StringComparison.Ordinal))
+                        earlySeen++;
+                    continue;
+                }
+                gatedSeen++;
+                Assert.True(Row(node.Id) * 100 / (rows - 2) >= earliest,
+                    $"'{fought}' was fought at row {Row(node.Id)} of {rows}, earlier than the act allows");
+            }
+        }
+
+        Assert.True(gatedSeen > 0, "no gated fight was ever placed, so the gate proved nothing");
+        Assert.True(earlySeen > 0, "the shallow rows ran no elite at all, so the gate proved too much");
+    }
+
     // A generated node id is "r{row}c{col}" (MapWiring.Id).
     private static int Row(NodeId id) =>
         int.Parse(id.Value[1..id.Value.IndexOf('c')], System.Globalization.CultureInfo.InvariantCulture);

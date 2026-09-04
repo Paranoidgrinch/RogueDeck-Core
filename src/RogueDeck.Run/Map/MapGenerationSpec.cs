@@ -128,6 +128,16 @@ public sealed record MapGenerationSpec
     public IReadOnlyDictionary<MapNodeKind, int> RoleMinimumDepthPercent { get; init; } =
         new Dictionary<MapNodeKind, int>();
 
+    // How DEEP into the act one ENCOUNTER TEMPLATE may first stand, as a percentage of the act's own depth.
+    // The third and last of the depth gates, and the one the DESIGN usually writes down: an elite master's
+    // "earliest depth/stage" table names individual fights, not roles — the act's two opening elites may stand
+    // at a fifth of the way in and its Colossus only at seven tenths, and RoleMinimumDepthPercent cannot say
+    // that because it only knows "Elite". Keyed by encounter id, so it is the fight's own property. Where a row
+    // can honour no candidate of its role, the gate yields (the earliest ones are drawn anyway) — a combat node
+    // is never left without a fight. Empty (the default) leaves generation byte-identical.
+    public IReadOnlyDictionary<string, int> EncounterMinimumDepthPercent { get; init; } =
+        new Dictionary<string, int>();
+
     // The kinds a gate funnel can be, in a fixed order (used to lay gates out and to iterate deterministically).
     // Boss is the fixed top row and is never a per-path gate.
     public static readonly IReadOnlyList<MapNodeKind> GateKinds = new[]
@@ -192,6 +202,11 @@ public sealed record MapGenerationSpec
             if (percent is < 0 or > 100)
                 throw new ArgumentOutOfRangeException(nameof(RoleMinimumDepthPercent), percent,
                     $"The earliest depth for the {role} role must be a percentage (0-100).");
+
+        foreach (var (encounter, percent) in EncounterMinimumDepthPercent)
+            if (percent is < 0 or > 100)
+                throw new ArgumentOutOfRangeException(nameof(EncounterMinimumDepthPercent), percent,
+                    $"The earliest depth for encounter '{encounter}' must be a percentage (0-100).");
     }
 
     private static readonly IReadOnlyDictionary<MapNodeKind, int> EmptyCounts = new Dictionary<MapNodeKind, int>();

@@ -180,7 +180,8 @@ public static class RuleBasedMapGenerator
                         effectiveKind = MapNodeKind.Mimic;
                     }
 
-                    var encounter = SelectEncounter(effectiveKind, ri, spec, realization, contentRng!, usedEncounters);
+                    var encounter = SelectEncounter(
+                        effectiveKind, ri, plan.Count, spec, realization, contentRng!, usedEncounters);
                     var nodeRef = SelectNodeRef(effectiveKind, spec, ri, plan.Count, contentRng!, usedRefs);
                     var realized = realization.Content(effectiveKind, new MapCoord(ri, c), encounter, nodeRef);
                     builder.AddNode(id, realized.Type, realized.Payload, realized.Tags);
@@ -345,16 +346,27 @@ public static class RuleBasedMapGenerator
     private static int Weight(IReadOnlyDictionary<MapNodeKind, int> weights, MapNodeKind kind) =>
         weights.TryGetValue(kind, out var value) ? Math.Max(0, value) : 0;
 
+    // A FIGHT may be gated by depth too (EncounterMinimumDepthPercent), one level below the role gate: the
+    // act's elites all stand where RoleMinimumDepthPercent[Elite] allows, but the design also says which of
+    // them is the third room's elite and which is the twelfth's.
     private static EncounterId? SelectEncounter(
-        MapNodeKind kind, int row, MapGenerationSpec spec, ContentRealization realization, MapGenRandom rng,
-        ISet<EncounterId> used)
+        MapNodeKind kind, int row, int rows, MapGenerationSpec spec, ContentRealization realization,
+        MapGenRandom rng, ISet<EncounterId> used)
     {
         if (!IsCombatRole(kind) || !realization.Selector.HasCandidates(kind))
             return null;
 
+        Func<EncounterId, bool>? eligible = null;
+        if (spec.EncounterMinimumDepthPercent.Count > 0)
+        {
+            var depth = DepthPercent(row, rows);
+            eligible = id => depth >= spec.EncounterMinimumDepthPercent.GetValueOrDefault(id.Value);
+        }
+
         var loadout = spec.BalanceTargets.AssumedLoadout(realization.StartingLoadout, row);
         var target = spec.BalanceTargets.TargetNet(row);
-        var picked = realization.Selector.Select(kind, loadout, target, spec.BalanceTargets.Tolerance, rng.Next, used);
+        var picked = realization.Selector.Select(
+            kind, loadout, target, spec.BalanceTargets.Tolerance, rng.Next, used, eligible);
         used.Add(picked);
         return picked;
     }

@@ -22,9 +22,13 @@ public sealed class EncounterSelector
 
     public bool HasCandidates(MapNodeKind role) => _distribution.For(role).Count > 0;
 
+    // `eligible` is the DEPTH gate (MapGenerationSpec.EncounterMinimumDepthPercent), asked before anything
+    // else: a fight the design does not open before the far end of the act is not a candidate in the third
+    // room, however well its threat fits. If it filters everything away the gate yields rather than leaving
+    // the node empty.
     public EncounterId Select(
         MapNodeKind role, int loadoutStrength, int targetNet, int tolerance, Func<int, int> next,
-        ISet<EncounterId>? exclude = null)
+        ISet<EncounterId>? exclude = null, Func<EncounterId, bool>? eligible = null)
     {
         ArgumentNullException.ThrowIfNull(next);
         var all = _distribution.For(role);
@@ -32,14 +36,23 @@ public sealed class EncounterSelector
             throw new InvalidOperationException(
                 $"No encounter candidates for role {role}; the distribution must list at least one.");
 
+        // What this depth may run at all, before the run's own history is consulted.
+        var open = all;
+        if (eligible is not null)
+        {
+            var allowed = all.Where(e => eligible(e.Encounter)).ToList();
+            if (allowed.Count > 0)
+                open = allowed;
+        }
+
         // Draw WITHOUT replacement: skip templates already placed this run. If every candidate for this role
         // is used up (pool smaller than the number of nodes needing it), fall back to the full list so a fight
         // is still chosen — repeats only happen once a role's pool is genuinely exhausted.
         var candidates = exclude is null || exclude.Count == 0
-            ? all
-            : all.Where(e => !exclude.Contains(e.Encounter)).ToList();
+            ? open
+            : open.Where(e => !exclude.Contains(e.Encounter)).ToList();
         if (candidates.Count == 0)
-            candidates = all;
+            candidates = open;
 
         var inBand = new List<EncounterPoolEntry>();
         foreach (var entry in candidates)
