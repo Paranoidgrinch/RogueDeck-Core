@@ -123,7 +123,17 @@ public sealed record StatusPreventionSpec(
     // Censure wants ("anything I would not want"); a named id is the narrow one a licence wants — Act III's
     // Safe-Conduct is protection against Trespass and against nothing else, and a safe conduct that also ate
     // Doubt and Panic would quietly be the best defensive status in the game.
-    StatusDefinitionId? Only = null)
+    StatusDefinitionId? Only = null,
+    // WHICH prohibition answers when a bearer carries several that all refuse the same application. Highest
+    // Priority first; ties keep the old rule and let the oldest instance pay. A bearer with one prohibition —
+    // which is every bearer until content stacks two — is unaffected.
+    int Priority = 0,
+    // The all-or-nothing charge, as against the stack-for-stack toll StacksPerStack pays: ONE stack refuses
+    // the whole application however many stacks it carried, and exactly one stack is spent doing it. This is
+    // the shape a "charge" has always had in this genre, and until now the engine could only approximate it
+    // with an absurdly large StacksPerStack — which is a different sentence that happens to round the same
+    // way, and rounds differently the moment an application is larger than the number chosen.
+    bool RefusesWholeApplication = false)
 {
     public bool Refuses(StatusPolarity incoming, bool bearerIsOnPlayerTeam) => Scope switch
     {

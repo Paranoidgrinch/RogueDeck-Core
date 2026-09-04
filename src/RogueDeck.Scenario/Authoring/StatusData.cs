@@ -82,7 +82,8 @@ public sealed record StatusData
                 ? new DisclosureData(sight.DrawPileCards, sight.IntentLookahead)
                 : null,
             Prevention = status.Prevention is { } refusal
-                ? new StatusPreventionData(refusal.Scope, refusal.StacksPerStack, refusal.Only?.value)
+                ? new StatusPreventionData(refusal.Scope, refusal.StacksPerStack, refusal.Only?.value,
+                    refusal.Priority, refusal.RefusesWholeApplication)
                 : null,
             Amplification = status.Amplification is { } louder
                 ? new StatusAmplificationData(louder.Scope, louder.AddStacks, louder.StacksSpent, louder.Only?.value)
@@ -110,7 +111,8 @@ public sealed record StatusData
                 : null,
             Prevention = Prevention is { } refusal
                 ? new StatusPreventionSpec(refusal.Scope, refusal.StacksPerStack,
-                    refusal.Only is null ? null : new StatusDefinitionId(refusal.Only))
+                    refusal.Only is null ? null : new StatusDefinitionId(refusal.Only),
+                    refusal.Priority, refusal.RefusesWholeApplication)
                 : null,
             Amplification = Amplification is { } louder
                 ? new StatusAmplificationSpec(louder.Scope, louder.AddStacks, louder.StacksSpent,
@@ -162,7 +164,16 @@ public sealed record StatusPreventionData(
     // is kept out of the wire format so documents written before the field existed round-trip byte-identically.
     [property: System.Text.Json.Serialization.JsonIgnore(
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
-    string? Only = null);
+    string? Only = null,
+    // Which prohibition answers first when several refuse the same application, and whether this one refuses
+    // the WHOLE application for a single stack. Both are kept out of the wire format at their defaults so
+    // documents written before the fields existed round-trip byte-identically.
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    int Priority = 0,
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    bool RefusesWholeApplication = false);
 
 // What the bearer has the next application to it enlarged by, and what that costs. The engine face is
 // StatusAmplificationSpec.

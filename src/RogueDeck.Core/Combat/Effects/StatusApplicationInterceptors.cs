@@ -125,9 +125,15 @@ public sealed class DeclarativeStatusPreventionInterceptor : IStatusApplicationI
         var bearer = context.TargetCombatant;
         var onPlayerTeam = bearer.TeamId == StandardCombatIds.PlayerTeam;
 
-        // Deterministic order: the oldest matching instance pays first.
+        // Which prohibition answers: the highest Priority first, and among equals the oldest instance, which
+        // is the rule this had before a spec could state a priority at all.
+        var order = 0;
+        var candidates = new List<(StatusInstance Status, StatusPreventionSpec Prevention, int Age)>();
+
         foreach (var candidate in bearer.Statuses)
         {
+            order++;
+
             if (candidate.DefinitionId == context.Request.StatusDefinitionId)
                 continue; // a prohibition never refuses itself
             if (context.Request.UnrefusableBy == candidate.DefinitionId)
@@ -141,14 +147,24 @@ public sealed class DeclarativeStatusPreventionInterceptor : IStatusApplicationI
                     context.Request.StatusDefinitionId, context.StatusDefinition.Polarity, onPlayerTeam))
                 continue;
 
+            candidates.Add((candidate, prevention, order));
+        }
+
+        foreach (var (candidate, prevention, _) in candidates
+                     .OrderByDescending(c => c.Prevention.Priority)
+                     .ThenBy(c => c.Age))
+        {
             var perStack = Math.Max(1, prevention.StacksPerStack);
-            var affordable = candidate.Stacks * perStack;
-            var prevented = Math.Min(affordable, incomingStacks);
+
+            // The all-or-nothing charge: one stack refuses everything the application carried.
+            var prevented = prevention.RefusesWholeApplication
+                ? incomingStacks
+                : Math.Min(candidate.Stacks * perStack, incomingStacks);
             if (prevented <= 0)
                 continue;
 
             // Round up: a stack that pays for part of an incoming stack is still spent.
-            var spent = (prevented + perStack - 1) / perStack;
+            var spent = prevention.RefusesWholeApplication ? 1 : (prevented + perStack - 1) / perStack;
 
             context.Combat.AddLogEntry(
                 StandardCombatLogTypes.StatusApplicationBlocked,
