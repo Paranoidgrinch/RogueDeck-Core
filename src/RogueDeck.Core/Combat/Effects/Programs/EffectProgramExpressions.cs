@@ -989,6 +989,11 @@ public sealed class EventAmountExpression<TContext> : ICombatExpression<TContext
             // measuring an application against itself needs.
             StatusAppliedTriggeredEffectContext applied => applied.CombatEvent.Stacks,
             StatusMergedTriggeredEffectContext merged => merged.CombatEvent.AppliedStacks,
+            // A draw reports HOW MANY CARDS came. The one question in this table that used to answer 0 for a
+            // real event: everything else here is a number the event carries, and a draw carries its cards.
+            // Without it a rule that rations draw has to read the hand instead, which is a different question
+            // (a hand is what the draw left plus what was already there) and quietly wrong.
+            CardsDrawnTriggeredEffectContext drawn => drawn.Cards.Count,
             _ => 0,
         };
 }

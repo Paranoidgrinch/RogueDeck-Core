@@ -61,6 +61,36 @@ public class ApplicationSizeTests
         Assert.Equal(2, merged.AppliedStacks);
     }
 
+    // …and the same question asked of a DRAW answers with the cards. It used to answer 0 — the only real
+    // event in that table that did — so a rule rationing draw had to read the hand, which is the draw plus
+    // whatever was already lying there.
+    [Fact]
+    public void ADrawReportsHowManyCardsCame()
+    {
+        var builder = CombatTestFactory.CreateStandardBuilder();
+        builder.RegisterTriggeredEffectDefinition(
+            TriggeredProgramContextAdapters.CardsDrawn.Define(
+                new TriggeredEffectDefinitionId("test.measure.drawn"),
+                new EffectProgram<CardsDrawnTriggeredEffectContext>(
+                    new SetCombatantCounterNode<CardsDrawnTriggeredEffectContext>(
+                        CombatantTargetSelectors.Source, Measured,
+                        new EventAmountExpression<CardsDrawnTriggeredEffectContext>(), relative: false))));
+        var registry = builder.Build();
+
+        var combat = Combat();
+        for (var i = 0; i < 4; i++)
+            combat.GetCardZones(PlayerId).AddCard(new CardInstance(
+                combat.CreateNextCardInstanceId(), StandardCombatIds.StrikeCard, PlayerId, CardZone.DrawPile));
+        // One card is already in hand, so a rule reading the HAND would say three.
+        combat.GetCardZones(PlayerId).AddCard(new CardInstance(
+            combat.CreateNextCardInstanceId(), StandardCombatIds.StrikeCard, PlayerId, CardZone.Hand));
+
+        combat.EnqueueEffect(new DrawCardsEffectRequest(PlayerId, Count: 2));
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+
+        Assert.Equal(2, combat.GetCombatant(PlayerId).GetCounter(Measured));
+    }
+
     // A rule that writes down the size of every application it sees, on both of the events an application
     // can raise. Registering the triggered definitions is enough to arm them.
     private static (CombatDefinitionRegistry Registry, CombatState Combat) Field()
