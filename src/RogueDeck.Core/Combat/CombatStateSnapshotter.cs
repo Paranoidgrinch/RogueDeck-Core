@@ -57,7 +57,11 @@ public static class CombatStateSnapshotter
             NextSummonedCombatantNumber: combat.NextSummonedCombatantNumber,
             NextEffectChainNumber: combat.NextEffectChainNumber,
             NextProgramExecutionId: combat.NextProgramExecutionId,
-            TemporaryRules: temporaryRules);
+            TemporaryRules: temporaryRules,
+            // In TurnOrder, so the capture is stable and the restore can walk it beside the combatants.
+            CardPlayTurnStats: combat.TurnOrder
+                .Select(id => (id, combat.GetCardPlayTurnStats(id).Capture()))
+                .ToImmutableArray());
     }
 
     private static CombatantSnapshot SnapshotCombatant(CombatantState c) =>

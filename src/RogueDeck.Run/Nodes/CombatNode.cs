@@ -86,6 +86,12 @@ public sealed record UnitDriveResult(
 public interface ICombatDriver
 {
     CombatDriveResult Drive(Playthrough playthrough);
+
+    // The same fight, RESUMED from a captured state instead of begun at the first bell — a save taken at a
+    // turn boundary, or the replay moving its baseline forward inside a long fight. The default ignores the
+    // capture and starts fresh, which is correct for every driver that cannot be interrupted in the first
+    // place (the auto-players and the scripted one): they run a fight start to finish inside one call.
+    CombatDriveResult Drive(Playthrough playthrough, CombatSaveData? resume) => Drive(playthrough);
 }
 
 // Reads the final state of each projected board unit (the blueprint's allies) off a finished CombatState, so a
@@ -300,7 +306,9 @@ public sealed class CombatNodeResolver : INodeResolver
         ApplyRunProjection(playthrough, run);
         var before = run.Health.Current;
 
-        var result = _driver.Drive(playthrough);
+        // A run resuming inside THIS fight hands its captured state over; every other entry starts at the
+        // first bell. Taken rather than read, because a resume happens once.
+        var result = _driver.Drive(playthrough, run.TakeCombatResume(node.Id));
         ReconcileUnits(run, result);
         ReconcileParty(run, result);
         var damageTaken = Math.Max(0, before - result.HeroHpRemaining);

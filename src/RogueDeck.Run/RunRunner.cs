@@ -129,7 +129,9 @@ public sealed class RunRunner
     // node 0 and a resumed run (Position = the last resolved node) continues at the next one.
     private void WalkLinear(RunState run, NodeResolveContext context)
     {
-        for (var index = run.Position + 1; index < run.Map.Nodes.Count; index++)
+        // A run resuming INSIDE a fight re-enters the node it was standing in rather than the one after it.
+        var first = run.ResumingCombatAtNode is not null ? run.Position : run.Position + 1;
+        for (var index = first; index < run.Map.Nodes.Count; index++)
         {
             var node = run.Map.Nodes[index];
             run.AdvanceTo(index);
@@ -148,15 +150,21 @@ public sealed class RunRunner
     }
 
     // Graph walk (edges present): start at an entry node (the player picks when there are several), resolve it,
-    // then offer its reachable-and-unvisited successors; the player picks one (or it auto-advances on a single
-    // successor). A node with no such successor is a leaf — the boss / finish — and ends the run.
+    // then offer its reachable-and-unvisited successors; the player picks one. A node with no such successor
+    // is a leaf — the boss / finish — and ends the run.
     private void WalkGraph(RunState run, NodeResolveContext context)
     {
         Node? current;
-        if (run.CurrentNodeId is not null)
+        if (run.ResumingCombatAtNode is { } fighting)
         {
-            // Resume from a save: the current node was already resolved (the save was taken at its interlude), so
-            // continue from its reachable-and-unvisited successors. No successors ⇒ it was a leaf; the run is done.
+            // Resume INSIDE a fight: the save was taken at a turn boundary, so the current node was not
+            // finished — it is re-entered, and its combat is rebuilt from the captured state (CombatNode).
+            current = run.Map.Nodes.FirstOrDefault(node => node.Id.Value == fighting);
+        }
+        else if (run.CurrentNodeId is not null)
+        {
+            // Resume from a save taken between nodes: the current node was already resolved, so continue from
+            // its reachable-and-unvisited successors. No successors ⇒ it was a leaf; the run is done.
             var resumeSuccessors = run.CurrentReachableNodes();
             current = resumeSuccessors.Count == 0 ? null : PickNode(resumeSuccessors, run);
         }
@@ -165,7 +173,10 @@ public sealed class RunRunner
             var entries = EntryNodes(run.Map);
             if (entries.Count == 0)
                 return; // a map with edges but no reachable entry node has nothing to walk
-            current = PickNode(entries, run);
+            // WHERE THE RUN BEGINS is the one place a single candidate is still taken silently: a map with one
+            // entrance has nothing to ask about, and asking would park the player in front of a door they have
+            // no choice but to open, before the run has started at all. Every step AFTER a room is a click.
+            current = entries.Count == 1 ? entries[0] : PickNode(entries, run);
         }
 
         while (current is not null)
@@ -214,12 +225,17 @@ public sealed class RunRunner
         return true;
     }
 
-    // Ask the choice provider which candidate to walk to (auto-selecting when there is only one), mapping its
-    // chosen id back to the node. Falls back to the first candidate if the id is not among them.
+    // Ask the choice provider which candidate to walk to, mapping its chosen id back to the node. Falls back
+    // to the first candidate if the id is not among them.
+    //
+    // IT ASKS EVEN WHEN THERE IS ONLY ONE. Stepping straight through a single successor reads as the map
+    // moving by itself: a fight ends and the player is already somewhere else, with no moment in between that
+    // belongs to them. So the map is always CLICKED, and a corridor is a corridor the player walks rather
+    // than one they are carried down. A headless caller answers instantly, so nothing but the UI notices.
     private Node PickNode(IReadOnlyList<Node> candidates, RunState run)
     {
-        if (candidates.Count == 1)
-            return candidates[0];
+        if (candidates.Count == 0)
+            throw new ArgumentException("PickNode needs at least one candidate.", nameof(candidates));
         var chosenId = _choices.ChooseNextNode(candidates, run);
         return candidates.FirstOrDefault(node => node.Id == chosenId) ?? candidates[0];
     }

@@ -125,6 +125,51 @@ public sealed class CombatantCardPlayTurnStats
         _cardsPlayedByTagThisTurn.Clear();
         _firstCardPlayedTags.Clear();
     }
+    // ── capture & restore ─────────────────────────────────────────────────────────
+    //
+    // A fight can be put down and picked up again — a save taken at a turn boundary, or the replay moving its
+    // baseline forward inside a long fight — and what a turn REMEMBERS has to survive that. It did not: a
+    // restored fight came back with an empty history, so every "more than last turn", "you opened with an
+    // Attack again", "the third copy this turn" rule silently read zero. Nothing caught it, because until a
+    // baseline moved inside a fight nothing ever restored one mid-flight.
+
+    public CardPlayTurnStatsSnapshot Capture() => new(
+        CardsPlayedThisTurn, CardsPlayedLastTurn, DamageDealtThisTurn, ResourceGainedThisTurn,
+        ResourceSpentThisTurn, FirstCardPlayedDefinitionId?.value,
+        [.. _cardsPlayedByDefinitionThisTurn.Select(e => (e.Key.value, e.Value)).OrderBy(e => e.Item1, StringComparer.Ordinal)],
+        [.. _cardsPlayedByTagThisTurn.Select(e => (e.Key.value, e.Value)).OrderBy(e => e.Item1, StringComparer.Ordinal)],
+        [.. _cardsPlayedByTagLastTurn.Select(e => (e.Key.value, e.Value)).OrderBy(e => e.Item1, StringComparer.Ordinal)],
+        [.. _firstCardPlayedTags.Select(t => t.value).OrderBy(v => v, StringComparer.Ordinal)],
+        [.. _firstCardPlayedTagsLastTurn.Select(t => t.value).OrderBy(v => v, StringComparer.Ordinal)]);
+
+    public void Restore(CardPlayTurnStatsSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        CardsPlayedThisTurn = snapshot.CardsPlayedThisTurn;
+        CardsPlayedLastTurn = snapshot.CardsPlayedLastTurn;
+        DamageDealtThisTurn = snapshot.DamageDealtThisTurn;
+        ResourceGainedThisTurn = snapshot.ResourceGainedThisTurn;
+        ResourceSpentThisTurn = snapshot.ResourceSpentThisTurn;
+        FirstCardPlayedDefinitionId = snapshot.FirstCardPlayedDefinitionId is { } id
+            ? new CardDefinitionId(id)
+            : null;
+        _cardsPlayedByDefinitionThisTurn.Clear();
+        foreach (var (key, count) in snapshot.ByDefinitionThisTurn)
+            _cardsPlayedByDefinitionThisTurn[new CardDefinitionId(key)] = count;
+        _cardsPlayedByTagThisTurn.Clear();
+        foreach (var (key, count) in snapshot.ByTagThisTurn)
+            _cardsPlayedByTagThisTurn[new TagId(key)] = count;
+        _cardsPlayedByTagLastTurn.Clear();
+        foreach (var (key, count) in snapshot.ByTagLastTurn)
+            _cardsPlayedByTagLastTurn[new TagId(key)] = count;
+        _firstCardPlayedTags.Clear();
+        foreach (var tag in snapshot.FirstCardTagsThisTurn)
+            _firstCardPlayedTags.Add(new TagId(tag));
+        _firstCardPlayedTagsLastTurn.Clear();
+        foreach (var tag in snapshot.FirstCardTagsLastTurn)
+            _firstCardPlayedTagsLastTurn.Add(new TagId(tag));
+    }
+
 }
 
 public sealed class TrackCardsPlayedThisTurnHandler
@@ -212,3 +257,17 @@ public sealed class TrackResourceSpentThisTurnHandler
               .RecordResourceSpent(combatEvent.Costs.Sum(cost => cost.Amount));
     }
 }
+
+// What one combatant's turn remembers, as values. Ordered by key throughout so the capture is stable.
+public sealed record CardPlayTurnStatsSnapshot(
+    int CardsPlayedThisTurn,
+    int CardsPlayedLastTurn,
+    int DamageDealtThisTurn,
+    int ResourceGainedThisTurn,
+    int ResourceSpentThisTurn,
+    string? FirstCardPlayedDefinitionId,
+    System.Collections.Immutable.ImmutableArray<(string Key, int Count)> ByDefinitionThisTurn,
+    System.Collections.Immutable.ImmutableArray<(string Key, int Count)> ByTagThisTurn,
+    System.Collections.Immutable.ImmutableArray<(string Key, int Count)> ByTagLastTurn,
+    System.Collections.Immutable.ImmutableArray<string> FirstCardTagsThisTurn,
+    System.Collections.Immutable.ImmutableArray<string> FirstCardTagsLastTurn);

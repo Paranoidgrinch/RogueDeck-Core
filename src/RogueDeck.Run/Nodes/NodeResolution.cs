@@ -90,17 +90,20 @@ public sealed class ScriptedChoiceProvider : IRunChoiceProvider, IRunEntityChoos
     public IReadOnlyList<T> ChooseEntities<T>(IReadOnlyList<T> candidates, int count, string purpose) =>
         candidates.Take(count).ToArray();
 
-    // Routes a branching map by scripted node id: consumes the same id queue as event choices (a scripted route
-    // lists the node ids to walk), falling back to the first candidate when the script runs out — keeping tests
-    // and replays deterministic.
+    // Routes a branching map by scripted node id: reads the same id queue as event choices (a scripted route
+    // lists the node ids to walk), falling back to the first candidate when the script has nothing to say —
+    // keeping tests and replays deterministic.
+    //
+    // ⚠ It PEEKS, and only consumes on a match. The walker now asks even where there is a single successor
+    // (a corridor is walked, not fallen down), so a route that DEQUEUED while searching would have its whole
+    // script eaten by the first corridor before it ever reached the fork it was written for.
     public NodeId ChooseNextNode(IReadOnlyList<Node> candidates, RunState run)
     {
-        while (_choiceIds.Count > 0)
+        if (_choiceIds.Count > 0
+            && candidates.FirstOrDefault(node => node.Id.Value == _choiceIds.Peek()) is { } match)
         {
-            var wanted = _choiceIds.Dequeue();
-            var match = candidates.FirstOrDefault(node => node.Id.Value == wanted);
-            if (match is not null)
-                return match.Id;
+            _choiceIds.Dequeue();
+            return match.Id;
         }
 
         return candidates[0].Id;

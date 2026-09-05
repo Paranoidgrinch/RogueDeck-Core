@@ -58,7 +58,18 @@ public sealed class InteractiveCombatDriver : ICombatDriver, IReplayResettable, 
     // Called by CombatNodeResolver during a replay. Builds the fight the same way AutoPlayCombatDriver does
     // (deterministic per blueprint+seed), installs the UI card chooser so ChosenCardInZone selections prompt the
     // player, then applies the recorded actions — parking when the player still owes the next one.
-    public CombatDriveResult Drive(Playthrough playthrough)
+    public CombatDriveResult Drive(Playthrough playthrough) => Drive(playthrough, null);
+
+    // The captured fight, rebuilt — with whatever it had already said put back in front of what it says next.
+    private static CombatState Restored(CombatSaveData resume, CompiledScenario compiled)
+    {
+        var state = CombatState.Restore(resume.State, compiled.Registry);
+        if (resume.Log is { Count: > 0 } log)
+            state.RestoreCombatLog(log);
+        return state;
+    }
+
+    public CombatDriveResult Drive(Playthrough playthrough, CombatSaveData? resume)
     {
         ArgumentNullException.ThrowIfNull(playthrough);
         var compiled = playthrough.Blueprint.Compile();
@@ -66,9 +77,16 @@ public sealed class InteractiveCombatDriver : ICombatDriver, IReplayResettable, 
         // asks the player something as the hand is dealt would otherwise be answered by the headless
         // fallback — the first option, silently — and a park raised inside the constructor would leave the
         // UI with no fight to render behind the prompt.
-        var combat = new InteractiveCombat(
-            compiled, EnemyIntentSelectors.Build(compiled), playthrough.CombatId, playthrough.RandomSeed,
-            startOpeningTurn: false);
+        // A RESUMED fight is rebuilt around its captured state rather than dealt from the first bell. The
+        // definitions come from the same compiled scenario either way, which is what lets a temporary rule's
+        // program body be re-linked instead of resurrected without one.
+        var combat = resume is null
+            ? new InteractiveCombat(
+                compiled, EnemyIntentSelectors.Build(compiled), playthrough.CombatId, playthrough.RandomSeed,
+                startOpeningTurn: false)
+            : new InteractiveCombat(
+                compiled, Restored(resume, compiled), EnemyIntentSelectors.Build(compiled),
+                startOpeningTurn: false);
         combat.State.SetCardChooser(_cardChooser);
         combat.State.SetOptionChooser(_optionChooser);
         Current = combat;
@@ -122,10 +140,24 @@ public sealed class InteractiveCombatDriver : ICombatDriver, IReplayResettable, 
         _script.Advance(new CombatPlayEntry(null, cardId, target));
     }
 
+
+    // THE TURN WAS JUST HANDED OVER — read and cleared by whoever moves the replay baseline (RunPlayback).
+    // A turn boundary is the only quiescent point inside a fight: no prompt is open and the enemies have
+    // answered, so it is the only place the fight can be captured and started again from.
+    private bool _handedOver;
+
+    public bool TakeTurnHandedOver()
+    {
+        var handed = _handedOver;
+        _handedOver = false;
+        return handed;
+    }
+
     public void EndTurn()
     {
         if (Current is null || _cardChooser.IsAwaitingChoice || _optionChooser.IsAwaitingChoice)
             return;
+        _handedOver = true;
         _script.Advance(new CombatEndTurnEntry(null));
     }
 

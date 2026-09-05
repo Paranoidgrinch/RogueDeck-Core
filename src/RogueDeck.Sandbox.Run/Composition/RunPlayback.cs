@@ -90,10 +90,31 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
             // with its own party) — don't guess from the blueprint's default start.
             partyOverride: save.Party.Count > 1);
 
+    // The act plan a restore rebuilds against, remembered between restores.
+    //
+    // ⚠ THIS IS A HOT PATH NOW. The replay baseline used to move once per ROOM; it moves once per TURN, so a
+    // long fight restores hundreds of times, and generating all five acts' maps each time was costing about
+    // half a second an answer — which is why the fights with the most answers were the ones the checkpoint
+    // helped least. Generation is deterministic in (seed, loadout), so the plan can simply be kept.
+    //
+    // Safe to share because a run NEVER mutates a map in place: every mid-run change (adding a node, an edge)
+    // replaces RunState.Map with a new RunMap, leaving the plan's own maps untouched.
+    private static (int Seed, int Loadout, RunBlueprint Blueprint, IReadOnlyList<RunActPlan> Acts)? _actPlan;
+
+    private static IReadOnlyList<RunActPlan> ActPlan(RunBlueprint blueprint, int seed, int loadout)
+    {
+        if (_actPlan is { } cached
+            && cached.Seed == seed && cached.Loadout == loadout && ReferenceEquals(cached.Blueprint, blueprint))
+            return cached.Acts;
+        var acts = blueprint.BuildActPlan(seed, loadout);
+        _actPlan = (seed, loadout, blueprint, acts);
+        return acts;
+    }
+
     private static RunState RestoreInItsAct(
         RunBlueprint blueprint, RunSaveData save, RunContentRegistry? content)
     {
-        var acts = blueprint.BuildActPlan(save.RandomSeed, save.MapGenerationLoadout ?? 0);
+        var acts = ActPlan(blueprint, save.RandomSeed, save.MapGenerationLoadout ?? 0);
         var index = Math.Clamp(save.ActIndex, 0, acts.Count - 1);
         var run = RunState.Restore(save, acts[index].Map, content);
         run.SetActPlan(acts, index);
@@ -103,13 +124,36 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
     // Serialize the live run to a save file. Only valid at a quiescent point (an interlude / event choice / the run's
     // end), where the run thread is parked — RunState.Snapshot throws otherwise; the caller surfaces that. Null when
     // no run is active.
+    // The live fight as a capture, or null when none is on the table. Shared by the autosave and by the
+    // replay baseline — they want exactly the same thing.
+    private CombatSaveData? CurrentCombatCapture()
+    {
+        if (Session is not { } session)
+            return null;
+        // WHICH ROOM THIS FIGHT IS IN. A graph walk records it as the current node; a LINEAR walk records only
+        // a position and leaves CurrentNodeId null — so asking for the node alone silently captured nothing at
+        // all on every linear map, which is every test probe in the project.
+        var run = session.Run;
+        var node = run.CurrentNodeId?.Value
+            ?? (run.Position >= 0 && run.Position < run.Map.Nodes.Count
+                ? run.Map.Nodes[run.Position].Id.Value
+                : null);
+        var combat = CombatDriver?.Current?.State ?? PartyCombatDriver?.Current?.State;
+        return node is null || combat is null
+            ? null
+            : new CombatSaveData(node, CombatStateSnapshotter.CreateSnapshot(combat)) { Log = [.. combat.CombatLog] };
+    }
+
     public string? SaveJson()
     {
         if (Session is not { } session)
             return null;
         try
         {
-            return RunSaveJson.ToJson(session.Run.Snapshot());
+            // A save taken while a fight is on the table CARRIES THE FIGHT: the same capture the replay
+            // baseline uses, so a player who saves mid-combat resumes in it rather than at the room's door.
+            // Between nodes there is no live combat and the capture is null, which is the save as it always was.
+            return RunSaveJson.ToJson(session.Run.Snapshot(CurrentCombatCapture()));
         }
         catch (Exception ex)
         {
@@ -211,6 +255,30 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
             var session = new InteractiveRunSession(
                 () => makeRun(content), registry, content, script, resettables, meta, metaRules, labeler,
                 restore: save => RestoreInItsAct(blueprint, save, content));
+
+            // THE REPLAY BASELINE MOVES AT EVERY TURN BOUNDARY INSIDE A FIGHT, not only between nodes. The
+            // session cannot see the fight — the drivers own it — so it asks here, and the answer is a capture
+            // only at the moment a turn has just been handed over: no prompt is open, the enemies have
+            // answered, and the next hand is dealt. Anywhere else (mid-turn, after a single card) the fight is
+            // in the middle of resolving something and there is nothing quiescent to capture.
+            session.CaptureCombat = () =>
+            {
+                // ⚠ ONLY AT A CLEAN PARK. A turn is handed over and the fight may still stop at a QUESTION —
+                // the opening hand that asks something, a judgment to accept, a card to give up. A pending
+                // choice lives in the driver's chooser, and no combat snapshot carries one: rebasing there
+                // restored a fight with the question silently gone. So the flag is only spent when nothing
+                // is being asked; otherwise it is left standing and the next clean boundary takes it.
+                if (CombatDriver is { } solo
+                    && (solo.PendingCardChoice is not null || solo.PendingOptionChoice is not null))
+                    return null;
+                if (PartyCombatDriver is { } party
+                    && (party.PendingCardChoice is not null || party.PendingOptionChoice is not null))
+                    return null;
+
+                var handed = (CombatDriver?.TakeTurnHandedOver() ?? false)
+                    | (PartyCombatDriver?.TakeTurnHandedOver() ?? false);
+                return handed ? CurrentCombatCapture() : null;
+            };
             session.Changed += onChanged;
             if (metaStore is { } store && meta is { } profile)
                 session.Changed += () =>

@@ -114,10 +114,24 @@ public sealed class PartyInteractiveCombatDriver : ICombatDriver, IReplayResetta
     }
 
     // Ending the last living member runs the enemy phase + opens the next player phase, inside PartyCombat.EndTurn.
+
+    // THE TURN WAS JUST HANDED OVER — read and cleared by whoever moves the replay baseline (RunPlayback).
+    // A turn boundary is the only quiescent point inside a fight: no prompt is open and the enemies have
+    // answered, so it is the only place the fight can be captured and started again from.
+    private bool _handedOver;
+
+    public bool TakeTurnHandedOver()
+    {
+        var handed = _handedOver;
+        _handedOver = false;
+        return handed;
+    }
+
     public void EndTurnFor(CombatantId member)
     {
         if (Current is null || _cardChooser.IsAwaitingChoice || _optionChooser.IsAwaitingChoice)
             return;
+        _handedOver = true;
         _script.Advance(new CombatEndTurnEntry(member));
     }
 

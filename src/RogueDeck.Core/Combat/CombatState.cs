@@ -172,6 +172,17 @@ public sealed class CombatState
 
     public IReadOnlyList<CombatLogEntry> CombatLog => _combatLog;
 
+    // Put a fight's log back on a RESTORED state. The log is pure observation — no rule reads it — so it is
+    // deliberately not part of the snapshot: a save file has no business carrying the whole history of the
+    // fight it was taken in. But a fight rebuilt IN PROCESS (the replay moving its baseline forward inside a
+    // long fight) is the same fight still being watched, and dropping what it had already said would blind
+    // every observer to everything before the last turn boundary.
+    public void RestoreCombatLog(IEnumerable<CombatLogEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        _combatLog.InsertRange(0, entries);
+    }
+
     // Temporary triggered programs installed at runtime (not part of the immutable
     // registry). They react to events alongside registered triggers and expire by
     // activation budget or round.
@@ -787,6 +798,12 @@ public sealed class CombatState
             RestorePile(target, combatantId, zones.ExhaustPile, CardZone.ExhaustPile);
             RestorePile(target, combatantId, zones.BanishedPile, CardZone.BanishedPile);
         }
+
+        // What each turn remembers. Default (an older snapshot) leaves the fresh, empty stats in place, which
+        // is exactly what a restore did for everyone before this was captured.
+        if (!snapshot.CardPlayTurnStats.IsDefault)
+            foreach (var (combatantId, stats) in snapshot.CardPlayTurnStats)
+                combat.GetCardPlayTurnStats(combatantId).Restore(stats);
 
         return combat;
     }

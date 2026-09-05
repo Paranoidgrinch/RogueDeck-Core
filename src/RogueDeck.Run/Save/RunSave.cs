@@ -1,3 +1,4 @@
+using RogueDeck.Core.Combat;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -102,6 +103,28 @@ public sealed record RunSaveData(
     [System.Text.Json.Serialization.JsonIgnore(
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<string>? ActFlags { get; init; }
+
+    // THE FIGHT THE RUN WAS STANDING IN, if it was standing in one. Null — the default, and every save written
+    // before this existed — means the save was taken between nodes, and resuming continues PAST the current
+    // node as it always has. With one, the run resumes AT that node and its combat is rebuilt from the
+    // captured state rather than fought again from the first bell.
+    //
+    // It is the same capture the replay uses to move its baseline forward inside a fight, which is the whole
+    // point: a checkpoint and an autosave want exactly the same thing, so they are one thing.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public CombatSaveData? Combat { get; init; }
+}
+
+// A fight captured mid-flight: which node it belongs to, and the whole of its state.
+//
+// `Log` rides along ONLY in memory — the replay's baseline is the same fight still being watched, so what it
+// had already said must not vanish — and is kept out of the wire format, because a save file has no business
+// carrying the entire history of the fight it was taken in. A loaded save legitimately starts a fresh log.
+public sealed record CombatSaveData(string NodeId, CombatStateSnapshot State)
+{
+    [System.Text.Json.Serialization.JsonIgnore]
+    public IReadOnlyList<CombatLogEntry>? Log { get; init; }
 }
 
 // Serialize a run save to/from JSON — the save file. Plain values (ids / ints / strings / an enum), plus the

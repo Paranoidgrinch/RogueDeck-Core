@@ -491,7 +491,9 @@ public sealed class RunState
     // (nothing references them across a save), so the snapshot stores VALUES; relics/consumables restore by id from
     // the content catalog.
 
-    public RunSaveData Snapshot()
+    // `combat`, when given, is the fight the run is standing IN — a save taken at a turn boundary rather than
+    // between nodes. It rides along untouched; everything else about the capture is the same.
+    public RunSaveData Snapshot(CombatSaveData? combat = null)
     {
         // A pending OPENING is nothing but its rule, so it saves by value and comes back waiting for the same
         // fight — which is what lets an event promise something about "your next combat" and still be saved
@@ -541,7 +543,26 @@ public sealed class RunState
             UnrestrictedSteps = UnrestrictedSteps,
             ActIndex = ActIndex,
             ActFlags = _actFlags.Count > 0 ? _actFlags.Select(flag => flag.Value).ToList() : null,
+            Combat = combat,
         };
+    }
+
+    // ── the fight a resumed run is standing in ────────────────────────────────────
+    //
+    // Set by Restore from the save, taken by the combat node the moment it is entered, and never seen again:
+    // a resume happens once. The walker reads WhichNode to know it must re-enter that node rather than step
+    // past it, so both halves have to be asked in the right order — hence one taker rather than a property
+    // anybody can clear.
+    private CombatSaveData? _combatResume;
+
+    public string? ResumingCombatAtNode => _combatResume?.NodeId;
+
+    public CombatSaveData? TakeCombatResume(NodeId node)
+    {
+        if (_combatResume is not { } resume || resume.NodeId != node.Value)
+            return null;
+        _combatResume = null;
+        return resume;
     }
 
     private static RunMemberSaveData SnapshotMember(PartyMember member) => new(
@@ -573,6 +594,7 @@ public sealed class RunState
         var run = new RunState(
             new RunId(data.RunId), new HealthState(primary.CurrentHealth, primary.MaxHealth), map, data.RandomSeed);
         run.SetContent(content);
+        run._combatResume = data.Combat;
         run._randomStep = data.RandomStep;
         if (data.MapGenerationLoadout is { } loadout)
             run.SetGeneratedMapLoadout(loadout); // so a resumed run re-saves with the same map identity

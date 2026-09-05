@@ -102,5 +102,11 @@ public sealed record CombatStateSnapshot(
     int NextSummonedCombatantNumber,
     long NextEffectChainNumber,
     long NextProgramExecutionId,
-    ImmutableArray<TemporaryTriggeredProgramSnapshot> TemporaryRules
+    ImmutableArray<TemporaryTriggeredProgramSnapshot> TemporaryRules,
+
+    // WHAT EACH TURN REMEMBERS — cards played this turn and last, what the turn opened with, damage dealt,
+    // resources gained and spent. Empty (the default, and every snapshot taken before this field existed) is
+    // a fight with no history, which is what a restore used to produce for ALL of them: every "more than last
+    // turn" and "you opened with an Attack again" rule read zero on the far side of a save.
+    ImmutableArray<(CombatantId CombatantId, CardPlayTurnStatsSnapshot Stats)> CardPlayTurnStats = default
 );

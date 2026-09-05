@@ -22,6 +22,14 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
     private readonly Func<RunSaveData, RunState>? _restore;
     private RunState _run;
     private bool _disposed;
+    private bool _rebasing;
+
+    // WHAT THE FIGHT LOOKS LIKE RIGHT NOW, when the replay is parked at a clean turn boundary inside one —
+    // supplied by whoever owns the combat drivers, because the session does not. Null (the default, and every
+    // caller written before this) means the baseline only ever moves between nodes, which is correct but slow:
+    // inside a long fight every answer then replays the whole fight behind it, and that cost grows with the
+    // fight. Act V is where it stopped being affordable.
+    public Func<CombatSaveData?>? CaptureCombat { get; set; }
 
     public RunState Run => _run;
     public EventSituation? PendingSituation { get; private set; }
@@ -122,6 +130,29 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
             Error = $"{ex.GetType().Name}: {ex.Message}";
             IsComplete = true;
         }
+
+        // THE BASELINE MOVES INSIDE THE FIGHT TOO. A turn boundary is the fight's own quiescent point — no
+        // prompt is open, the hand is about to be dealt — so everything answered so far is IN the capture and
+        // the script can start empty again. Without this the replay is quadratic in the fight's length.
+        if (!_rebasing && Error is null && !IsComplete && CaptureCombat?.Invoke() is { } fight)
+        {
+            _rebasing = true;
+            bool rebased;
+            try
+            {
+                rebased = TryCheckpoint(fight);
+            }
+            finally
+            {
+                _rebasing = false;
+            }
+            // Only a rebase that actually happened has published its own park and raised Changed. One that
+            // could not (a run this capture cannot be taken of) must fall through and raise it here, or the
+            // UI silently never hears about the answer it just gave.
+            if (rebased)
+                return;
+        }
+
         Changed?.Invoke();
     }
 
@@ -213,14 +244,14 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
     // Move the replay baseline to the parked run. False when this run cannot be captured (a pending combat or
     // reward modifier whose body is not value-capturable — RunState.Snapshot says so by throwing), and then the
     // caller records the answer as before: a run that cannot checkpoint is slow, never wrong.
-    private bool TryCheckpoint()
+    private bool TryCheckpoint(CombatSaveData? fight = null)
     {
         if (_restore is null)
             return false;
         RunSaveData save;
         try
         {
-            save = _run.Snapshot();
+            save = _run.Snapshot(fight);
         }
         catch (InvalidOperationException)
         {
