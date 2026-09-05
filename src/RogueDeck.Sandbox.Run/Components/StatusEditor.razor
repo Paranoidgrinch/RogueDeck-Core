@@ -128,6 +128,11 @@
                             <input type="number" value="@dp.SurvivingHealth" style="width:4rem"
                                    @onchange="e => SetDeathPrevention(index, dp with { SurvivingHealth = AsInt(e.Value, dp.SurvivingHealth) })" />
                         </label>
+                        <label title="Off: the status is spent saving its bearer once. On: it keeps standing, and the bearer cannot be killed at all while it wears this.">
+                            <input type="checkbox" checked="@dp.Repeating"
+                                   @onchange="e => SetDeathPrevention(index, dp with { Repeating = e.Value is true })" />
+                            every time (not spent)
+                        </label>
                         <button class="mini" @onclick="() => SetDeathPrevention(index, null)">✕ remove</button>
                     </div>
                     @InterceptorEffectsEditor(dp.Effects, fx => SetDeathPrevention(index, dp with { Effects = fx }))

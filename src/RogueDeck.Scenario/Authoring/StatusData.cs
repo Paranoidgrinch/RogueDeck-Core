@@ -187,7 +187,17 @@ public sealed record StatusAmplificationData(
     string? Only = null);
 
 // A status' death-prevention interceptor as data: the HP to survive at, plus the effects to run when it fires.
-public sealed record StatusDeathPreventionData(int SurvivingHealth, IReadOnlyList<InterceptorEffectData> Effects);
+public sealed record StatusDeathPreventionData(
+    int SurvivingHealth,
+    IReadOnlyList<InterceptorEffectData> Effects,
+    // Whether the status STAYS after it has saved its bearer. False — the default, and every anchor written
+    // before this flag existed — is the one-shot charm: it fires once and is spent doing it. True is a body
+    // that cannot be killed while it wears the thing at all, however many blows land: a rule the fight itself
+    // has to be talked out of rather than a charge that can be burned through. Kept out of the wire format
+    // when false, so documents written before the flag round-trip byte-identically.
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    bool Repeating = false);
 
 // A status' debuff-block interceptor as data: the effects to run when a blocked debuff is suppressed.
 public sealed record StatusDebuffBlockData(IReadOnlyList<InterceptorEffectData> Effects);

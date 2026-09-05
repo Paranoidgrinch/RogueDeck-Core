@@ -174,7 +174,8 @@ public static class StatusDataRebuild
     {
         ArgumentNullException.ThrowIfNull(data);
         return new StatusDeathPreventionInterceptor(
-            new StatusDefinitionId(statusSlug), data.SurvivingHealth, BuildRequestFactory(data.Effects));
+            new StatusDefinitionId(statusSlug), data.SurvivingHealth, BuildRequestFactory(data.Effects),
+            data.Repeating);
     }
 
     public static IStatusApplicationInterceptor RebuildDebuffBlock(string statusSlug, StatusDebuffBlockData data)

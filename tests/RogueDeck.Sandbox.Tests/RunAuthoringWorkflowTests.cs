@@ -405,6 +405,86 @@ public class RunAuthoringWorkflowTests
         Assert.DoesNotContain(hero.Statuses, s => s.DefinitionId.value == "phoenixshield");
     }
 
+    // The other flavour of the same hook: a status that is NOT spent saving its bearer. The interesting case
+    // is not "twice over two turns" — it is TWICE INSIDE ONE ACTION, which is exactly where a one-shot charm
+    // that re-applied itself would fail: the re-application is enqueued behind the hit it survived, and the
+    // second hit of the same swing lands before it resolves. A repeating status is still standing there.
+    [Fact]
+    public void ARepeatingDeathPrevention_CatchesEveryHitOfTheSameAction()
+    {
+        var options = RunJson.CreateOptions();
+
+        var indelible = new StatusData
+        {
+            Id = "indelible",
+            Polarity = StatusPolarity.Buff,
+            DeathPrevention = new StatusDeathPreventionData(1, Array.Empty<InterceptorEffectData>(), Repeating: true),
+        };
+        var twoBlows = new EnemyActionData
+        {
+            Id = "twoblows",
+            Intent = new ActionIntent("Two Blows", IntentKind.Attack),
+            Program = new EffectProgram<EnemyActionContext>(
+                new CausalSequenceEffectNode<EnemyActionContext>(new IEffectNode<EnemyActionContext>[]
+                {
+                    new DealDamageNode<EnemyActionContext>(
+                        CombatantTargetSelectors.EventTarget, new ConstantExpression<EnemyActionContext>(50)),
+                    new DealDamageNode<EnemyActionContext>(
+                        CombatantTargetSelectors.EventTarget, new ConstantExpression<EnemyActionContext>(50)),
+                })),
+        };
+        var encounter = new EncounterDefinition(
+            new EncounterId("combat-fight"),
+            new[] { new EncounterEnemy("smasher", 30, new[] { new EnemyActionDefinitionId("twoblows") }, null, "Smasher") },
+            new[] { new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3) },
+            new[] { new StartingStatusSpec(new StatusDefinitionId("indelible"), 1) });
+        var imported = new RunBlueprint(
+            Array.Empty<CardDefinitionId>(), new Dictionary<string, EventScript>(), new[] { encounter },
+            Array.Empty<CardData>(), new[] { twoBlows }, new RunMap(Array.Empty<Node>()))
+        { Statuses = new[] { indelible } };
+
+        // The flag survives the wire, and its absence still writes nothing at all.
+        var json = RunJson.ToJson(imported, options);
+        Assert.Contains("\"Repeating\": true", json, StringComparison.Ordinal);
+        var reloaded = RunJson.FromJson<RunBlueprint>(json, options);
+        Assert.True(Assert.Single(reloaded.Statuses, s => s.Id == "indelible").DeathPrevention!.Repeating);
+
+        var blueprint = reloaded with
+        {
+            Map = new RunMap(new Node[]
+            {
+                new(new NodeId("n1"), StandardRunIds.CombatNode, new EncounterRef(new EncounterId("combat-fight"))),
+            }),
+        };
+        var content = RunPlayback.BuildContent(blueprint);
+        using var driver = new InteractiveCombatDriver();
+        var defs = new RunDefinitionRegistryBuilder();
+        new StandardRunPackage(driver, content).RegisterDefinitions(defs);
+        var registry = defs.Build();
+        RunState MakeRun()
+        {
+            var run = new RunState(new RunId("t"), new HealthState(10, 10), blueprint.Map, randomSeed: 1);
+            foreach (var card in blueprint.Deck)
+                run.AddDeckCard(card);
+            return run;
+        }
+
+        DriveToPark(driver, registry, content, MakeRun);
+        Assert.NotNull(driver.Current);
+        if (driver.Current!.IsHeroTurn)
+        {
+            driver.EndTurn();
+            DriveToPark(driver, registry, content, MakeRun);
+        }
+
+        var live = driver.Current;
+        Assert.NotNull(live);
+        var hero = live!.State.GetCombatant(live.HeroId);
+        Assert.True(hero.IsAlive);
+        Assert.Equal(1, hero.Health.Current);
+        Assert.Contains(hero.Statuses, s => s.DefinitionId.value == "indelible");
+    }
+
     [Fact]
     public void AuthoredRelic_RoundTrips_IsGranted_AndReacts()
     {
