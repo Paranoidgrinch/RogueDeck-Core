@@ -26,10 +26,14 @@
                                         @onchange="e => Save(spec with { MaxWidth = AsInt(e.Value) })" /></label>
                 <label>Min enemies / path <input type="number" value="@spec.MinEnemiesPerPath" style="width:5rem"
                                                  @onchange="e => Save(spec with { MinEnemiesPerPath = AsInt(e.Value) })" /></label>
+                <label>Boss rooms <input type="number" min="1" value="@spec.BossRooms" style="width:5rem"
+                                         @onchange="e => Save(spec with { BossRooms = AsInt(e.Value) })" /></label>
             </div>
             <p class="muted" style="margin-top:.5rem">
                 @spec.Rows wide branch row(s) carry the variety; guaranteed minimums are met by narrow funnel rows
-                inserted between them (only as many as the worst path still needs), then a boss. Any Rows ≥ 1 builds.
+                inserted between them (only as many as the worst path still needs), then the act's boss room(s).
+                Any Rows ≥ 1 builds. Rows = 0 with several boss rooms is a GAUNTLET act: back-to-back bosses,
+                each drawn without repeating, and no room in between (so it can promise nothing per path).
             </p>
         </div>
 

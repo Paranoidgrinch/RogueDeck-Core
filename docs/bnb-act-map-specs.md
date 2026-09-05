@@ -16,6 +16,9 @@ Maps are hybrid — fixed structure, random layout each run. One `MapGenerationS
 | Shops (`Shop`) | 2 | 2 | 2 | 3 |
 | Boss | 1 (fixed top) | 1 | 1 | 1 |
 
+**Act V is not in the table**: it is a gauntlet — three boss rooms back to back, drawn from six, and nothing
+else at all (no rooms, no recovery, no spoils). Its spec is `Rows = 0` with `BossRooms = 3`.
+
 ## Global run rules
 - **No encounter template repeats within a run** (each combat/elite/boss fight the player meets is a
   distinct template).
@@ -33,6 +36,10 @@ Maps are hybrid — fixed structure, random layout each run. One `MapGenerationS
   id: the elite masters' "earliest depth/stage" tables name individual fights, which neither the role gate
   (`RoleMinimumDepthPercent`) nor the weighted pool can express. Where a row can honour none of a role's
   candidates the gate yields, so a combat node is never left without a fight.
+- ✅ **A gauntlet act** → `MapGenerationSpec.BossRooms` (default 1) plus `Rows = 0`: the act ends on several
+  boss rooms rather than one, each its own row, each drawing its fight from the Boss pool without replacement
+  (so the three gods of one run are three different gods, and the run knows which three from the moment its
+  map is built). An act with no branch rows can keep no per-path promise, and saying both is a spec error.
 - ✅ **Per-path multi-encounter minimum** → new role `MapNodeKind.MultiCombat`: placed via gate funnels like
   any per-path minimum, draws from `Encounters[MultiCombat]` (list the duo/trio templates there), realizes
   as a normal combat, counts as an enemy. Set `PerPathMinimums[MultiCombat]` per act.

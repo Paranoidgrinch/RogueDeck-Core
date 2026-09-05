@@ -307,8 +307,16 @@ public static class RunDocumentValidator
         List<string> problems, MapGenerationSpec spec, HashSet<string> encounterIds, RunBlueprint blueprint,
         string scope = "")
     {
-        if (spec.Rows < 1)
-            problems.Add($"{MapRulesTab}: {scope}Rows must be at least 1.");
+        // Rows 0 is legal and means a GAUNTLET act: no backbone, nothing but its boss rooms. It can then keep
+        // no per-path promise, because there is no row to keep one on.
+        if (spec.Rows < 0)
+            problems.Add($"{MapRulesTab}: {scope}Rows cannot be negative.");
+        if (spec.BossRooms < 1)
+            problems.Add($"{MapRulesTab}: {scope}an act ends on at least one boss room.");
+        if (spec.Rows == 0 && (spec.PerPathMinimums.Any(entry => entry.Value > 0) || spec.MinEnemiesPerPath > 0))
+            problems.Add(
+                $"{MapRulesTab}: {scope}an act with no branch rows holds nothing but its boss rooms, "
+                + "so it can promise nothing per path.");
         if (spec.MinWidth < 1 || spec.MaxWidth < spec.MinWidth)
             problems.Add($"{MapRulesTab}: {scope}row widths are invalid — need 1 <= MinWidth <= MaxWidth.");
 

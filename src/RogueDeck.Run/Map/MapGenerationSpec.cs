@@ -32,8 +32,16 @@ public sealed record MapVictoryReward(IRewardSource Source, string RewardIdPrefi
 public sealed record MapGenerationSpec
 {
     // The branching backbone length: how many WIDE varied rows the act has (before any inserted gate funnels and the
-    // boss). More rows ⇒ a taller, branchier map.
+    // boss). More rows ⇒ a taller, branchier map. ZERO is legal and means the act has no backbone at all: it is
+    // nothing but its boss rooms (see BossRooms), which is what a gauntlet act is.
     public int Rows { get; init; } = 5;
+
+    // How many BOSS rooms the act ENDS on. One is what a boss is, and every ordinary act is that. A design's
+    // final act can be three of them back to back with nothing in between — no rooms, no recovery — and that
+    // is not a second generator but this number: each boss room is its own row, one node wide, and each draws
+    // its own fight from the Boss pool WITHOUT replacement, so a gauntlet never fights the same boss twice in
+    // one run. Which bosses a run draws, and in which order, is therefore settled the moment the map is built.
+    public int BossRooms { get; init; } = 1;
     public int MinWidth { get; init; } = 2;
     public int MaxWidth { get; init; } = 4;
 
@@ -150,12 +158,15 @@ public sealed record MapGenerationSpec
     // (a gate) or a positive branch weight. Used to check that each appearing kind has resolvable content.
     public IReadOnlyCollection<MapNodeKind> AppearingKinds()
     {
-        var kinds = new HashSet<MapNodeKind> { MapNodeKind.Combat, MapNodeKind.Boss };
+        // Boss always — every act ends on one. Combat almost always, because a branch row falls back to it and
+        // every ceiling rewrites into it; but an act with NO branch rows has nowhere to put one, and a gauntlet
+        // that had to name combat candidates would be asked for fights it never fields.
+        var kinds = new HashSet<MapNodeKind> { MapNodeKind.Boss };
+        if (Rows > 0 || PerPathMinimums.GetValueOrDefault(MapNodeKind.Combat) > 0 || MinEnemiesPerPath > 0)
+            kinds.Add(MapNodeKind.Combat);
         foreach (var (kind, min) in PerPathMinimums)
             if (min > 0)
                 kinds.Add(kind);
-        if (MinEnemiesPerPath > 0)
-            kinds.Add(MapNodeKind.Combat);
         foreach (var (kind, weight) in KindWeights)
             if (weight > 0)
                 kinds.Add(kind);
@@ -172,8 +183,16 @@ public sealed record MapGenerationSpec
 
     public void Validate()
     {
-        if (Rows < 1)
-            throw new ArgumentOutOfRangeException(nameof(Rows), Rows, "An act needs at least one branch row.");
+        if (Rows < 0)
+            throw new ArgumentOutOfRangeException(nameof(Rows), Rows, "An act cannot have a negative number of rows.");
+        if (BossRooms < 1)
+            throw new ArgumentOutOfRangeException(nameof(BossRooms), BossRooms, "An act ends on at least one boss.");
+        // A backbone-less act is a gauntlet, and a gauntlet is boss rooms and nothing else: there is no row a
+        // promise could be kept on. Saying both is a spec that cannot be built, and the generator would loop
+        // adding gates for a minimum it can never satisfy.
+        if (Rows == 0 && (PerPathMinimums.Any(entry => entry.Value > 0) || MinEnemiesPerPath > 0))
+            throw new ArgumentOutOfRangeException(nameof(Rows), Rows,
+                "An act with no branch rows holds nothing but its boss rooms, so it can keep no per-path promise.");
         if (MinWidth < 1)
             throw new ArgumentOutOfRangeException(nameof(MinWidth), MinWidth, "Row width must be at least 1.");
         if (MaxWidth < MinWidth)

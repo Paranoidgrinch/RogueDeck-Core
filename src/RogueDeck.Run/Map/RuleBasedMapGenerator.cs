@@ -7,8 +7,9 @@ namespace RogueDeck.Run;
 public sealed record GeneratedMap(RunMap Map, IReadOnlyDictionary<NodeId, MapNodeKind> Roles);
 
 // Builds a run's map from a MapGenerationSpec. The act is a backbone of `Rows` WIDE "branch" rows (each column
-// draws its own kind from KindWeights — so rows are heterogeneous and paths differ) plus a single boss row. Per-path
-// minimums and the enemy floor are met by inserting width-1 GATE rows: narrow funnels every path crosses. Only as
+// draws its own kind from KindWeights — so rows are heterogeneous and paths differ) plus its boss rows — one,
+// unless the act is a gauntlet, and a backbone of zero rows is nothing BUT them. Per-path minimums and the
+// enemy floor are met by inserting width-1 GATE rows: narrow funnels every path crosses. Only as
 // many gates as the WORST path still needs are added — the varied rows are credited first (via a reverse-topo DP),
 // so a combat-rich backbone gets no pointless combat funnels. Deterministic from `seed`; the caller's `content`
 // delegate realizes each (role, coord, chosen-encounter) into a concrete Node. Output always passes RunMapValidator
@@ -193,8 +194,9 @@ public static class RuleBasedMapGenerator
             }
         }
 
-        // Entries are the first row's columns (row 0 is always a branch row).
-        for (var c = 0; c < branches.Widths[0]; c++)
+        // Entries are the first row's columns — the first branch row, or, in an act that has no backbone at
+        // all, its first boss room.
+        for (var c = 0; c < WidthOf(spec, plan[0], branches); c++)
             builder.Entry(MapWiring.Id(0, c));
 
         for (var ri = 0; ri < plan.Count - 1; ri++)
@@ -207,7 +209,7 @@ public static class RuleBasedMapGenerator
     // borrows the width of the branch row it sits next to.
     private static int WidthOf(MapGenerationSpec spec, RowPlanRow row, Branches branches) =>
         row.IsGate
-            ? (spec.WideGuaranteeRows && row.GateKind != MapNodeKind.Boss
+            ? (spec.WideGuaranteeRows && row.GateKind != MapNodeKind.Boss && branches.Widths.Length > 0
                 ? branches.Widths[Math.Min(row.BranchIndex, branches.Widths.Length - 1)]
                 : 1)
             : branches.Widths[row.BranchIndex];
@@ -219,11 +221,13 @@ public static class RuleBasedMapGenerator
         MapGenerationSpec spec, int branchCount, IReadOnlyDictionary<MapNodeKind, int> gateCounts)
     {
         var gates = FlattenGates(gateCounts);
-        var plan = new List<RowPlanRow> { new(false, default, 0) }; // row 0 = the first branch (entries)
+        var plan = new List<RowPlanRow>();
+        if (branchCount > 0)
+            plan.Add(new RowPlanRow(false, default, 0)); // row 0 = the first branch (entries)
 
         // Spread the gates as evenly as possible among the remaining branch rows.
-        var tail = branchCount - 1 + gates.Count;
-        var rows = 1 + tail + 1; // + the boss leaf
+        var tail = Math.Max(0, branchCount - 1) + gates.Count;
+        var rows = plan.Count + tail + spec.BossRooms;
         var remaining = gates.ToList();
         var gatesPlaced = 0;
         var branchIndex = 1;
@@ -236,7 +240,7 @@ public static class RuleBasedMapGenerator
                 // Which promise this funnel keeps is decided by HOW DEEP it sits: the first kind still owed that
                 // the act allows this shallow, in the order the flattening spread them. With no depths authored
                 // that is always the first one left, which is exactly the old behaviour.
-                var depth = rows <= 2 ? 100 : (plan.Count) * 100 / (rows - 2);
+                var depth = rows - spec.BossRooms <= 1 ? 100 : plan.Count * 100 / (rows - spec.BossRooms - 1);
                 var pick = remaining.FindIndex(
                     kind => depth >= spec.RoleMinimumDepthPercent.GetValueOrDefault(kind));
                 if (pick < 0)
@@ -251,7 +255,10 @@ public static class RuleBasedMapGenerator
             }
         }
 
-        plan.Add(new RowPlanRow(true, MapNodeKind.Boss, 0)); // the single boss leaf
+        // The act's boss rooms, one row each. Ordinarily that is a single leaf; a gauntlet act ends on several,
+        // walked back to back — the rows in between are the ones the act does not have.
+        for (var i = 0; i < spec.BossRooms; i++)
+            plan.Add(new RowPlanRow(true, MapNodeKind.Boss, 0));
         return plan;
     }
 
