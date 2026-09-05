@@ -63,4 +63,23 @@ public class ResumeInteractiveCombatTests
         resumed.PlayCard(resumed.Hand.First(c => c.DefinitionId == new CardDefinitionId("strike")).Id, OgreId);
         Assert.Equal(28, resumed.State.GetCombatant(OgreId).Health.Current); // 34 − 6
     }
+
+    // A RESTORED FIGHT KEEPS ITS DICTIONARY, and this test exists because it did not. Everything read by
+    // DEFINITION rather than by instance goes through the registry, and a restored state without one does not
+    // fail — it answers every such question with "nothing". In the game that showed up as every status chip
+    // reverting to a humanised id after the first turn ("Nisaba line guard counted nothing"), and it would
+    // have shown up next as a tag-filtered card count quietly returning zero in any resumed fight.
+    [Fact]
+    public void A_restored_fight_can_still_look_its_own_definitions_up()
+    {
+        var compiled = Fight().Compile();
+        var combat = new InteractiveCombat(compiled, (_, _, _) => null);
+
+        var restored = CombatState.Restore(combat.State.CreateSnapshot(), compiled.Registry);
+
+        Assert.NotNull(restored.DefinitionRegistry);
+        Assert.Same(compiled.Registry, restored.DefinitionRegistry);
+        Assert.True(restored.DefinitionRegistry!.CardDefinitions
+            .ContainsKey(new CardDefinitionId("strike")));
+    }
 }

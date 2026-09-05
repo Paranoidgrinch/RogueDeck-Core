@@ -724,6 +724,15 @@ public sealed class CombatState
         ArgumentNullException.ThrowIfNull(registry);
 
         var combat = RestoreCore(snapshot);
+        // THE RESTORED FIGHT KEEPS ITS DICTIONARY. Everything a running combat reads by DEFINITION rather
+        // than by instance goes through this — a status's display name, a card's tags, an enemy action's
+        // body — and a restored state without it is not obviously broken: it runs, and it answers every
+        // definition question with "nothing". The mid-combat checkpoint made that reachable in ordinary play,
+        // and the first thing it cost was every status chip in the game, which after one turn read as a
+        // humanised id ("Nisaba line guard counted nothing") instead of its authored name. The quieter half
+        // is worse: a tag-filtered card count returns 0 with no registry, so "for each Junk in your hand"
+        // silently becomes zero in a resumed fight.
+        combat.DefinitionRegistry = registry;
         foreach (var rule in snapshot.TemporaryRules)
             RestoreTemporaryRule(combat, registry, rule);
         return combat;
