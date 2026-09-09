@@ -58,11 +58,13 @@ public sealed class StandardCombatPackage : ICombatPackage
         registry.RegisterCardPlayValidator(new UnplayableCardPlayValidator());
         registry.RegisterCardPlayValidator(new StunCardPlayValidator());
         registry.RegisterCardPlayValidator(new OneAttackPerTurnCardPlayValidator());
+        registry.RegisterCardPlayValidator(new DecreeCardPlayValidator());
 
         registry.RegisterCardCostModifier(new FreeNextCardCostModifier());
         registry.RegisterCardCostModifier(new FirstAttackEachTurnFreeCostModifier());
         registry.RegisterCardCostModifier(new SkillCostReductionCostModifier());
         registry.RegisterCardCostModifier(new CardInstanceCostModifier());
+        registry.RegisterCardCostModifier(new DecreeCardCostModifier());
 
         registry.RegisterStatusApplicationInterceptor(new ArtifactStatusApplicationInterceptor());
         registry.RegisterStatusApplicationInterceptor(new DeclarativeStatusPreventionInterceptor());

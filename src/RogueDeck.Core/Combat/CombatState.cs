@@ -784,9 +784,9 @@ public sealed class CombatState
                 new HealthState(c.HealthCurrent, c.HealthMax));
             combatant.SetLifecycleState(c.LifecycleState);
             foreach (var (id, pool) in c.Resources)
-                combatant.AddResource(id, new ValuePoolState(pool.Current, pool.Max, pool.CanExceedMax));
+                combatant.AddResource(id, ValuePoolState.Restored(pool.Current, pool.Max, pool.CanExceedMax));
             foreach (var (id, pool) in c.DefensivePools)
-                combatant.AddDefensivePool(id, new ValuePoolState(pool.Current, pool.Max, pool.CanExceedMax));
+                combatant.AddDefensivePool(id, ValuePoolState.Restored(pool.Current, pool.Max, pool.CanExceedMax));
             foreach (var status in c.Statuses)
                 combatant.AddStatus(RestoreStatus(status));
             foreach (var (id, value) in c.Counters)

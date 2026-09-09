@@ -206,7 +206,7 @@ public sealed class CombatCardPlayProcessor
             {
                 var capturedPlayerId = source.Id;
                 var capturedCardId = cardInstanceId.Value;
-                var capturedDestZone = card.PlayedCardDestinationZone;
+                var capturedDestZone = PlayedCardDestination(registry, source, card);
 
                 // Card placement runs when the on-play program reaches a terminal state, with
                 // behaviour defined per outcome so a played card never gets stuck in hand:
@@ -265,12 +265,20 @@ public sealed class CombatCardPlayProcessor
                 combat.EnqueueEffect(new MoveCardToZoneEffectRequest(
                     source.Id,
                     cardInstanceId.Value,
-                    card.PlayedCardDestinationZone));
+                    PlayedCardDestination(registry, source, card)));
 
             // A card with no program is still an action: close it behind whatever its effect list enqueued.
             combat.EnqueueContinuation(c => CloseAction(c, actor));
         }
     }
+
+    // Where a played card goes. Normally what its definition says; under a decree that no work shall return,
+    // the exhaust pile instead — read from the combatant playing it, so the rule binds whoever wears it.
+    internal static CardZone PlayedCardDestination(
+        CombatDefinitionRegistry registry, CombatantState source, CardDefinition card) =>
+        CombatDecrees.Any(registry, source, CombatRule.PlayedCardsExhaust)
+            ? CardZone.ExhaustPile
+            : card.PlayedCardDestinationZone;
 
     // Closes an action and announces what it was. Silent when the actor has meanwhile left the fight, and
     // silent when no scope was open (a defensive guard: the close must never invent an action).
@@ -323,7 +331,10 @@ public sealed class CombatCardPlayProcessor
     // is a programming error there) and wrong for the effect-request path, where the same refusal has to leave
     // the card in hand and the session standing. So the effect path asks this question first: the refusal is
     // caught here and answered as "no", exactly as an unaffordable cost is.
-    internal static bool IsCardPlayAllowed(
+    //
+    // PUBLIC because a frontend has to ask it too: a card the rules forbid must be drawn as forbidden rather
+    // than refused on click, and the only honest answer is the one the play path would give.
+    public static bool IsCardPlayAllowed(
         CombatState combat,
         CombatDefinitionRegistry registry,
         CardDefinition card,
@@ -449,6 +460,19 @@ public sealed class CombatCardPlayProcessor
 
             if (!totalCosts.TryAdd(cost.ResourceId, modifiedAmount))
                 totalCosts[cost.ResourceId] = checked(totalCosts[cost.ResourceId] + modifiedAmount);
+        }
+
+        // "No work shall be without measure." Applied here rather than as a cost modifier because a card
+        // whose printed cost is zero carries NO cost entry, so there is nothing for a per-entry modifier to
+        // raise — the floor has to be able to invent the entry. It is also therefore the LAST word: if a
+        // decree made this card free and another forbids free cards, the fight is under both and the card
+        // costs the floor. Enlil's Director exists to keep that pair from being spoken together.
+        foreach (var spec in CombatDecrees.InForce(registry, source, CombatRule.MinimumCardCost))
+        {
+            var resource = spec.ResourceOrEnergy;
+            var paid = totalCosts.TryGetValue(resource, out var already) ? already : 0;
+            if (paid < spec.Amount)
+                totalCosts[resource] = spec.Amount;
         }
 
         return totalCosts

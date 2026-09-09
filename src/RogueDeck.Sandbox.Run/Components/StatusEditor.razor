@@ -91,10 +91,41 @@
                             <input type="checkbox" checked="@mod.OncePerAction"
                                    @onchange="e => SetModifier(index, modIndex, mod with { OncePerAction = AsBool(e.Value) })" /> once per action (card play or enemy action)
                         </label>
+                        <label title="Contribute once per the wearer's TURN, however many actions it holds — what 'the first blow each turn' means.">
+                            <input type="checkbox" checked="@mod.OncePerTurn"
+                                   @onchange="e => SetModifier(index, modIndex, mod with { OncePerTurn = AsBool(e.Value) })" /> once per turn
+                        </label>
                         <button class="mini" @onclick="() => RemoveModifier(index, modIndex)">✕</button>
                     </div>
                 }
                 <button class="mini" @onclick="() => AddModifier(index)">+ passive modifier</button>
+            </div>
+
+            <div class="editor-effects">
+                <span class="muted" title="Rules of combat that are different while this status is worn — a ceiling on the cards a turn may hold, a card that costs nothing for where it falls in the turn, a played card that exhausts. A rule meant to bind both sides is simply worn by both.">Decrees (rules of combat):</span>
+                @for (var ri = 0; ri < (status.CombatRules?.Count ?? 0); ri++)
+                {
+                    var ruleIndex = ri;
+                    var rule = status.CombatRules![ri];
+                    <div class="run-bar">
+                        @EnumSelect(rule.Rule, r => SetCombatRule(index, ruleIndex, rule with { Rule = r }))
+                        <label title="The rule's number: the ceiling, the floor, or which card of the turn is free.">amount
+                            <input type="number" value="@rule.Amount" style="width:4rem"
+                                   @onchange="e => SetCombatRule(index, ruleIndex, rule with { Amount = AsInt(e.Value, rule.Amount) })" />
+                        </label>
+                        <label title="Likeness only: the card tags compared — the card TYPES. Comma-separated; empty makes the rule inert.">likeness tags
+                            <input value="@string.Join(", ", rule.Tags ?? [])" style="width:10rem" placeholder="deed, working, rite"
+                                   @onchange="e => SetCombatRule(index, ruleIndex, rule with { Tags = ParseTags(AsString(e.Value)) })" />
+                        </label>
+                        <label title="Cost rules only: which pool is priced. Blank = the standard energy resource.">resource
+                            <input value="@rule.Resource" style="width:8rem" placeholder="standard.energy"
+                                   @onchange="e => SetCombatRule(index, ruleIndex, rule with { Resource = Nullable(AsString(e.Value)) })" />
+                        </label>
+                        <button class="mini" @onclick="() => RemoveCombatRule(index, ruleIndex)">✕</button>
+                    </div>
+                }
+                <div class="muted">@StudioVocabulary.FieldDescription("StatusData.CombatRules")</div>
+                <button class="mini" @onclick="() => AddCombatRule(index)">+ decree</button>
             </div>
 
             <div class="editor-effects">
@@ -423,6 +454,23 @@
     };
 
     // ── interceptors (death-prevention / debuff-block) ────────────────────────────────
+    private Task SetCombatRule(int index, int ruleIndex, CombatRuleData rule) =>
+        Edit(index, s =>
+        {
+            var rules = (s.CombatRules ?? []).ToList();
+            rules[ruleIndex] = rule;
+            return s with { CombatRules = rules };
+        });
+
+    private Task RemoveCombatRule(int index, int ruleIndex) =>
+        Edit(index, s => s with { CombatRules = (s.CombatRules ?? []).Where((_, i) => i != ruleIndex).ToList() });
+
+    private Task AddCombatRule(int index) =>
+        Edit(index, s => s with
+        {
+            CombatRules = (s.CombatRules ?? []).Append(new CombatRuleData(CombatRule.MaxCardsPerTurn, 4)).ToList(),
+        });
+
     private Task SetDeathPrevention(int index, StatusDeathPreventionData? data) =>
         Edit(index, s => s with { DeathPrevention = data });
 

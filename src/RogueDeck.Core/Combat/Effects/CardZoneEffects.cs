@@ -24,16 +24,36 @@ public sealed class DrawCardsEffectHandler : EffectRequestHandler<DrawCardsEffec
         }
 
         var zones = combat.GetCardZones(request.CombatantId);
+
+        // "Seven shall be the hand's measure." A hand ceiling is subtracted from the DRAW, not from the hand:
+        // the cards past it are never drawn, so they are still on the pile rather than drawn and thrown away.
+        // A hand already at or over the ceiling draws nothing at all.
+        var wanted = request.Count;
+        if (combat.TryGetCombatant(request.CombatantId, out var drawer) &&
+            CombatDecrees.Ceiling(registry, drawer!, CombatRule.MaxHandSize) is { } handCeiling)
+        {
+            wanted = Math.Clamp(handCeiling - zones.Hand.Count, 0, wanted);
+            if (wanted == 0)
+            {
+                if (request.OutcomeSlot is { } cappedSlot)
+                    cappedSlot.Value = new DrawCardsOutcome(request.Count, 0, []);
+                combat.AddLogEntry(
+                    StandardCombatLogTypes.CardsDrawn,
+                    $"Combatant '{request.CombatantId}' drew no card: the hand is at its decreed measure "
+                    + $"of {handCeiling}.");
+                return;
+            }
+        }
         var drawnCards = new List<CardInstance>();
 
-        while (drawnCards.Count < request.Count)
+        while (drawnCards.Count < wanted)
         {
-            var remainingCardsToDraw = request.Count - drawnCards.Count;
+            var remainingCardsToDraw = wanted - drawnCards.Count;
             var newlyDrawnCards = zones.DrawCards(remainingCardsToDraw);
 
             drawnCards.AddRange(newlyDrawnCards);
 
-            if (drawnCards.Count >= request.Count)
+            if (drawnCards.Count >= wanted)
                 break;
 
             if (zones.DiscardPile.Count == 0)

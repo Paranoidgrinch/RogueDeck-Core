@@ -23,6 +23,13 @@ public sealed record StatusData
     public IReadOnlyList<string> Tags { get; init; } = [];
     public IReadOnlyList<PassiveModifierData> PassiveModifiers { get; init; } = [];
 
+    // "Decrees": the rules of combat that are different while this status is worn. Null for all but a
+    // handful of statuses, and null is kept out of the wire format so every document written before the
+    // field existed round-trips byte-identically.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<CombatRuleData>? CombatRules { get; init; }
+
     // Triggered programs bound to this status (fire on an event while a combatant bears it). Each carries the
     // trigger event and the effect program as context-free CombatJson (deserialized under the event's context
     // when the status is registered into a combat). Reconstructed by the sandbox composer, not by ToBlueprint —
@@ -75,6 +82,9 @@ public sealed record StatusData
             StackingBehavior = status.StackingBehavior,
             Tags = status.Tags.Select(t => t.value).ToArray(),
             PassiveModifiers = status.PassiveModifiers.Select(PassiveModifierData.From).ToArray(),
+            CombatRules = status.CombatRules.Count == 0
+                ? null
+                : status.CombatRules.Select(CombatRuleData.From).ToArray(),
             IncomingStatusDelay = status.IncomingStatusDelay is { } delay
                 ? new IncomingStatusDelayData(delay.Turns, delay.Polarity)
                 : null,
@@ -123,6 +133,8 @@ public sealed record StatusData
             status.Tags.Add(new TagId(tag));
         foreach (var modifier in PassiveModifiers)
             status.PassiveModifiers.Add(modifier.ToSpec());
+        foreach (var rule in CombatRules ?? [])
+            status.CombatRules.Add(rule.ToSpec());
         return status;
     }
 }
@@ -226,15 +238,45 @@ public sealed record PassiveModifierData(
     // before the flag existed round-trip byte-identically.
     [property: System.Text.Json.Serialization.JsonIgnore(
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
-    bool OncePerAction = false)
+    bool OncePerAction = false,
+    // The same claim one scope wider: contribute once per the read-from combatant's TURN, however many
+    // actions it holds. "The first blow each turn falls upon nothing" needs it, because every card is its own
+    // action and the rule has to survive from one to the next. Kept out of the wire format when false.
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    bool OncePerTurn = false)
 {
     public static PassiveModifierData From(PassiveModifierSpec spec) => new(
         spec.Pipeline, spec.Operation, spec.Magnitude, spec.Priority, spec.RestrictDamageKind,
-        spec.AppliesToStatusId?.value, spec.RestrictSourceCardTag?.value, spec.OncePerAction);
+        spec.AppliesToStatusId?.value, spec.RestrictSourceCardTag?.value, spec.OncePerAction,
+        spec.OncePerTurn);
 
     public PassiveModifierSpec ToSpec() => new(
         Pipeline, Operation, Magnitude, Priority, RestrictDamageKind,
         AppliesToStatusId is null ? null : new StatusDefinitionId(AppliesToStatusId),
         RestrictSourceCardTag: RestrictSourceCardTag is null ? null : new TagId(RestrictSourceCardTag),
-        OncePerAction: OncePerAction);
+        OncePerAction: OncePerAction,
+        OncePerTurn: OncePerTurn);
+}
+
+// One rule of combat a status changes while it is worn — the authoring face of CombatRuleSpec.
+//
+// Amount is the rule's number (the ceiling, the floor, which card of the turn is free). Tags name the card
+// tags a rule about likeness compares — the card TYPES, in a game whose cards have one. Resource names the
+// pool a cost rule prices in, and means the standard energy resource when left unnamed.
+public sealed record CombatRuleData(
+    CombatRule Rule,
+    int Amount = 0,
+    IReadOnlyList<string>? Tags = null,
+    string? Resource = null)
+{
+    public static CombatRuleData From(CombatRuleSpec spec) => new(
+        spec.Rule, spec.Amount,
+        spec.Tags is null ? null : [.. spec.Tags.Select(t => t.value)],
+        spec.Resource?.value);
+
+    public CombatRuleSpec ToSpec() => new(
+        Rule, Amount,
+        Tags is null ? null : [.. Tags.Select(t => new TagId(t))],
+        Resource is null ? null : new ResourceId(Resource));
 }

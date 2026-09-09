@@ -84,7 +84,16 @@ public sealed class RefillResourceEffectHandler : EffectRequestHandler<RefillRes
         var previousCurrent = resource.Current;
         var refillTarget = resource.Max ?? request.DefaultMax;
 
-        resource.SetCurrent(refillTarget);
+        // "What is unspent shall pass into tomorrow." The refill ADDS to what was left instead of replacing
+        // it, and the pool is allowed above its ceiling for as long as the decree stands — an unspent point
+        // that the refill quietly overwrote would be a rule the player could not see working.
+        var carries = combat.TryGetCombatant(request.CombatantId, out var holder)
+            && CombatDecrees.InForce(registry, holder!, CombatRule.UnspentResourceCarries)
+                .Any(spec => spec.Resource is null || spec.Resource == request.ResourceId);
+        if (carries)
+            refillTarget = checked(refillTarget + previousCurrent);
+
+        resource.SetCurrent(refillTarget, allowExceedingMax: carries);
 
         if (request.OutcomeSlot is { } refillSlot)
             refillSlot.Value = new RefillResourceOutcome(

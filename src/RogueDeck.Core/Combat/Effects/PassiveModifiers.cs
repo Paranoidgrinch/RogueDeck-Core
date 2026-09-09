@@ -34,7 +34,13 @@ public enum PassiveModifierOperation
 {
     AddPerStack,  // amount += Magnitude * total stacks of the status
     AddFlat,      // amount += Magnitude once if the status is present
-    ScalePercent  // amount = amount * Magnitude / 100 once if present (150 = +50 %, 75 = -25 %)
+    ScalePercent, // amount = amount * Magnitude / 100 once if present (150 = +50 %, 75 = -25 %)
+
+    // amount = min(amount, Magnitude) once if present — a CEILING, which neither adding nor scaling can
+    // say. "No single blow shall exceed twenty" is not 20 less damage and not damage halved; it is a
+    // number no amount may pass, whoever threw it and however large it was going to be. Magnitude 0 is a
+    // legal ceiling and means the amount is annulled.
+    ClampMax
 }
 
 // A magnitude computed at evaluation time from the live state of the combatant the spec is read from.
@@ -98,7 +104,13 @@ public sealed record PassiveModifierSpec(
     // three-hit Deed and a Deed that repeats itself both collect the bonus a single time. Outside an action
     // (a status tick, a turn-boundary program) such a spec never applies, because there is no action to be
     // "once" within.
-    bool OncePerAction = false);
+    bool OncePerAction = false,
+    // The wider sibling of OncePerAction: the spec contributes at most ONCE per the read-from combatant's
+    // turn, however many actions that turn contains. "The first blow each turn falls upon nothing" cannot be
+    // said per action (every card is its own action) and must survive from one action to the next, so the
+    // claim is kept where a turn's memory is kept — in the combatant's card-play turn stats, which are reset
+    // at the turn start and captured in the snapshot, so a restored fight remembers what it has already spent.
+    bool OncePerTurn = false);
 
 // Shared fold used by every generic declarative modifier.
 internal static class DeclarativePassiveModifierEngine
@@ -179,6 +191,12 @@ internal static class DeclarativePassiveModifierEngine
                 !combat.TryClaimOnceThisAction($"{pipeline}|{entry.statusId}|{entry.specIndex}|{combatant.Id.value}"))
                 continue;
 
+            // The same claim, one scope wider. Claimed after every other gate for the same reason.
+            if (entry.spec.OncePerTurn &&
+                !combat.GetCardPlayTurnStats(combatant.Id)
+                       .TryClaimOnceThisTurn($"{pipeline}|{entry.statusId}|{entry.specIndex}"))
+                continue;
+
             // An expression magnitude scales by live state (evaluated against the read-from combatant);
             // otherwise the constant Magnitude is used.
             var magnitude = entry.spec.MagnitudeExpression?.Evaluate(combat, combatant) ?? entry.spec.Magnitude;
@@ -187,6 +205,7 @@ internal static class DeclarativePassiveModifierEngine
                 PassiveModifierOperation.AddPerStack => current + magnitude * entry.stacks,
                 PassiveModifierOperation.AddFlat => current + magnitude,
                 PassiveModifierOperation.ScalePercent => current * magnitude / 100,
+                PassiveModifierOperation.ClampMax => Math.Min(current, Math.Max(0, magnitude)),
                 _ => current
             };
         }

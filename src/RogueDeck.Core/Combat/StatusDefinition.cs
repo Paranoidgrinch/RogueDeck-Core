@@ -33,6 +33,11 @@ public sealed class StatusDefinition
     // instead of a bespoke C# modifier class. Immutable from construction (see PassiveModifiers.cs).
     public IReadOnlyList<PassiveModifierSpec> PassiveModifiers { get; }
 
+    // "Decrees": the rules of combat that are different while this status is worn. Not arithmetic — the
+    // number of cards a turn may hold, what a played card costs and where it goes afterwards. Empty for
+    // every status that leaves the rules alone, which is all but a handful (see CombatDecrees.cs).
+    public IReadOnlyList<CombatRuleSpec> CombatRules { get; }
+
     // "Due notice": while this status is on a combatant, statuses newly applied TO that combatant do not take
     // effect at once — they wait the given number of the bearer's turn starts, visible and cleansable but
     // inert. Null = applications land immediately, as always.
@@ -71,7 +76,8 @@ public sealed class StatusDefinition
         IncomingStatusDelaySpec? incomingStatusDelay = null,
         DisclosureSpec? disclosure = null,
         StatusPreventionSpec? prevention = null,
-        StatusAmplificationSpec? amplification = null)
+        StatusAmplificationSpec? amplification = null,
+        IEnumerable<CombatRuleSpec>? combatRules = null)
     {
         if (string.IsNullOrWhiteSpace(displayNameKey))
             throw new ArgumentException("Display name key cannot be empty.", nameof(displayNameKey));
@@ -93,6 +99,7 @@ public sealed class StatusDefinition
         ShowChargesInUi = showChargesInUi;
         StackingBehavior = stackingBehavior;
         PassiveModifiers = passiveModifiers?.ToImmutableArray() ?? ImmutableArray<PassiveModifierSpec>.Empty;
+        CombatRules = combatRules?.ToImmutableArray() ?? ImmutableArray<CombatRuleSpec>.Empty;
         IncomingStatusDelay = incomingStatusDelay;
         Disclosure = disclosure;
         Prevention = prevention;

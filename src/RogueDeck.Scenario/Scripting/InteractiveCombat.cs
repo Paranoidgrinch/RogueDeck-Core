@@ -165,6 +165,26 @@ public sealed class InteractiveCombat
         return intents;
     }
 
+    // Whether a card in hand may be played AT ALL right now, cost aside — the question a frontend has to be
+    // able to ask before it draws the card face. Affordability is a number the UI can work out for itself;
+    // a RULE that forbids the play (a decree capping the turn's cards, a rule about what may follow what,
+    // a stun, a curse) is not, and a card that is refused only when it is clicked is a rule the player was
+    // never shown.
+    public bool CanPlay(CardInstanceId cardInstanceId)
+    {
+        var zones = _combat.GetCardZones(_heroId);
+        if (!zones.ContainsCard(cardInstanceId))
+            return false;
+        var card = zones.GetCard(cardInstanceId);
+        if (card.Zone != CardZone.Hand)
+            return false;
+        if (!_registry.CardDefinitions.TryGetValue(card.DefinitionId, out var definition))
+            return false;
+        return CombatCardPlayProcessor.IsCardPlayAllowed(
+            _combat, _registry, definition, _combat.GetCombatant(_heroId),
+            requestedTargetId: null, cardInstanceId: cardInstanceId);
+    }
+
     public ScenarioReport ToReport() => new(_steps.ToList(), _combat.Result, _combat);
 
     public string RenderLog() => new NarrativeLogRenderer().Render(ToReport());

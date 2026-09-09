@@ -113,7 +113,10 @@ public static class QueueResolution
             return;
 
         zones.GetCard(cardId).SetQueuedTarget(null);
-        combat.EnqueueEffect(new MoveCardToZoneEffectRequest(ownerId, cardId, card.PlayedCardDestinationZone));
+        var destination = combat.DefinitionRegistry is { } registry && combat.TryGetCombatant(ownerId, out var owner)
+            ? CombatCardPlayProcessor.PlayedCardDestination(registry, owner!, card)
+            : card.PlayedCardDestinationZone;
+        combat.EnqueueEffect(new MoveCardToZoneEffectRequest(ownerId, cardId, destination));
     }
 }
 

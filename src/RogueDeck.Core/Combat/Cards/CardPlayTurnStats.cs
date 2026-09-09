@@ -9,6 +9,17 @@ public sealed class CombatantCardPlayTurnStats
     // played). Content reads it for "the opening card is an Attack" / "first non-Junk card type" mechanics.
     private readonly HashSet<TagId> _firstCardPlayedTags = new();
 
+    // The tag set of the card played MOST RECENTLY this turn (empty until one is played). The first card's
+    // tags answer "what did you open with"; this answers "what did you just do", which is the only thing a
+    // rule about SUCCESSION can be written against — "no work shall follow its likeness" has to compare the
+    // card being played against the one immediately before it, not against the turn's opening.
+    private readonly HashSet<TagId> _lastCardPlayedTags = new();
+
+    // What this turn has already spent its once-per-turn allowances on (passive-modifier specs marked
+    // OncePerTurn). Cleared with everything else at the turn start, and captured, because a fight that is
+    // put down and picked up again mid-turn must not hand back an allowance it has already used.
+    private readonly HashSet<string> _claimedThisTurn = new(StringComparer.Ordinal);
+
     // Previous turn's snapshot, retained across Reset so "again" / habit mechanics (Whispered Prediction,
     // "the previous turn was Busy/Sparse", "you opened with Attack again") can compare against last turn.
     private readonly Dictionary<TagId, int> _cardsPlayedByTagLastTurn = new();
@@ -37,6 +48,9 @@ public sealed class CombatantCardPlayTurnStats
 
     // Definition of the first card played this turn, or null if none yet.
     public CardDefinitionId? FirstCardPlayedDefinitionId { get; private set; }
+
+    // Definition of the card played most recently this turn, or null if none yet.
+    public CardDefinitionId? LastCardPlayedDefinitionId { get; private set; }
 
     public int CardsPlayedLastTurn { get; private set; }
 
@@ -71,6 +85,13 @@ public sealed class CombatantCardPlayTurnStats
     public bool FirstCardPlayedThisTurnHasTag(TagId tagId) => _firstCardPlayedTags.Contains(tagId);
     public bool FirstCardPlayedLastTurnHasTag(TagId tagId) => _firstCardPlayedTagsLastTurn.Contains(tagId);
 
+    // Whether the card played most recently this turn carried the given tag.
+    public bool LastCardPlayedThisTurnHasTag(TagId tagId) => _lastCardPlayedTags.Contains(tagId);
+
+    // Claims one named allowance for this turn. True the first time it is asked for, false ever after —
+    // the turn-scoped sibling of CombatState.TryClaimOnceThisAction.
+    public bool TryClaimOnceThisTurn(string key) => _claimedThisTurn.Add(key);
+
     public void RecordCardPlayed(CardDefinition card)
     {
         ArgumentNullException.ThrowIfNull(card);
@@ -84,6 +105,10 @@ public sealed class CombatantCardPlayTurnStats
         }
 
         CardsPlayedThisTurn++;
+        LastCardPlayedDefinitionId = card.Id;
+        _lastCardPlayedTags.Clear();
+        foreach (var tag in card.Tags)
+            _lastCardPlayedTags.Add(tag);
 
         if (!_cardsPlayedByDefinitionThisTurn.TryAdd(card.Id, 1))
             _cardsPlayedByDefinitionThisTurn[card.Id]++;
@@ -132,9 +157,12 @@ public sealed class CombatantCardPlayTurnStats
         ResourceGainedThisTurn = 0;
         ResourceSpentThisTurn = 0;
         FirstCardPlayedDefinitionId = null;
+        LastCardPlayedDefinitionId = null;
         _cardsPlayedByDefinitionThisTurn.Clear();
         _cardsPlayedByTagThisTurn.Clear();
         _firstCardPlayedTags.Clear();
+        _lastCardPlayedTags.Clear();
+        _claimedThisTurn.Clear();
     }
     // ── capture & restore ─────────────────────────────────────────────────────────
     //
@@ -152,7 +180,10 @@ public sealed class CombatantCardPlayTurnStats
         [.. _cardsPlayedByTagLastTurn.Select(e => (e.Key.value, e.Value)).OrderBy(e => e.Item1, StringComparer.Ordinal)],
         [.. _firstCardPlayedTags.Select(t => t.value).OrderBy(v => v, StringComparer.Ordinal)],
         [.. _firstCardPlayedTagsLastTurn.Select(t => t.value).OrderBy(v => v, StringComparer.Ordinal)],
-        CardDrawsThisTurn);
+        CardDrawsThisTurn,
+        LastCardPlayedDefinitionId?.value,
+        [.. _lastCardPlayedTags.Select(t => t.value).OrderBy(v => v, StringComparer.Ordinal)],
+        [.. _claimedThisTurn.OrderBy(v => v, StringComparer.Ordinal)]);
 
     public void Restore(CardPlayTurnStatsSnapshot snapshot)
     {
@@ -181,6 +212,15 @@ public sealed class CombatantCardPlayTurnStats
         _firstCardPlayedTagsLastTurn.Clear();
         foreach (var tag in snapshot.FirstCardTagsLastTurn)
             _firstCardPlayedTagsLastTurn.Add(new TagId(tag));
+        LastCardPlayedDefinitionId = snapshot.LastCardPlayedDefinitionId is { } lastId
+            ? new CardDefinitionId(lastId)
+            : null;
+        _lastCardPlayedTags.Clear();
+        foreach (var tag in snapshot.LastCardTagsThisTurn)
+            _lastCardPlayedTags.Add(new TagId(tag));
+        _claimedThisTurn.Clear();
+        foreach (var claim in snapshot.ClaimedThisTurn)
+            _claimedThisTurn.Add(claim);
     }
 
 }
@@ -303,4 +343,10 @@ public sealed record CardPlayTurnStatsSnapshot(
     System.Collections.Immutable.ImmutableArray<string> FirstCardTagsLastTurn,
     // Last, and defaulted: a snapshot written before a turn could count its draws reads zero, which is what
     // a fight that never drew twice in a turn would have said anyway.
-    int CardDrawsThisTurn = 0);
+    int CardDrawsThisTurn = 0,
+    // What the turn played LAST, and what it has already claimed — both defaulted for the same reason: a
+    // snapshot written before these existed reads "nothing played yet, nothing claimed yet", which is the
+    // truth for every fight that never met a rule about succession or a once-a-turn ceiling.
+    string? LastCardPlayedDefinitionId = null,
+    System.Collections.Immutable.ImmutableArray<string> LastCardTagsThisTurn = default,
+    System.Collections.Immutable.ImmutableArray<string> ClaimedThisTurn = default);

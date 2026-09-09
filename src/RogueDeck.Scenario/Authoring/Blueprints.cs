@@ -20,6 +20,11 @@ public sealed class StatusBlueprint
     public List<TagId> Tags { get; } = new();
     public List<PassiveModifierSpec> PassiveModifiers { get; } = new();
 
+    // "Decrees": rules of combat that are different while the status is worn — a ceiling on the cards a turn
+    // may hold, a card that costs nothing because of where it falls in the turn, a played card that exhausts.
+    // Empty for every status that only changes numbers.
+    public List<CombatRuleSpec> CombatRules { get; } = new();
+
     // "Due notice": while a combatant bears this status, statuses newly applied TO it wait the given number of
     // its turn starts before taking effect (visible and cleansable, but inert). Null = immediate, as always.
     public IncomingStatusDelaySpec? IncomingStatusDelay { get; init; }
@@ -52,7 +57,7 @@ public sealed class StatusBlueprint
             polarity: Polarity, usesStacks: UsesStacks, usesDuration: UsesDuration, usesCharges: UsesCharges,
             stackingBehavior: StackingBehavior, passiveModifiers: PassiveModifiers,
             incomingStatusDelay: IncomingStatusDelay, disclosure: Disclosure, prevention: Prevention,
-            amplification: Amplification);
+            amplification: Amplification, combatRules: CombatRules);
         foreach (var tag in Tags) def.Tags.Add(tag);
         return def;
     }

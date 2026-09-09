@@ -160,12 +160,30 @@ public sealed class ValuePoolState
         CanExceedMax = canExceedMax;
     }
 
-    public void SetCurrent(int value)
+    // Rebuilding a pool from a snapshot. A snapshot is a FACT — the engine produced that state and wrote it
+    // down — so restoring it is not a request that may be refused. The ordinary constructor rejects a value
+    // above the ceiling, which is right for anything asking to create one and wrong for anything reading one
+    // back: a pool deliberately overfilled (energy carried into tomorrow by decree) would be unrestorable,
+    // and the fight would simply stop the next time the replay moved its baseline.
+    public static ValuePoolState Restored(int current, int? max, bool canExceedMax)
+    {
+        var pool = new ValuePoolState(0, max, canExceedMax);
+        pool.SetCurrent(Math.Max(0, current), allowExceedingMax: true);
+        return pool;
+    }
+
+    public void SetCurrent(int value) => SetCurrent(value, allowExceedingMax: false);
+
+    // allowExceedingMax is the deliberate overfill: a caller that KNOWS it is suspending the ceiling rather
+    // than ignoring it. Energy that carries from one turn to the next is the case it exists for — a pool that
+    // refills to its max cannot also keep what was left in it without briefly standing above that max. The
+    // ceiling is not changed and reasserts itself at the next ordinary refill.
+    public void SetCurrent(int value, bool allowExceedingMax)
     {
         if (value < 0)
             throw new ArgumentOutOfRangeException(nameof(value), "Pool value cannot be negative.");
 
-        if (Max.HasValue && value > Max.Value && !CanExceedMax)
+        if (Max.HasValue && value > Max.Value && !CanExceedMax && !allowExceedingMax)
             throw new ArgumentOutOfRangeException(nameof(value), "Pool value cannot exceed max.");
 
         Current = value;
