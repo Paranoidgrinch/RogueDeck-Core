@@ -98,7 +98,8 @@ public sealed class CombatQueueProcessor
         {
             if (resolvedCycles >= limits.MaxQueueCycles)
                 throw new InvalidOperationException(
-                    $"Stopped resolving pending queues after reaching the limit of {limits.MaxQueueCycles} cycles.");
+                    $"Stopped resolving pending queues after reaching the limit of {limits.MaxQueueCycles} cycles."
+                    + WhatIsLooping(combat));
 
             _effectQueueProcessor.ResolvePendingEffects(combat, registry, limits);
             _eventQueueProcessor.ResolvePendingEvents(combat, registry, limits);
@@ -112,4 +113,33 @@ public sealed class CombatQueueProcessor
             resolvedCycles++;
         }
     }
+
+    // What the fight was carrying at the moment it was stopped. A cycle limit is only ever reached by a loop,
+    // and a loop is a handful of requests handing each other back and forth for ever — so the fastest way to
+    // name it is to say what is standing in the queues and what the fight said last. Without this the message
+    // reports only that something went round in circles, which is the one thing already known.
+    private static string WhatIsLooping(CombatState combat)
+    {
+        static string Short(object item)
+        {
+            var text = item.ToString() ?? item.GetType().Name;
+            return text.Length <= 200 ? text : string.Concat(text.AsSpan(0, 200), "…");
+        }
+
+        var report = new System.Text.StringBuilder();
+        report.Append($" Pending: {combat.PendingEffectCount} effect(s), {combat.PendingEventCount} event(s)");
+        if (combat.HasPendingContinuations)
+            report.Append(", continuations waiting");
+        report.Append('.');
+        foreach (var effect in combat.PendingEffects.Take(PendingShown))
+            report.Append($" [effect] {Short(effect)}");
+        foreach (var pending in combat.PendingEvents.Take(PendingShown))
+            report.Append($" [event] {Short(pending)}");
+        foreach (var entry in combat.CombatLog.TakeLast(LogTailShown))
+            report.Append($" [log] {entry.Type}: {entry.Message}");
+        return report.ToString();
+    }
+
+    private const int PendingShown = 6;
+    private const int LogTailShown = 10;
 }
