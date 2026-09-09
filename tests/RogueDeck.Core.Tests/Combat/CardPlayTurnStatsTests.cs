@@ -300,6 +300,74 @@ public class CardPlayTurnStatsTests
             handler => handler is TrackResourceSpentThisTurnHandler);
     }
 
+    // A TURN COUNTS ITS DRAWS — the one reading that tells a hand dealt at the turn's start apart from a card
+    // some rule drew afterwards. Everything a game writes on "the start of your turn, with your hand in front
+    // of you" has to hang on the draw, because a turn-start trigger runs before the hand exists; without this
+    // number such a rule fires again for every card anything else draws, and a rule that pays in CARDS then
+    // feeds itself for as long as the draw pile lasts.
+    [Fact]
+    public void ATurnCountsItsDrawsAndTheOpeningHandIsTheFirstOfThem()
+    {
+        var registry = CombatTestFactory.CreateStandardRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        for (var i = 0; i < 10; i++)
+            AddCardToZone(combat, HeroId, StandardCombatIds.StrikeCard, CardZone.DrawPile);
+
+        Assert.Equal(0, combat.GetCardPlayTurnStats(HeroId).CardDrawsThisTurn);
+
+        // The turn's own hand is the first draw of the turn.
+        new CombatTurnProcessor().StartCurrentTurn(combat, registry);
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+        Assert.Equal(1, combat.GetCardPlayTurnStats(HeroId).CardDrawsThisTurn);
+
+        // Anything drawn afterwards is not.
+        combat.EnqueueEffect(new DrawCardsEffectRequest(HeroId, 1));
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+        Assert.Equal(2, combat.GetCardPlayTurnStats(HeroId).CardDrawsThisTurn);
+
+        // A draw that finds nothing to draw is not a draw: no cards, no announcement, nothing counted.
+        combat.GetCardZones(HeroId).GetCardsInZone(CardZone.DrawPile).ToList()
+            .ForEach(card => combat.GetCardZones(HeroId).MoveCardToZone(card.Id, CardZone.ExhaustPile));
+        combat.EnqueueEffect(new DrawCardsEffectRequest(HeroId, 1));
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+        Assert.Equal(2, combat.GetCardPlayTurnStats(HeroId).CardDrawsThisTurn);
+
+        // …and the count belongs to the TURN, so the hero's own next hand is an opening hand again — while
+        // the turn in between, which is somebody else's, leaves the hero's count where it stood.
+        var turns = new CombatTurnProcessor();
+        var queues = new CombatQueueProcessor();
+        turns.EndCurrentTurnAndStartNextTurn(combat, registry);
+        queues.ResolvePendingQueues(combat, registry);
+        Assert.Equal(GoblinId, combat.ActiveCombatantId);
+        Assert.Equal(2, combat.GetCardPlayTurnStats(HeroId).CardDrawsThisTurn);
+
+        turns.EndCurrentTurnAndStartNextTurn(combat, registry);
+        queues.ResolvePendingQueues(combat, registry);
+        Assert.Equal(HeroId, combat.ActiveCombatantId);
+        Assert.Equal(1, combat.GetCardPlayTurnStats(HeroId).CardDrawsThisTurn);
+    }
+
+    // What a turn remembers has to survive a fight being put down and picked up again — the draw count with
+    // the rest of it, or a rebuilt fight would hand out every opening-hand payment a second time.
+    [Fact]
+    public void TheDrawCountSurvivesCaptureAndRestore()
+    {
+        var registry = CombatTestFactory.CreateStandardRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        for (var i = 0; i < 5; i++)
+            AddCardToZone(combat, HeroId, StandardCombatIds.StrikeCard, CardZone.DrawPile);
+
+        new CombatTurnProcessor().StartCurrentTurn(combat, registry);
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+
+        var snapshot = combat.GetCardPlayTurnStats(HeroId).Capture();
+        var restored = new CombatantCardPlayTurnStats();
+        restored.Restore(snapshot);
+
+        Assert.Equal(combat.GetCardPlayTurnStats(HeroId).CardDrawsThisTurn, restored.CardDrawsThisTurn);
+        Assert.Equal(1, restored.CardDrawsThisTurn);
+    }
+
     private static void EnsureEnergy(
         CombatantState combatant,
         int current,

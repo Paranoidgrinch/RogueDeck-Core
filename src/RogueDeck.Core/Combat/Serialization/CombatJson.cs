@@ -198,6 +198,7 @@ public static class CombatJson
          .Register("countTargets", typeof(CountTargetsExpression<>))
          .Register("sumOverTargets", typeof(SumOverTargetsExpression<>))
          .Register("cardsPlayedThisTurn", typeof(CardsPlayedThisTurnExpression<>))
+         .Register("cardDrawsThisTurn", typeof(CardDrawsThisTurnExpression<>))
          .Register("cardsPlayedThisTurnWithTag", typeof(CardsPlayedThisTurnWithTagExpression<>))
          .Register("cardsPlayedLastTurn", typeof(CardsPlayedLastTurnExpression<>))
          .Register("cardsPlayedLastTurnWithTag", typeof(CardsPlayedLastTurnWithTagExpression<>))

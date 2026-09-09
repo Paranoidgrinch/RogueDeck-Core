@@ -16,6 +16,14 @@ public sealed class CombatantCardPlayTurnStats
 
     public int CardsPlayedThisTurn { get; private set; }
 
+    // How many separate DRAWS the combatant has taken this turn. A turn's opening hand is the first of them,
+    // and that is the only way a rule can say "when my turn begins, with my hand in front of me": a turn-start
+    // trigger runs before the hand exists, so everything that means "at the hand" hangs off the draw — and a
+    // draw is a draw, whoever asked for it. Without this number a rule reacting to the hand also reacts to
+    // every card any other rule draws, which is how a relic that rings "every third turn" comes to ring on
+    // its own ringing.
+    public int CardDrawsThisTurn { get; private set; }
+
     public int DamageDealtThisTurn { get; private set; }
 
     public int ResourceGainedThisTurn { get; private set; }
@@ -87,6 +95,8 @@ public sealed class CombatantCardPlayTurnStats
         }
     }
 
+    public void RecordCardsDrawn() => CardDrawsThisTurn++;
+
     public void RecordDamageDealt(int healthDamage)
     {
         if (healthDamage > 0)
@@ -117,6 +127,7 @@ public sealed class CombatantCardPlayTurnStats
             _firstCardPlayedTagsLastTurn.Add(tag);
 
         CardsPlayedThisTurn = 0;
+        CardDrawsThisTurn = 0;
         DamageDealtThisTurn = 0;
         ResourceGainedThisTurn = 0;
         ResourceSpentThisTurn = 0;
@@ -140,12 +151,14 @@ public sealed class CombatantCardPlayTurnStats
         [.. _cardsPlayedByTagThisTurn.Select(e => (e.Key.value, e.Value)).OrderBy(e => e.Item1, StringComparer.Ordinal)],
         [.. _cardsPlayedByTagLastTurn.Select(e => (e.Key.value, e.Value)).OrderBy(e => e.Item1, StringComparer.Ordinal)],
         [.. _firstCardPlayedTags.Select(t => t.value).OrderBy(v => v, StringComparer.Ordinal)],
-        [.. _firstCardPlayedTagsLastTurn.Select(t => t.value).OrderBy(v => v, StringComparer.Ordinal)]);
+        [.. _firstCardPlayedTagsLastTurn.Select(t => t.value).OrderBy(v => v, StringComparer.Ordinal)],
+        CardDrawsThisTurn);
 
     public void Restore(CardPlayTurnStatsSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         CardsPlayedThisTurn = snapshot.CardsPlayedThisTurn;
+        CardDrawsThisTurn = snapshot.CardDrawsThisTurn;
         CardsPlayedLastTurn = snapshot.CardsPlayedLastTurn;
         DamageDealtThisTurn = snapshot.DamageDealtThisTurn;
         ResourceGainedThisTurn = snapshot.ResourceGainedThisTurn;
@@ -202,6 +215,23 @@ public sealed class ResetCardPlayTurnStatsOnTurnStartedHandler
             return;
 
         combat.GetCardPlayTurnStats(combatEvent.CombatantId).Reset();
+    }
+}
+
+// Every draw is counted, and the count is taken BEFORE the draw is announced — so a rule reacting to the
+// announcement can ask which draw of the turn it is looking at.
+public sealed class TrackCardDrawsThisTurnHandler
+    : CombatEventHandler<CardsDrawnCombatEvent>
+{
+    protected override void Handle(
+        CombatState combat,
+        CombatDefinitionRegistry registry,
+        CardsDrawnCombatEvent combatEvent)
+    {
+        if (!combat.TryGetCombatant(combatEvent.CombatantId, out _))
+            return;
+
+        combat.GetCardPlayTurnStats(combatEvent.CombatantId).RecordCardsDrawn();
     }
 }
 
@@ -270,4 +300,7 @@ public sealed record CardPlayTurnStatsSnapshot(
     System.Collections.Immutable.ImmutableArray<(string Key, int Count)> ByTagThisTurn,
     System.Collections.Immutable.ImmutableArray<(string Key, int Count)> ByTagLastTurn,
     System.Collections.Immutable.ImmutableArray<string> FirstCardTagsThisTurn,
-    System.Collections.Immutable.ImmutableArray<string> FirstCardTagsLastTurn);
+    System.Collections.Immutable.ImmutableArray<string> FirstCardTagsLastTurn,
+    // Last, and defaulted: a snapshot written before a turn could count its draws reads zero, which is what
+    // a fight that never drew twice in a turn would have said anyway.
+    int CardDrawsThisTurn = 0);

@@ -133,6 +133,9 @@ public sealed class StandardCombatPackage : ICombatPackage
         registry.RegisterCombatEventHandler(new DecreaseTimedStatusDurationsOnTurnEndedHandler());
         registry.RegisterCombatEventHandler(new DamageOverTimeOnTurnStartedHandler());
         registry.RegisterCombatEventHandler(new TrackCardsPlayedThisTurnHandler());
+        // Registered ahead of the CardsDrawn triggered-program adapter below, so that a rule reacting to a
+        // draw already sees this draw counted.
+        registry.RegisterCombatEventHandler(new TrackCardDrawsThisTurnHandler());
         registry.RegisterCombatEventHandler(new TrackDamageDealtThisTurnHandler());
         registry.RegisterCombatEventHandler(new TrackResourceGainedThisTurnHandler());
         registry.RegisterCombatEventHandler(new TrackResourceSpentThisTurnHandler());

@@ -1490,6 +1490,28 @@ public sealed class CardsPlayedThisTurnExpression<TContext> : ICombatExpression<
     }
 }
 
+// Which draw of this turn is being looked at: 1 is the hand the turn opened with, 2 and up is anything a
+// card or a rule drew afterwards.
+public sealed class CardDrawsThisTurnExpression<TContext> : ICombatExpression<TContext, int>
+    where TContext : class
+{
+    public ICombatantTargetSelector Selector { get; }
+
+    public CardDrawsThisTurnExpression(ICombatantTargetSelector selector)
+    {
+        ArgumentNullException.ThrowIfNull(selector);
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
+    }
+
+    public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        var selCtx = context.GetTargetSelectionContext();
+        var targets = Selector.ResolveTargets(selCtx);
+        if (targets.Count == 0) return 0;
+        return combat.GetCardPlayTurnStats(ScalarTargetExpression.RequireSingle(targets)).CardDrawsThisTurn;
+    }
+}
+
 public sealed class DamageDealtThisTurnExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {
