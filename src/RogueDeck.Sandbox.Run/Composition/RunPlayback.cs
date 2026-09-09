@@ -92,16 +92,30 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
 
     // The act plan a restore rebuilds against, remembered between restores.
     //
-    // ⚠ THIS IS A HOT PATH NOW. The replay baseline used to move once per ROOM; it moves once per TURN, so a
+    // ⚠ THIS IS A HOT PATH. The replay baseline used to move once per ROOM; it moves once per TURN, so a
     // long fight restores hundreds of times, and generating all five acts' maps each time was costing about
     // half a second an answer — which is why the fights with the most answers were the ones the checkpoint
     // helped least. Generation is deterministic in (seed, loadout), so the plan can simply be kept.
     //
-    // Safe to share because a run NEVER mutates a map in place: every mid-run change (adding a node, an edge)
+    // Safe to keep because a run NEVER mutates a map in place: every mid-run change (adding a node, an edge)
     // replaces RunState.Map with a new RunMap, leaving the plan's own maps untouched.
-    private static (int Seed, int Loadout, RunBlueprint Blueprint, IReadOnlyList<RunActPlan> Acts)? _actPlan;
+    //
+    // ⚠⚠ AND IT BELONGS TO THIS PLAYBACK, NOT TO THE PROCESS. It was a STATIC slot, which is correct exactly
+    // as long as one run exists at a time — and two do whenever a process hosts two: xUnit runs test classes
+    // in parallel, and a Blazor server can hold a run per visitor. The tuple in it is a multi-field struct, so
+    // writing it is several writes and a concurrent reader can see a TORN one: the Blueprint and Seed from the
+    // run that wrote last, the Acts from the run that wrote before. The reference check then passes against a
+    // plan belonging to a different game, and the run is restored onto ANOTHER blueprint's map — whose nodes
+    // name encounters this run's catalog has never heard of.
+    //
+    // That is not a theory. It showed up as an Act-II boss encounter being looked up inside an Act-III probe
+    // ("No encounter registered with id 'archives_boss_curator_of_misplaced_hours'"), twice in one suite run
+    // and never again in the next — the signature of a race, and the reason a flaky gate is worth a step of
+    // its own. Per instance there is nothing to tear: one playback is one run against one blueprint, so the
+    // hit rate is what it was, and two playbacks no longer evict each other.
+    private (int Seed, int Loadout, RunBlueprint Blueprint, IReadOnlyList<RunActPlan> Acts)? _actPlan;
 
-    private static IReadOnlyList<RunActPlan> ActPlan(RunBlueprint blueprint, int seed, int loadout)
+    private IReadOnlyList<RunActPlan> ActPlan(RunBlueprint blueprint, int seed, int loadout)
     {
         if (_actPlan is { } cached
             && cached.Seed == seed && cached.Loadout == loadout && ReferenceEquals(cached.Blueprint, blueprint))
@@ -111,7 +125,7 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
         return acts;
     }
 
-    private static RunState RestoreInItsAct(
+    private RunState RestoreInItsAct(
         RunBlueprint blueprint, RunSaveData save, RunContentRegistry? content)
     {
         var acts = ActPlan(blueprint, save.RandomSeed, save.MapGenerationLoadout ?? 0);
