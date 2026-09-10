@@ -249,4 +249,88 @@ public class RewardLabelingTortureTests
             Assert.Equal(deckBefore, session.Run.Deck.Count); // no card added
         }
     }
+
+    // A NAME IS NOT AN ADDRESS. A frontend that draws a card as a card has to know which card it is drawing,
+    // and "Paper Cut" cannot be turned back into `paper-cut` — so the pick carries the identity beside the
+    // name. This is the whole reason EntityArt exists: without it a reward screen can only ever be a list of
+    // sentences, which is what it was.
+    [Fact]
+    public void A_card_pick_says_which_card_each_option_is_a_picture_of()
+    {
+        var play = new RunPlayback(() => { });
+        play.Start(SpoilsAtAnEvent(), seed: 1, interactive: true);
+        var session = play.Session!;
+        Assert.Null(play.Error);
+        using (play)
+        {
+            session.Pick("open");
+
+            // The bundle is gold and a door to a further pick — a picture of NOTHING, and it says so rather
+            // than guessing at the card behind the door (which has not been rolled yet).
+            Assert.True(session.IsAwaitingEntities);
+            Assert.Null(session.PendingEntities!.ArtAt(0));
+            session.PickEntities([0]);
+
+            var pick = session.PendingEntities!;
+            var names = pick.Displays.ToList();
+            var art = Enumerable.Range(0, names.Count).Select(pick.ArtAt).ToList();
+            Assert.All(art, a => Assert.Equal(EntityArt.Card, a!.Value.Kind));
+            Assert.Equal("paper-cut", art[names.IndexOf("Paper Cut")]!.Value.Id);
+            Assert.Equal("strong-binder", art[names.IndexOf("Strong Binder")]!.Value.Id);
+
+            // An index past the end answers null rather than throwing: a frontend redraws from a stale index
+            // more often than anyone would like.
+            Assert.Null(pick.ArtAt(names.Count));
+            Assert.Null(pick.ArtAt(-1));
+        }
+    }
+
+    // And the other widget: a relic pick names the relic, so the shelf's own tile can be drawn on the reward
+    // screen instead of a sentence about it.
+    [Fact]
+    public void A_relic_pick_says_which_relic_it_is_a_picture_of()
+    {
+        var play = new RunPlayback(() => { });
+        play.Start(SpoilsThatOpenARelic(), seed: 1, interactive: true);
+        var session = play.Session!;
+        Assert.Null(play.Error);
+        using (play)
+        {
+            session.Pick("open");
+            session.PickEntities([0]);   // the bundle
+            session.PickEntities([0]);   // the card reward inside it
+
+            Assert.True(session.IsAwaitingEntities);
+            var art = session.PendingEntities!.ArtAt(0);
+            Assert.NotNull(art);
+            Assert.Equal(EntityArt.Relic, art!.Value.Kind);
+            Assert.Equal("brass-charm", art.Value.Id);
+        }
+    }
+
+    // AN UPGRADED CARD IS THE SAME PICTURE. The deck pick (card removal, and anything else that offers the
+    // cards you already own) hands out RunCardInstances, which carry an upgrade level — and an improvement
+    // changes what a card DOES, not what it is a picture of. The level travels along so the face can print
+    // the "+" without the art slot ever growing one.
+    [Fact]
+    public void A_pick_from_the_deck_carries_the_upgrade_level_but_the_same_card_id()
+    {
+        var card = new RunCardInstance(new RunCardInstanceId("c1"), new CardDefinitionId("paper-cut"));
+        card.Upgrade(2);
+        var art = RunEntityLabeler.ArtFor(card);
+        Assert.NotNull(art);
+        Assert.Equal(EntityArt.Card, art!.Value.Kind);
+        Assert.Equal("paper-cut", art.Value.Id);
+        Assert.Equal(2, art.Value.UpgradeLevel);
+    }
+
+    // Anything the run can offer that no widget draws answers null, and a frontend keeps its words.
+    [Fact]
+    public void Something_that_is_not_a_card_or_a_relic_is_a_picture_of_nothing()
+    {
+        Assert.Null(RunEntityLabeler.ArtFor(null));
+        Assert.Null(RunEntityLabeler.ArtFor("a sentence"));
+        Assert.Null(RunEntityLabeler.ArtFor(
+            new RewardOffer("purse", [new ChangeResourceRunEffect(StandardRunIds.Gold, 30)])));
+    }
 }

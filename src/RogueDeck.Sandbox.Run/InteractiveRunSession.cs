@@ -304,7 +304,8 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
             purpose, Math.Min(count, candidates.Count),
             candidates.Select(c => Display(c)).ToArray(),
             candidates.Select(c => _labeler?.Description(c) ?? string.Empty).ToArray(),
-            allowSkip);
+            allowSkip,
+            candidates.Select(c => RunEntityLabeler.ArtFor(c)).ToArray());
         throw new ReplayParkedException();
     }
 
@@ -337,13 +338,24 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
 
 // A pending entity selection surfaced to the UI: what for, how many to pick, the display names, a parallel
 // list of ability/rules descriptions (empty string when an option has none) so a reward pick can show WHAT
-// each card does, and whether the pick is declinable (AllowSkip — the player may confirm 0, e.g. skip a
-// card reward).
+// each card does, whether the pick is declinable (AllowSkip — the player may confirm 0, e.g. skip a
+// card reward), and a parallel list of WHAT EACH OPTION IS A PICTURE OF.
+//
+// That last one is why this record exists rather than a list of strings. A reward screen that wants to draw a
+// card as a card cannot work backwards from "Levy Stamp +" to the card it names — a display string is for
+// reading, not for addressing — so the identity travels with the name instead of being guessed from it. An
+// option that is not a picture of anything (gold, healing, a further reward that has not been rolled yet)
+// carries null, and a frontend falls back to the words, which is what every frontend did before.
 public sealed record EntitySelectionRequest(
     string Purpose, int Count, IReadOnlyList<string> Displays, IReadOnlyList<string> Descriptions,
-    bool AllowSkip = false)
+    bool AllowSkip = false, IReadOnlyList<EntityArt?>? Arts = null)
 {
     // Back-compat ctor: no descriptions (all empty).
     public EntitySelectionRequest(string purpose, int count, IReadOnlyList<string> displays)
         : this(purpose, count, displays, displays.Select(_ => string.Empty).ToArray()) { }
+
+    // What the option at this index is a picture of, or null when it is a picture of nothing — so a caller
+    // never has to know whether the art list is there at all (an older rig builds a request without one).
+    public EntityArt? ArtAt(int index) =>
+        Arts is not null && index >= 0 && index < Arts.Count ? Arts[index] : null;
 }
