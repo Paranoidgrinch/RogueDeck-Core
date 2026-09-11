@@ -159,7 +159,7 @@ public static class RuleBasedMapGenerator
                 // depth is decided, since the gates inserted around it are most of the act. So the act's
                 // "not this shallow" rule is applied HERE, against the assembled plan, and a room standing too
                 // early becomes a fight: the same honest filler the ceilings rewrite to.
-                if (!row.IsGate && DepthPercent(ri, plan.Count) < spec.RoleMinimumDepthPercent.GetValueOrDefault(kind))
+                if (!row.IsGate && MapDepth.Percent(ri, plan.Count) < spec.RoleMinimumDepthPercent.GetValueOrDefault(kind))
                     kind = MapNodeKind.Combat;
                 var id = new NodeId(MapWiring.Id(ri, c));
                 if (realization is null)
@@ -366,7 +366,7 @@ public static class RuleBasedMapGenerator
         Func<EncounterId, bool>? eligible = null;
         if (spec.EncounterMinimumDepthPercent.Count > 0)
         {
-            var depth = DepthPercent(row, rows);
+            var depth = MapDepth.Percent(row, rows);
             eligible = id => depth >= spec.EncounterMinimumDepthPercent.GetValueOrDefault(id.Value);
         }
 
@@ -397,7 +397,7 @@ public static class RuleBasedMapGenerator
         var eligible = pool;
         if (spec.NodeRefMinimumDepthPercent.Count > 0)
         {
-            var depth = DepthPercent(row, rows);
+            var depth = MapDepth.Percent(row, rows);
             var deep = pool
                 .Where(r => depth >= spec.NodeRefMinimumDepthPercent.GetValueOrDefault(r))
                 .ToList();
@@ -412,12 +412,6 @@ public static class RuleBasedMapGenerator
         used.Add(picked);
         return picked;
     }
-
-    // How far into the act a row sits, as the percentage NodeRefMinimumDepthPercent is authored against. Row 0 is
-    // the entry and the last row is the boss, so the deepest row a DOOR can sit on is rows - 2, and that row is
-    // 100%. A map with no room between the two is entirely "deep" — nothing is gated out of a map that short.
-    private static int DepthPercent(int row, int rows) =>
-        rows <= 2 ? 100 : Math.Clamp(row * 100 / (rows - 2), 0, 100);
 
     private static bool IsCombatRole(MapNodeKind kind) =>
         kind is MapNodeKind.Combat or MapNodeKind.MultiCombat or MapNodeKind.Elite
