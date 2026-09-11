@@ -222,8 +222,16 @@ placed is worth nothing.
 `WorstPathCount`, so an off-by-one would rewrite every map — and the v0.0.0 golden passed byte-identical across
 it on all fifteen real act maps. Core 1469/755/**603**/373 green, `dotnet format` 0.
 
-**S3 — `MapSeedStreams`.** Named salts for Topology / Strands / Rooms / Repair / Content. The legacy generator's
-`seed * 31 + 7` formulas stay where they are — touching them changes its golden output.
+**S3 — `MapSeedStreams`.** ✔ **DONE 2026-09-11** — Core `49d3131`. `From(seed)` → `.Topology` / `.Strands` /
+`.Rooms` / `.Repair` / `.Content`, plus `For(name)` for a stream a later stage needs and `Attempt(index)` for a
+deterministic retry family (attempt 0 is the original). The legacy generator's `seed * 31 + 7` formulas stay
+where they are.
+Two things are frozen on purpose. The hash is **written out, not borrowed**: `string.GetHashCode()` is randomized
+per process in .NET, so a stream salted with it would lay out a different map on every launch — the one thing a
+seed exists to prevent. And the derived numbers are **pinned as literals** in the tests, computed twice by two
+independent implementations and agreed to the digit, so altering the mixing fails a test instead of silently
+invalidating every recorded seed and both golden files. 7 tests; Core 1469/755/**610**/373 green; the v0.0.0
+golden unaffected, as nothing in the legacy path was touched.
 
 **S4 — topology.** The IR, the stateful width walk (CONTINUE / SPLIT / MERGE with weights 6/2/2), strand
 identity with split ancestry, `MinBranchLifeRows`, merges only between **adjacent** strands (planarity by
