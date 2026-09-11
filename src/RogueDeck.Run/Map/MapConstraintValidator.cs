@@ -16,7 +16,6 @@ public static class MapConstraintValidator
 
         var map = generated.Map;
         var roles = generated.Roles;
-        var order = TopologicalOrder(map);
         var problems = new List<string>();
 
         foreach (var (kind, min) in spec.PerPathMinimums)
@@ -24,7 +23,7 @@ public static class MapConstraintValidator
             if (min <= 0)
                 continue;
             var kindLocal = kind;
-            var worst = MinCountOnAnyPath(map, order, roles, k => k == kindLocal);
+            var worst = MinCountOnAnyPath(map, roles, k => k == kindLocal);
             if (worst < min)
                 problems.Add($"Every path should hold at least {min} {kind} node(s), but some path has only {worst}.");
         }
@@ -32,14 +31,14 @@ public static class MapConstraintValidator
         foreach (var (kind, max) in spec.PerPathMaximums)
         {
             var kindLocal = kind;
-            var richest = MaxCountOnAnyPath(map, order, roles, k => k == kindLocal);
+            var richest = MaxCountOnAnyPath(map, roles, k => k == kindLocal);
             if (richest > max)
                 problems.Add($"No path should hold more than {max} {kind} node(s), but some path holds {richest}.");
         }
 
         if (spec.MinEnemiesPerPath > 0)
         {
-            var worst = MinCountOnAnyPath(map, order, roles, IsEnemy);
+            var worst = MinCountOnAnyPath(map, roles, IsEnemy);
             if (worst < spec.MinEnemiesPerPath)
                 problems.Add(
                     $"Every path should hold at least {spec.MinEnemiesPerPath} enemy node(s), but some path has only {worst}.");
@@ -75,7 +74,7 @@ public static class MapConstraintValidator
         ArgumentNullException.ThrowIfNull(map);
         ArgumentNullException.ThrowIfNull(roles);
         ArgumentNullException.ThrowIfNull(matches);
-        return MinCountOnAnyPath(map, TopologicalOrder(map), roles, matches);
+        return MinCountOnAnyPath(map, roles, matches);
     }
 
     // The MOST `matches`-role nodes on any entry→boss path (the richest path). Public so the generator can see
@@ -86,7 +85,7 @@ public static class MapConstraintValidator
         ArgumentNullException.ThrowIfNull(map);
         ArgumentNullException.ThrowIfNull(roles);
         ArgumentNullException.ThrowIfNull(matches);
-        return MaxCountOnAnyPath(map, TopologicalOrder(map), roles, matches);
+        return MaxCountOnAnyPath(map, roles, matches);
     }
 
     // Whether a role counts as an enemy for the min-enemies constraint.
@@ -95,86 +94,26 @@ public static class MapConstraintValidator
     private static bool IsEnemy(MapNodeKind kind) =>
         kind is MapNodeKind.Combat or MapNodeKind.MultiCombat or MapNodeKind.Elite;
 
-    // The fewest `matches` nodes on any entry→boss path. minPath(node) = self + min over successors; a leaf is just
-    // self. The answer is the minimum over entry nodes. Processed in reverse topological order so every successor is
-    // solved before the node that depends on it.
+    // ── The traversal itself lives in WeightedPathEvaluator ──────────────────────────────────────────────
+    // Counting how many Elites the thinnest route holds IS a weighted path score with a weight of 1 per Elite,
+    // so this checker runs on top of that one DP rather than keeping a second copy of it. The weights are whole
+    // numbers and the sums stay far inside the range a double represents exactly, so the rounding is not an
+    // approximation — it is turning an exact integer back into an int.
+    //
+    // Each call walks the graph again (Validate does so once per constraint rather than once in total). On a map
+    // of a few hundred rooms that is a handful of O(V+E) passes and beneath noticing; one implementation of the
+    // traversal is worth more than saving them.
     private static int MinCountOnAnyPath(
-        RunMap map, IReadOnlyList<NodeId> order, IReadOnlyDictionary<NodeId, MapNodeKind> roles,
-        Func<MapNodeKind, bool> matches) =>
-        MinCountOnAnyPath(map, order, roles, (_, kind) => matches(kind));
+        RunMap map, IReadOnlyDictionary<NodeId, MapNodeKind> roles, Func<MapNodeKind, bool> matches) =>
+        MinCountOnAnyPath(map, roles, (_, kind) => matches(kind));
 
     private static int MinCountOnAnyPath(
-        RunMap map, IReadOnlyList<NodeId> order, IReadOnlyDictionary<NodeId, MapNodeKind> roles,
-        Func<NodeId, MapNodeKind, bool> matches)
-    {
-        var minPath = new Dictionary<NodeId, int>();
-        for (var i = order.Count - 1; i >= 0; i--)
-        {
-            var id = order[i];
-            var self = roles.TryGetValue(id, out var kind) && matches(id, kind) ? 1 : 0;
+        RunMap map, IReadOnlyDictionary<NodeId, MapNodeKind> roles, Func<NodeId, MapNodeKind, bool> matches) =>
+        (int)Math.Round(WeightedPathEvaluator.MinimumPathScore(
+            map, roles, (id, kind) => matches(id, kind) ? 1d : 0d));
 
-            var best = int.MaxValue;
-            foreach (var successor in map.SuccessorIds(id))
-                best = Math.Min(best, minPath[successor]);
-            minPath[id] = best == int.MaxValue ? self : self + best; // no successors ⇒ leaf
-        }
-
-        var answer = int.MaxValue;
-        foreach (var entry in EntryNodes(map))
-            answer = Math.Min(answer, minPath.TryGetValue(entry, out var value) ? value : 0);
-        return answer == int.MaxValue ? 0 : answer;
-    }
-
-    // The most `matches` nodes on any entry→boss path — the mirror of MinCountOnAnyPath.
     private static int MaxCountOnAnyPath(
-        RunMap map, IReadOnlyList<NodeId> order, IReadOnlyDictionary<NodeId, MapNodeKind> roles,
-        Func<MapNodeKind, bool> matches)
-    {
-        var maxPath = new Dictionary<NodeId, int>();
-        for (var i = order.Count - 1; i >= 0; i--)
-        {
-            var id = order[i];
-            var self = roles.TryGetValue(id, out var kind) && matches(kind) ? 1 : 0;
-
-            var best = -1;
-            foreach (var successor in map.SuccessorIds(id))
-                best = Math.Max(best, maxPath[successor]);
-            maxPath[id] = best < 0 ? self : self + best; // no successors ⇒ leaf
-        }
-
-        var answer = 0;
-        foreach (var entry in EntryNodes(map))
-            answer = Math.Max(answer, maxPath.TryGetValue(entry, out var value) ? value : 0);
-        return answer;
-    }
-
-    private static IEnumerable<NodeId> EntryNodes(RunMap map) =>
-        map.EntryNodeIds.Count > 0 ? map.EntryNodeIds : map.RootIds();
-
-    // Kahn's algorithm: nodes ordered so that every node precedes its successors.
-    private static IReadOnlyList<NodeId> TopologicalOrder(RunMap map)
-    {
-        var inDegree = new Dictionary<NodeId, int>();
-        foreach (var node in map.Nodes)
-            inDegree.TryAdd(node.Id, 0);
-        foreach (var node in map.Nodes)
-            foreach (var successor in map.SuccessorIds(node.Id))
-                inDegree[successor] = inDegree.TryGetValue(successor, out var degree) ? degree + 1 : 1;
-
-        var queue = new Queue<NodeId>();
-        foreach (var node in map.Nodes)
-            if (inDegree[node.Id] == 0)
-                queue.Enqueue(node.Id);
-
-        var order = new List<NodeId>();
-        while (queue.Count > 0)
-        {
-            var id = queue.Dequeue();
-            order.Add(id);
-            foreach (var successor in map.SuccessorIds(id))
-                if (--inDegree[successor] == 0)
-                    queue.Enqueue(successor);
-        }
-        return order;
-    }
+        RunMap map, IReadOnlyDictionary<NodeId, MapNodeKind> roles, Func<MapNodeKind, bool> matches) =>
+        (int)Math.Round(WeightedPathEvaluator.MaximumPathScore(
+            map, roles, (_, kind) => matches(kind) ? 1d : 0d));
 }
