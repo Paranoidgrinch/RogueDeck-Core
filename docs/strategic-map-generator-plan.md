@@ -338,9 +338,59 @@ is the knob for an act that should hit its numbers rather than breathe around th
 **Open for S12's tuning pass, not a defect:** the BnB budget numbers themselves. The document (§13) explicitly
 warns against deriving them by multiplying the old per-path minimums, and the numbers used above are test specs.
 
-**S7 — depth bands.** `DepthBandBudget` over normalized depth, existing `RoleMinimumDepthPercent` /
-`NodeRefMinimumDepthPercent` / `EncounterMinimumDepthPercent` stay authoritative, and a spec validator that
-catches impossible band/eligibility combinations *before* generation.
+**S7 — depth bands + the spec validator.** ✔ **DONE 2026-09-11** — Core `8188443`. `DepthBandBudget` beside
+`RoomBudget`, `StrategicActSpec` (the act as one authored thing) and `StrategicActSpecValidator`, with 50 tests.
+**An act-wide budget is silent about depth, and a number silent about depth is satisfied by every shop standing in
+the opening third.** A band is the smallest sentence that forbids it: the same `Min`/`Target`/`Max` vocabulary over
+one slice of `MapDepth.Percent` — the measure every authored gate already uses, so a band and a gate speak one
+language. A band is the half-open range `[Start, End)` so quarters written 0-25 / 25-50 do not both claim the 25 %
+row; the band ending at 100 includes 100 or the act's deepest row would fall in none; bands **may not overlap**
+(refused by name, because otherwise the order of a list would be a rule nobody wrote); and they **need not cover
+the act** — a room in no band is a room no band has an opinion about, not an error.
+**Three places a band enters the allocator, and only one of them is a score.** A band ceiling is a HARD FILTER
+exactly as the act's is, because "at most one shop this early" has to be a rule rather than a hope.
+`BandBudgetNeed` is the same pace arithmetic over the band's own rooms — extracted into one shared `Pace` rather
+than copied, so "the act is behind on elites" and "this third of it is" cannot drift apart. And a band minimum is a
+promise of the same kind as the act's, and a **narrower** one: its rooms are a subset, so S6's existing
+"fewest legal rooms first" ordering puts it ahead by its own rule rather than by a new one. A band minimum **counts
+toward the act's own** — "at least three elites in the last quarter" plus "at least four in the act" is four
+elites, not seven, which falls out of there being one count per role.
+**A band never lifts a depth gate** (source document §14, its own example to the number): a role earliest at 35 %
+cannot stand in a 0-25 % band however loudly that band asks, so such a band asks for nothing — and that is now
+said before a seed is spent rather than rediscovered once per act.
+*Regression guard:* bands that ask for nothing score **bit-identically** to no bands at all (the need factor
+cancels exactly at 100 %), asserted over 300 acts, so every seed recorded under S6 is untouched.
+**The validator's one interesting decision is that it has two answers, and they mean different things.**
+`IMPOSSIBLE` = the WIDEST act this spec permits cannot satisfy it, so no seed can — a defect. `TIGHT` = the widest
+can and the NARROWEST cannot, so some seeds will report a shortfall and some will not. That is why a width is a
+range here and not a number: the walk draws its opening width per seed and stays between `MinWidth` and `MaxWidth`
+for the whole act, so `rows × MinWidth` and `rows × MaxWidth` are both genuinely reachable and both honest bounds.
+It catches S4's short-act refusal (generalized, and asserted to agree with the generator's own throw), an act no
+row of which may ever fork (S5's 4-row finding, as a `TIGHT`), a band no row of an act this long falls into — with
+the depths the act *does* have, because that is the number the author must author against — a band minimum above
+the act's ceiling, bands that cover the act and cannot between them reach its floor, a minimum or a band weighed
+against what a depth gate leaves, a role **every** lane profile weights 0 (an authored 0 means "never on this
+route"), a role listed as both repeating freely and never repeating, and **a target nothing weights** — which can
+place nothing at all, since a target bends a draw and cannot create one, and was the subtlest trap in the whole
+spec vocabulary. It **reports rather than throws** for the reason `Crossings` and `RoomShortfall` do;
+`ThrowIfImpossible` is the gate S11's export validation wants. A MALFORMED spec (overlapping bands, a negative
+width) comes back as an `IMPOSSIBLE` reason rather than an exception, because a UI asking "is this act buildable"
+wants one list and not a list plus a catch.
+**`StrategicActSpec` is new vocabulary and deliberate:** "can this act hold two shops in its opening quarter" is a
+question about length, widths, gates, budgets and lanes at once, and a validator taking six loose parameters is a
+validator nobody calls from a UI. S11 binds it onto `RunAct`/`RunBlueprint`; it knows nothing about documents or
+saves yet.
+*Proved:* **11 000 banded acts** — four band configurations × 1 000 and every BnB length × 1 000 — on S6's single
+invariant, now grown band clauses (a band ceiling overshot or a band minimum unkept has to name itself *and* name
+the band). A band demanding 20 shops in six rows reports **1 000 shortfalls and 0 forced rooms**. A 4-row act has
+**exactly one quarter with no room in it, in every seed** — precisely the case the validator now refuses up front.
+And **2 000 acts** over the four BnB lengths under a spec the validator calls clean: **2 000 honoured**, which is
+the number that says how close "clean" and "honoured" actually are, since the validator is arithmetic and
+therefore necessary and not sufficient. Run suite **764** green (+50), `dotnet format` 0; the v0.0.0 golden
+untouched — nothing outside the strategic path is referenced by anything else.
+**Open for S12, not a defect:** `NodeRefMinimumDepthPercent` and `EncounterMinimumDepthPercent` stay authoritative
+as the document asks, and they are read where the *content* is realized rather than where a role is placed — so
+they enter the strategic path at S11's seam, and the validator will gain them there.
 
 **S8 — PathPressure.** Role weights through `WeightedPathEvaluator`; `Minimum` is a hard constraint, `Maximum`
 is a diagnostic at first. This is what replaces `MinEnemiesPerPath` and the per-path role minima.
