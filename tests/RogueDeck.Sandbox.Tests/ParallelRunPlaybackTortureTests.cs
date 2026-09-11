@@ -99,7 +99,7 @@ public class ParallelRunPlaybackTortureTests
     }
 
     [Fact]
-    public void Two_games_replayed_at_the_same_time_keep_their_own_maps()
+    public async Task Two_games_replayed_at_the_same_time_keep_their_own_maps()
     {
         var alpha = OneLongDuel("alpha");
         var beta = OneLongDuel("beta");
@@ -120,7 +120,7 @@ public class ParallelRunPlaybackTortureTests
             }
         })).ToArray();
 
-        Task.WaitAll(work);
+        await Task.WhenAll(work);
 
         Assert.True(failures.IsEmpty,
             $"{failures.Count} of 16 parallel games broke; first: {failures.FirstOrDefault()?.Message}");
