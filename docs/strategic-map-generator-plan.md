@@ -260,9 +260,37 @@ minimum width of 1.) S7 generalizes this into the spec validator.
 "act length is a structural invariant" is only true if the authored number is the number a route walks, so S12
 authors 23/24/25/35 as totals.
 
-**S5 — lane profiles bind to strands.** `StrandId → MapLaneProfile`, with the document's conservative split
-(child keeps the parent's profile, sibling takes a different one) and merge (older strand weighted higher,
-deterministic tie-break) inheritance. Lane weights themselves are **not** retuned here.
+**S5 — lane profiles bind to strands.** ✔ **DONE 2026-09-11** — Core `2fb9659`. `StrategicStrandProfiles`
+(the model) and `StrategicStrandProfileAssigner` (a single pass down a finished topology), with 32 tests.
+A profile changes at exactly three kinds of row and nowhere else: the act **opens** (each entrance takes a
+flavour of its own, the list rotated by the seed — the only place position decides anything, and legitimate
+because row 0 holds doors, not routes yet), a **split** (the parent keeps its profile, the new branch takes a
+weighted step away: same 1 / adjacent 4 / distant 2), and a **merge** (the survivor's flavour is drawn with the
+older route favoured, 3:1). Every other row inherits — that is the whole difference from `column % count`, under
+which a route that shifted one column sideways silently became a different lane. The draws come from the
+**Strands** stream, so retuning inheritance cannot reshape an act and reshaping an act cannot reflavour it. Lane
+weights themselves are untouched, as the document asks (§30).
+**A profile is spans over rows, not one value per strand.** A merge is the only event that can change a LIVING
+strand's profile, and it must be able to: a corridor that swallows a young branch may take on its character, and
+pretending the absorbed route left no trace would be decorative branching wearing a different hat. Most strands
+have exactly one span — an Act I-length act averages 6.3 spans over 5.7 strands. `ProfileOf(NodeId)` is the one
+call S6's allocator needs, and it resolves through the strand, never through the column.
+**The authored list's order is a conceptual scale, and NOT a ring.** Neighbours are authored as related
+flavours; the first and last are not adjacent, because that would make a neighbourhood out of where a list
+happens to end. *Measured consequence, worth knowing when authoring:* the ends of the list get about **10 %
+fewer rooms** than its middle (35.9k/39.3k/39.5k/35.8k rooms over 2 000 Act III-length acts), because an
+interior flavour has two neighbours to be stepped onto from and an end has one. Put the flavours an act should
+mostly feel like in the middle of the list.
+*Proved:* every BnB act length × 2 000 seeds, one to six authored profiles × 1 000, and five rule extremes
+(all weights zero → the document's documented fallback, forks that always agree, forks that always jump,
+convergences that always hand over) × 1 000 — **22 000 acts**, every room resolving to a flavour, and a flavour
+beginning only where a route was born or where a second route arrived. Both invariants are checked on the
+finished assignment rather than argued from the walk. Run suite **678** green, `dotnet format` 0; the v0.0.0
+golden untouched (two new files, nothing modified).
+**Handover rate, for S13:** with the 3:1 age bias roughly **half** of all acts contain one convergence that
+actually changed the survivor's character (1 001 of 2 000 at Act I length, 1 301 of 2 000 at Act IV length).
+A 4-row act has none at all — `MinBranchLifeRows` forbids every split after row 0, so such an act is parallel
+corridors that only the boss joins.
 
 **S6 — act-wide budgets + the allocator.** `RoomBudget{Target,Min,Max}`, the scored assignment
 (`BaseActWeight × StrandAffinity × ActBudgetNeed × LocalDiversity`), constrained-roles-first ordering, depth
