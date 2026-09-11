@@ -211,10 +211,16 @@ file every time an act gains content; re-bless with `UPDATE_MAP_GOLDEN=1`, and a
 first refactor it was asked to vouch for. **New fact it turned up:** v0.0.0 emits crossing edges —
 **30 crossing pairs in 1 155 edges** across the fifteen sampled maps, which confirms §2's claim with numbers.
 
-**S2 — `WeightedPathEvaluator`.** `MinimumPathScore` / `MaximumPathScore` over
-`Func<NodeId, MapNodeKind, double>`, hand-built DAGs in the tests (the document's §40 examples). Re-express
-`MapConstraintValidator`'s existing min/max count DP on top of it so there is one implementation, with the old
-tests proving it unchanged. No behaviour change.
+**S2 — `WeightedPathEvaluator`.** ✔ **DONE 2026-09-11** — Core `c6559e2` + `86a92f6`.
+`MinimumPathScore` / `MaximumPathScore` over `Func<NodeId, MapNodeKind, double>`, one reverse-topological O(V+E)
+pass, proved on hand-drawn diamonds and ladders (11 tests, including the source document's §40 example).
+`MapConstraintValidator` now runs on it and has lost its own copy of the traversal, its Kahn ordering and its
+entry-node fallback. Two edges of the definition are deliberate: a map nobody can walk scores **0, not infinity**
+(a caller comparing ±∞ against a threshold would silently pass or fail everything), and a room the role map never
+placed is worth nothing.
+*Proved inert:* the refactor is behaviour-SENSITIVE — the generator sizes its guarantee gates from
+`WorstPathCount`, so an off-by-one would rewrite every map — and the v0.0.0 golden passed byte-identical across
+it on all fifteen real act maps. Core 1469/755/**603**/373 green, `dotnet format` 0.
 
 **S3 — `MapSeedStreams`.** Named salts for Topology / Strands / Rooms / Repair / Content. The legacy generator's
 `seed * 31 + 7` formulas stay where they are — touching them changes its golden output.
