@@ -5,8 +5,8 @@ both on `origin/main`), plus a measurement probe run against the REAL BnB act sp
 
 Source: the user's `BnB_Strategic_Map_Generator_Implementation_Plan.md`. That document's **diagnosis and target
 architecture are adopted whole**. This file is what the code says about it: the measured baseline, five places
-where the source document describes a repository that does not exist, the one decision only the user can make,
-and the step order to build it in.
+where the source document describes a repository that does not exist, the two decisions the user has since
+made (act length, and shipping both generators side by side), and the step order to build it in.
 
 ---
 
@@ -117,24 +117,18 @@ described; and the current wiring really can cross (`MapWiring.WireRows` may emi
 
 ---
 
-## 3. ⚠ THE ONE OPEN DECISION — how long is an act?
+## 3. Act length — DECIDED (user, 2026-09-11): keep it
 
-Every budget number in this plan scales off it, so it is settled before step 5.
+> "aktlänge beibehalten"
 
-- **(A) Keep today's effective length.** `Rows` authored per act at `23 / 24 / 25 / 35`, which is what the
-  guarantee rows add up to today. The rework then changes *shape only* — same ~114-room run, same fight count,
-  same reward economy — and a playtest measures one variable. **Recommended**, and it is what the source
-  document's §55 asks for.
-- **(B) Take the authored `steps_before_boss`.** `9 / 12 / 17 / 17`. A 62-room run, much closer to genre norm
-  (Slay the Spire is ~50), and arguably the better game — but it is a balance pass wearing a generator's
-  clothes, and it needs the encounter/gold/reward tables revisited in the same breath.
-- **(C) A third set of numbers** the user authors now.
+`Rows` is authored explicitly per act at **23 / 24 / 25 / 35** — what the guarantee rows add up to today — so
+the rework changes *shape only*: the same ~114-room run, the same fight count, the same reward economy, and a
+playtest that measures one variable. Option (B) (`steps_before_boss`, a 62-room run) stays available later as a
+four-number edit plus a budget rescale; it is a balance pass and belongs in its own arc.
 
-This plan is written for **(A)**, with `Rows` as an explicit authored field per act so that (B) is later a
-four-number edit plus a budget rescale, not a rewrite. Whichever is chosen, `steps_before_boss` stops being
-load-bearing and should either be re-authored to the real number or deleted from the manifests.
-
----
+Consequence: `steps_before_boss` (9 / 12 / 17 / 17) has described nothing since the per-path table was authored
+(§1.1). It is **re-authored in the act manifests to the real numbers** in S12, so the field means what it says,
+and `MinimumFreeRows` / `FreeRows` go with it.
 
 ## 4. Target architecture
 
@@ -162,6 +156,41 @@ Seam: `RunAct.StrategicMapGeneration` / `RunBlueprint.StrategicMapGeneration` (n
 picks. `MapNodeRealizer` is reused verbatim — content realization does not change at all.
 
 ---
+
+## 4b. Both generators ship, and the player picks — DECIDED (user, 2026-09-11)
+
+> "ich würde außerdem den alten map generator noch drinbehalten und im hauptmenü bei einem neuen spielstart
+> einmal abfragen ob man den v.0.0.0 oder v0.0.1 map gen benutzen will"
+
+The legacy generator was already staying (§4). What is new is that the choice becomes **player-facing**: the
+title screen asks at "New run ▸" which map generator the run uses, and that answer is a property of the run for
+as long as it lives.
+
+**That last part is the whole difficulty, and it is not in the UI.** A BnB map is never saved — it is
+*regenerated* on resume, as a pure function of `(seed, startingLoadout)`, both of which the save carries
+(`RunSetup.BuildActPlan`, `RunSaveData.MapGenerationLoadout`, `RunPlayback.Resume`). A generator choice that
+lives only in the menu would therefore **change a running save's map on the next resume** — the player closes
+the game standing in front of an elite and comes back to a shop. So:
+
+- `RunSaveData` gains `public string? MapGenerator { get; init; }` — an `init` property with a default, exactly
+  like `MapGenerationLoadout`, so **every existing save keeps the legacy generator** with no migration.
+- `RunState` carries it beside `GeneratedMapLoadout` (`SetGeneratedMapGenerator`), and
+  `BuildActPlan` / `BuildRunMap` / `CreateInitialRun` take it as a parameter. Absent ⇒ rule-based.
+- `RunPlayback.Resume` passes the saved value. A resumed run rebuilds its own map, not the current default's.
+
+Naming, as the user set it: **v0.0.0** = the rule-based generator (guaranteed routes, what every run has used so
+far), **v0.0.1** = the strategic generator. Both labels appear in the dialog with one line of plain English
+each, because "v0.0.1" tells a playtester nothing about what they are choosing.
+
+Godot side (`bnb-godot`): "New run ▸" opens a small dialog in the existing overlay pattern (veil + dim +
+centered panel, the one `BugReportPanel` uses), two options, last pick preselected and remembered in the meta
+store, then `host.StartNewRun(seed, character, generator)`. The option only becomes selectable once S11 has
+landed — until then the dialog would offer a generator that cannot build a map.
+
+**And it joins the bug report.** `BugReport.Diagnostics` prints a `map` line already; it must now name the
+generator the run was started with. A report about a broken map is close to worthless without it, and from the
+moment two generators ship, every report is ambiguous until it says which one it is about. This is a two-line
+change in `bnb-godot/scripts/BugReport.cs` and it is not optional.
 
 ## 5. Step order
 
@@ -209,9 +238,13 @@ contrast. Reported, not repaired, so the seed reports can rank forks before anyt
 regeneration from `Hash(seed, attempt)`. C–F from the document are deferred; a diagnostic exception naming seed,
 attempt count, violated constraints, budget state, pressure range and worst fork replaces any silent degradation.
 
-**S11 — the document seam.** `StrategicMapGeneration` on `RunAct`/`RunBlueprint`, `RunSetup.Generate`,
-`RunJson` round-trip, `RunDocumentValidator` checks + export gate, `MapRulesTab.razor` authoring, and the
-strategic generator emitting `RunMap.Layout` (§2.4). `docs/godot-export-contract.md` updated.
+**S11 — the document seam + the run remembers its generator.** `StrategicMapGeneration` on
+`RunAct`/`RunBlueprint`, `RunSetup.Generate`, `RunJson` round-trip, `RunDocumentValidator` checks + export gate,
+`MapRulesTab.razor` authoring, and the strategic generator emitting `RunMap.Layout` (§2.4). Plus the whole
+persistence chain from §4b: `RunSaveData.MapGenerator`, `RunState`, `BuildActPlan`/`BuildRunMap`/
+`CreateInitialRun`, `RunPlayback.Resume`. `docs/godot-export-contract.md` updated.
+*Done when:* a save written under one generator resumes on that generator with a byte-identical map, a save
+written before this step resumes on v0.0.0, and the round trip is covered by a test.
 
 **S12 — BnB integration.** `ActRules` gains `Rows`, `RoomBudgets`, `DepthBands`, `Topology`, `PathPressure`,
 `ForkQuality` and loses `PerPathMinimums` / `PerPathMaximums`; `MapSpecBuilder` drops `FreeRows` and
@@ -226,7 +259,14 @@ regenerations, and a named outlier seed per category. CI fails on hard constrain
 exported for reading.
 
 **S14 — retire the BnB guarantee configuration** and rewrite `docs/bnb-act-map-specs.md`, which currently
-states the per-path promises as the design (see §7).
+states the per-path promises as the design (see §7). BnB keeps BOTH specs per act (§4b), so nothing here removes
+`MapGenerationSpec` or the rule-based generator — only BnB's dependence on per-path guarantees as the *default*.
+
+**S15 — the choice reaches the player** (`bnb-godot`). The "New run ▸" dialog, the remembered preference, the
+generator on the `StartNewRun` call, and the generator named in `BugReport.Diagnostics` (§4b). A `--smoke-*`
+probe that starts a run on each generator and reports act length + room counts, in the house style.
+*Done when:* both generators are startable from the title screen, a run resumed after a restart has the map it
+had before, and a bug report names its generator.
 
 ---
 
@@ -285,8 +325,10 @@ The differences a player can actually see:
   commitment rather than a one-room detour.
 - **No crossing lines.** Merges only happen between neighbours, and the generator writes the visual column into
   `RunMap.Layout`, so `MapView` draws what the generator guaranteed.
-- **The act is the same length and holds the same amount of everything** (under decision A). What changed is
-  *where*, and therefore *whether two routes differ*.
+- **The act is the same length and holds the same amount of everything** (§3). What changed is *where*, and
+  therefore *whether two routes differ*.
+- **And the old map is still there.** A run started on v0.0.0 is the act above; the two can be played back to
+  back from the same title screen and compared (§4b).
 - **Unchanged on purpose:** which concrete elite and which boss stand on the map is still decided at generation
   time (so the frontend can keep revealing them), boss relics are still random, Act V is still three gods back
   to back, treasure still flips to a mimic, and every fight still pays out.
