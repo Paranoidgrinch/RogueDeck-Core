@@ -10,19 +10,23 @@ namespace RogueDeck.Run;
 // Here the decision is a SCORE over the roles a room may legally hold, in the order the source document's
 // §16 asks for — the most constrained roles first, the flexible ones after:
 //
-//   Score(kind, room) = RouteWeight × ActBudgetNeed × LocalDiversity
+//   Score(kind, room) = RouteWeight × ActBudgetNeed × BandBudgetNeed × LocalDiversity
 //
 //   RouteWeight      what the act and this room's ROUTE want. The lane profile S5 bound to the strand wins
 //                    where it names the kind, the act's own table answers where it does not.
 //   ActBudgetNeed    100 % while the act is on pace for the role's target, more when it has fallen behind,
 //                    AtTargetNeedPercent once the target is reached (a target is not a ceiling).
+//   BandBudgetNeed   the same pace over the one DEPTH BAND this room sits in, and a flat 100 % where no band has
+//                    an opinion — so a spec with no bands scores exactly as it did before bands existed.
 //   LocalDiversity   a penalty for a role that already stands next door, and a bigger one for a role already
 //                    offered by the other side of the same fork.
 //
-// Eligibility is a HARD FILTER and never a multiplier: a role gated to a depth, a role at its ceiling, a role a
-// route's flavour forbids outright (an authored weight of 0) and a role banned from standing after itself are
-// not unlikely, they are absent. The draws come from the ROOMS stream (MapSeedStreams.Rooms), so retuning what
-// stands in a room cannot reshape an act or reflavour a route.
+// Eligibility is a HARD FILTER and never a multiplier: a role gated to a depth, a role at its ceiling — the act's
+// or its band's — a role a route's flavour forbids outright (an authored weight of 0) and a role banned from
+// standing after itself are not unlikely, they are absent. A band never relaxes a gate in the other direction
+// either (source document §14): a band that asks for a role the depth gates keep out of it asks for nothing, and
+// StrategicActSpecValidator says so before a seed is spent. The draws come from the ROOMS stream
+// (MapSeedStreams.Rooms), so retuning what stands in a room cannot reshape an act or reflavour a route.
 //
 // WHY THE TWO AUTHORED WEIGHT TABLES ARE NOT MULTIPLIED, which is what the source document's
 // `BaseActWeight × StrandAffinity` literally says: both are ABSOLUTE weight tables in this codebase, and a
@@ -83,11 +87,32 @@ public static class StrategicRoomAllocator
                 .ToList();
         }
 
+        // WHICH DEPTH BAND EACH ROOM SITS IN, once. Bands cannot overlap, so a room has at most one, and -1 means
+        // no band has an opinion about it — the common case, and the whole act when nothing is banded.
+        var bands = spec.DepthBands;
+        var bandOf = slots.ToDictionary(slot => slot.Id, slot => spec.BandIndexOf(slot.Row, rows));
+
         // How many rooms each role could stand in AT ALL, by its depth gate alone — the denominator the budget's
         // pace is measured against. A role allowed only in the act's last third is not "behind" in its first.
         var eligibleTotal = placeable.ToDictionary(kind => kind, kind => slots.Count(slot => DeepEnough(spec, kind, slot, rows)));
         var eligibleLeft = new Dictionary<MapNodeKind, int>(eligibleTotal);
         var placed = placeable.ToDictionary(kind => kind, _ => 0);
+
+        // The same three numbers per band. A band's denominator is its OWN rooms, which is what makes a band a
+        // statement about one slice of the act rather than a second way of writing the act's total.
+        var bandEligibleTotal = new List<Dictionary<MapNodeKind, int>>();
+        var bandEligibleLeft = new List<Dictionary<MapNodeKind, int>>();
+        var bandPlaced = new List<Dictionary<MapNodeKind, int>>();
+        for (var band = 0; band < bands.Count; band++)
+        {
+            var index = band;
+            var total = placeable.ToDictionary(kind => kind,
+                kind => slots.Count(slot => bandOf[slot.Id] == index && DeepEnough(spec, kind, slot, rows)));
+            bandEligibleTotal.Add(total);
+            bandEligibleLeft.Add(new Dictionary<MapNodeKind, int>(total));
+            bandPlaced.Add(placeable.ToDictionary(kind => kind, _ => 0));
+        }
+
         var shortfalls = new List<RoomShortfall>();
         var forced = new List<ForcedRoom>();
 
@@ -95,31 +120,59 @@ public static class StrategicRoomAllocator
         {
             kinds[slot.Id] = kind;
             placed[kind]++;
+            var band = bandOf[slot.Id];
+            if (band >= 0)
+                bandPlaced[band][kind]++;
             foreach (var other in placeable)
-                if (DeepEnough(spec, other, slot, rows))
-                    eligibleLeft[other]--;
+            {
+                if (!DeepEnough(spec, other, slot, rows))
+                    continue;
+                eligibleLeft[other]--;
+                if (band >= 0)
+                    bandEligibleLeft[band][other]--;
+            }
         }
 
         // PASS ONE — THE PROMISES. A budget minimum is placed before anything is drawn by weight, because a role
-        // that waits its turn competes for rooms a filler has already taken. The narrowest role goes first: the
-        // fewer rooms a role can legally stand in, the less freedom there is to give it later.
-        var promises = placeable
-            .Where(kind => (spec.BudgetOf(kind)?.Min ?? 0) > 0)
-            .OrderBy(kind => eligibleTotal[kind])
-            .ThenBy(kind => Priority(rules, kind))
-            .ThenBy(kind => (int)kind)
-            .ToList();
-
-        foreach (var kind in promises)
+        // that waits its turn competes for rooms a filler has already taken. A BAND's minimum is a promise of the
+        // same kind, and a narrower one — its rooms are a subset of the act's — so the ordering below puts it
+        // first by the same rule it puts a rare role first: the fewer rooms a promise may be kept in, the less
+        // freedom there is to keep it later. A band minimum also counts toward the act's own, which falls out of
+        // `placed` being one map: "at least two elites after the halfway mark" half-satisfies "at least four".
+        var promises = new List<(MapNodeKind Kind, int Band, int Wanted, int Pool)>();
+        foreach (var kind in placeable)
         {
-            var wanted = spec.BudgetOf(kind)!.Min;
-            while (placed[kind] < wanted)
+            for (var band = 0; band < bands.Count; band++)
+            {
+                var minimum = bands[band].BudgetOf(kind)?.Min ?? 0;
+                if (minimum > 0)
+                    promises.Add((kind, band, minimum, bandEligibleTotal[band][kind]));
+            }
+            var wanted = spec.BudgetOf(kind)?.Min ?? 0;
+            if (wanted > 0)
+                promises.Add((kind, -1, wanted, eligibleTotal[kind]));
+        }
+
+        int Kept(MapNodeKind kind, int band) => band < 0 ? placed[kind] : bandPlaced[band][kind];
+
+        foreach (var promise in promises
+            .OrderBy(promise => promise.Pool)
+            .ThenBy(promise => promise.Band < 0 ? 1 : 0)
+            .ThenBy(promise => promise.Band)
+            .ThenBy(promise => Priority(rules, promise.Kind))
+            .ThenBy(promise => (int)promise.Kind)
+            .ToList())
+        {
+            var (kind, band, wanted, _) = promise;
+            while (Kept(kind, band) < wanted)
             {
                 var choices = new List<(StrategicSlot Slot, int Weight)>();
                 foreach (var slot in slots)
                 {
                     if (kinds.ContainsKey(slot.Id)
-                        || !Legal(profiles, spec, kind, slot, rows, placed, kinds, neighbours, promise: true))
+                        || (band >= 0 && bandOf[slot.Id] != band)
+                        || !Legal(profiles, spec, kind, slot, rows, bandOf[slot.Id], placed, bandPlaced, kinds,
+                            neighbours, promise: true))
                         continue;
                     // The promise is not negotiable, but WHERE it is kept still follows the route's flavour and
                     // the local variety: a guaranteed elite lands on a route that wanted elites.
@@ -131,12 +184,14 @@ public static class StrategicRoomAllocator
 
                 if (choices.Count == 0)
                 {
+                    var pool = band < 0 ? slots : slots.Where(slot => bandOf[slot.Id] == band).ToList();
                     shortfalls.Add(new RoomShortfall
                     {
                         Kind = kind,
+                        Band = band < 0 ? null : bands[band],
                         Wanted = wanted,
-                        Placed = placed[kind],
-                        Reason = Why(spec, kind, slots, rows, kinds),
+                        Placed = Kept(kind, band),
+                        Reason = Why(spec, kind, pool, rows, kinds, band < 0 ? "this act" : $"the {bands[band].Label} band"),
                     });
                     break;
                 }
@@ -153,14 +208,21 @@ public static class StrategicRoomAllocator
             if (kinds.ContainsKey(slot.Id))
                 continue;
 
+            var band = bandOf[slot.Id];
             var candidates = new List<(MapNodeKind Kind, int Weight)>();
             foreach (var kind in placeable)
             {
-                if (!Legal(profiles, spec, kind, slot, rows, placed, kinds, neighbours, promise: false))
+                if (!Legal(profiles, spec, kind, slot, rows, band, placed, bandPlaced, kinds, neighbours,
+                        promise: false))
                     continue;
-                var weight = RouteWeight(profiles, spec, kind, slot)
+                // Long arithmetic and then back to int: the two need factors are percentages that a pathological
+                // MaxNeedPercent could multiply past an int, and a weight that silently wrapped would be a map
+                // that depends on the machine. A band need of 100 % cancels exactly, so an unbanded act's weights
+                // are bit-identical to what they were before this factor existed.
+                var weight = (int)((long)RouteWeight(profiles, spec, kind, slot)
                     * Need(spec, kind, placed, eligibleTotal, eligibleLeft)
-                    * Diversity(rules, kind, slot, kinds, neighbours, siblings) / 100;
+                    * BandNeed(spec, kind, band, bandPlaced, bandEligibleTotal, bandEligibleLeft) / 100
+                    * Diversity(rules, kind, slot, kinds, neighbours, siblings) / 100);
                 candidates.Add((kind, weight));
             }
 
@@ -180,7 +242,8 @@ public static class StrategicRoomAllocator
             }
 
             // NOTHING IS LEGAL. A room cannot be empty, so exactly one rule yields, cheapest first, and says so.
-            var (fallback, reason) = Yield(profiles, spec, slot, rows, placed, kinds, neighbours, placeable);
+            var (fallback, reason) = Yield(profiles, spec, slot, rows, band, placed, bandPlaced, kinds, neighbours,
+                placeable);
             forced.Add(new ForcedRoom { Room = slot.Id, Kind = fallback, Reason = reason });
             Fill(slot, fallback);
         }
@@ -206,6 +269,10 @@ public static class StrategicRoomAllocator
         foreach (var (kind, budget) in spec.RoomBudgets)
             if (budget.Min > 0 || budget.Target > 0)
                 placeable.Add(kind);
+        foreach (var band in spec.DepthBands)
+            foreach (var (kind, budget) in band.Budgets)
+                if (budget.Min > 0 || budget.Target > 0)
+                    placeable.Add(kind);
         placeable.Remove(MapNodeKind.Boss);
         placeable.Remove(MapNodeKind.Mimic);
         return placeable.OrderBy(kind => (int)kind).ToList();
@@ -239,17 +306,41 @@ public static class StrategicRoomAllocator
         var budget = spec.BudgetOf(kind);
         if (budget is null || budget.Target <= 0)
             return 100;
+        return Pace(spec.Rules, budget.Target - placed[kind], budget.Target, eligibleTotal[kind], eligibleLeft[kind]);
+    }
 
-        var wanted = budget.Target - placed[kind];
+    // THE SAME PACE, OVER ONE SLICE OF THE ACT. A band budget is a statement about WHERE a role sits rather than
+    // how much of it there is, so the factor is the same arithmetic on the band's own rooms — and exactly 100 %
+    // where no band has an opinion, which is what keeps an unbanded act scored as it was before bands existed.
+    private static int BandNeed(
+        StrategicRoomSpec spec,
+        MapNodeKind kind,
+        int band,
+        IReadOnlyList<Dictionary<MapNodeKind, int>> placed,
+        IReadOnlyList<Dictionary<MapNodeKind, int>> eligibleTotal,
+        IReadOnlyList<Dictionary<MapNodeKind, int>> eligibleLeft)
+    {
+        if (band < 0)
+            return 100;
+        var budget = spec.DepthBands[band].BudgetOf(kind);
+        if (budget is null || budget.Target <= 0)
+            return 100;
+        return Pace(spec.Rules, budget.Target - placed[band][kind], budget.Target,
+            eligibleTotal[band][kind], eligibleLeft[band][kind]);
+    }
+
+    // The pace itself, written once: the density a target asked for against the density still wanted. Shared by
+    // the act and its bands deliberately — two copies of this formula would let a band drift from the act it is a
+    // slice of, and "the act is behind on elites" and "this third of the act is" would stop being the same
+    // sentence at different scopes.
+    private static int Pace(StrategicRoomRules rules, int wanted, int target, int total, int left)
+    {
         if (wanted <= 0)
-            return spec.Rules.AtTargetNeedPercent;
-
-        var left = eligibleLeft[kind];
+            return rules.AtTargetNeedPercent;
         if (left <= 0)
-            return spec.Rules.MaxNeedPercent;
-
-        var need = 100L * wanted * eligibleTotal[kind] / ((long)left * budget.Target);
-        return (int)Math.Clamp(need, spec.Rules.AtTargetNeedPercent, spec.Rules.MaxNeedPercent);
+            return rules.MaxNeedPercent;
+        var need = 100L * wanted * total / ((long)left * target);
+        return (int)Math.Clamp(need, rules.AtTargetNeedPercent, rules.MaxNeedPercent);
     }
 
     // THE PENALTY FOR REPEATING, as a percentage. Two penalties, multiplied, and both measured only against
@@ -283,12 +374,14 @@ public static class StrategicRoomAllocator
         MapNodeKind kind,
         StrategicSlot slot,
         int rows,
+        int band,
         IReadOnlyDictionary<MapNodeKind, int> placed,
+        IReadOnlyList<Dictionary<MapNodeKind, int>> bandPlaced,
         IReadOnlyDictionary<NodeId, MapNodeKind> kinds,
         IReadOnlyDictionary<NodeId, List<NodeId>> neighbours,
         bool promise) =>
         DeepEnough(spec, kind, slot, rows)
-        && Below(spec, kind, placed)
+        && Below(spec, kind, band, placed, bandPlaced)
         && !Forbidden(spec, kind, slot, neighbours, kinds)
         // A MINIMUM IS PLACED ON THE STRENGTH OF BEING A MINIMUM, and a weight only decides WHERE. So a promise
         // asks the weaker question — did this route REFUSE the role — while a preference asks whether anyone
@@ -307,9 +400,17 @@ public static class StrategicRoomAllocator
     private static bool DeepEnough(StrategicRoomSpec spec, MapNodeKind kind, StrategicSlot slot, int rows) =>
         MapDepth.Percent(slot.Row, rows) >= spec.EarliestDepthOf(kind);
 
+    // UNDER BOTH CEILINGS — the act's and, where the room sits in one, its band's. A band ceiling is the half of a
+    // band that actually forbids something: "at most one shop this early" is a rule, while "two shops early" as a
+    // target is only a preference the weights may miss.
     private static bool Below(
-        StrategicRoomSpec spec, MapNodeKind kind, IReadOnlyDictionary<MapNodeKind, int> placed) =>
-        placed[kind] < (spec.BudgetOf(kind)?.Max ?? int.MaxValue);
+        StrategicRoomSpec spec,
+        MapNodeKind kind,
+        int band,
+        IReadOnlyDictionary<MapNodeKind, int> placed,
+        IReadOnlyList<Dictionary<MapNodeKind, int>> bandPlaced) =>
+        placed[kind] < (spec.BudgetOf(kind)?.Max ?? int.MaxValue)
+        && (band < 0 || bandPlaced[band][kind] < (spec.DepthBands[band].BudgetOf(kind)?.Max ?? int.MaxValue));
 
     private static bool Forbidden(
         StrategicRoomSpec spec,
@@ -328,7 +429,9 @@ public static class StrategicRoomAllocator
         StrategicRoomSpec spec,
         StrategicSlot slot,
         int rows,
+        int band,
         IReadOnlyDictionary<MapNodeKind, int> placed,
+        IReadOnlyList<Dictionary<MapNodeKind, int>> bandPlaced,
         IReadOnlyDictionary<NodeId, MapNodeKind> kinds,
         IReadOnlyDictionary<NodeId, List<NodeId>> neighbours,
         IReadOnlyList<MapNodeKind> placeable)
@@ -340,7 +443,16 @@ public static class StrategicRoomAllocator
                 && RouteWeight(profiles, spec, kind, slot) > 0)
             .ToList();
         if (ceilingOnly.Count > 0)
-            return (Strongest(profiles, spec, ceilingOnly, slot), "every role this room may hold is at its ceiling");
+        {
+            // Which ceiling, said out loud: a role still under the act's own total but full for this stretch of
+            // depth is a band's doing, and sending the author to the act's number would be sending them to the
+            // wrong one.
+            var banded = band >= 0
+                && ceilingOnly.Any(kind => placed[kind] < (spec.BudgetOf(kind)?.Max ?? int.MaxValue));
+            return (Strongest(profiles, spec, ceilingOnly, slot), banded
+                ? $"every role this room may hold is full for the {spec.DepthBands[band].Label} band"
+                : "every role this room may hold is at its ceiling");
+        }
 
         var banOnly = deep.Where(kind => RouteWeight(profiles, spec, kind, slot) > 0).ToList();
         if (banOnly.Count > 0)
@@ -374,15 +486,17 @@ public static class StrategicRoomAllocator
         MapNodeKind kind,
         IReadOnlyList<StrategicSlot> slots,
         int rows,
-        IReadOnlyDictionary<NodeId, MapNodeKind> kinds)
+        IReadOnlyDictionary<NodeId, MapNodeKind> kinds,
+        string where)
     {
         var deep = slots.Count(slot => DeepEnough(spec, kind, slot, rows));
         if (deep == 0)
-            return $"no room of this act is as deep as {spec.EarliestDepthOf(kind)} %";
+            return $"no room of {where} is as deep as {spec.EarliestDepthOf(kind)} %";
         var free = slots.Count(slot => !kinds.ContainsKey(slot.Id) && DeepEnough(spec, kind, slot, rows));
         if (free == 0)
-            return $"all {deep} room(s) deep enough for it were already taken";
-        return $"the {free} free room(s) deep enough for it are on routes that forbid it, or next to one of its own";
+            return $"all {deep} room(s) of {where} deep enough for it were already taken";
+        return $"the {free} free room(s) of {where} deep enough for it are on routes that forbid it, at a ceiling, "
+            + "or next to one of its own";
     }
 
     private static int Priority(StrategicRoomRules rules, MapNodeKind kind)
