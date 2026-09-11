@@ -1,0 +1,305 @@
+# The strategic map generator — implementation plan
+
+**Written 2026-09-11**, from a live audit of `RogueDeck-Core @6cccd2c` and `bnb-content @1e6fced` (both clean,
+both on `origin/main`), plus a measurement probe run against the REAL BnB act specs at four acts × three seeds.
+
+Source: the user's `BnB_Strategic_Map_Generator_Implementation_Plan.md`. That document's **diagnosis and target
+architecture are adopted whole**. This file is what the code says about it: the measured baseline, five places
+where the source document describes a repository that does not exist, the one decision only the user can make,
+and the step order to build it in.
+
+---
+
+## 1. What today's maps actually are (measured, not assumed)
+
+A throwaway probe generated every act's map from the real `ActMap.Spec` and dumped its shape. The numbers below
+are that output, not a reading of the code.
+
+| | Act I | Act II | Act III | Act IV | Act V |
+|---|---:|---:|---:|---:|---:|
+| authored `steps_before_boss` | 9 | 12 | 17 | 17 | 3 |
+| `spec.Rows` (the varied backbone) | **5** | **5** | **5** | **5** | 0 |
+| rows GENERATED (incl. boss) | 23–24 | 24 | 25–27 | 36–37 | 3 |
+| of those: **uniform** wide rows | **19–20** | **21** | **21–22** | **31** | — |
+| of those: genuinely varied rows | **3** | **2–3** | **3–4** | **4–5** | — |
+| nodes | 55–78 | 55–80 | 74–86 | 84–124 | 3 |
+
+Three facts follow from this, and all three are worse than the source document claims.
+
+**1.1 Every act has exactly five varied rows — by accident.** `MapSpecBuilder.FreeRows` is
+`Math.Max(MinimumFreeRows /*5*/, StepsBeforeBoss − PerPathMinimums.Sum())`. For every act the subtraction is
+negative (Act I: 9 − 19 = −10; Act IV: 17 − 31 = −14), so **the floor always wins**. `steps_before_boss` has not
+influenced a single BnB map since the per-path table was authored. The act's length is
+`4 + sum(per-path minimums)`, and nothing else.
+
+**1.2 Roughly 85 % of an act is rows where every column is the same room.** `WideGuaranteeRows = true` makes a
+guarantee row keep the map's width and fill *every column with that one kind*. Act I, seed 1, from row 7 down:
+
+```
+r7  R R     r11 M M     r15 C C     r19 T T
+r8  T T     r12 C ?     r16 $ $     r20 C C
+r9  C C     r13 E E     r17 C C     r21 ? ?
+r10 C C     r14 ? ?     r18 R R     r22 C C
+```
+
+The player's "choice" at row 7 is *rest, or rest*. The branching is decorative for sixteen consecutive rows.
+The per-path ranges say the same thing in numbers — Act I over all 162 routes:
+
+```
+Elite 1..1   MultiCombat 1..1   Rest 2..2   Shop 2..2   Treasure 2..3   Event 3..5   Combat 9..12
+```
+
+Four of seven room types are **identical on every single route**. This is the defect the rework exists to fix,
+and it is not "routes are nudged toward similar composition" — it is *routes are the same list of rooms in a
+slightly different order*.
+
+**1.3 The whole tail of an act has one width, drawn once.** `RuleBasedMapGenerator.WidthOf` gives a guarantee
+row `branches.Widths[Math.Min(row.BranchIndex, last)]`, and `BranchIndex` saturates at the last branch row — so
+every guarantee row past row 5 borrows the **same** width. Measured: `343333322222222222222221` (Act I seed 1),
+`432222222244444444444444444444444441` (Act IV seed 20260820). One dice roll decides whether two thirds of an
+act is two rooms wide or four. Topology-first generation removes this for free.
+
+---
+
+## 2. Where the source document and the repository disagree
+
+Adopt the source document except for these five points.
+
+**2.1 `Rows = StepsBeforeBoss` does not preserve act length — it halves the game.** The document states act
+lengths stay unchanged (§6 of its header, Phases 6 and 22) and derives that from removing the `FreeRows`
+subtraction. But guarantee rows are **added on top of** the five free rows, not subtracted from the authored
+number. Taking `steps_before_boss` literally:
+
+| | Act I | Act II | Act III | Act IV | Act V | **run** |
+|---|---:|---:|---:|---:|---:|---:|
+| rooms per route today | 24 | 24 | 26 | 37 | 3 | **~114** |
+| rooms per route at `steps_before_boss` | 10 | 13 | 18 | 18 | 3 | **~62** |
+
+That is not a map rework, it is a 45 % cut to run length, fight count, gold, card rewards and deck growth, and
+it would land in the same commit as the generator — making both unmeasurable. It also contradicts the document's
+own §55 ("the first BnB version should try to preserve the current overall content density while changing
+**where** that content appears"). §55 is the instruction that matches the intent; the header is a mistake about
+the baseline. **See §3 — this is the one open decision.**
+
+**2.2 The new spec has to survive serialization, export and the Studio — the document never mentions it.**
+`MapGenerationSpec` is not just a generator input: it round-trips through `RunJson`, hangs off
+`RunAct.MapGeneration` and `RunBlueprint.MapGeneration`, is checked by
+`RunDocumentValidator.CheckMapGeneration` + the export gate (`ValidateForExport` actually *generates* a map),
+rides inside `game.roguedeck.json` to Godot (`docs/godot-export-contract.md`), and is authored by
+`MapRulesTab.razor` (461 lines). A new spec type means work in all five. This is a real chunk of the project and
+the document prices it at zero.
+
+**2.3 The generator cannot be selected "by the caller".** The document's Phase 39 suggests the caller picks.
+The caller is `RunSetup.Generate`, which reads the generator choice out of the *document*. So the switch must be
+a document field: a nullable `StrategicMapGeneration` beside the existing `MapGeneration` on both `RunAct` and
+`RunBlueprint`. Present ⇒ strategic; absent ⇒ rule-based. Additive, so no `RunBlueprintSchema` ladder step is
+needed (old documents simply lack the property) — but the round-trip test must cover it.
+
+**2.4 Planarity has to reach the screen, and today it only does by luck.** `MapView.Layout` →
+`MapGraphLayout.Resolve` assigns a node's lane by **insertion order within its depth column**, not by its id.
+It matches the generator's columns only because the generator happens to add nodes left-to-right. A topology
+that *guarantees* no crossings should say so in the data: the strategic generator emits `RunMap.Layout` (the
+field already exists, for authored maps), and the frontends stop guessing. Cheap, and it is the only way the
+planarity work is visible to a player.
+
+**2.5 Two live dependencies on the retired fields.**
+- `MapSpecBuilder` sizes the treasure-event pool as `PerPathMaximums[Treasure] + 1`. Retiring per-path maxima
+  breaks that line; it must read the Treasure budget's `Max`.
+- Today a treasure **on a guarantee row never flips to a mimic** (it is the promise). With map-wide budgets that
+  special case disappears and *every* treasure becomes flippable — so the effective mimic rate roughly doubles
+  at an unchanged `TreasureMimicChancePercent`. Decide deliberately: either accept it and halve the percentages,
+  or keep a "one unflippable treasure per act" rule in the budget.
+
+Everything else in the source document survives contact with the code. Two claims worth confirming as correct:
+`MapConstraintValidator` really is an O(V+E) reverse-topological DP and generalizes to weighted scores as
+described; and the current wiring really can cross (`MapWiring.WireRows` may emit `i → mid+1` alongside
+`i+1 → mid`), so "no crossings" is a new guarantee, not a restatement.
+
+---
+
+## 3. ⚠ THE ONE OPEN DECISION — how long is an act?
+
+Every budget number in this plan scales off it, so it is settled before step 5.
+
+- **(A) Keep today's effective length.** `Rows` authored per act at `23 / 24 / 25 / 35`, which is what the
+  guarantee rows add up to today. The rework then changes *shape only* — same ~114-room run, same fight count,
+  same reward economy — and a playtest measures one variable. **Recommended**, and it is what the source
+  document's §55 asks for.
+- **(B) Take the authored `steps_before_boss`.** `9 / 12 / 17 / 17`. A 62-room run, much closer to genre norm
+  (Slay the Spire is ~50), and arguably the better game — but it is a balance pass wearing a generator's
+  clothes, and it needs the encounter/gold/reward tables revisited in the same breath.
+- **(C) A third set of numbers** the user authors now.
+
+This plan is written for **(A)**, with `Rows` as an explicit authored field per act so that (B) is later a
+four-number edit plus a budget rescale, not a rewrite. Whichever is chosen, `steps_before_boss` stops being
+load-bearing and should either be re-authored to the real number or deleted from the manifests.
+
+---
+
+## 4. Target architecture
+
+New files, all in `src/RogueDeck.Run/Map/`:
+
+```
+WeightedPathEvaluator.cs      min/max weighted path score (generalizes MapConstraintValidator's DP)
+MapSeedStreams.cs             named deterministic RNG streams from one run seed
+StrategicMapGenerationSpec.cs the new config record (+ RoomBudget, DepthBandBudget, StrategicTopologyRules,
+                              PathPressureRules, ForkQualityRules, RepairRules)
+StrategicTopology.cs          topology-only IR: rows, slots, edges, strand assignments
+StrategicTopologyGenerator.cs the CONTINUE/SPLIT/MERGE walk, strand identity, planarity, branch lifetime
+RoomAllocator.cs              scored role assignment against act + band budgets
+ChoiceSignature.cs            fork signatures + decision-horizon aggregation + contrast
+MapRepair.cs                  deterministic swap-first repair
+StrategicMapGenerator.cs      the pipeline + bounded attempts + diagnostic exception
+MapDiagnostics.cs             per-node/whole-map diagnostics + the ASCII dump
+```
+
+Untouched: `RuleBasedMapGenerator`, `MapGenerationSpec`, `MapConstraintValidator`, `MapWiring`,
+`EncounterSelector`, `MapNodeRealizer`, `LayeredMapGenerator`. The legacy generator keeps its golden output and
+its seed formulas exactly; it is the guarantee-oriented generator and stays supported.
+
+Seam: `RunAct.StrategicMapGeneration` / `RunBlueprint.StrategicMapGeneration` (nullable) → `RunSetup.Generate`
+picks. `MapNodeRealizer` is reused verbatim — content realization does not change at all.
+
+---
+
+## 5. Step order
+
+Each step is one commit or a short series, builds green, and is pushed before the next. Suites to keep green:
+Core / Scenario / Run / Sandbox, plus `bnb-content` 925.
+
+**S1 — the measurement tool first.** `MapDiagnostics` + the ASCII dump, wired to a test-only entry point, and a
+golden-seed test that pins the CURRENT generator's output for Acts I–IV. Nothing else can be trusted without
+this, and the probe written for §1 of this plan becomes permanent instead of thrown away.
+*Done when:* the dump reproduces the §1 tables and the golden test fails if legacy output shifts.
+
+**S2 — `WeightedPathEvaluator`.** `MinimumPathScore` / `MaximumPathScore` over
+`Func<NodeId, MapNodeKind, double>`, hand-built DAGs in the tests (the document's §40 examples). Re-express
+`MapConstraintValidator`'s existing min/max count DP on top of it so there is one implementation, with the old
+tests proving it unchanged. No behaviour change.
+
+**S3 — `MapSeedStreams`.** Named salts for Topology / Strands / Rooms / Repair / Content. The legacy generator's
+`seed * 31 + 7` formulas stay where they are — touching them changes its golden output.
+
+**S4 — topology.** The IR, the stateful width walk (CONTINUE / SPLIT / MERGE with weights 6/2/2), strand
+identity with split ancestry, `MinBranchLifeRows`, merges only between **adjacent** strands (planarity by
+construction), and a topology validator. No room kinds exist yet.
+*Done when:* 10 000 seeds × each supported row count: no cycle, full reachability, boss convergence, width in
+bounds, no crossing, no premature sibling reunion, identical per seed.
+
+**S5 — lane profiles bind to strands.** `StrandId → MapLaneProfile`, with the document's conservative split
+(child keeps the parent's profile, sibling takes a different one) and merge (older strand weighted higher,
+deterministic tie-break) inheritance. Lane weights themselves are **not** retuned here.
+
+**S6 — act-wide budgets + the allocator.** `RoomBudget{Target,Min,Max}`, the scored assignment
+(`BaseActWeight × StrandAffinity × ActBudgetNeed × LocalDiversity`), constrained-roles-first ordering, depth
+eligibility as a hard filter. Combat is the filler but never the universal repair target.
+
+**S7 — depth bands.** `DepthBandBudget` over normalized depth, existing `RoleMinimumDepthPercent` /
+`NodeRefMinimumDepthPercent` / `EncounterMinimumDepthPercent` stay authoritative, and a spec validator that
+catches impossible band/eligibility combinations *before* generation.
+
+**S8 — PathPressure.** Role weights through `WeightedPathEvaluator`; `Minimum` is a hard constraint, `Maximum`
+is a diagnostic at first. This is what replaces `MinEnemiesPerPath` and the per-path role minima.
+
+**S9 — fork quality, measurement only.** `ChoiceSignature`, decision horizon (default 3 rows), pairwise
+contrast. Reported, not repaired, so the seed reports can rank forks before anything acts on the ranking.
+
+**S10 — repair.** Swap-first (Repair A), single reassignment second (B), bounded passes, then deterministic full
+regeneration from `Hash(seed, attempt)`. C–F from the document are deferred; a diagnostic exception naming seed,
+attempt count, violated constraints, budget state, pressure range and worst fork replaces any silent degradation.
+
+**S11 — the document seam.** `StrategicMapGeneration` on `RunAct`/`RunBlueprint`, `RunSetup.Generate`,
+`RunJson` round-trip, `RunDocumentValidator` checks + export gate, `MapRulesTab.razor` authoring, and the
+strategic generator emitting `RunMap.Layout` (§2.4). `docs/godot-export-contract.md` updated.
+
+**S12 — BnB integration.** `ActRules` gains `Rows`, `RoomBudgets`, `DepthBands`, `Topology`, `PathPressure`,
+`ForkQuality` and loses `PerPathMinimums` / `PerPathMaximums`; `MapSpecBuilder` drops `FreeRows` and
+`MinimumFreeRows`, builds the strategic spec, and reads the treasure-pool size from the Treasure budget (§2.5).
+Acts I–IV switch over; Act V keeps `BuildGauntlet` untouched. BnB tests move from per-path counts to intent:
+act length, boss last, 2–4 wide, budgets in range, depth gates held, every route meets minimum pressure, all
+content resolvable. `ActSeamTests` (16 references to the retired fields) is the largest rewrite.
+
+**S13 — the statistical report.** Per act over 1 000–10 000 seeds: invalid maps, node/fork/merge/branch-life
+averages, fork contrast min/mean/max, pressure min/mean/max, per-role count ranges, repair operations, full
+regenerations, and a named outlier seed per category. CI fails on hard constraints only; quality metrics are
+exported for reading.
+
+**S14 — retire the BnB guarantee configuration** and rewrite `docs/bnb-act-map-specs.md`, which currently
+states the per-path promises as the design (see §7).
+
+---
+
+## 6. Starting numbers for BnB (Act I, worked through)
+
+Derived from the measured totals in §1 for a 23-row act (≈ 66 nodes at width 2–4), not from multiplying the old
+per-path minimums — paths share nodes, so that multiplication is meaningless.
+
+```
+RoomBudgets (map-wide)        Target  Min  Max      PathPressure (role weights)
+  Elite                          5     3    8         Combat       1.0
+  Shop                           5     4    7         MultiCombat  1.5
+  Rest                           6     4    9         Elite        2.5
+  Treasure                       6     4    9         everything else 0
+  Event                         11     8   15
+  MultiCombat                    4     2    7       Minimum 11   (today's worst route = 13)
+  Combat                    the filler (~29)        Maximum 20   (today's richest  = 16)
+```
+
+Acts II–IV scale the same way off their own measured totals. Topology: `ContinueWeight 6`, `SplitWeight 2`,
+`MergeWeight 2`, `MinBranchLifeRows 3`, `DecisionHorizonRows 3`. Four depth bands at 25 % each. All of it is
+tuning, and all of it is expected to move after the first playtest — which is why S13 exists.
+
+---
+
+## 7. What the map looks like afterwards
+
+Act I, same 23 rows, but every row is now drawn on its own and the strands carry the flavour. A plausible
+generated act:
+
+```
+                  A:C     B:?     C:C                 A/B/C/D = strand      C combat   M multi
+                   |      / \      |                                        E elite    ? event
+                  A:C   B:$ D:C   C:R                  A = "the long queue" R rest     $ shop
+                   |     |   |    / \                  B = "errands"        T treasure
+                  A:M   B:? D:C  C:T C:C               C = "the quiet        B boss
+                   \     /    \    |  /                     corridor"
+                    A:E       D:C  C:?
+                     |         \    /
+                    A:C         D:$
+                     ...         ...
+                        \       /
+                          r22:B
+```
+
+The differences a player can actually see:
+
+- **A route can lack a room type entirely.** Strand A through the long queue may hold three elites and no shop;
+  strand C through the quiet corridor may hold two rests, two treasures and one elite. Today both hold exactly
+  one elite, two rests and two shops.
+- **A fork is a real question.** Left is an elite two rows deep and a treasure behind it; right is a shop and a
+  campfire. Today a fork is "rest or rest".
+- **The act breathes.** Width walks 2 → 3 → 4 → 3 → 2 in coherent stretches of splits and merges instead of
+  jumping per row and then freezing for twenty rows at whatever the fifth row rolled.
+- **Branches live long enough to matter.** A split cannot re-merge for three rows, so choosing a side is a
+  commitment rather than a one-room detour.
+- **No crossing lines.** Merges only happen between neighbours, and the generator writes the visual column into
+  `RunMap.Layout`, so `MapView` draws what the generator guaranteed.
+- **The act is the same length and holds the same amount of everything** (under decision A). What changed is
+  *where*, and therefore *whether two routes differ*.
+- **Unchanged on purpose:** which concrete elite and which boss stand on the map is still decided at generation
+  time (so the frontend can keep revealing them), boss relics are still random, Act V is still three gods back
+  to back, treasure still flips to a mimic, and every fight still pays out.
+
+`docs/bnb-act-map-specs.md` stops being true the moment S12 lands: its per-path table is the thing being
+retired. It gets rewritten in the same step to state map-wide budgets and minimum path pressure, with a note
+that the per-path era ran until 2026-09-11 and why it ended.
+
+---
+
+## 8. Out of scope (from the source document's §54, confirmed)
+
+Act-length rebalance beyond the one decision in §3 · boss relic selection · Act V · map artwork · a Godot map
+redesign · meta progression · encounter, card or relic balance · encounter-threat-driven pressure · blended
+continuous lane-affinity vectors · map mutation from events or relics · player-visible route scoring ·
+`LayeredMapGenerator` · and the legacy generator's own features, which stay in the engine.
