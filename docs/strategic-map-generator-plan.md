@@ -197,10 +197,19 @@ change in `bnb-godot/scripts/BugReport.cs` and it is not optional.
 Each step is one commit or a short series, builds green, and is pushed before the next. Suites to keep green:
 Core / Scenario / Run / Sandbox, plus `bnb-content` 925.
 
-**S1 — the measurement tool first.** `MapDiagnostics` + the ASCII dump, wired to a test-only entry point, and a
-golden-seed test that pins the CURRENT generator's output for Acts I–IV. Nothing else can be trusted without
-this, and the probe written for §1 of this plan becomes permanent instead of thrown away.
-*Done when:* the dump reproduces the §1 tables and the golden test fails if legacy output shifts.
+**S1 — the measurement tool first.** ✔ **DONE 2026-09-11** — Core `fe60be0` + `6dc06f0`, bnb-content (golden).
+`MapDiagnostics.Of(GeneratedMap)` measures rows, widths, nodes, edges, entries, forks, merges, room totals, the
+per-route spread per role (via the existing O(V+E) DP — never by walking routes), and two numbers nothing
+measured before: **uniform rows** and **crossing edges**. `MapDepth.Percent` is now the single depth formula the
+generator and the diagnostics share. `Render()` is the summary + grid, `Detail()` one line per room with the
+fight or door it drew. `bnb-content/Tests/MapGoldenTests.cs` pins v0.0.0's **topology and roles** for Acts I–V ×
+3 seeds in `Tests/Golden/map-v0.0.0.txt` (551 lines) — deliberately *not* encounter ids, which would rewrite the
+file every time an act gains content; re-bless with `UPDATE_MAP_GOLDEN=1`, and a failure drops an
+`.actual.txt` beside it to diff. `Tests/MapDumpProbe.cs` prints any act/seed on demand
+(`MAP_DUMP_ACT=4 MAP_DUMP_SEED=99 dotnet test --filter MapDumpProbe --logger "console;verbosity=detailed"`).
+*Proved:* the dump reproduces §1's tables exactly, and the golden passed un-reblessed across `6dc06f0` — the
+first refactor it was asked to vouch for. **New fact it turned up:** v0.0.0 emits crossing edges —
+**30 crossing pairs in 1 155 edges** across the fifteen sampled maps, which confirms §2's claim with numbers.
 
 **S2 — `WeightedPathEvaluator`.** `MinimumPathScore` / `MaximumPathScore` over
 `Func<NodeId, MapNodeKind, double>`, hand-built DAGs in the tests (the document's §40 examples). Re-express
