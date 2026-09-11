@@ -292,9 +292,51 @@ actually changed the survivor's character (1 001 of 2 000 at Act I length, 1 301
 A 4-row act has none at all — `MinBranchLifeRows` forbids every split after row 0, so such an act is parallel
 corridors that only the boss joins.
 
-**S6 — act-wide budgets + the allocator.** `RoomBudget{Target,Min,Max}`, the scored assignment
-(`BaseActWeight × StrandAffinity × ActBudgetNeed × LocalDiversity`), constrained-roles-first ordering, depth
-eligibility as a hard filter. Combat is the filler but never the universal repair target.
+**S6 — act-wide budgets + the allocator.** ✔ **DONE 2026-09-11** — Core `1375b0f`. `StrategicRoomPlan`
+(`RoomBudget{Target,Min,Max}`, `StrategicRoomRules`, `StrategicRoomSpec`, `RoomShortfall`, `ForcedRoom`) and
+`StrategicRoomAllocator`, with 36 tests. **A budget is a map-wide count, and that is a different sentence from a
+per-path minimum** — deliberately so: "every route holds two elites" can only be kept by a row every route
+crosses, which is what the gate funnels are and what they cost the act's shape. "The act holds eight elites, at
+least six, at most ten" needs nothing inserted, so the topology stays the one the walk drew and what a single
+route holds becomes S8's *measurement* instead of a manufactured promise.
+**The score** over the roles a room may legally hold is `RouteWeight × ActBudgetNeed × LocalDiversity`.
+`RouteWeight` reads the lane profile S5 bound to the strand: **the lane wins where it names a kind, the act's own
+`KindWeights` answers where the lane is silent, and an authored 0 means "never on this route"** — a sentence a
+lane could not say while a lane was a column. `ActBudgetNeed` is the act's PACE, not its count: the density the
+budget asked for (`Target / eligible rooms`) against the density still wanted, so on schedule scores exactly like
+no budget at all (100 %), behind scores higher, and at target it drops to `AtTargetNeedPercent` — a target is not
+a ceiling. `LocalDiversity` penalizes a role already standing next door (25 %) and penalizes the other side of
+the same fork harder (40 %), because a choice between two shops is not a choice and is invisible in every count
+of what an act holds. Combat repeats freely (it is the act's rhythm; penalizing it would push every other role
+upward everywhere and quietly override the authored weights).
+**Why the document's two weight tables are not multiplied.** §15's `BaseActWeight × StrandAffinity` reads
+literally as a product, but both are ABSOLUTE tables in this codebase, and a product squares the author's intent:
+a role the act weights 7 and the lane weights 7 would be 49× one both merely allow at 1, a ratio nobody wrote
+down. A lane here says what is DIFFERENT about a route, so it overrides per kind and is silent about the rest.
+**Eligibility is a hard filter, never a multiplier**: depth gate, ceiling, the route's refusal, and the ban on a
+shop or a rest after itself. Minimums are placed **first**, narrowest role first (fewest legal rooms), before
+anything is drawn by weight — and a minimum is placed *on the strength of being a minimum*: silence in every
+weight table is not a refusal, so "at least two workbenches" works without also authoring a weight, while an
+authored 0 still refuses. **Combat is the filler but never the repair target:** a room with nothing legal left
+goes to what its ROUTE wants most, which on an errand lane is a shop.
+**Nothing throws over an act it cannot satisfy.** An unkept minimum is a `RoomShortfall` (with the reason that
+actually blocked it) and a room with no legal role is a `ForcedRoom` naming the rule that yielded — cheapest
+first: a ceiling, then a no-repeat ban, then the route's flavour, then the depth gate last. Same reasoning as
+`StrategicTopology.Crossings`: an allocator that throws cannot report WHICH promise failed, which is the only
+useful thing to say. `plan.Honoured` is the single bit S7's validator, S10's repair and S13's report start from.
+*Proved:* **22 000 acts** — every BnB length × 2 000, four budget sets × 1 000, four depth-gate sets × 1 000,
+four rule extremes × 1 000 — on one invariant: **every room holds a role, and every rule that did not hold named
+itself** (a gate that yielded, a ceiling overshot, a minimum unkept, two shops adjacent — each has to appear in
+`Forced` or `Shortfalls`). Run suite **714** green (+36), `dotnet format` 0; the v0.0.0 golden untouched (two new
+files, nothing tracked modified).
+**The lane effect, as a number for S13** (2 000 Act III acts, rooms grouped by the flavour their route carries):
+gauntlet **62 %** combat · wilds 38 % · hoard 41 % · errands **23 %**; shops 0 % on the gauntlet (an authored
+refusal) against **13.5 %** on the errand routes; treasure 16.7 % on the hoard against 3.5 % on the gauntlet.
+Under `column % LaneProfiles.Count` this table could not be produced at all. And with `AtTargetNeedPercent = 0`
+plus `MaxNeedPercent = 100` the act lands on its targets almost exactly (Elite 6.98 against a target of 7), which
+is the knob for an act that should hit its numbers rather than breathe around them.
+**Open for S12's tuning pass, not a defect:** the BnB budget numbers themselves. The document (§13) explicitly
+warns against deriving them by multiplying the old per-path minimums, and the numbers used above are test specs.
 
 **S7 — depth bands.** `DepthBandBudget` over normalized depth, existing `RoleMinimumDepthPercent` /
 `NodeRefMinimumDepthPercent` / `EncounterMinimumDepthPercent` stay authoritative, and a spec validator that
