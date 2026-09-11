@@ -233,11 +233,32 @@ independent implementations and agreed to the digit, so altering the mixing fail
 invalidating every recorded seed and both golden files. 7 tests; Core 1469/755/**610**/373 green; the v0.0.0
 golden unaffected, as nothing in the legacy path was touched.
 
-**S4 — topology.** The IR, the stateful width walk (CONTINUE / SPLIT / MERGE with weights 6/2/2), strand
-identity with split ancestry, `MinBranchLifeRows`, merges only between **adjacent** strands (planarity by
-construction), and a topology validator. No room kinds exist yet.
-*Done when:* 10 000 seeds × each supported row count: no cycle, full reachability, boss convergence, width in
-bounds, no crossing, no premature sibling reunion, identical per seed.
+**S4 — topology.** ✔ **DONE 2026-09-11** — Core `a38f7f1`. `StrategicTopology` (the IR: rows, slots, edges,
+strands), `StrategicTopologyGenerator` (the walk) and `StrategicTopologyValidator`, with 36 tests. A row is an
+OPERATION on the live routes, not a width: CONTINUE, SPLIT (child inserted beside its parent) or MERGE
+(neighbours only), weights 6/2/2, and the edges are what the operation means rather than a repair fitted to two
+mismatched widths. Strand identity survives continues, sideways shifts and convergences (the **older** strand
+keeps its name, leftmost on a tie — which lane PROFILE a merged strand carries is S5's question, deliberately
+not settled here). `MinBranchLifeRows = 3` is enforced twice over: a merge needs both strands old enough, and no
+split happens in the act's last three rows, so the boss's own convergence cannot cut a branch short either.
+*Proved:* 10 000 seeds × act lengths 4/5/12/23/24/25/35, plus 1 000 each over five width configurations
+(1..2 through 2..6), four branch lifetimes (0/1/5/9) and the short acts — **80 000 acts in ten seconds**, zero
+validator problems, **zero crossings**, shortest absorbed branch exactly 3 rows. Cheap enough to stay a
+permanent gate rather than a claim in a document.
+**Measured shape** (10 000 seeds each, BnB widths 2..4): Act I-length acts average **2.7 forks · 4.0 merges ·
+5.7 strands**, Act IV-length **4.5 · 5.8 · 7.5**. That is far fewer forks than v0.0.0's twelve — and the point:
+v0.0.0's twelve are forks between identical rooms, these are the only places a route can differ. Raising
+`SplitWeight` moves it little, because every split above `MaxWidth` must be paid for by a merge; the real knob is
+`MaxWidth`. Carried into S13's report as a tuning question, not settled here.
+**One real defect the sweep found:** an act too short for a branch to live its minimum cannot honour both
+promises, because the act's OPENING WIDTH is already a set of branches and the boss absorbs them after
+`rows − bossRooms` rows. A 2- or 3-row act at width ≥ 2 with a 3-row branch minimum is now **refused by name**
+instead of quietly bent. (A gauntlet act — nothing but boss rooms — has no branches and stays legal, as does a
+minimum width of 1.) S7 generalizes this into the spec validator.
+**`Rows` means the WHOLE act here, boss rooms included** — deliberately unlike the rule-based
+`MapGenerationSpec.Rows`, which counts only the backbone and then grows by however many gates it needs. §12's
+"act length is a structural invariant" is only true if the authored number is the number a route walks, so S12
+authors 23/24/25/35 as totals.
 
 **S5 — lane profiles bind to strands.** `StrandId → MapLaneProfile`, with the document's conservative split
 (child keeps the parent's profile, sibling takes a different one) and merge (older strand weighted higher,
