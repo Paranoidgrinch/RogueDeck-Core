@@ -7,11 +7,14 @@ namespace RogueDeck.Sandbox.Composition;
 // depth (longest path from an entry/root), row = order among same-depth nodes. Pure + UI-free so it is testable.
 public static class MapGraphLayout
 {
-    public const int CellWidth = 170;
-    public const int CellHeight = 84;
+    // The grid itself is the engine's (MapLayout), not this file's: a generator that places its own rooms has
+    // to write them on the same lattice this reads them off, and two copies of the number is how that stops
+    // being true. What stays here is what only a DRAWING needs — how big a node's box is.
+    public const int CellWidth = MapLayout.CellWidth;
+    public const int CellHeight = MapLayout.CellHeight;
     public const int NodeWidth = 130;
     public const int NodeHeight = 46;
-    private const int Margin = 12;
+    private const int Margin = MapLayout.Margin;
 
     // Top-left (X, Y) per node id.
     public static IReadOnlyDictionary<NodeId, (int X, int Y)> Resolve(RunMap map)
@@ -31,7 +34,7 @@ public static class MapGraphLayout
             var column = depth.GetValueOrDefault(node.Id);
             var row = rowCursor.GetValueOrDefault(column);
             rowCursor[column] = row + 1;
-            result[node.Id] = (column * CellWidth + Margin, row * CellHeight + Margin);
+            result[node.Id] = MapLayout.Cell(column, row);
         }
         return result;
     }

@@ -68,7 +68,11 @@ public static class StrategicMapRealizer
                 var realized = realize(kind, new MapCoord(row.Index, slot.Column), encounter, nodeRef);
 
                 builder.AddNode(slot.Id, realized.Type, realized.Payload, realized.Tags);
-                builder.Position(slot.Id, slot.Column, row.Index);
+                // WHERE THE ROOM IS DRAWN, in the units RunMap.Layout is read in: depth along X, lane along Y,
+                // one cell apart (MapLayout). Writing the bare indices here put every room of every act on one
+                // drawing cell — the generator's whole no-crossings guarantee arrived as a heap.
+                var (x, y) = MapLayout.Cell(depth: row.Index, lane: slot.Column);
+                builder.Position(slot.Id, x, y);
                 roles[slot.Id] = kind;
             }
 
