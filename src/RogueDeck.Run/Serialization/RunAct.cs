@@ -9,6 +9,13 @@ namespace RogueDeck.Run;
 // spec are still different maps); `Map` is an authored one. Exactly one of the two should be set — an act with
 // neither falls back to the blueprint's own map, which is what makes a one-act blueprint expressible as an
 // empty act list.
+//
+// `StrategicMapGeneration` is the SHAPE half of the second generator (map rework S11): rows, widths, lane
+// profiles, act-wide budgets, path pressure, fork quality. It sits BESIDE `MapGeneration` rather than replacing
+// it, because the two generators both ship and the player picks (plan §4b) — and because the content half of
+// `MapGeneration` (the encounter pools, the node refs, the balance targets) is what either generator realizes
+// its rooms from. An act with only a strategic spec cannot be built by the strategic generator: it would have
+// rooms and nothing to put in them.
 public sealed record RunAct(
     string Id,
     [property: System.Text.Json.Serialization.JsonIgnore(
@@ -19,7 +26,10 @@ public sealed record RunAct(
     RunMap? Map = null,
     [property: System.Text.Json.Serialization.JsonIgnore(
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
-    string? NameKey = null);
+    string? NameKey = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    StrategicActSpec? StrategicMapGeneration = null);
 
 // One act as the live run holds it: its id and the map that was built for it. The whole plan is laid out when
 // the run starts, so the acts are as seed-deterministic as the first one and a resumed run rebuilds all of

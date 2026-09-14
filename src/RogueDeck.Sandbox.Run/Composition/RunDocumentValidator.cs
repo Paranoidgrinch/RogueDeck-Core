@@ -206,6 +206,17 @@ public static class RunDocumentValidator
             if (act.MapGeneration is { } actSpec)
                 CheckMapGeneration(problems, actSpec, encounterIds, blueprint, $"act '{act.Id}' — ");
 
+        // THE SECOND GENERATOR'S RULES (map rework S11). Only the things no seed could satisfy are reported — a
+        // spec the validator calls TIGHT produces acts, just not always the ones it hoped for, and refusing to
+        // ship a game over that would be the validator making a design decision.
+        if (blueprint.StrategicMapGeneration is { } strategic)
+            CheckStrategicMapGeneration(problems, strategic, blueprint.MapGeneration is not null);
+        foreach (var act in blueprint.Acts ?? [])
+            if (act.StrategicMapGeneration is { } actStrategic)
+                CheckStrategicMapGeneration(
+                    problems, actStrategic,
+                    (act.MapGeneration ?? blueprint.MapGeneration) is not null, $"act '{act.Id}' — ");
+
         // Sanity: a run with no map has nothing to play — unless the map is generated per run (then the authored
         // Map is legitimately empty and MapGeneration provides the nodes), or the acts each bring their own.
         if (blueprint.Map.Nodes.Count == 0 && blueprint.MapGeneration is null && !ActsProvideMaps(blueprint))
@@ -275,6 +286,12 @@ public static class RunDocumentValidator
                 var loadout = new BalanceCalculator(blueprint.Balance, blueprint.Encounters)
                     .LoadoutStrength(blueprint.ResolveStart(null), blueprint.Deck);
                 _ = blueprint.BuildActPlan(1, loadout);
+
+                // AND ON THE OTHER GENERATOR, where the game offers one. A player who picks it at "New run"
+                // must not be the one who discovers that act four cannot be laid out under its rules.
+                if (blueprint.StrategicMapGeneration is not null
+                    || (blueprint.Acts ?? []).Any(act => act.StrategicMapGeneration is not null))
+                    _ = blueprint.BuildActPlan(1, loadout, MapGenerators.Strategic);
             }
             catch (Exception ex)
             {
@@ -295,6 +312,22 @@ public static class RunDocumentValidator
         foreach (var id in keys)
             if (!knownIds.Contains(id))
                 problems.Add($"{BalanceTab}: strength/threat value for {kind} '{id}' points at nothing — no such {kind} is defined.");
+    }
+
+    // THE STRATEGIC GENERATOR'S SHAPE RULES. Two things can be wrong before a seed is spent: the act asks for
+    // something no seed can give (S7's validator says which, in sentences an author can act on), or it has no
+    // content rules beside it — a strategic spec says how many rooms of each kind and where, and nothing at all
+    // about which fight stands in one. The second generator draws the shape; MapGenerationSpec still furnishes it.
+    private static void CheckStrategicMapGeneration(
+        List<string> problems, StrategicActSpec spec, bool hasContentRules, string scope = "")
+    {
+        if (!hasContentRules)
+            problems.Add(
+                $"{MapRulesTab}: {scope}there are strategic map rules but no map generation rules beside them, so "
+                + "the act would have rooms and nothing to put in them.");
+
+        foreach (var problem in StrategicActSpecValidator.Validate(spec).Of(StrategicSpecSeverity.Impossible))
+            problems.Add($"{MapRulesTab}: {scope}{problem.Subject}: {problem.Message}");
     }
 
     // Pre-flight for procedural generation: the shape is valid and every role that CAN appear on the map (Combat +

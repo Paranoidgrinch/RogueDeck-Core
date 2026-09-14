@@ -77,4 +77,31 @@ public class MapGenerationTabRenderTests
         Assert.Contains("Difficulty band", html);
         Assert.Contains("branch row", html); // the shape summary for the default spec
     }
+
+    // The second generator is authored on the same tab (map rework S11) — off by default, and every section of
+    // it present once it is on, including the "can this act be built" report the author tunes against.
+    [Fact]
+    public async Task Map_rules_tab_renders_the_second_generator_when_it_is_authored()
+    {
+        var off = await Render<MapRulesTab>(Blueprint());
+        Assert.Contains("Second generator", off);
+        Assert.DoesNotContain("Route flavours", off);
+
+        var on = await Render<MapRulesTab>(Blueprint() with
+        {
+            StrategicMapGeneration = new StrategicActSpec
+            {
+                Rows = 12,
+                LaneProfiles = [new("the way through", new Dictionary<MapNodeKind, int> { [MapNodeKind.Combat] = 7 })],
+                PathPressure = new PathPressureRules { Minimum = 90 },
+            },
+        });
+
+        Assert.Contains("Route flavours", on);
+        Assert.Contains("Room budgets", on);
+        Assert.Contains("Depth bands", on);
+        Assert.Contains("Path pressure", on);
+        Assert.Contains("Can this act be built?", on);
+        Assert.Contains("pressure ≥ 90", on); // the spec report, rendered against the authored numbers
+    }
 }

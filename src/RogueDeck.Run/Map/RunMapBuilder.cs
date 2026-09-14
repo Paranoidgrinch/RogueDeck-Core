@@ -9,6 +9,7 @@ public sealed class RunMapBuilder
     private readonly List<MapEdge> _edges = new();
     private readonly List<NodeId> _entries = new();
     private readonly HashSet<string> _ids = new(StringComparer.Ordinal);
+    private readonly List<NodeLayout> _layout = new();
 
     public RunMapBuilder AddNode(Node node)
     {
@@ -38,8 +39,21 @@ public sealed class RunMapBuilder
 
     public RunMapBuilder Entry(string id) => Entry(new NodeId(id));
 
+    // WHERE A NODE IS DRAWN, when the generator knows. A layered generator that guarantees its edges do not cross
+    // (the strategic one does, by construction) has to say in which order its rooms stand, or the frontends will
+    // lay the row out in insertion order and draw crossings the graph does not have.
+    public RunMapBuilder Position(NodeId id, int x, int y)
+    {
+        _layout.Add(new NodeLayout(id, x, y));
+        return this;
+    }
+
     public bool HasNode(NodeId id) => _ids.Contains(id.Value);
 
-    public RunMap Build() =>
-        new(_nodes.ToList()) { Edges = _edges.ToList(), EntryNodeIds = _entries.ToList() };
+    public RunMap Build() => new(_nodes.ToList())
+    {
+        Edges = _edges.ToList(),
+        EntryNodeIds = _entries.ToList(),
+        Layout = _layout.ToList(),
+    };
 }

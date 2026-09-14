@@ -75,6 +75,13 @@ public sealed record RunSaveData(
     // An init property with a default, so older saves and authored-map runs load unchanged.
     public int? MapGenerationLoadout { get; init; }
 
+    // Which map generator the run was STARTED on (map rework S11, plan §4b). The map is regenerated from the seed
+    // on every resume rather than stored, so without this a save written on one generator would come back on
+    // whichever one the menu happens to offer now — the player closes the game in front of an elite and returns
+    // to a shop. An init property with a default, so every save written before this step loads as what it was:
+    // null ⇒ MapGenerators.RuleBased, no migration anywhere.
+    public string? MapGenerator { get; init; }
+
     // The next-combat openings still waiting for a fight — what an event promised about "your next combat"
     // before the player walked out of the room. Null (the default) when nothing is pending, so a save taken
     // without one round-trips byte-identically.

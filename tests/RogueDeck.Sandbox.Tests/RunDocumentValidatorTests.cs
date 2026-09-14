@@ -551,4 +551,57 @@ public class RunDocumentValidatorTests
         Assert.Empty(RunDocumentValidator.ValidateForExport(bp));
         Assert.DoesNotContain(RunDocumentValidator.Validate(bp), p => p.Contains("the map is empty"));
     }
+
+    // ————— the second generator's rules (map rework S11) —————
+
+    private static StrategicActSpec Strategic() => new()
+    {
+        Rows = 8,
+        LaneProfiles = [new("plain", new Dictionary<MapNodeKind, int> { [MapNodeKind.Combat] = 1 })],
+        Rooms = new StrategicRoomSpec
+        {
+            KindWeights = new Dictionary<MapNodeKind, int> { [MapNodeKind.Combat] = 1 },
+        },
+    };
+
+    [Fact]
+    public void A_document_that_authors_both_generators_is_clean()
+    {
+        var problems = RunDocumentValidator.Validate(Generated() with { StrategicMapGeneration = Strategic() });
+        Assert.DoesNotContain(problems, p => p.StartsWith("Map Rules:", StringComparison.Ordinal));
+    }
+
+    // A strategic spec says how many rooms of each kind and where; it says nothing about which fight stands in
+    // one. Without the content rules beside it, the act would have rooms and nothing to put in them.
+    [Fact]
+    public void Flags_strategic_rules_with_no_content_rules_beside_them()
+    {
+        var bp = Valid() with { StrategicMapGeneration = Strategic() };
+        Assert.Contains(RunDocumentValidator.Validate(bp),
+            p => p.StartsWith("Map Rules:", StringComparison.Ordinal) && p.Contains("nothing to put in them"));
+    }
+
+    // What no seed can satisfy is said here, in the words S7's validator uses — not discovered by a player who
+    // picked the other generator in the menu.
+    [Fact]
+    public void Flags_strategic_rules_no_seed_could_satisfy()
+    {
+        var bp = Generated() with
+        {
+            StrategicMapGeneration = Strategic() with
+            {
+                Rooms = new StrategicRoomSpec
+                {
+                    KindWeights = new Dictionary<MapNodeKind, int> { [MapNodeKind.Combat] = 1 },
+                    RoomBudgets = new Dictionary<MapNodeKind, RoomBudget>
+                    {
+                        [MapNodeKind.Elite] = new() { Min = 40, Target = 40, Max = 40 },
+                    },
+                },
+            },
+        };
+
+        Assert.Contains(RunDocumentValidator.Validate(bp),
+            p => p.StartsWith("Map Rules:", StringComparison.Ordinal) && p.Contains("Elite"));
+    }
 }

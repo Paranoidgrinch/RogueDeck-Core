@@ -182,7 +182,8 @@ public static class RuleBasedMapGenerator
                     }
 
                     var encounter = SelectEncounter(
-                        effectiveKind, ri, plan.Count, spec, realization, contentRng!, usedEncounters);
+                        effectiveKind, ri, plan.Count, spec, realization.Selector, realization.StartingLoadout,
+                        contentRng!, usedEncounters);
                     var nodeRef = SelectNodeRef(effectiveKind, spec, ri, plan.Count, contentRng!, usedRefs);
                     var realized = realization.Content(effectiveKind, new MapCoord(ri, c), encounter, nodeRef);
                     builder.AddNode(id, realized.Type, realized.Payload, realized.Tags);
@@ -356,11 +357,14 @@ public static class RuleBasedMapGenerator
     // A FIGHT may be gated by depth too (EncounterMinimumDepthPercent), one level below the role gate: the
     // act's elites all stand where RoleMinimumDepthPercent[Elite] allows, but the design also says which of
     // them is the third room's elite and which is the twelfth's.
-    private static EncounterId? SelectEncounter(
-        MapNodeKind kind, int row, int rows, MapGenerationSpec spec, ContentRealization realization,
-        MapGenRandom rng, ISet<EncounterId> used)
+    //
+    // `internal` because the strategic generator realizes its rooms with exactly these rules (S11): the shape is
+    // the thing that changed, the content is not, and a second copy of "which fight stands here" would drift.
+    internal static EncounterId? SelectEncounter(
+        MapNodeKind kind, int row, int rows, MapGenerationSpec spec, EncounterSelector selector,
+        int startingLoadout, MapGenRandom rng, ISet<EncounterId> used)
     {
-        if (!IsCombatRole(kind) || !realization.Selector.HasCandidates(kind))
+        if (!IsCombatRole(kind) || !selector.HasCandidates(kind))
             return null;
 
         Func<EncounterId, bool>? eligible = null;
@@ -370,9 +374,9 @@ public static class RuleBasedMapGenerator
             eligible = id => depth >= spec.EncounterMinimumDepthPercent.GetValueOrDefault(id.Value);
         }
 
-        var loadout = spec.BalanceTargets.AssumedLoadout(realization.StartingLoadout, row);
+        var loadout = spec.BalanceTargets.AssumedLoadout(startingLoadout, row);
         var target = spec.BalanceTargets.TargetNet(row);
-        var picked = realization.Selector.Select(
+        var picked = selector.Select(
             kind, loadout, target, spec.BalanceTargets.Tolerance, rng.Next, used, eligible);
         used.Add(picked);
         return picked;
@@ -386,7 +390,7 @@ public static class RuleBasedMapGenerator
     // A ref may also be gated by DEPTH (NodeRefMinimumDepthPercent): a door the design only opens late in the act
     // is filtered out of the shallow rows. If a row can honour nothing in the pool, the gate yields — the node has
     // to be SOMETHING, and an empty room is worse than an early one.
-    private static string? SelectNodeRef(
+    internal static string? SelectNodeRef(
         MapNodeKind kind, MapGenerationSpec spec, int row, int rows, MapGenRandom rng, ISet<string> used)
     {
         if (IsCombatRole(kind))
@@ -413,7 +417,7 @@ public static class RuleBasedMapGenerator
         return picked;
     }
 
-    private static bool IsCombatRole(MapNodeKind kind) =>
+    internal static bool IsCombatRole(MapNodeKind kind) =>
         kind is MapNodeKind.Combat or MapNodeKind.MultiCombat or MapNodeKind.Elite
             or MapNodeKind.Boss or MapNodeKind.Mimic;
 
