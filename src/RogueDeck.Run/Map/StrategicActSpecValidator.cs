@@ -77,6 +77,7 @@ public sealed class StrategicSpecReport
             .Append(" · rooms ").Append(Spec.RowsBeforeBoss * Spec.MinWidth)
             .Append("..").Append(Spec.RowsBeforeBoss * Spec.MaxWidth)
             .Append(Spec.PathPressure.Promises ? $" · pressure ≥ {Spec.PathPressure.Minimum}" : "")
+            .Append(Spec.ForkQuality.MinimumContrast > 0 ? $" · forks ≥ {Spec.ForkQuality.MinimumContrast}" : "")
             .Append(" · ").AppendLine(Possible ? Clean ? "clean" : "possible" : "IMPOSSIBLE");
         foreach (var problem in Problems)
             text.AppendLine(problem.ToString());
@@ -115,6 +116,7 @@ public static class StrategicActSpecValidator
         ActBudgets(spec, problems);
         Bands(spec, problems);
         Pressure(spec, problems);
+        Forks(spec, problems);
 
         return new StrategicSpecReport(spec, problems);
     }
@@ -387,27 +389,88 @@ public static class StrategicActSpecValidator
     {
         foreach (var (kind, pressure) in rules.KindPressure.OrderBy(entry => (int)entry.Key))
         {
-            if (pressure <= 0 || !Placeable(kind))
+            if (pressure <= 0 || !CanAppear(spec, kind))
                 continue;
 
             var budget = spec.Rooms.BudgetOf(kind);
             var ceiling = budget is null ? rows : Math.Min(rows, budget.Max);
-            if (ceiling <= 0)
-                continue;
-
-            // An authored 0 in every lane profile means "never on this route" everywhere, and nothing weighting
-            // it at all means it is never drawn — either way the act cannot use it to reach its floor.
-            var refused = spec.LaneProfiles.Count > 0 && spec.LaneProfiles.All(lane =>
-                lane.KindWeights.TryGetValue(kind, out var weight) && weight <= 0);
-            var drawn = spec.Rooms.WeightOf(kind) > 0
-                || spec.LaneProfiles.Any(lane => lane.KindWeights.TryGetValue(kind, out var weight) && weight > 0);
-            if (refused || (!drawn && Minimums(spec, kind) == 0))
-                continue;
-
             var gate = spec.Rooms.EarliestDepthOf(kind);
             for (var copy = 0; copy < ceiling; copy++)
                 yield return (kind, pressure, gate);
         }
+    }
+
+    // WHETHER A ROLE CAN STAND ANYWHERE IN THIS ACT AT ALL. An authored 0 in every lane profile means "never on
+    // this route" everywhere; nothing weighting it and no minimum demanding it means it is never drawn; a
+    // ceiling of nought means it may not exist. Shared by every check that needs to know what the act can be
+    // made of, because three answers to that question would be three chances to disagree.
+    private static bool CanAppear(StrategicActSpec spec, MapNodeKind kind)
+    {
+        if (!Placeable(kind))
+            return false;
+        if (spec.Rooms.BudgetOf(kind) is { Max: <= 0 })
+            return false;
+
+        var refused = spec.LaneProfiles.Count > 0 && spec.LaneProfiles.All(lane =>
+            lane.KindWeights.TryGetValue(kind, out var weight) && weight <= 0);
+        var drawn = spec.Rooms.WeightOf(kind) > 0
+            || spec.LaneProfiles.Any(lane => lane.KindWeights.TryGetValue(kind, out var weight) && weight > 0);
+        return !refused && (drawn || Minimums(spec, kind) > 0);
+    }
+
+    // THE CONTRAST THE ACT ASKS OF ITS FORKS, against the sharpest fork its own roles could ever draw.
+    //
+    // Two things can be said before a seed is spent. An act that cannot fork at all — because it is too short
+    // for a branch to live its minimum, or because it is never allowed to widen — is an act whose fork threshold
+    // is a sentence about nothing. And a threshold above the widest gap between any two of the act's roles,
+    // repeated for every row of the horizon, is a threshold no arrangement of those roles can reach.
+    //
+    // The second is an upper bound and knowingly a generous one: it assumes every row of the horizon is the
+    // act's sharpest possible pairing, which no real act manages. That is the right direction for a check that
+    // only ever says IMPOSSIBLE — everything it passes may still be hard, and S9 reports how hard per seed.
+    private static void Forks(StrategicActSpec spec, List<StrategicSpecProblem> problems)
+    {
+        var rules = spec.ForkQuality;
+        if (rules.MinimumContrast <= 0)
+            return;
+
+        var life = Math.Max(0, spec.Topology.MinBranchLifeRows);
+        if (spec.MaxWidth <= 1 || (spec.MaxWidth > spec.MinWidth && 1 + life > spec.RowsBeforeBoss))
+        {
+            problems.Add(Tight("the act's forks",
+                $"it asks a contrast of {rules.MinimumContrast} of its forks, and no row of a {spec.Rows}-row "
+                + "act this shape can fork, so the threshold is inert."));
+            return;
+        }
+
+        var kinds = Enum.GetValues<MapNodeKind>()
+            .Where(kind => kind is MapNodeKind.Boss || CanAppear(spec, kind))
+            .ToList();
+        var sharpest = 0;
+        foreach (var left in kinds)
+            foreach (var right in kinds)
+                sharpest = Math.Max(sharpest, Distance(rules, left, right));
+
+        var reachable = sharpest * rules.HorizonRows;
+        if (rules.MinimumContrast <= reachable)
+            return;
+
+        problems.Add(Impossible("the act's forks",
+            $"it asks a contrast of {rules.MinimumContrast} of its forks, and the sharpest pair of roles this "
+            + $"act can hold differs by {sharpest} in a row, so {rules.HorizonRows} row(s) of decision horizon "
+            + $"cannot tell two futures further apart than {reachable}."));
+    }
+
+    // The weighted Manhattan distance between two roles, the same measure ForkQualityEvaluator applies to two
+    // futures — one row of horizon, at its sharpest.
+    private static int Distance(ForkQualityRules rules, MapNodeKind left, MapNodeKind right)
+    {
+        var first = rules.SignatureOf(left);
+        var second = rules.SignatureOf(right);
+        var distance = 0;
+        foreach (var dimension in Enum.GetValues<ChoiceDimension>())
+            distance += Math.Abs(first.Of(dimension) - second.Of(dimension)) * rules.DimensionWeights.Of(dimension);
+        return distance;
     }
 
     // ONE CAPACITY CLAIM, measured against both ends of the width range — which is where the two severities come

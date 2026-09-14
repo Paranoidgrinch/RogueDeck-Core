@@ -35,6 +35,10 @@ public sealed record StrategicActSpec
     // per-path minimums used to be (see StrategicPathPressure).
     public PathPressureRules PathPressure { get; init; } = new();
 
+    // WHETHER THE ACT'S FORKS ARE CHOICES. Measured, not yet enforced (see ForkQualityRules): what a fork is
+    // worth is the one thing a branching act exists for and the one thing nothing used to count.
+    public ForkQualityRules ForkQuality { get; init; } = new();
+
     // The rows that hold a room the allocator chooses. A boss room's content is fixed, so it is part of the act's
     // shape and never part of its supply.
     public int RowsBeforeBoss => Math.Max(0, Rows - Math.Max(0, BossRooms));
@@ -62,6 +66,7 @@ public sealed record StrategicActSpec
         ArgumentNullException.ThrowIfNull(LaneAssignment);
         ArgumentNullException.ThrowIfNull(Rooms);
         ArgumentNullException.ThrowIfNull(PathPressure);
+        ArgumentNullException.ThrowIfNull(ForkQuality);
 
         if (LaneProfiles.Count == 0)
             throw new ArgumentException("An act needs at least one lane profile to flavour its routes with.",
@@ -78,5 +83,6 @@ public sealed record StrategicActSpec
 
         Rooms.Validate();
         PathPressure.Validate();
+        ForkQuality.Validate();
     }
 }
