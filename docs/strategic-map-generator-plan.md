@@ -520,13 +520,36 @@ a twelve-row act" is an answer, "the generator gave up" is not.
 every promise read back off the act that came out — budgets inside their bounds, no shortfall, no forced room,
 every route over the floor, every fork over the threshold, the shape untouched and zero crossings.
 
-**S11 — the document seam + the run remembers its generator.** `StrategicMapGeneration` on
-`RunAct`/`RunBlueprint`, `RunSetup.Generate`, `RunJson` round-trip, `RunDocumentValidator` checks + export gate,
-`MapRulesTab.razor` authoring, and the strategic generator emitting `RunMap.Layout` (§2.4). Plus the whole
-persistence chain from §4b: `RunSaveData.MapGenerator`, `RunState`, `BuildActPlan`/`BuildRunMap`/
-`CreateInitialRun`, `RunPlayback.Resume`. `docs/godot-export-contract.md` updated.
-*Done when:* a save written under one generator resumes on that generator with a byte-identical map, a save
-written before this step resumes on v0.0.0, and the round trip is covered by a test.
+**S11 — the document seam + the run remembers its generator.** ✔ **DONE 2026-09-14** —
+`StrategicMapGeneration` on `RunAct`/`RunBlueprint`, `StrategicMapRealizer`, `MapGenerators`,
+`RunSaveData.MapGenerator`, `RunState.GeneratedMapGenerator`, the `mapGenerator` parameter through
+`CreateInitialRun`/`BuildActPlan`/`BuildRunMap`/`RunPlayback.Start`/`.Resume`, `ReadOnlySetJsonConverterFactory`,
+two validator checks + the export gate, the whole second-generator section of `MapRulesTab.razor` (with the
+preview switchable between generators), and `docs/godot-export-contract.md`. 12 tests; Run **816**, Sandbox
+**384**.
+
+**The content half never moved.** A strategic spec says how many rooms of each kind and where; it says nothing
+about which fight stands in one, and it was never going to: `MapGenerationSpec` keeps the encounter pools, the
+node refs and the balance targets, and `StrategicMapRealizer` fills the strategic act's rooms by CALLING the
+rule-based generator's own two selections rather than copying them. So an act from either generator holds content
+drawn by the same rules, and a document with strategic rules and no `MapGeneration` is refused by name — it would
+be an act with rooms and nothing to put in them.
+
+**`RunMap.Layout` is now emitted** (§2.4), because S4's promise that the edges do not cross holds only when each
+row is drawn in column order, and a promise nobody records is one the frontends cannot keep. The rule-based
+generator still emits none: it never promised an order, and inventing one for it would be a claim.
+
+**The choice is part of the run, not of the menu** (§4b). `RunSaveData.MapGenerator` is an `init` property with
+no migration — a save written before this step has nothing there, and nothing there means v0.0.0 — and
+`RunPlayback.Resume` passes the saved value back, so a run resumed after a restart rebuilds ITS map rather than
+the one the current default would draw. The act-plan cache got the generator in its key for the same reason.
+Proved by test: a run started on v0.0.1, saved, and rebuilt from the save comes back byte-identical **including
+what stands in every room**, and a run with no generator recorded rebuilds identically to an explicit v0.0.0.
+
+**One serializer gap**, found by writing the round trip rather than by reasoning about it: `System.Text.Json`
+writes an `IReadOnlySet<T>` and cannot read one back, so an act's "these roles may never repeat" would have saved
+and then failed to load. Taught rather than worked around — a converter factory, and the properties keep saying
+set, because membership without order or duplicates is what they ARE.
 
 **S12 — BnB integration.** `ActRules` gains `Rows`, `RoomBudgets`, `DepthBands`, `Topology`, `PathPressure`,
 `ForkQuality` and loses `PerPathMinimums` / `PerPathMaximums`; `MapSpecBuilder` drops `FreeRows` and
