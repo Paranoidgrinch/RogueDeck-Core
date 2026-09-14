@@ -197,6 +197,158 @@
 
         @if (MapRulesProblems.Count > 0)
         {
+        @* ── The second generator (map rework S11) ─────────────────────────────────────────────────────────
+           Shape rules only: how long the act is, how it branches, what each route tastes like, how many rooms
+           of each kind it holds and where, what a single route has to be worth, and how much a fork has to
+           decide. What stands IN a room is the content above — either generator fills its rooms from it. *@
+        <div class="editor-card" style="border:1px solid var(--border,#ccc); border-radius:6px; padding:1rem; margin:.75rem 0">
+            <strong>Second generator (v0.0.1 — strategic)</strong>
+            <span class="muted"> — the other generator a player can pick at “New run”. It draws the act's SHAPE first and then fills it: no funnel rows, act-wide budgets instead of per-path promises, and a floor of challenge every route has to clear.</span>
+            <div style="margin-top:.5rem">
+                <label class="chk"><input type="checkbox" checked="@StrategicEnabled" @onchange="ToggleStrategic" />
+                    Author strategic map rules</label>
+            </div>
+
+            @if (_blueprint.StrategicMapGeneration is { } str)
+            {
+                <div class="run-bar" style="gap:1rem; flex-wrap:wrap; margin-top:.6rem">
+                    <label>Rows (whole act) <input type="number" min="1" value="@str.Rows" style="width:5rem"
+                                                   @onchange="e => SaveStrategic(str with { Rows = AsInt(e.Value) })" /></label>
+                    <label>Boss rooms <input type="number" min="0" value="@str.BossRooms" style="width:4.5rem"
+                                             @onchange="e => SaveStrategic(str with { BossRooms = AsInt(e.Value) })" /></label>
+                    <label>Min width <input type="number" min="1" value="@str.MinWidth" style="width:4.5rem"
+                                            @onchange="e => SaveStrategic(str with { MinWidth = AsInt(e.Value) })" /></label>
+                    <label>Max width <input type="number" min="1" value="@str.MaxWidth" style="width:4.5rem"
+                                            @onchange="e => SaveStrategic(str with { MaxWidth = AsInt(e.Value) })" /></label>
+                </div>
+                <p class="muted" style="margin-top:.4rem">
+                    Rows counts EVERY row including the boss rooms — it is the number of rooms a route walks,
+                    unlike the backbone above, which grows by however many funnels it needs.
+                </p>
+
+                <div class="run-bar" style="gap:1rem; flex-wrap:wrap; margin-top:.4rem">
+                    <label>Continue <input type="number" min="0" value="@str.Topology.ContinueWeight" style="width:4.5rem"
+                                           @onchange="e => SaveStrategic(str with { Topology = str.Topology with { ContinueWeight = AsInt(e.Value) } })" /></label>
+                    <label>Split <input type="number" min="0" value="@str.Topology.SplitWeight" style="width:4.5rem"
+                                        @onchange="e => SaveStrategic(str with { Topology = str.Topology with { SplitWeight = AsInt(e.Value) } })" /></label>
+                    <label>Merge <input type="number" min="0" value="@str.Topology.MergeWeight" style="width:4.5rem"
+                                        @onchange="e => SaveStrategic(str with { Topology = str.Topology with { MergeWeight = AsInt(e.Value) } })" /></label>
+                    <label>Branch lives (rows) <input type="number" min="0" value="@str.Topology.MinBranchLifeRows" style="width:4.5rem"
+                                                      @onchange="e => SaveStrategic(str with { Topology = str.Topology with { MinBranchLifeRows = AsInt(e.Value) } })" /></label>
+                    <label>Attempts <input type="number" min="1" value="@str.MaxGenerationAttempts" style="width:4.5rem"
+                                           @onchange="e => SaveStrategic(str with { MaxGenerationAttempts = Math.Max(1, AsInt(e.Value)) })" /></label>
+                </div>
+                <p class="muted" style="margin-top:.4rem">
+                    A row CONTINUES, SPLITS or MERGES by these weights. A branch that must live three rows makes
+                    choosing a side a commitment; the real width knob is Max width, since every split above it has
+                    to be paid for by a merge.
+                </p>
+
+                <div style="margin-top:.8rem"><strong>Route flavours</strong>
+                    <span class="muted"> — a route's own character, carried by the route and not by a column. Neighbours in this list are related flavours a fork may step between; a weight of 0 means “never on this route”.</span>
+                </div>
+                @for (var laneIndex = 0; laneIndex < str.LaneProfiles.Count; laneIndex++)
+                {
+                    var li = laneIndex;
+                    var lane = str.LaneProfiles[li];
+                    <div class="run-bar" style="gap:1rem; flex-wrap:wrap; margin-top:.4rem">
+                        <label>name <input value="@lane.Name" style="width:8rem"
+                                           @onchange="e => SaveStrategicLane(li, lane with { Name = AsString(e.Value) })" /></label>
+                        @foreach (var kind in Reservable)
+                        {
+                            var k = kind;
+                            <label>@k <input type="number" min="0" value="@Get(lane.KindWeights, k)" style="width:4.5rem"
+                                             @onchange="e => SaveStrategicLane(li, lane with { KindWeights = WithKind(lane.KindWeights, k, AsInt(e.Value)) })" /></label>
+                        }
+                        <button class="mini" @onclick="() => RemoveStrategicLane(li)">✕</button>
+                    </div>
+                }
+                <button class="mini" style="margin-top:.4rem" @onclick="AddStrategicLane">+ flavour</button>
+
+                <div style="margin-top:.8rem"><strong>Room budgets</strong>
+                    <span class="muted"> — how many of each the ACT holds: a target it aims at, a minimum it promises, a ceiling it may not pass. Nothing is inserted to keep these, so the act keeps its shape.</span>
+                </div>
+                <table style="border-collapse:collapse; margin-top:.3rem">
+                    <thead><tr><th style="text-align:left; padding-right:1rem">Role</th><th style="padding-right:.6rem">Min</th><th style="padding-right:.6rem">Target</th><th style="padding-right:.6rem">Max</th><th style="text-align:left">Earliest depth %</th></tr></thead>
+                    <tbody>
+                        @foreach (var kind in Reservable)
+                        {
+                            var k = kind;
+                            var budget = str.Rooms.BudgetOf(k) ?? new RoomBudget();
+                            <tr>
+                                <td style="padding-right:1rem">@k</td>
+                                <td><input type="number" min="0" value="@budget.Min" style="width:4rem"
+                                           @onchange="e => SaveBudget(k, budget with { Min = AsInt(e.Value) })" /></td>
+                                <td><input type="number" min="0" value="@budget.Target" style="width:4rem"
+                                           @onchange="e => SaveBudget(k, budget with { Target = AsInt(e.Value) })" /></td>
+                                <td><input type="number" min="0" value="@Unbounded(budget.Max)" style="width:4rem"
+                                           @onchange="e => SaveBudget(k, budget with { Max = Bounded(AsInt(e.Value)) })" /></td>
+                                <td><input type="number" min="0" max="100" value="@Get(str.Rooms.RoleMinimumDepthPercent, k)" style="width:4rem"
+                                           @onchange="e => SaveStrategic(str with { Rooms = str.Rooms with { RoleMinimumDepthPercent = WithKind(str.Rooms.RoleMinimumDepthPercent, k, AsInt(e.Value)) } })" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <p class="muted" style="margin-top:.3rem">Max 0 means unlimited. A budget says what the act holds; it says nothing about where — that is what the bands below are for.</p>
+
+                <div style="margin-top:.8rem"><strong>Depth bands</strong>
+                    <span class="muted"> — the same counts over one slice of the act's depth, so “five shops” cannot all stand in the opening third. Bands may not overlap and need not cover the act.</span>
+                </div>
+                @for (var bandIndex = 0; bandIndex < str.Rooms.DepthBands.Count; bandIndex++)
+                {
+                    var bi = bandIndex;
+                    var band = str.Rooms.DepthBands[bi];
+                    <div class="run-bar" style="gap:1rem; flex-wrap:wrap; margin-top:.4rem; align-items:flex-start">
+                        <label>from % <input type="number" min="0" max="100" value="@band.StartPercent" style="width:4.5rem"
+                                             @onchange="e => SaveBand(bi, band with { StartPercent = AsInt(e.Value) })" /></label>
+                        <label>to % <input type="number" min="0" max="100" value="@band.EndPercent" style="width:4.5rem"
+                                           @onchange="e => SaveBand(bi, band with { EndPercent = AsInt(e.Value) })" /></label>
+                        @foreach (var kind in Reservable)
+                        {
+                            var k = kind;
+                            var budget = band.BudgetOf(k) ?? new RoomBudget();
+                            <label>@k <input type="number" min="0" value="@budget.Min" style="width:3.5rem" title="minimum in this band"
+                                             @onchange="e => SaveBand(bi, band with { Budgets = WithBudget(band.Budgets, k, budget with { Min = AsInt(e.Value) }) })" />
+                                <input type="number" min="0" value="@Unbounded(budget.Max)" style="width:3.5rem" title="ceiling in this band (0 = unlimited)"
+                                       @onchange="e => SaveBand(bi, band with { Budgets = WithBudget(band.Budgets, k, budget with { Max = Bounded(AsInt(e.Value)) }) })" /></label>
+                        }
+                        <button class="mini" @onclick="() => RemoveBand(bi)">✕</button>
+                    </div>
+                }
+                <button class="mini" style="margin-top:.4rem" @onclick="AddBand">+ band</button>
+
+                <div style="margin-top:.8rem"><strong>Path pressure</strong>
+                    <span class="muted"> — what one ROUTE has to be worth, in points per room. This is what replaces “every path holds two elites”: a route must carry enough challenge, however it comes by it.</span>
+                </div>
+                <div class="run-bar" style="gap:1rem; flex-wrap:wrap; margin-top:.3rem">
+                    @foreach (var kind in Reservable)
+                    {
+                        var k = kind;
+                        <label>@k <input type="number" min="0" value="@Get(str.PathPressure.KindPressure, k)" style="width:4.5rem"
+                                         @onchange="e => SaveStrategic(str with { PathPressure = str.PathPressure with { KindPressure = WithKind(str.PathPressure.KindPressure, k, AsInt(e.Value)) } })" /></label>
+                    }
+                    <label>floor <input type="number" min="0" value="@str.PathPressure.Minimum" style="width:5rem"
+                                        @onchange="e => SaveStrategic(str with { PathPressure = str.PathPressure with { Minimum = AsInt(e.Value) } })" /></label>
+                    <label>ceiling <input type="number" min="0" value="@Unbounded(str.PathPressure.Maximum)" style="width:5rem"
+                                          @onchange="e => SaveStrategic(str with { PathPressure = str.PathPressure with { Maximum = Bounded(AsInt(e.Value)) } })" /></label>
+                </div>
+                <p class="muted" style="margin-top:.3rem">The floor is a promise the generator keeps or says it could not. The ceiling is only ever reported — whether a spike is too hard depends on the deck.</p>
+
+                <div style="margin-top:.8rem"><strong>Forks</strong>
+                    <span class="muted"> — how much a choice has to decide, judged over the next few rows rather than the next room.</span>
+                </div>
+                <div class="run-bar" style="gap:1rem; flex-wrap:wrap; margin-top:.3rem">
+                    <label>Minimum contrast <input type="number" min="0" value="@str.ForkQuality.MinimumContrast" style="width:5rem"
+                                                   @onchange="e => SaveStrategic(str with { ForkQuality = str.ForkQuality with { MinimumContrast = AsInt(e.Value) } })" /></label>
+                    <label>Decision horizon (rows) <input type="number" min="1" max="6" value="@str.ForkQuality.HorizonRows" style="width:4.5rem"
+                                                          @onchange="e => SaveStrategic(str with { ForkQuality = str.ForkQuality with { HorizonRows = Math.Clamp(AsInt(e.Value), 1, ForkQualityRules.MaximumHorizonRows) } })" /></label>
+                </div>
+
+                <div style="margin-top:.8rem"><strong>Can this act be built?</strong></div>
+                <pre style="white-space:pre-wrap; margin:.3rem 0; font-size:.85rem">@StrategicReport</pre>
+            }
+        </div>
+
             <div class="editor-card" style="border:1px solid #c0392b; border-radius:6px; padding:1rem; margin:.75rem 0">
                 <strong style="color:#c0392b">Problems</strong>
                 <ul style="margin:.4rem 0">
@@ -209,6 +361,10 @@
                 <strong>Preview</strong>
                 <span class="muted">seed</span>
                 <input type="number" @bind="_previewSeed" style="width:6rem" />
+                <select @bind="_previewGenerator" title="which generator draws the preview">
+                    <option value="@MapGenerators.RuleBased">v0.0.0 — rule-based</option>
+                    <option value="@MapGenerators.Strategic">v0.0.1 — strategic</option>
+                </select>
                 <button class="play" @onclick="() => GeneratePreview(spec)">Generate preview</button>
             </div>
 
@@ -280,6 +436,7 @@
     private readonly Dictionary<MapNodeKind, string> _newEncounter = new();
 
     private int _previewSeed = 1;
+    private string _previewGenerator = MapGenerators.RuleBased;
     private GeneratedMap? _preview;
     private IReadOnlyDictionary<NodeId, (int X, int Y)> _previewPositions = new Dictionary<NodeId, (int, int)>();
     private (int Width, int Height) _previewSize;
@@ -337,6 +494,136 @@
     {
         _blueprint = _blueprint with { MapGeneration = spec };
         Doc.Save(_blueprint);
+    }
+
+    // ── the second generator (map rework S11) ───────────────────────────────────────
+    private bool StrategicEnabled => _blueprint.StrategicMapGeneration is not null;
+
+    // A new strategic spec starts from the defaults that work: an act about as long as a real one, one flavour,
+    // and nothing promised. An author who turns it on and changes nothing gets a playable act, not a refusal.
+    private void ToggleStrategic(ChangeEventArgs e)
+    {
+        var on = e.Value is bool b && b;
+        SaveStrategic(on
+            ? new StrategicActSpec
+            {
+                Rows = 12,
+                LaneProfiles = [new MapLaneProfile("the way through", new Dictionary<MapNodeKind, int>
+                {
+                    [MapNodeKind.Combat] = 7,
+                    [MapNodeKind.Event] = 3,
+                })],
+            }
+            : null);
+    }
+
+    private void SaveStrategic(StrategicActSpec? spec)
+    {
+        _blueprint = _blueprint with { StrategicMapGeneration = spec };
+        Doc.Save(_blueprint);
+    }
+
+    private void SaveStrategicLane(int index, MapLaneProfile lane)
+    {
+        if (_blueprint.StrategicMapGeneration is not { } spec)
+            return;
+        var lanes = spec.LaneProfiles.ToList();
+        lanes[index] = lane;
+        SaveStrategic(spec with { LaneProfiles = lanes });
+    }
+
+    private void AddStrategicLane()
+    {
+        if (_blueprint.StrategicMapGeneration is not { } spec)
+            return;
+        var lanes = spec.LaneProfiles.ToList();
+        lanes.Add(new MapLaneProfile($"flavour {lanes.Count + 1}", new Dictionary<MapNodeKind, int>
+        {
+            [MapNodeKind.Combat] = 5,
+        }));
+        SaveStrategic(spec with { LaneProfiles = lanes });
+    }
+
+    // An act needs at least one flavour to draw its rooms by, so the last one does not go.
+    private void RemoveStrategicLane(int index)
+    {
+        if (_blueprint.StrategicMapGeneration is not { } spec || spec.LaneProfiles.Count <= 1)
+            return;
+        var lanes = spec.LaneProfiles.ToList();
+        lanes.RemoveAt(index);
+        SaveStrategic(spec with { LaneProfiles = lanes });
+    }
+
+    private void SaveBudget(MapNodeKind kind, RoomBudget budget)
+    {
+        if (_blueprint.StrategicMapGeneration is not { } spec)
+            return;
+        SaveStrategic(spec with
+        {
+            Rooms = spec.Rooms with { RoomBudgets = WithBudget(spec.Rooms.RoomBudgets, kind, budget) },
+        });
+    }
+
+    private void SaveBand(int index, DepthBandBudget band)
+    {
+        if (_blueprint.StrategicMapGeneration is not { } spec)
+            return;
+        var bands = spec.Rooms.DepthBands.ToList();
+        bands[index] = band;
+        SaveStrategic(spec with { Rooms = spec.Rooms with { DepthBands = bands } });
+    }
+
+    private void AddBand()
+    {
+        if (_blueprint.StrategicMapGeneration is not { } spec)
+            return;
+        var bands = spec.Rooms.DepthBands.ToList();
+        var from = bands.Count == 0 ? 0 : Math.Min(100, bands.Max(band => band.EndPercent));
+        bands.Add(new DepthBandBudget { StartPercent = from, EndPercent = Math.Min(100, from + 25) });
+        SaveStrategic(spec with { Rooms = spec.Rooms with { DepthBands = bands } });
+    }
+
+    private void RemoveBand(int index)
+    {
+        if (_blueprint.StrategicMapGeneration is not { } spec)
+            return;
+        var bands = spec.Rooms.DepthBands.Where((_, i) => i != index).ToList();
+        SaveStrategic(spec with { Rooms = spec.Rooms with { DepthBands = bands } });
+    }
+
+    // A budget of nothing at all is no budget: an author clearing every field removes the row rather than
+    // leaving a zero that reads as "never place one".
+    private static IReadOnlyDictionary<MapNodeKind, RoomBudget> WithBudget(
+        IReadOnlyDictionary<MapNodeKind, RoomBudget> budgets, MapNodeKind kind, RoomBudget budget)
+    {
+        var next = new Dictionary<MapNodeKind, RoomBudget>(budgets);
+        if (budget.Min == 0 && budget.Target == 0 && budget.Max == int.MaxValue)
+            next.Remove(kind);
+        else
+            next[kind] = budget with { Target = Math.Clamp(budget.Target, budget.Min, budget.Max) };
+        return next;
+    }
+
+    // An empty ceiling field means "no ceiling", which the engine spells int.MaxValue and a number box cannot.
+    private static int Unbounded(int max) => max == int.MaxValue ? 0 : max;
+    private static int Bounded(int value) => value <= 0 ? int.MaxValue : value;
+
+    // What the act can and cannot be asked for, before a seed is spent on finding out.
+    private string StrategicReport
+    {
+        get
+        {
+            if (_blueprint.StrategicMapGeneration is not { } spec)
+                return "";
+            try
+            {
+                return StrategicActSpecValidator.Validate(spec).Render();
+            }
+            catch (Exception ex)
+            {
+                return ex.Message;
+            }
+        }
     }
 
     // ── column lanes ────────────────────────────────────────────────────────────────
@@ -419,6 +706,10 @@
     }
 
     // ── Preview: generate a sample map from the current spec + seed and render it, without touching the doc ──
+    //
+    // Either generator draws it, because the point of a preview is to see what the player will see and the
+    // player picks. The strategic one uses the shape rules above and the SAME content rules — which is exactly
+    // how a run does it.
     private void GeneratePreview(MapGenerationSpec spec)
     {
         try
@@ -426,7 +717,12 @@
             var start = _blueprint.ResolveStart(null);
             var balance = new BalanceCalculator(_blueprint.Balance, _blueprint.Encounters);
             _previewLoadout = balance.LoadoutStrength(start, _blueprint.Deck);
-            _preview = RuleBasedMapGenerator.Generate(
+            _preview = MapGenerators.IsStrategic(_previewGenerator)
+                && _blueprint.StrategicMapGeneration is { } strategic
+                ? StrategicMapRealizer.Realize(
+                    StrategicMapGenerator.Generate(strategic, _previewSeed), spec, _previewLoadout, balance,
+                    (kind, _, encounter, nodeRef) => MapNodeRealizer.Realize(spec, kind, encounter, nodeRef))
+                : RuleBasedMapGenerator.Generate(
                 spec, _previewSeed, _previewLoadout, balance,
                 (kind, _, encounter, nodeRef) => MapNodeRealizer.Realize(spec, kind, encounter, nodeRef));
             _previewPositions = MapGraphLayout.Resolve(_preview.Map);

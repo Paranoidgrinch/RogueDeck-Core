@@ -73,9 +73,14 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
     // characterId picks a starting character from Blueprint.Characters (a host's character-select screen
     // passes the chosen id; gate the roster with MetaProgression.AvailableCharacters); null keeps the
     // blueprint's default start, so existing callers are unchanged.
-    public void Start(RunBlueprint blueprint, int seed, bool interactive, string? characterId = null) =>
+    //
+    // mapGenerator picks which generator draws this run's acts (MapGenerators; map rework S11). Null keeps the
+    // rule-based one, and the choice is written into the run so a resume rebuilds the map this run actually has.
+    public void Start(
+        RunBlueprint blueprint, int seed, bool interactive, string? characterId = null,
+        string? mapGenerator = null) =>
         StartSession(blueprint, interactive,
-            _ => blueprint.CreateInitialRun(new RunId("play"), seed, characterId),
+            _ => blueprint.CreateInitialRun(new RunId("play"), seed, characterId, mapGenerator),
             characterId);
 
     // Resume a SAVED run against its blueprint (the map + content are content, supplied here; the live progress comes
@@ -113,22 +118,27 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
     // and never again in the next — the signature of a race, and the reason a flaky gate is worth a step of
     // its own. Per instance there is nothing to tear: one playback is one run against one blueprint, so the
     // hit rate is what it was, and two playbacks no longer evict each other.
-    private (int Seed, int Loadout, RunBlueprint Blueprint, IReadOnlyList<RunActPlan> Acts)? _actPlan;
+    private (int Seed, int Loadout, string? Generator, RunBlueprint Blueprint, IReadOnlyList<RunActPlan> Acts)? _actPlan;
 
-    private IReadOnlyList<RunActPlan> ActPlan(RunBlueprint blueprint, int seed, int loadout)
+    private IReadOnlyList<RunActPlan> ActPlan(RunBlueprint blueprint, int seed, int loadout, string? generator)
     {
+        // The generator belongs in the key as much as the seed does: two runs of the same seed on two generators
+        // are two different sets of acts, and a cache that could not tell them apart would hand one run the
+        // other's map.
         if (_actPlan is { } cached
-            && cached.Seed == seed && cached.Loadout == loadout && ReferenceEquals(cached.Blueprint, blueprint))
+            && cached.Seed == seed && cached.Loadout == loadout && cached.Generator == generator
+            && ReferenceEquals(cached.Blueprint, blueprint))
             return cached.Acts;
-        var acts = blueprint.BuildActPlan(seed, loadout);
-        _actPlan = (seed, loadout, blueprint, acts);
+        var acts = blueprint.BuildActPlan(seed, loadout, generator);
+        _actPlan = (seed, loadout, generator, blueprint, acts);
         return acts;
     }
 
     private RunState RestoreInItsAct(
         RunBlueprint blueprint, RunSaveData save, RunContentRegistry? content)
     {
-        var acts = ActPlan(blueprint, save.RandomSeed, save.MapGenerationLoadout ?? 0);
+        // A resumed run rebuilds ITS OWN map, not the one the current default would draw (plan §4b).
+        var acts = ActPlan(blueprint, save.RandomSeed, save.MapGenerationLoadout ?? 0, save.MapGenerator);
         var index = Math.Clamp(save.ActIndex, 0, acts.Count - 1);
         var run = RunState.Restore(save, acts[index].Map, content);
         run.SetActPlan(acts, index);

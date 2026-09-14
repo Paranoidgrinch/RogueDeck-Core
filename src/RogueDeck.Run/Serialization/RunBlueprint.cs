@@ -99,6 +99,16 @@ public sealed record RunBlueprint(
     // per-path minimums and balancing each fight. Round-trips via RunJson.
     public MapGenerationSpec? MapGeneration { get; init; }
 
+    // The shape rules of the strategic generator (map rework S11), for a blueprint whose acts do not each carry
+    // their own. Null ⇒ this game has no strategic generator and every run uses the rule-based one, whatever a
+    // caller asks for: an act cannot be built to rules nobody wrote.
+    //
+    // Omitted from the JSON when null, unlike MapGeneration above: a game that never heard of the second
+    // generator should not grow a line about it in every document it writes.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public StrategicActSpec? StrategicMapGeneration { get; init; }
+
     // The run's ACTS, walked in order. A run is one RunState from the first act to the last — the deck, the
     // relics and the purse have to cross every boundary, and a save is a save of the whole run — so an act is a
     // SEGMENT of one walk rather than a separate game: its own map, its own generation rules, its own name.

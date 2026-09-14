@@ -77,6 +77,7 @@ Top level: a single JSON object, **PascalCase** property names, enums as **strin
 | `Workbenches` | id → crafting-station definition, referenced by `workbench` map nodes (`node.workbenchRef`) |
 | `Balance` | strength/threat values per entity that steer map generation — see below (empty when unused) |
 | `MapGeneration` | procedural map rules, or `null` for a hand-authored `Map` — see below |
+| `StrategicMapGeneration` | the SECOND generator's shape rules, or `null` — see below (acts may carry their own) |
 | `Presentation` | the look manifest — see below |
 
 Polymorphic nodes (effects, expressions, selectors, rewards, payloads, …) always use the envelope
@@ -182,6 +183,38 @@ choices also depend on the starting loadout strength. That loadout is persisted 
 `RunPlayback.Resume` already passes it. (As with authored maps, runtime map mutations are not re-persisted across a
 save — restore rebuilds from the rules, the same limitation authored maps have always had.)
 
+## The second generator, and the run that remembers it
+
+A document may also carry `StrategicMapGeneration` — the shape rules of a second generator (`v0.0.1`) that draws
+an act's topology first and fills it afterwards. It sits BESIDE `MapGeneration` rather than replacing it, and the
+content still comes from `MapGeneration`: the encounter pools, the node refs and the balance targets are what
+either generator's rooms are filled from, so a document with strategic rules and no `MapGeneration` is refused by
+the export gate. An act (`Acts[i].StrategicMapGeneration`) may carry its own, exactly as it may carry its own
+`MapGeneration`.
+
+What it promises instead of per-path minimums:
+
+- **Act-wide room budgets** (`Rooms.RoomBudgets`: this act holds five elites, at least three, at most eight) and
+  **depth bands** (the same counts over one slice of the act's depth), rather than a promise about every route —
+  so no width-1 funnel row is ever inserted and the act keeps the shape the walk drew.
+- **Path pressure**: every complete route carries at least `PathPressure.Minimum` points of challenge, where a
+  role's points are authored per room (`Combat 10 / MultiCombat 15 / Elite 25` in the worked numbers). This is
+  what replaces "every path holds two elites": a route must be worth walking, however it comes by it.
+- **Fork quality**: how much a choice has to decide, measured over a short decision horizon. Reported per act;
+  a threshold (`ForkQuality.MinimumContrast`) makes it a promise the generator keeps or refuses the seed over.
+- **`RunMap.Layout` is emitted.** The strategic generator guarantees its edges do not cross when each row is
+  drawn in column order, and it writes that order into the map (`Layout`: node → x, y). **A frontend drawing a
+  strategic map should use `Layout` where it is present** instead of laying a row out in node order; the
+  rule-based generator emits none, and there a frontend falls back to its own layout as before.
+
+**Which generator a run uses is part of the run.** `RunSetup.CreateInitialRun` / `BuildActPlan` / `BuildRunMap`
+take a `mapGenerator` string (`MapGenerators.RuleBased` = `"v0.0.0"`, `MapGenerators.Strategic` = `"v0.0.1"`;
+null = rule-based), `RunState` carries it, and it is persisted as `RunSaveData.MapGenerator`. A host that offers
+the choice at "new run" MUST pass the saved value back on resume (`RunPlayback.Resume` does) — a map is
+regenerated rather than stored, so a run resumed under the other generator would come back as a different map.
+A save written before this existed has no value there, which means the rule-based generator: no migration.
+A game that never authored strategic rules ignores the choice and draws the rule-based map.
+
 ## What the export gate guarantees
 
 An exported document passed `RunDocumentValidator.ValidateForExport`, so a frontend may assume:
@@ -193,7 +226,9 @@ An exported document passed `RunDocumentValidator.ValidateForExport`, so a front
 - every card cost names a resource that some combat resource or encounter actually defines;
 - every `Balance` value points at a real entity;
 - when `MapGeneration` is set: every role that can appear has resolvable content (an encounter pool or a `NodeRefs`
-  id), and a map actually generates from a sample seed.
+  id), and a map actually generates from a sample seed;
+- when `StrategicMapGeneration` is set: there are content rules beside it, nothing it asks for is impossible for
+  every seed, and a map actually generates from a sample seed **on that generator too**.
 
 Defensive loading is still correct engineering, but these classes of error are authoring errors the Studio keeps,
 not runtime conditions the frontend must design UI for.

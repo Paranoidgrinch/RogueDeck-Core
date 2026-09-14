@@ -9,7 +9,8 @@ public static class RunSetup
     // id / no roster falls back to the first roster character or the single Start, so existing single-character
     // callers are unchanged. The caller resolves the pick (a UI presents blueprint.Characters and passes the id).
     public static RunState CreateInitialRun(
-        this RunBlueprint blueprint, RunId id, int randomSeed = 1, string? characterId = null)
+        this RunBlueprint blueprint, RunId id, int randomSeed = 1, string? characterId = null,
+        string? mapGenerator = null)
     {
         ArgumentNullException.ThrowIfNull(blueprint);
         var start = blueprint.ResolveStart(characterId);
@@ -19,13 +20,20 @@ public static class RunSetup
         // is persisted on the run so Resume rebuilds the identical map.
         var startingLoadout = new BalanceCalculator(blueprint.Balance, blueprint.Encounters)
             .LoadoutStrength(start, blueprint.Deck, characterId);
-        var acts = blueprint.BuildActPlan(randomSeed, startingLoadout);
+        var acts = blueprint.BuildActPlan(randomSeed, startingLoadout, mapGenerator);
 
         var run = new RunState(
             id, new Core.Combat.HealthState(start.StartingHealth, start.MaxHealth), acts[0].Map, randomSeed);
         run.SetActPlan(acts);
         if (blueprint.MapGeneration is not null)
             run.SetGeneratedMapLoadout(startingLoadout);
+
+        // WHICH GENERATOR THIS RUN BELONGS TO, for as long as it lives. A BnB map is regenerated on every resume
+        // rather than saved, so a choice that lived only in the menu would hand a resumed run a different map
+        // (plan §4b). Recorded only when something was actually chosen, so a run on the default re-saves exactly
+        // as it always did.
+        if (mapGenerator is not null)
+            run.SetGeneratedMapGenerator(mapGenerator);
 
         // The chosen character's own deck, or the blueprint's shared deck when the character declares none.
         var deck = start.Deck.Count > 0 ? start.Deck : blueprint.Deck;
@@ -64,8 +72,11 @@ public static class RunSetup
     // per-path minimums guaranteed and its fights balanced against `startingLoadout`), else the authored Map as-is.
     // Deterministic from `seed` + `startingLoadout`, so Resume rebuilds the identical map (RunPlayback.Resume passes
     // the saved seed + RunSaveData.MapGenerationLoadout). Non-combat nodes are realized from MapGenerationSpec.NodeRefs.
-    public static RunMap BuildRunMap(this RunBlueprint blueprint, int seed, int startingLoadout) =>
-        Generate(blueprint, blueprint.MapGeneration, blueprint.Map, seed, startingLoadout);
+    public static RunMap BuildRunMap(
+        this RunBlueprint blueprint, int seed, int startingLoadout, string? mapGenerator = null) =>
+        Generate(
+            blueprint, blueprint.MapGeneration, blueprint.StrategicMapGeneration, blueprint.Map, seed,
+            startingLoadout, mapGenerator);
 
     // The whole run's acts, laid out at once. Doing it up front rather than act by act is what keeps a resumed
     // run identical: every act's map is a pure function of the seed and the starting loadout, both of which the
@@ -74,11 +85,11 @@ public static class RunSetup
     // No acts declared ⇒ one unnamed act around the blueprint's own map, which is every blueprint written
     // before acts existed.
     public static IReadOnlyList<RunActPlan> BuildActPlan(
-        this RunBlueprint blueprint, int seed, int startingLoadout)
+        this RunBlueprint blueprint, int seed, int startingLoadout, string? mapGenerator = null)
     {
         ArgumentNullException.ThrowIfNull(blueprint);
         if (blueprint.Acts is not { Count: > 0 } acts)
-            return [new RunActPlan(string.Empty, blueprint.BuildRunMap(seed, startingLoadout))];
+            return [new RunActPlan(string.Empty, blueprint.BuildRunMap(seed, startingLoadout, mapGenerator))];
 
         var plan = new List<RunActPlan>(acts.Count);
         for (var index = 0; index < acts.Count; index++)
@@ -87,27 +98,46 @@ public static class RunSetup
             plan.Add(new RunActPlan(act.Id, Generate(
                 blueprint,
                 act.MapGeneration ?? blueprint.MapGeneration,
+                act.StrategicMapGeneration ?? blueprint.StrategicMapGeneration,
                 act.Map ?? blueprint.Map,
                 // Each act draws from its own seed, so two acts that share one generation spec are still two
                 // different maps rather than the same walk twice.
                 seed + index * ActSeedStride,
-                startingLoadout)));
+                startingLoadout,
+                mapGenerator)));
         }
         return plan;
     }
 
     private const int ActSeedStride = 7919;
 
+    // WHICH GENERATOR DRAWS THIS ACT. The rule-based one unless the run was started on the strategic one AND the
+    // act actually has strategic rules to be drawn by: a game that never authored them keeps working, and a run
+    // started on a generator an act cannot honour gets the act it can have rather than an exception in the middle
+    // of a playthrough. Either way the CONTENT comes from the same MapGenerationSpec, which is why a strategic
+    // act without one is not a thing that can exist (see RunAct).
     private static RunMap Generate(
-        RunBlueprint blueprint, MapGenerationSpec? spec, RunMap authored, int seed, int startingLoadout)
+        RunBlueprint blueprint,
+        MapGenerationSpec? spec,
+        StrategicActSpec? strategic,
+        RunMap authored,
+        int seed,
+        int startingLoadout,
+        string? mapGenerator)
     {
         if (spec is null)
             return authored;
 
         var balance = new BalanceCalculator(blueprint.Balance, blueprint.Encounters);
-        var generated = RuleBasedMapGenerator.Generate(
-            spec, seed, startingLoadout, balance,
-            (kind, _, encounter, nodeRef) => MapNodeRealizer.Realize(spec, kind, encounter, nodeRef));
-        return generated.Map;
+        NodeContent Realize(MapNodeKind kind, MapCoord _, EncounterId? encounter, string? nodeRef) =>
+            MapNodeRealizer.Realize(spec, kind, encounter, nodeRef);
+
+        if (MapGenerators.IsStrategic(mapGenerator) && strategic is not null)
+        {
+            var act = StrategicMapGenerator.Generate(strategic, seed);
+            return StrategicMapRealizer.Realize(act, spec, startingLoadout, balance, Realize).Map;
+        }
+
+        return RuleBasedMapGenerator.Generate(spec, seed, startingLoadout, balance, Realize).Map;
     }
 }

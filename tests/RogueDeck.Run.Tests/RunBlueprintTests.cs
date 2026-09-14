@@ -407,6 +407,76 @@ public class RunBlueprintTests
         Assert.Equal(25, calc.LoadoutStrength(back.Start, back.Deck)); // 5 smites × 5
     }
 
+    // THE SECOND GENERATOR'S RULES ARE AUTHORED DATA TOO (map rework S11), and an act carries its own. The two
+    // awkward shapes are in here on purpose: the sets of roles that may or may not repeat (which the serializer
+    // writes happily and could not read back until it was taught how), and the acts' own strategic specs.
+    [Fact]
+    public void Strategic_map_rules_round_trip_on_the_blueprint_and_on_its_acts()
+    {
+        var strategic = new StrategicActSpec
+        {
+            Rows = 23,
+            MinWidth = 2,
+            MaxWidth = 4,
+            LaneProfiles =
+            [
+                new("gauntlet", new Dictionary<MapNodeKind, int> { [MapNodeKind.Combat] = 9, [MapNodeKind.Shop] = 0 }),
+                new("errands", new Dictionary<MapNodeKind, int> { [MapNodeKind.Shop] = 5, [MapNodeKind.Rest] = 3 }),
+            ],
+            Rooms = new StrategicRoomSpec
+            {
+                KindWeights = new Dictionary<MapNodeKind, int> { [MapNodeKind.Combat] = 7, [MapNodeKind.Event] = 3 },
+                RoomBudgets = new Dictionary<MapNodeKind, RoomBudget>
+                {
+                    [MapNodeKind.Elite] = new() { Min = 3, Target = 5, Max = 8 },
+                },
+                DepthBands =
+                [
+                    new()
+                    {
+                        StartPercent = 50,
+                        EndPercent = 100,
+                        Budgets = new Dictionary<MapNodeKind, RoomBudget>
+                        {
+                            [MapNodeKind.Elite] = new() { Min = 2, Target = 3, Max = 5 },
+                        },
+                    },
+                ],
+                RoleMinimumDepthPercent = new Dictionary<MapNodeKind, int> { [MapNodeKind.Elite] = 15 },
+            },
+            PathPressure = new PathPressureRules { Minimum = 120, Maximum = 200 },
+            ForkQuality = new ForkQualityRules { MinimumContrast = 40, HorizonRows = 3 },
+        };
+
+        var blueprint = Demo() with
+        {
+            StrategicMapGeneration = strategic,
+            Acts = new[] { new RunAct("one", StrategicMapGeneration: strategic with { Rows = 35 }) },
+        };
+
+        var back = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(blueprint, Options), Options);
+
+        var spec = Assert.IsType<StrategicActSpec>(back.StrategicMapGeneration);
+        Assert.Equal(23, spec.Rows);
+        Assert.Equal(2, spec.LaneProfiles.Count);
+        Assert.Equal(0, spec.LaneProfiles[0].KindWeights[MapNodeKind.Shop]);
+        Assert.Equal(3, spec.Rooms.RoomBudgets[MapNodeKind.Elite].Min);
+        Assert.Equal(2, spec.Rooms.DepthBands[0].Budgets[MapNodeKind.Elite].Min);
+        Assert.Equal(15, spec.Rooms.RoleMinimumDepthPercent[MapNodeKind.Elite]);
+        Assert.Equal(120, spec.PathPressure.Minimum);
+        Assert.Equal(40, spec.ForkQuality.MinimumContrast);
+
+        // The role sets: written as arrays, read back as sets, and still meaning what the allocator reads them as.
+        Assert.Contains(MapNodeKind.Shop, spec.Rooms.Rules.NoRepeatKinds);
+        Assert.Contains(MapNodeKind.Combat, spec.Rooms.Rules.RepeatFreelyKinds);
+
+        Assert.Equal(35, Assert.IsType<StrategicActSpec>(back.Acts![0].StrategicMapGeneration).Rows);
+
+        // And the document is stable: serializing what came back produces the same bytes, so a save-load-save
+        // round trip is not a diff.
+        Assert.Equal(RunJson.ToJson(blueprint, Options), RunJson.ToJson(back, Options));
+    }
+
     [Fact]
     public void Map_generation_spec_round_trips_with_enum_keyed_sections()
     {

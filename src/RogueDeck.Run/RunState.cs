@@ -99,6 +99,12 @@ public sealed class RunState
     public int? GeneratedMapLoadout { get; private set; }
     public void SetGeneratedMapLoadout(int loadout) => GeneratedMapLoadout = loadout;
 
+    // WHICH MAP GENERATOR THIS RUN WAS STARTED ON (map rework S11). Persisted beside the loadout and for the same
+    // reason: the map is rebuilt on resume rather than saved, so both halves of "which map is this" have to
+    // survive the save file. Null ⇒ the rule-based generator, which is what every run before this step used.
+    public string? GeneratedMapGenerator { get; private set; }
+    public void SetGeneratedMapGenerator(string? generator) => GeneratedMapGenerator = generator;
+
     // Branching-map traversal (B1). CurrentNodeId is the node being/just walked; the visited set records every node
     // already walked so a graph walk never re-enters one. Both are unused by a linear map (which tracks Position).
     public NodeId? CurrentNodeId { get; private set; }
@@ -531,6 +537,7 @@ public sealed class RunState
             NextProgramSeq: _nextProgramSeq)
         {
             MapGenerationLoadout = GeneratedMapLoadout,
+            MapGenerator = GeneratedMapGenerator,
             RemovedCards = _removedCards.Count > 0
                 ? _removedCards.Select(r => new RunCardSaveData(
                     r.Definition.value, r.UpgradeLevel, r.Tags.Select(t => t.Value).ToArray(),
@@ -598,6 +605,7 @@ public sealed class RunState
         run._randomStep = data.RandomStep;
         if (data.MapGenerationLoadout is { } loadout)
             run.SetGeneratedMapLoadout(loadout); // so a resumed run re-saves with the same map identity
+        run.SetGeneratedMapGenerator(data.MapGenerator);
         run.Result = data.Result;
         run.Position = data.Position;
         if (data.CurrentNodeId is { } current)
