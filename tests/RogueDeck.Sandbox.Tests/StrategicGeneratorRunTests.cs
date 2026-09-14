@@ -200,6 +200,55 @@ public class StrategicGeneratorRunTests
         Assert.Empty(BothGenerators().BuildRunMap(7, 0).Layout);
     }
 
+    // …AND A COORDINATE IS ONLY WORTH WHAT IT DECODES TO. Counting the entries is not the test: the generator
+    // wrote one per room and every one of them was correct as a pair of numbers, while every room in the act
+    // still landed on the same drawing cell — the act reached the player as a heap, and nothing failed.
+    //
+    // RunMap.Layout is a SCREEN coordinate on the drawing grid (MapLayout): depth along X, lane along Y. So what
+    // has to be asserted is what a frontend gets back out of it.
+    [Fact]
+    public void Every_room_of_a_strategic_map_is_drawn_in_its_own_place()
+    {
+        var map = BothGenerators().BuildRunMap(7, 0, MapGenerators.Strategic);
+        var drawn = MapGraphLayout.Resolve(map);
+
+        var cells = map.Nodes
+            .ToDictionary(node => node.Id, node => (
+                Depth: MapLayout.DepthOf(drawn[node.Id].X),
+                Lane: MapLayout.LaneOf(drawn[node.Id].Y)));
+
+        // No two rooms share a cell. This is the whole bug in one line.
+        Assert.Equal(map.Nodes.Count, cells.Values.Distinct().Count());
+
+        // The depth a frontend reads is the row the generator meant, and the lane is the column: the ids the
+        // generator hands out say both, so the coordinate can be checked against the room's own name.
+        foreach (var node in map.Nodes)
+        {
+            var parts = node.Id.Value.TrimStart('r').Split('c');
+            Assert.Equal(int.Parse(parts[0]), cells[node.Id].Depth);
+            Assert.Equal(int.Parse(parts[1]), cells[node.Id].Lane);
+        }
+
+        // …and the act runs the way an act runs: every depth from the first row to the last is drawn, exactly
+        // once each, so no row of the map is laid on top of another.
+        var depths = cells.Values.Select(cell => cell.Depth).Distinct().OrderBy(depth => depth).ToList();
+        Assert.Equal(Enumerable.Range(0, depths.Count), depths);
+
+        // THE NO-CROSSINGS PROMISE, read off the drawing rather than off the topology: within one step of depth
+        // the edges keep their order, so a lower lane never leads to a higher one than its neighbour does.
+        foreach (var group in map.Edges.GroupBy(edge => cells[edge.From].Depth))
+        {
+            var ordered = group.OrderBy(edge => cells[edge.From].Lane).ThenBy(edge => cells[edge.To].Lane).ToList();
+            for (var i = 1; i < ordered.Count; i++)
+            {
+                var (before, after) = (ordered[i - 1], ordered[i]);
+                Assert.False(cells[before.From].Lane < cells[after.From].Lane
+                    && cells[before.To].Lane > cells[after.To].Lane,
+                    $"{before.From.Value}→{before.To.Value} crosses {after.From.Value}→{after.To.Value}");
+            }
+        }
+    }
+
     // AN ACT'S TWO SPECS ARE ONE DESCRIPTION AND THEY FALL BACK TOGETHER (found by BnB's Act V, which is three
     // boss rooms and no treasure room at all). An act that brings its own content rules but no strategic ones
     // used to borrow the BLUEPRINT's strategic rules — another act's length, another act's budgets — and then
