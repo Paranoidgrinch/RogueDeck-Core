@@ -614,10 +614,50 @@ the fork contrast, not to the spread, and the tests say so.
 comfortable but not roomy; and the thinnest route lands within a few points of the floor on most seeds, because
 the repair stops at the promise. Both are worth a report before they are worth a change.
 
-**S13 — the statistical report.** Per act over 1 000–10 000 seeds: invalid maps, node/fork/merge/branch-life
-averages, fork contrast min/mean/max, pressure min/mean/max, per-role count ranges, repair operations, full
-regenerations, and a named outlier seed per category. CI fails on hard constraints only; quality metrics are
-exported for reading.
+**S13 — the statistical report.** ✔ **DONE 2026-09-14** — Core `StrategicActStatistics.cs` (`ActMeasure`,
+`ActStatistics`, `RefusedAct`) with 8 tests; bnb-content `Tests/StrategicActReportTests.cs` (1 000 seeds × 4
+acts, 43 s) and `--map-report <n>` on the converter. Run suite **824**, bnb-content **1501**.
+
+**One hard bit, and it is one bit rather than two** — because the generator makes it so: an act it cannot get
+clean is never handed back, it is refused with the least unsatisfactory attempt attached (§25). So a seed either
+produced a clean act or produced nothing, `ActStatistics.Sound` is the whole of what CI may fail on, and a
+refusal is worth reading for *how close it came*: `RefusedAct` carries the attempt count and the best defects,
+which is what separates a spec that is wrong from a spec that wants one number moved. Everything else — width,
+forks, merges, branch life, pressure, contrast, repairs, retries, per-role counts — is printed and never
+asserted, because a quality number that fails a build is a number nobody dares tune.
+
+**Every extreme carries its seed**, and the seed is the deliverable: `MAP_DUMP_GENERATOR=v0.0.1
+MAP_DUMP_ACT=3 MAP_DUMP_SEED=881` opens the act the report just named. The test that matters most is the one
+that re-generates from a named seed and checks the extreme is really there — a report that sends a reader to
+the wrong act is worse than no report. Means are kept in **tenths as integers** for the reason every other
+number in this arc is: two machines must agree about what they are reading.
+
+**MEASURED — the four acts, 1 000 seeds each, on S12's authored numbers:**
+
+```
+             retries   repairs        thinnest route     route spread     weakest fork    hollow   forkless
+  Act I      2/1000   1.3 (≤ 8)    120..165 (mean 130)   4..125 % (51 %)  30..185 (60)     0 %      20/1000
+  Act II    49/1000   2.7 (≤11)    160..200 (mean 165)   3.. 75 % (29 %)  30..175 (58)     0 %      15/1000
+  Act III  139/1000   4.0 (≤11)    185..205 (mean 188)   0.. 66 % (21 %)  30..165 (58)     0 %       9/1000
+  Act IV   153/1000   5.0 (≤12)    265..300 (mean 268)   2.. 55 % (21 %)  30..150 (51)     0 %       1/1000
+```
+
+All 4 000 acts came out clean, and **no act in 4 000 holds a hollow fork**. Three things in that table are
+tuning facts rather than results, and they are recorded here rather than acted on:
+
+- **The retry rate climbs with the act** — 0.2 % → 4.9 % → 13.9 % → 15.3 %. Nothing is failing (the retries are
+  the mechanism working, and `MaxGenerationAttempts` is 8) but Acts III and IV are noticeably tighter than the
+  city, and the cost is paid at run start. The suspects are the pressure floors, which sit exactly at v0.0.0's
+  measured minimum with no slack at all.
+- **Act IV's repair count reaches 12**, which is `MaxRepairPasses` exactly. A hill climb that stops because it
+  ran out of passes rather than because it ran out of improvements is a silent ceiling, and it is being reached.
+- **The pressure spread falls as the floor rises** — Act I 51 %, Act IV 21 %. Expected, and the reason the
+  "routes differ" claim belongs to §1.2's per-role ranges and to the fork contrast rather than to the spread.
+
+**A defect the report found in itself.** The first run read `narrowest row 1..1` on every act ever generated:
+the boss rows were being counted, an act ends on one room however wide it ran, and so the line was always true
+and said nothing. Width is now measured over the rows a player chooses in. A measure that cannot vary is worse
+than a missing measure, because it reads like evidence.
 
 **S14 — retire the BnB guarantee configuration** and rewrite `docs/bnb-act-map-specs.md`, which currently
 states the per-path promises as the design (see §7). BnB keeps BOTH specs per act (§4b), so nothing here removes
