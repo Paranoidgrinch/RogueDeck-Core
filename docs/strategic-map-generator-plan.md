@@ -659,15 +659,70 @@ the boss rows were being counted, an act ends on one room however wide it ran, a
 and said nothing. Width is now measured over the rows a player chooses in. A measure that cannot vary is worse
 than a missing measure, because it reads like evidence.
 
-**S14 — retire the BnB guarantee configuration** and rewrite `docs/bnb-act-map-specs.md`, which currently
-states the per-path promises as the design (see §7). BnB keeps BOTH specs per act (§4b), so nothing here removes
-`MapGenerationSpec` or the rule-based generator — only BnB's dependence on per-path guarantees as the *default*.
+**S14 — retire the BnB guarantee configuration.** ✔ **DONE 2026-09-14** — `docs/bnb-act-map-specs.md`
+rewritten whole (it stated the per-path promises as the design), plus the two places in bnb-content that still
+said so: `MapSpecBuilder`'s header and the converter's own default generator.
 
-**S15 — the choice reaches the player** (`bnb-godot`). The "New run ▸" dialog, the remembered preference, the
-generator on the `StartNewRun` call, and the generator named in `BugReport.Diagnostics` (§4b). A `--smoke-*`
-probe that starts a run on each generator and reports act length + room counts, in the house style.
-*Done when:* both generators are startable from the title screen, a run resumed after a restart has the map it
-had before, and a bug report names its generator.
+**What retires is a claim, not a configuration.** S12 already settled that the per-path table stays — v0.0.0
+ships, and a baseline that quietly moved would be no baseline. So this step retires the *sentence*: the doc no
+longer says an act is a set of per-path promises, it says an act is a length, a budget of rooms, a depth
+profile, a floor of challenge on every route and a threshold below which a fork is not a choice. The old table
+is still in the file, under a heading that says what it is and a paragraph on why the era ended, with the
+measurement that ended it (Act I's seven room types, four of them identical on all 162 routes).
+
+**And one real default moves.** `--playtest` and `--walk` now lay their maps out with **v0.0.1** unless asked
+otherwise, because the playtester should be walking the design. The ENGINE's default stays v0.0.0 and must: a
+save written before the choice existed has nothing recorded, and nothing recorded has to keep meaning the maps
+that save was laid out with. Those are two different questions — what an old run is, and what a new one should
+be — and conflating them is exactly the bug §4b exists to prevent.
+
+**S15 — the choice reaches the player.** ✔ **DONE 2026-09-14** — bnb-godot `NewRunPanel.cs` (the dialog),
+`RunPreferences.cs` (the remembered choice), `GameHost.StartNewRun(…, mapGenerator)`, the generator on the
+bug report's `map` line, and `--smoke-generators` / `--smoke-newrun`; `content/game.roguedeck.json` re-exported
+so the acts actually carry their strategic rules.
+
+**The dialog does not say "v0.0.1".** It says *Real choices* and *Guaranteed routes*, with one sentence each
+about what the act will be like, because a version number tells a playtester nothing about what they are
+choosing. The choice is remembered and preselected next time — somebody comparing the two starts a great many
+runs — and it defaults to the strategic one, which is what a BnB act now is.
+
+**The preference lives in `user://settings.cfg`, not in the meta store**, and the plan said the meta store. The
+meta store is the ENGINE's cross-run profile: unlocks, discoveries, counters. Which generator the NEXT run uses
+is a preference about the next run, like a window size, and putting it in the profile would grow the engine's
+own save model a field about a frontend dialog. It sits beside the display settings, in the file that already
+exists for exactly this kind of thing.
+
+**And it is only ever a default.** "Continue run" never opens the dialog: the generator a run was laid out with
+belongs to the run and travels in its save, so a resumed run rebuilds the maps it had rather than the ones the
+menu currently prefers. `--smoke-generators` checks that from the player's side — it starts a run on each
+generator through the shipped document, saves it, resumes it, and compares every room, every payload and every
+edge — alongside the side-by-side both generators are actually for:
+
+```
+  smoke-generators: v0.0.0 (Guaranteed routes)     smoke-generators: v0.0.1 (Real choices)
+    act 1: 23 rows, 48 rooms                         act 1: 23 rows, 66 rooms
+    act 2: 24 rows, 71 rooms                         act 2: 24 rows, 69 rooms
+    act 3: 26 rows, 80 rooms                         act 3: 25 rows, 80 rooms
+    act 4: 36 rows, 82 rooms                         act 4: 35 rows, 88 rooms
+    act 5:  3 rows,  3 rooms                         act 5:  3 rows,  3 rooms  ← the same gauntlet
+```
+
+The act lengths are the same game — v0.0.0 drifts a row or two because its guarantee rows add up to whatever
+they add up to, while v0.0.1's lengths are the authored 23 / 24 / 25 / 35 exactly, which is §3 holding.
+
+**The bug report names the generator on its `map` line**, and it reads it off the RUN rather than off the
+preference, because those two can differ for exactly as long as a save exists — which is the whole period a
+report might be written in.
+
+---
+
+## 5b. The arc is complete
+
+S1–S15 are done. Both generators ship, a run remembers which one laid its maps out, the choice is the player's,
+and every claim in §1 has a number against it. What is deliberately NOT done, and is a balance pass rather than
+this arc: option (B) from §3 (`steps_before_boss` as the act's real length, a 62-room run), and the tuning the
+S13 report asks for — Acts III and IV need a whole-act retry 14–15 % of the time, and Act IV reaches
+`MaxRepairPasses` exactly. Neither is a defect; both want a playtest before they want an edit.
 
 ---
 
@@ -735,9 +790,9 @@ The differences a player can actually see:
   time (so the frontend can keep revealing them), boss relics are still random, Act V is still three gods back
   to back, treasure still flips to a mimic, and every fight still pays out.
 
-`docs/bnb-act-map-specs.md` stops being true the moment S12 lands: its per-path table is the thing being
-retired. It gets rewritten in the same step to state map-wide budgets and minimum path pressure, with a note
-that the per-path era ran until 2026-09-11 and why it ended.
+`docs/bnb-act-map-specs.md` stopped being true the moment S12 landed: its per-path table was the thing being
+retired. It was rewritten in S14 to state map-wide budgets and minimum path pressure, with the per-path table
+kept below them as v0.0.0's frozen configuration and a paragraph on why the era ended.
 
 ---
 
