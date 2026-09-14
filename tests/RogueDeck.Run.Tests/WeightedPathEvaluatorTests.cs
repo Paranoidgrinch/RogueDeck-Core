@@ -238,4 +238,53 @@ public class WeightedPathEvaluatorTests
                     generated.Map, generated.Roles, (_, k) => k == role ? 1d : 0d));
         }
     }
+
+    // ————— the graph-agnostic pass (map rework S8) —————
+    //
+    // PathPressure asks this question of a StrategicTopology, which is rows, slots and edges and no RunMap at
+    // all, so the DP takes a successor function. These two tests are what keeps the RunMap overloads honest as
+    // wrappers rather than as a second copy of the traversal.
+
+    [Fact]
+    public void The_same_pass_answers_both_ends_and_names_the_routes()
+    {
+        var (map, roles) = Graph(
+            new Dictionary<string, MapNodeKind>
+            {
+                ["start"] = MapNodeKind.Combat,
+                ["elite"] = MapNodeKind.Elite,
+                ["rest"] = MapNodeKind.Rest,
+                ["boss"] = MapNodeKind.Boss,
+            },
+            "start>elite", "start>rest", "elite>boss", "rest>boss");
+
+        var scores = WeightedPathEvaluator.Score(
+            map.Nodes.Select(node => node.Id).ToList(),
+            map.SuccessorIds,
+            map.RootIds(),
+            id => Challenge.GetValueOrDefault(roles[id]));
+
+        Assert.Equal(1.0, scores.Minimum);
+        Assert.Equal(3.5, scores.Maximum);
+        Assert.Equal(new[] { "start", "rest", "boss" }, scores.ThinnestRoute.Select(id => id.Value));
+        Assert.Equal(new[] { "start", "elite", "boss" }, scores.RichestRoute.Select(id => id.Value));
+    }
+
+    // A graph nobody can enter has no route, and a route that does not exist is worth nothing rather than
+    // infinity — the same edge the RunMap overloads take, said once for the pass they both run on.
+    [Fact]
+    public void A_graph_with_no_entries_scores_nothing_and_reports_no_route()
+    {
+        var (map, roles) = Graph(
+            new Dictionary<string, MapNodeKind> { ["only"] = MapNodeKind.Elite });
+
+        var scores = WeightedPathEvaluator.Score(
+            map.Nodes.Select(node => node.Id).ToList(), map.SuccessorIds, [],
+            id => Challenge.GetValueOrDefault(roles[id]));
+
+        Assert.Equal(0, scores.Minimum);
+        Assert.Equal(0, scores.Maximum);
+        Assert.Empty(scores.ThinnestRoute);
+        Assert.Empty(scores.RichestRoute);
+    }
 }
