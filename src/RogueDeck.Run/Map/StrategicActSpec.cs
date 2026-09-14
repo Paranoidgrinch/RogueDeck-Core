@@ -30,6 +30,11 @@ public sealed record StrategicActSpec
     public StrategicStrandProfileRules LaneAssignment { get; init; } = new();
     public StrategicRoomSpec Rooms { get; init; } = new();
 
+    // WHAT A SINGLE ROUTE THROUGH THE ACT MUST ASK OF THE PLAYER. The act-wide budgets above say what the act
+    // HOLDS and say nothing about what one walk through it meets; this is the other half, and it is the half the
+    // per-path minimums used to be (see StrategicPathPressure).
+    public PathPressureRules PathPressure { get; init; } = new();
+
     // The rows that hold a room the allocator chooses. A boss room's content is fixed, so it is part of the act's
     // shape and never part of its supply.
     public int RowsBeforeBoss => Math.Max(0, Rows - Math.Max(0, BossRooms));
@@ -56,6 +61,7 @@ public sealed record StrategicActSpec
         ArgumentNullException.ThrowIfNull(LaneProfiles);
         ArgumentNullException.ThrowIfNull(LaneAssignment);
         ArgumentNullException.ThrowIfNull(Rooms);
+        ArgumentNullException.ThrowIfNull(PathPressure);
 
         if (LaneProfiles.Count == 0)
             throw new ArgumentException("An act needs at least one lane profile to flavour its routes with.",
@@ -71,5 +77,6 @@ public sealed record StrategicActSpec
         }
 
         Rooms.Validate();
+        PathPressure.Validate();
     }
 }

@@ -76,6 +76,7 @@ public sealed class StrategicSpecReport
             .Append(" · lanes ").Append(Spec.LaneProfiles.Count)
             .Append(" · rooms ").Append(Spec.RowsBeforeBoss * Spec.MinWidth)
             .Append("..").Append(Spec.RowsBeforeBoss * Spec.MaxWidth)
+            .Append(Spec.PathPressure.Promises ? $" · pressure ≥ {Spec.PathPressure.Minimum}" : "")
             .Append(" · ").AppendLine(Possible ? Clean ? "clean" : "possible" : "IMPOSSIBLE");
         foreach (var problem in Problems)
             text.AppendLine(problem.ToString());
@@ -113,6 +114,7 @@ public static class StrategicActSpecValidator
         Roles(spec, problems);
         ActBudgets(spec, problems);
         Bands(spec, problems);
+        Pressure(spec, problems);
 
         return new StrategicSpecReport(spec, problems);
     }
@@ -324,6 +326,87 @@ public static class StrategicActSpecValidator
                 problems.Add(Impossible(kind.ToString(),
                     $"the depth bands cover the whole act and allow at most {allowed} between them, while the act "
                     + $"demands at least {act.Min}."));
+        }
+    }
+
+    // THE FLOOR OF CHALLENGE EVERY ROUTE IS PROMISED, against the very best route the spec could ever permit.
+    //
+    // A route walks exactly one room per row, so the most it can possibly carry is: the highest-pressure role
+    // that is legal in each row, with no role used more often than the act's own ceiling allows it to exist at
+    // all. Both of those are hard filters in the allocator, so this really is an upper bound, and a floor above
+    // it is a floor no seed can reach — IMPOSSIBLE, by the same standard as every other check here.
+    //
+    // There is deliberately no TIGHT companion. A LOWER bound on a route's pressure is not arithmetic on the
+    // authored numbers: whether the thin route through an act clears the floor depends on where the seed put the
+    // elites, which is precisely why the floor is checked on the finished plan (StrategicPathPressure) and
+    // repaired there (S10). Guessing at it here would be a warning an author could neither trust nor act on.
+    private static void Pressure(StrategicActSpec spec, List<StrategicSpecProblem> problems)
+    {
+        var rules = spec.PathPressure;
+        if (!rules.Promises)
+            return;
+
+        var bossRooms = Math.Max(0, spec.BossRooms);
+        var best = bossRooms * rules.PressureOf(MapNodeKind.Boss);
+        var free = spec.RowDepthPercents.Order().ToList();
+
+        // Every copy of every role that could stand in this act, richest first, each carrying the depth it may
+        // first appear at. A role nothing weights and no minimum demands is not among them: it is never drawn,
+        // so counting on it would make this bound worthless.
+        var copies = Placements(spec, rules, free.Count)
+            .OrderByDescending(copy => copy.Pressure)
+            .ThenByDescending(copy => copy.Gate)
+            .ThenBy(copy => (int)copy.Kind)
+            .ToList();
+
+        // Each copy takes the SHALLOWEST row it is allowed in, which keeps the deep rows free for the roles that
+        // are gated out of everywhere else — the assignment that maximizes the total when, as here, one role's
+        // legal rows are always a suffix of another's.
+        foreach (var copy in copies)
+        {
+            var row = free.FindIndex(depth => depth >= copy.Gate);
+            if (row < 0)
+                continue;
+            free.RemoveAt(row);
+            best += copy.Pressure;
+        }
+
+        if (best >= rules.Minimum)
+            return;
+
+        problems.Add(Impossible("the act's path pressure",
+            $"every route is promised {rules.Minimum} point(s) of challenge, and the richest route a "
+            + $"{spec.Rows}-row act can hold is worth {best} — one room per row, each the most demanding role "
+            + "its depth gate and the act's own ceiling allow."));
+    }
+
+    // One placeable room of one role, as many times over as the act's ceiling permits it to exist. Roles worth
+    // no pressure are left out: they cannot raise a maximum.
+    private static IEnumerable<(MapNodeKind Kind, int Pressure, int Gate)> Placements(
+        StrategicActSpec spec, PathPressureRules rules, int rows)
+    {
+        foreach (var (kind, pressure) in rules.KindPressure.OrderBy(entry => (int)entry.Key))
+        {
+            if (pressure <= 0 || !Placeable(kind))
+                continue;
+
+            var budget = spec.Rooms.BudgetOf(kind);
+            var ceiling = budget is null ? rows : Math.Min(rows, budget.Max);
+            if (ceiling <= 0)
+                continue;
+
+            // An authored 0 in every lane profile means "never on this route" everywhere, and nothing weighting
+            // it at all means it is never drawn — either way the act cannot use it to reach its floor.
+            var refused = spec.LaneProfiles.Count > 0 && spec.LaneProfiles.All(lane =>
+                lane.KindWeights.TryGetValue(kind, out var weight) && weight <= 0);
+            var drawn = spec.Rooms.WeightOf(kind) > 0
+                || spec.LaneProfiles.Any(lane => lane.KindWeights.TryGetValue(kind, out var weight) && weight > 0);
+            if (refused || (!drawn && Minimums(spec, kind) == 0))
+                continue;
+
+            var gate = spec.Rooms.EarliestDepthOf(kind);
+            for (var copy = 0; copy < ceiling; copy++)
+                yield return (kind, pressure, gate);
         }
     }
 

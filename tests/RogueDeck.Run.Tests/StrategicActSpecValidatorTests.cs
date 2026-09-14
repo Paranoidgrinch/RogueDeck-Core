@@ -400,4 +400,114 @@ public class StrategicActSpecValidatorTests(ITestOutputHelper output)
         Assert.Equal(200, honoured);
         Assert.Equal(200, broken);
     }
+
+    // ————— the floor of challenge every route is promised (map rework S8) —————
+    //
+    // The bound is the richest route the spec could EVER permit: one room per row, each the most demanding role
+    // its gate and the act's own ceiling allow. Anything above that is a promise no seed can keep. Each test
+    // below moves exactly one of the three things that bound it.
+
+    [Fact]
+    public void A_floor_the_act_can_reach_with_room_to_spare_is_not_a_problem()
+    {
+        var report = StrategicActSpecValidator.Validate(Act() with
+        {
+            PathPressure = new PathPressureRules { Minimum = 110, Maximum = 200 },
+        });
+
+        output.WriteLine(report.Render());
+        Assert.True(report.Clean, report.Render());
+    }
+
+    // THE CEILING ENTERS THE BOUND. A route cannot hold more elites than the act holds, so "at most 3 elites"
+    // caps the richest route at 3 × 25 + 21 fights × 10 = 285 — and 286 is a promise about nothing.
+    [Fact]
+    public void A_floor_above_the_best_route_the_ceilings_allow_is_impossible()
+    {
+        var rooms = Rooms(budgets: new Dictionary<MapNodeKind, RoomBudget>
+        {
+            [MapNodeKind.Elite] = new() { Min = 2, Target = 3, Max = 3 },
+        });
+
+        Assert.True(StrategicActSpecValidator.Validate(
+            Act(rooms) with { PathPressure = new PathPressureRules { Minimum = 285 } }).Clean);
+
+        var report = StrategicActSpecValidator.Validate(
+            Act(rooms) with { PathPressure = new PathPressureRules { Minimum = 286 } });
+
+        output.WriteLine(report.Render());
+        Assert.False(report.Possible);
+        Assert.Contains("the richest route a 25-row act can hold is worth 285",
+            string.Join(" ", Messages(report, StrategicSpecSeverity.Impossible)));
+    }
+
+    // THE DEPTH GATE ENTERS IT TOO: a role that may not appear before the act's last rows can only be met in
+    // those rows, however many of them the ceiling would otherwise allow.
+    [Fact]
+    public void A_gate_that_leaves_too_few_deep_rows_puts_the_floor_out_of_reach()
+    {
+        // Nothing but the elites is worth anything here, so the bound is purely "how many elites can a route meet".
+        var pressure = new PathPressureRules
+        {
+            KindPressure = new Dictionary<MapNodeKind, int> { [MapNodeKind.Elite] = 25 },
+            Minimum = 100,
+        };
+        var budgets = new Dictionary<MapNodeKind, RoomBudget>
+        {
+            [MapNodeKind.Elite] = new() { Min = 4, Target = 6, Max = 8 },
+        };
+
+        Assert.True(StrategicActSpecValidator.Validate(
+            Act(Rooms(budgets)) with { PathPressure = pressure }).Possible);
+
+        var gated = StrategicActSpecValidator.Validate(
+            Act(Rooms(budgets, gates: new Dictionary<MapNodeKind, int> { [MapNodeKind.Elite] = 90 }))
+                with
+            { PathPressure = pressure });
+
+        output.WriteLine(gated.Render());
+        Assert.False(gated.Possible);
+        Assert.Contains("the act's path pressure",
+            string.Join(" ", Messages(gated, StrategicSpecSeverity.Impossible)));
+    }
+
+    // The boss stands on every route, so what it asks is part of what every route is worth.
+    [Fact]
+    public void The_boss_rooms_count_towards_what_a_route_carries()
+    {
+        var pressure = new PathPressureRules
+        {
+            KindPressure = new Dictionary<MapNodeKind, int> { [MapNodeKind.Boss] = 40 },
+        };
+
+        Assert.True(StrategicActSpecValidator.Validate(
+            Act() with { PathPressure = pressure with { Minimum = 40 } }).Clean);
+        Assert.False(StrategicActSpecValidator.Validate(
+            Act() with { PathPressure = pressure with { Minimum = 41 } }).Possible);
+    }
+
+    // A floor above the ceiling, and a floor nothing can ever be earned against, are contradictions in the
+    // AUTHORED NUMBERS rather than facts about an act — so they are malformed, and the validator reports them
+    // the way it reports every other malformed spec: as one impossible line, not as an exception to catch.
+    [Fact]
+    public void A_floor_no_role_can_ever_pay_for_is_malformed()
+    {
+        var mute = StrategicActSpecValidator.Validate(Act() with
+        {
+            PathPressure = new PathPressureRules
+            {
+                KindPressure = new Dictionary<MapNodeKind, int> { [MapNodeKind.Combat] = 0 },
+                Minimum = 50,
+            },
+        });
+        Assert.False(mute.Possible);
+        Assert.Contains("cannot be kept by any act whatsoever",
+            string.Join(" ", Messages(mute, StrategicSpecSeverity.Impossible)));
+
+        var inverted = StrategicActSpecValidator.Validate(Act() with
+        {
+            PathPressure = new PathPressureRules { Minimum = 200, Maximum = 100 },
+        });
+        Assert.False(inverted.Possible);
+    }
 }
