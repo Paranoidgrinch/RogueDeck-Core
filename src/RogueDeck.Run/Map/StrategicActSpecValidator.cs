@@ -449,7 +449,7 @@ public static class StrategicActSpecValidator
         var sharpest = 0;
         foreach (var left in kinds)
             foreach (var right in kinds)
-                sharpest = Math.Max(sharpest, Distance(rules, left, right));
+                sharpest = Math.Max(sharpest, rules.Distance(left, right));
 
         var reachable = sharpest * rules.HorizonRows;
         if (rules.MinimumContrast <= reachable)
@@ -461,17 +461,6 @@ public static class StrategicActSpecValidator
             + $"cannot tell two futures further apart than {reachable}."));
     }
 
-    // The weighted Manhattan distance between two roles, the same measure ForkQualityEvaluator applies to two
-    // futures — one row of horizon, at its sharpest.
-    private static int Distance(ForkQualityRules rules, MapNodeKind left, MapNodeKind right)
-    {
-        var first = rules.SignatureOf(left);
-        var second = rules.SignatureOf(right);
-        var distance = 0;
-        foreach (var dimension in Enum.GetValues<ChoiceDimension>())
-            distance += Math.Abs(first.Of(dimension) - second.Of(dimension)) * rules.DimensionWeights.Of(dimension);
-        return distance;
-    }
 
     // ONE CAPACITY CLAIM, measured against both ends of the width range — which is where the two severities come
     // from. `shape` is the sentence about the rooms available, with {0} for the row count.

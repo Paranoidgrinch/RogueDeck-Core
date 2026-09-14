@@ -426,9 +426,7 @@ public sealed class StrategicRoomPlan
             .Select(entry => $"{MapDiagnostics.Letter(entry.Key)}{entry.Value}")));
 
         if (Spec.RoomBudgets.Count > 0)
-            text.Append("budgets ").AppendLine(string.Join(" ", Spec.RoomBudgets
-                .OrderBy(entry => (int)entry.Key)
-                .Select(entry => Held(entry.Key, entry.Value, Count(entry.Key)))));
+            text.AppendLine(Budgets());
 
         for (var index = 0; index < Spec.DepthBands.Count; index++)
         {
@@ -457,6 +455,14 @@ public sealed class StrategicRoomPlan
             text.Append("forced ").AppendLine(forced.ToString());
         return text.ToString();
     }
+
+    // What the act holds against what it was budgeted, on one line — the line a failed generation puts in its
+    // diagnosis, which is why it is reachable without printing the whole grid under it.
+    public string Budgets() => Spec.RoomBudgets.Count == 0
+        ? "budgets none"
+        : "budgets " + string.Join(" ", Spec.RoomBudgets
+            .OrderBy(entry => (int)entry.Key)
+            .Select(entry => Held(entry.Key, entry.Value, Count(entry.Key))));
 
     // `Kind=held/target[min..max]` — one shape for the act's budgets and for a band's, so the two lines of a
     // report read the same way and a band that landed wrong is spotted by eye.

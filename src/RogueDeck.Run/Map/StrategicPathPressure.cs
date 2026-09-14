@@ -141,16 +141,25 @@ public static class StrategicPathPressure
     public static PathPressureReport Measure(StrategicRoomPlan plan, PathPressureRules rules)
     {
         ArgumentNullException.ThrowIfNull(plan);
+        return Measure(plan.Topology, id => plan.TryKindOf(id, out var kind) ? kind : MapNodeKind.Combat, rules);
+    }
+
+    // The same act with the rooms handed in separately — what S10's repair measures, because a repair holds a
+    // scratch set of rooms it has not committed to a plan yet and must be able to ask what it would be worth.
+    public static PathPressureReport Measure(
+        StrategicTopology topology, Func<NodeId, MapNodeKind> kindOf, PathPressureRules rules)
+    {
+        ArgumentNullException.ThrowIfNull(topology);
+        ArgumentNullException.ThrowIfNull(kindOf);
         ArgumentNullException.ThrowIfNull(rules);
 
-        var topology = plan.Topology;
         return Report(
             WeightedPathEvaluator.Score(
                 topology.Slots.Select(slot => slot.Id).ToList(),
                 topology.SuccessorsOf,
                 topology.EntryIds,
-                id => plan.TryKindOf(id, out var kind) ? rules.PressureOf(kind) : 0d),
-            id => plan.TryKindOf(id, out var kind) ? kind : MapNodeKind.Combat,
+                id => rules.PressureOf(kindOf(id))),
+            kindOf,
             rules);
     }
 

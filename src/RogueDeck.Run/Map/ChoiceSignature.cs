@@ -132,6 +132,19 @@ public sealed record ForkQualityRules
 
     public ChoiceSignature SignatureOf(MapNodeKind kind) => Signatures.GetValueOrDefault(kind);
 
+    // How far apart two ROLES are, by the same weighted Manhattan measure the evaluator applies to two futures
+    // (§23) — one row of horizon, which is what a spec validator bounds a whole act with and what a repair uses
+    // to guess which room would sharpen a fork before it pays to find out.
+    public int Distance(MapNodeKind left, MapNodeKind right)
+    {
+        var first = SignatureOf(left);
+        var second = SignatureOf(right);
+        var distance = 0;
+        foreach (var dimension in Enum.GetValues<ChoiceDimension>())
+            distance += Math.Abs(first.Of(dimension) - second.Of(dimension)) * DimensionWeights.Of(dimension);
+        return distance;
+    }
+
     public void Validate()
     {
         ArgumentNullException.ThrowIfNull(Signatures);
