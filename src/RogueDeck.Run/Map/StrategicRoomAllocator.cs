@@ -256,7 +256,7 @@ public static class StrategicRoomAllocator
 
     // Every role this act can hold: one the act weights, one a route's flavour weights, or one a budget asks
     // for. Boss is the topology's and Mimic is a realized Treasure — neither is ever placed here.
-    private static List<MapNodeKind> Placeable(StrategicStrandProfiles profiles, StrategicRoomSpec spec)
+    internal static List<MapNodeKind> Placeable(StrategicStrandProfiles profiles, StrategicRoomSpec spec)
     {
         var placeable = new HashSet<MapNodeKind>();
         foreach (var (kind, weight) in spec.KindWeights)
@@ -282,7 +282,7 @@ public static class StrategicRoomAllocator
     // what makes a route's character a character — and is silent about the rest, where the act's own table is
     // the answer. A room whose strand carries no profile at all cannot happen on a finished assignment; if it
     // ever did, the act's table is still a correct answer, which is why this reads rather than throws.
-    private static int RouteWeight(
+    internal static int RouteWeight(
         StrategicStrandProfiles profiles, StrategicRoomSpec spec, MapNodeKind kind, StrategicSlot slot)
     {
         if (!profiles.TryIndexOf(slot.Strand, slot.Row, out var index))
@@ -364,6 +364,11 @@ public static class StrategicRoomAllocator
         return diversity;
     }
 
+    // THE HARD FILTERS ARE `internal` FROM HERE DOWN, because S10's repair asks exactly the same questions of a
+    // FINISHED act — may this room hold that role — and two implementations of "legal" that must agree is the
+    // drift this file spent S6 avoiding. The allocator asks them of its running state, the repair of a plan; the
+    // rules themselves are written once.
+    //
     // The hard filters, in the order they are cheapest to check. Boss as the "no room here yet" default is safe:
     // Boss is never placeable, so an undecided neighbour can never look like a repetition. A route weight of 0 is
     // a filter rather than a weight of zero, so that "no shops on the gauntlet" is a fact about the act and not
@@ -392,12 +397,12 @@ public static class StrategicRoomAllocator
 
     // Whether this room's route forbids a role OUTRIGHT — an authored weight of 0 in the lane profile the
     // strand carries. Silence is not a refusal; it only means the act's own table answers (see RouteWeight).
-    private static bool RouteRefuses(StrategicStrandProfiles profiles, MapNodeKind kind, StrategicSlot slot) =>
+    internal static bool RouteRefuses(StrategicStrandProfiles profiles, MapNodeKind kind, StrategicSlot slot) =>
         profiles.TryIndexOf(slot.Strand, slot.Row, out var index)
         && profiles.Profiles[index].KindWeights.TryGetValue(kind, out var weight)
         && weight <= 0;
 
-    private static bool DeepEnough(StrategicRoomSpec spec, MapNodeKind kind, StrategicSlot slot, int rows) =>
+    internal static bool DeepEnough(StrategicRoomSpec spec, MapNodeKind kind, StrategicSlot slot, int rows) =>
         MapDepth.Percent(slot.Row, rows) >= spec.EarliestDepthOf(kind);
 
     // UNDER BOTH CEILINGS — the act's and, where the room sits in one, its band's. A band ceiling is the half of a
@@ -412,7 +417,7 @@ public static class StrategicRoomAllocator
         placed[kind] < (spec.BudgetOf(kind)?.Max ?? int.MaxValue)
         && (band < 0 || bandPlaced[band][kind] < (spec.DepthBands[band].BudgetOf(kind)?.Max ?? int.MaxValue));
 
-    private static bool Forbidden(
+    internal static bool Forbidden(
         StrategicRoomSpec spec,
         MapNodeKind kind,
         StrategicSlot slot,

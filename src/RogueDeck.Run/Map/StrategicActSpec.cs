@@ -39,6 +39,13 @@ public sealed record StrategicActSpec
     // worth is the one thing a branching act exists for and the one thing nothing used to count.
     public ForkQualityRules ForkQuality { get; init; } = new();
 
+    public RepairRules Repair { get; init; } = new();
+
+    // HOW MANY WHOLE ACTS MAY BE TRIED before the generator gives up and says why (source document §25). Each
+    // retry is a fresh family of seed streams derived from the same run seed, so the fourth attempt at a hard
+    // spec is as reproducible as the first. An act that promises nothing is clean on the first one.
+    public int MaxGenerationAttempts { get; init; } = 8;
+
     // The rows that hold a room the allocator chooses. A boss room's content is fixed, so it is part of the act's
     // shape and never part of its supply.
     public int RowsBeforeBoss => Math.Max(0, Rows - Math.Max(0, BossRooms));
@@ -67,6 +74,8 @@ public sealed record StrategicActSpec
         ArgumentNullException.ThrowIfNull(Rooms);
         ArgumentNullException.ThrowIfNull(PathPressure);
         ArgumentNullException.ThrowIfNull(ForkQuality);
+        ArgumentNullException.ThrowIfNull(Repair);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(MaxGenerationAttempts);
 
         if (LaneProfiles.Count == 0)
             throw new ArgumentException("An act needs at least one lane profile to flavour its routes with.",
@@ -84,5 +93,6 @@ public sealed record StrategicActSpec
         Rooms.Validate();
         PathPressure.Validate();
         ForkQuality.Validate();
+        Repair.Validate();
     }
 }
