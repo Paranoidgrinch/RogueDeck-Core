@@ -510,4 +510,49 @@ public class StrategicActSpecValidatorTests(ITestOutputHelper output)
         });
         Assert.False(inverted.Possible);
     }
+
+    // ————— the contrast the act asks of its forks (map rework S9) —————
+
+    // A soft target within reach of the act's own roles is not a problem, and one beyond the sharpest pairing
+    // those roles could ever draw is a sentence about nothing. The bound is generous on purpose: it assumes
+    // every row of the horizon is the act's sharpest pair, which no real act manages.
+    [Fact]
+    public void A_fork_threshold_no_two_roles_could_ever_reach_is_impossible()
+    {
+        Assert.True(StrategicActSpecValidator.Validate(
+            Act() with { ForkQuality = new ForkQualityRules { MinimumContrast = 200 } }).Clean);
+
+        var report = StrategicActSpecValidator.Validate(
+            Act() with { ForkQuality = new ForkQualityRules { MinimumContrast = 400 } });
+
+        output.WriteLine(report.Render());
+        Assert.False(report.Possible);
+        Assert.Contains("the sharpest pair of roles this act can hold",
+            string.Join(" ", Messages(report, StrategicSpecSeverity.Impossible)));
+    }
+
+    // A shorter horizon sees less of the difference, so the same threshold can be reachable at three rows and
+    // out of reach at one.
+    [Fact]
+    public void A_shorter_horizon_puts_the_same_threshold_further_away()
+    {
+        var rules = new ForkQualityRules { MinimumContrast = 200 };
+        Assert.True(StrategicActSpecValidator.Validate(Act() with { ForkQuality = rules }).Clean);
+        Assert.False(StrategicActSpecValidator.Validate(
+            Act() with { ForkQuality = rules with { HorizonRows = 1 } }).Possible);
+    }
+
+    // AN ACT THAT CANNOT FORK CANNOT BE HELD TO A FORK THRESHOLD. Not broken — inert, which is the same thing
+    // S7 says about the fork weights of a 4-row act, and worth hearing once rather than never.
+    [Fact]
+    public void A_fork_threshold_on_an_act_that_never_forks_is_reported_as_inert()
+    {
+        var report = StrategicActSpecValidator.Validate(
+            Act(rows: 4) with { ForkQuality = new ForkQualityRules { MinimumContrast = 50 } });
+
+        output.WriteLine(report.Render());
+        Assert.True(report.Possible);
+        Assert.Contains("the threshold is inert",
+            string.Join(" ", Messages(report, StrategicSpecSeverity.Tight)));
+    }
 }
