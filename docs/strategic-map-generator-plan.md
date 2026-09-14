@@ -440,8 +440,46 @@ the walk-round-everything route the old per-path minimums existed to forbid. Tha
 the floor per act; on today's evidence Act I's floor wants to sit near v0.0.0's own thin route (≈ 120), not at
 the 110 §6 sketched.
 
-**S9 — fork quality, measurement only.** `ChoiceSignature`, decision horizon (default 3 rows), pairwise
-contrast. Reported, not repaired, so the seed reports can rank forks before anything acts on the ranking.
+**S9 — fork quality, measurement only.** ✔ **DONE 2026-09-14** — Core `ChoiceSignature.cs`
+(`ChoiceSignature`, `WeightedSignature`, `ForkQualityRules`, `BranchQuality`, `ForkQuality`,
+`ForkQualityReport`, `ForkQualityEvaluator`), `StrategicActSpec.ForkQuality`, two more checks in
+`StrategicActSpecValidator` — 12 tests, Run suite **790**. Reported and NOT repaired, deliberately (source
+document PR 8): a ranking has to exist and be trusted before anything acts on it, or S10 becomes a generator
+optimizing a number instead of a map.
+
+A room is scored on the document's five dimensions (§21, in points: its +1 is 10), a branch is the EXPECTATION
+over the futures it leads into for the next `HorizonRows` rows, and a fork's contrast is the weighted Manhattan
+distance between two such futures (§23). Three decisions. **The expectation is kept as an exact fraction** — a
+weighted sum over a route count — and divided exactly once, when two branches are compared by cross-
+multiplication; subtracting two rounded averages would make a fork's score move when a branch gains a room that
+changes nothing about it. **A fork is scored by its WEAKEST pair**, not its sharpest: a three-way fork with one
+redundant pair offers two real options and a decoy, and the decoy is the defect, because it is the side a player
+spends thought on for nothing. **The horizon is capped at six rows** rather than merely documented: the futures
+of a branch are counted exactly, there are exponentially many of them, and past six the cross-multiplied
+comparison stops fitting in a `long` on a very wide act — a silently overflowed score is a fork ranked at random.
+
+The spec validator gains the two things that can be said before a seed is spent: a threshold above the sharpest
+pairing the act's own roles could ever draw, repeated for every row of the horizon, is IMPOSSIBLE (110 × 3 = 330
+for the BnB roles); a threshold on an act that cannot fork at all is TIGHT and inert, the same sentence S7 says
+about such an act's fork weights.
+
+**MEASURED — and this is the number the whole rework exists for.** v0.0.0, 100 seeds per act, with the
+document's own signature table:
+
+```
+             forks per act   contrast (mean)   HOLLOW — forks whose two ways are the same future
+  Act I          15.3         0..90 (10.4)     72.6 %
+  Act II         16.3         0..87 ( 9.3)     75.2 %
+  Act III        16.5         0..90 (11.3)     71.2 %
+  Act IV         23.4         0..90 ( 8.2)     79.6 %
+  Act V           none (the gauntlet act is one room wide)
+```
+
+Act I, seed 1: `forks 12 · contrast 0..45 (mean 9) · hollow 9`. §1 said "twelve forks between identical rooms"
+from reading the grid; the instrument says nine of the twelve decide nothing at all, and the other three decide
+very little. The strategic generator over 500 acts of the same length: **2.7 forks per act, contrast 0..210
+(mean 84), hollow 3.5 %**. Fewer forks, and each of them a choice — which is the trade S4 made when it drew a
+row as an operation instead of a width, now with a number on it.
 
 **S10 — repair.** Swap-first (Repair A), single reassignment second (B), bounded passes, then deterministic full
 regeneration from `Hash(seed, attempt)`. C–F from the document are deferred; a diagnostic exception naming seed,
