@@ -392,8 +392,53 @@ untouched — nothing outside the strategic path is referenced by anything else.
 as the document asks, and they are read where the *content* is realized rather than where a role is placed — so
 they enter the strategic path at S11's seam, and the validator will gain them there.
 
-**S8 — PathPressure.** Role weights through `WeightedPathEvaluator`; `Minimum` is a hard constraint, `Maximum`
-is a diagnostic at first. This is what replaces `MinEnemiesPerPath` and the per-path role minima.
+**S8 — PathPressure.** ✔ **DONE 2026-09-14** — Core `StrategicPathPressure.cs` (`PathPressureRules`,
+`PressureRoute`, `PathPressureReport`), `StrategicActSpec.PathPressure`, a pressure check in
+`StrategicActSpecValidator`, and a graph-agnostic `WeightedPathEvaluator.Score` — 14 tests, Run suite **778**.
+This is what replaces `MinEnemiesPerPath` and the per-path role minima: a route must carry enough CHALLENGE,
+however it comes by it, and no single role is promised anywhere — which is why nothing has to be inserted
+anywhere to keep it. `Minimum` is the promise (reported unkept; S10's repair is what acts on it), `Maximum` is
+only ever a remark, because whether a spike is too hard depends on the deck and the relics and the generator can
+see neither.
+
+Three decisions worth the ink. **Pressure is authored in whole points** — the plan's 1.0 / 1.5 / 2.5 is
+10 / 15 / 25 and a floor of 11 is 110 — for the reason `StrategicRoomRules` gives for its percentages: a map is a
+contract with a seed, and a threshold a route clears on one machine and misses on another is a bug nobody can
+reproduce. **The DP now takes a graph, not a `RunMap`**: the same pass scores a `StrategicTopology` (which has no
+RunMap anywhere near it until S11) and a finished v0.0.0 map, which is what makes the two generators' numbers
+comparable at all — and it reports the extreme ROUTES, not just their scores, because "worth 9, and 11 was
+promised" is only actionable once you know which rooms to look at. **The spec validator says IMPOSSIBLE and
+never TIGHT here:** the richest route a spec can permit is arithmetic (one room per row, each the most demanding
+role its depth gate and the act's own ceiling allow), a FLOOR on the thin route is not — it depends on where the
+seed put the elites — so the floor is checked on the finished plan and repaired there.
+
+**MEASURED — what v0.0.0 actually asks, with the plan's own table (Combat 10 / MultiCombat 15 / Elite 25),
+100 seeds per act:**
+
+```
+              thinnest route        richest route       spread of the act
+  Act I     120..150 (mean 131)   140..190 (mean 162)   0..54 %  (mean 24 %)
+  Act II    160..190 (mean 172)   180..230 (mean 207)   3..32 %  (mean 20 %)
+  Act III   185..220 (mean 195)   205..255 (mean 237)  10..35 %  (mean 22 %)
+  Act IV    265..305 (mean 275)   275..345 (mean 318)   4..30 %  (mean 16 %)
+  Act V       0 (three boss rooms — the gauntlet act has no chosen room at all)
+```
+
+§6 guessed Act I's worst route at 13 and its richest at 16 from the measured totals; the instrument says 13.1 and
+16.2. **The starting numbers in §6 stand as authored** (they are now measurements rather than estimates), and
+seed 1 of Act I shows what the spread is made of:
+
+```
+  thinnest 130 · CTC?C$?RTCCM?E?C$CRTC?CB
+  richest  160 · CCC?C$CRTCCMCE?C$CRTC?CB      ← three rooms out of twenty-four differ
+```
+
+For comparison, the strategic generator on a 23-row act with the same table over 500 seeds: thinnest **30..170**
+(mean 101), spread **12..650 %** (mean 119 %). Both halves of that are the point. The routes genuinely differ —
+v0.0.0's fork decides three rooms, this one decides the act — and the thin end really can fall to 30, which is
+the walk-round-everything route the old per-path minimums existed to forbid. That is S10's job, and S12 authors
+the floor per act; on today's evidence Act I's floor wants to sit near v0.0.0's own thin route (≈ 120), not at
+the 110 §6 sketched.
 
 **S9 — fork quality, measurement only.** `ChoiceSignature`, decision horizon (default 3 rows), pairwise
 contrast. Reported, not repaired, so the seed reports can rank forks before anything acts on the ranking.
@@ -440,17 +485,18 @@ Derived from the measured totals in §1 for a 23-row act (≈ 66 nodes at width 
 per-path minimums — paths share nodes, so that multiplication is meaningless.
 
 ```
-RoomBudgets (map-wide)        Target  Min  Max      PathPressure (role weights)
-  Elite                          5     3    8         Combat       1.0
-  Shop                           5     4    7         MultiCombat  1.5
-  Rest                           6     4    9         Elite        2.5
+RoomBudgets (map-wide)        Target  Min  Max      PathPressure (points per room, S8)
+  Elite                          5     3    8         Combat        10
+  Shop                           5     4    7         MultiCombat   15
+  Rest                           6     4    9         Elite         25
   Treasure                       6     4    9         everything else 0
   Event                         11     8   15
-  MultiCombat                    4     2    7       Minimum 11   (today's worst route = 13)
-  Combat                    the filler (~29)        Maximum 20   (today's richest  = 16)
+  MultiCombat                    4     2    7       Minimum 110  (v0.0.0's worst route: 131 measured)
+  Combat                    the filler (~29)        Maximum 200  (v0.0.0's richest:     162 measured)
 ```
 
-Acts II–IV scale the same way off their own measured totals. Topology: `ContinueWeight 6`, `SplitWeight 2`,
+Acts II–IV scale the same way off their own measured totals; S8's table of what v0.0.0 asks per act is the
+evidence to scale them against. Topology: `ContinueWeight 6`, `SplitWeight 2`,
 `MergeWeight 2`, `MinBranchLifeRows 3`, `DecisionHorizonRows 3`. Four depth bands at 25 % each. All of it is
 tuning, and all of it is expected to move after the first playtest — which is why S13 exists.
 
