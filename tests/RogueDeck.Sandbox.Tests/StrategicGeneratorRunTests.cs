@@ -200,6 +200,43 @@ public class StrategicGeneratorRunTests
         Assert.Empty(BothGenerators().BuildRunMap(7, 0).Layout);
     }
 
+    // AN ACT'S TWO SPECS ARE ONE DESCRIPTION AND THEY FALL BACK TOGETHER (found by BnB's Act V, which is three
+    // boss rooms and no treasure room at all). An act that brings its own content rules but no strategic ones
+    // used to borrow the BLUEPRINT's strategic rules — another act's length, another act's budgets — and then
+    // asked its own content spec for rooms that act does not have. Such an act is drawn by the rule-based
+    // generator, whichever generator the run was started on, because that is the only description it has.
+    [Fact]
+    public void An_act_that_authors_no_strategic_rules_does_not_borrow_the_documents()
+    {
+        var blueprint = BothGenerators();
+        var gauntlet = new MapGenerationSpec
+        {
+            Rows = 0,
+            BossRooms = 2,
+            MinWidth = 1,
+            MaxWidth = 1,
+            Encounters = blueprint.MapGeneration!.Encounters,
+        };
+        var withActs = blueprint with
+        {
+            Acts =
+            [
+                new RunAct("one", blueprint.MapGeneration!) { StrategicMapGeneration = blueprint.StrategicMapGeneration },
+                new RunAct("two", gauntlet),
+            ],
+        };
+
+        var plan = withActs.BuildActPlan(7, 0, MapGenerators.Strategic);
+
+        // The first act is the strategic one it authored: eight rows, and a layout to draw them by.
+        Assert.Equal(8, plan[0].Map.Nodes.Select(node => node.Id.Value.Split('c')[0]).Distinct().Count());
+        Assert.NotEmpty(plan[0].Map.Layout);
+        // The second is its own two boss rooms, not the first act's eight rows — and it records no layout,
+        // which is how you can tell which generator drew it.
+        Assert.Equal(2, plan[1].Map.Nodes.Count);
+        Assert.Empty(plan[1].Map.Layout);
+    }
+
     private static string Signature(RunMap map) =>
         string.Join("|", map.Nodes.Select(node => node.Id.Value)) + "##"
         + string.Join("|", map.Edges.Select(edge => $"{edge.From.Value}->{edge.To.Value}")) + "##"

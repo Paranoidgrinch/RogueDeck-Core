@@ -95,10 +95,20 @@ public static class RunSetup
         for (var index = 0; index < acts.Count; index++)
         {
             var act = acts[index];
+            // THE TWO SPECS ARE ONE ACT'S DESCRIPTION AND THEY FALL BACK TOGETHER. An act that brings its own
+            // map rules brings BOTH halves of them or neither: taking the content from the act and the shape
+            // from the blueprint pairs one act's rooms with another act's length, which is how a gauntlet of
+            // three bosses came to be generated as a twenty-three-row city and then asked for a treasure it has
+            // no treasure room for. Only an act that declares no rules at all reads the blueprint's.
+            var content = act.MapGeneration ?? blueprint.MapGeneration;
+            var strategic = act.MapGeneration is null
+                ? blueprint.StrategicMapGeneration
+                : act.StrategicMapGeneration;
+
             plan.Add(new RunActPlan(act.Id, Generate(
                 blueprint,
-                act.MapGeneration ?? blueprint.MapGeneration,
-                act.StrategicMapGeneration ?? blueprint.StrategicMapGeneration,
+                content,
+                strategic,
                 act.Map ?? blueprint.Map,
                 // Each act draws from its own seed, so two acts that share one generation spec are still two
                 // different maps rather than the same walk twice.
