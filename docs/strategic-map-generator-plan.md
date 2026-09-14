@@ -551,12 +551,68 @@ writes an `IReadOnlySet<T>` and cannot read one back, so an act's "these roles m
 and then failed to load. Taught rather than worked around — a converter factory, and the properties keep saying
 set, because membership without order or duplicates is what they ARE.
 
-**S12 — BnB integration.** `ActRules` gains `Rows`, `RoomBudgets`, `DepthBands`, `Topology`, `PathPressure`,
-`ForkQuality` and loses `PerPathMinimums` / `PerPathMaximums`; `MapSpecBuilder` drops `FreeRows` and
-`MinimumFreeRows`, builds the strategic spec, and reads the treasure-pool size from the Treasure budget (§2.5).
-Acts I–IV switch over; Act V keeps `BuildGauntlet` untouched. BnB tests move from per-path counts to intent:
-act length, boss last, 2–4 wide, budgets in range, depth gates held, every route meets minimum pressure, all
-content resolvable. `ActSeamTests` (16 references to the retired fields) is the largest rewrite.
+**S12 — BnB integration.** ✔ **DONE 2026-09-14** — bnb-content `ActRules` (the four acts authored for both
+generators), `MapSpecBuilder.Strategic`, `BlueprintAssembler`, the manifests' `steps_before_boss`, a
+`--generator` flag on the walker and `MAP_DUMP_GENERATOR` on the probe; Core `RunSetup` (one defect, below).
+New `Tests/StrategicMapTests.cs` (26 cases) plus rewrites in `ActSeamTests`, `ActFiveGauntletTests` and
+`WholeRunTests`; bnb-content suite **1495**.
+
+**One deviation from the step as written, and it is the whole shape of the step.** The plan said `ActRules`
+*loses* `PerPathMinimums` / `PerPathMaximums`. It keeps them, frozen, because §4b decided the opposite thing
+three sections earlier: both generators ship and the player picks between them at "New run ▸". A v0.0.0 whose
+per-path table had been deleted is not the generator every run has used so far — it is a third, worse generator
+that nobody chose, and the comparison the whole arc is for would be a comparison against nothing. So S12 is
+**additive**: the act gains a second description beside the first, `Tests/Golden/map-v0.0.0.txt` is untouched,
+and what actually retires is the per-path table's status as *the design* — which is what the tests now say.
+Deleting the configuration is S14's business, and S14 should reconsider whether it ever should be.
+
+`MapSpecBuilder.FreeRows` and `MinimumFreeRows` did go. The formula's floor won for every act in the game
+(§1.1), so it described nothing; v0.0.0's backbone is now the literal five it always produced, written down as
+`ActRules.RuleBasedFreeRows`, and `steps_before_boss` is re-authored to 23 / 24 / 25 / 35 where it states the
+act's real length and is read by the strategic spec. The treasure pool is sized off the Treasure budget's `Max`
+(§2.5), which is an act-wide question being answered with an act-wide number for the first time.
+
+**A defect this step found, in Core rather than in BnB.** `RunSetup.BuildActPlan` read
+`act.StrategicMapGeneration ?? blueprint.StrategicMapGeneration`. An act's two specs are one description, and
+falling back on only one half of it paired the Divine Ledger's content rules — three bosses, no treasure room,
+no combat pool — with Act I's twenty-three-row shape, which then asked for a treasure the act does not have.
+The two now fall back together: an act that authors its own map rules reads its own, and only an act that
+declares none at all reads the document's. Found by a test that walks Act V on v0.0.1, not by reading the code.
+
+**MEASURED — the four acts, 200 seeds each, on the authored numbers:**
+
+```
+          generated  clean  attempts  repairs   thinnest route      weakest fork      hollow
+  Act I    200/200   200/200  ≤ 0     1.2 (≤4)  120..165 (129)    30..170 (mean 60)   0.0 %
+  Act II   200/200   200/200  ≤ 1     2.9 (≤9)  160..185 (164)    30..175 (mean 57)   0.0 %
+  Act III  200/200   200/200  ≤ 3     4.1 (≤11) 185..205 (187)    30..120 (mean 55)   0.0 %
+  Act IV   200/200   200/200  ≤ 2     4.8 (≤12) 265..285 (267)    30..115 (mean 50)   0.0 %
+```
+
+Not one seed in eight hundred failed to generate and not one act came out with a defect still on it. The floors
+are v0.0.0's own thinnest routes, measured in S8 (120 / 160 / 185 / 265), so no walk through a strategic act is
+worth less than the easiest walk through the old one — and the fork threshold of 30 turns S9's headline number
+over completely: **0 % hollow forks against v0.0.0's 72–80 %**.
+
+**And §1.2, inverted.** The defect the rework exists for was that four of Act I's seven room types were
+identical on every single route. The same measurement — one reverse-topological pass per role over all routes at
+once — on the strategic acts:
+
+```
+  v0.0.0  Act I  Elite 1..1  MultiCombat 1..1  Rest 2..2  Shop 2..2  Treasure 2..3  Event 3..5  Combat  9..12
+  v0.0.1  Act I  Elite 0..2  MultiCombat 0..2  Rest 1..3  Shop 0..3  Treasure 0..6  Event 2..4  Combat  8..12
+  v0.0.1  Act IV Elite 2..7  MultiCombat 0..7  Rest 3..4  Shop 1..4  Treasure 1..4  Event 4..8  Combat  9..14
+```
+
+Zero room types identical on every route, on every act and every seed measured, and a route that meets no shop
+and no jar at all is an ordinary Act I. What did NOT improve is the pressure SPREAD (Act IV: 15 % against
+v0.0.0's 16 %), and that is the floor doing its job rather than a disappointment — a promise about the thinnest
+route is a promise that compresses the low end. The claim "the routes differ" belongs to the table above and to
+the fork contrast, not to the spread, and the tests say so.
+
+**Open for S13, not defects:** Act III and Act IV sit at 4–5 repairs an act with the ceiling at 12, which is
+comfortable but not roomy; and the thinnest route lands within a few points of the floor on most seeds, because
+the repair stops at the promise. Both are worth a report before they are worth a change.
 
 **S13 — the statistical report.** Per act over 1 000–10 000 seeds: invalid maps, node/fork/merge/branch-life
 averages, fork contrast min/mean/max, pressure min/mean/max, per-role count ranges, repair operations, full
