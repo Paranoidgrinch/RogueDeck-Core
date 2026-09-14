@@ -481,9 +481,44 @@ very little. The strategic generator over 500 acts of the same length: **2.7 for
 (mean 84), hollow 3.5 %**. Fewer forks, and each of them a choice — which is the trade S4 made when it drew a
 row as an operation instead of a width, now with a number on it.
 
-**S10 — repair.** Swap-first (Repair A), single reassignment second (B), bounded passes, then deterministic full
-regeneration from `Hash(seed, attempt)`. C–F from the document are deferred; a diagnostic exception naming seed,
-attempt count, violated constraints, budget state, pressure range and worst fork replaces any silent degradation.
+**S10 — repair.** ✔ **DONE 2026-09-14** — Core `MapRepair.cs` (`MapDefects`, `RepairOperation`, `RepairRules`,
+`RepairedAct`, `MapRepair`) and `StrategicMapGenerator.cs` (`GeneratedAct`, `StrategicMapGenerationException`),
+plus `StrategicActSpec.Repair` / `.MaxGenerationAttempts` — 25 tests, Run suite **815**. Repairs A and B only;
+C–F are deferred as planned.
+
+**The repair is a first-improvement hill climb over `MapDefects`, and the four defects are compared
+LEXICOGRAPHICALLY rather than added up.** An unkept minimum, a room holding an illegal role, a route under the
+floor and a fork that decides nothing are not commensurable, nobody has evidence for an exchange rate between
+them, and a repair that traded a promise for a prettier fork would be a repair nobody asked for. Two properties
+then fall out of the shape instead of being asserted about it: a repair can never make an act worse, because a
+change is only taken when the comparison says better; and the same act repairs the same way every time, because
+nothing in it draws a random number.
+
+**Legality is not re-implemented.** The allocator's four hard filters became `internal` and the repair asks
+*those*, so `Forced` — the count of rooms whose role breaks one — makes an illegal change reject itself through
+the comparison rather than through a second copy of the rulebook that could disagree with the first. The one
+reconstruction is which of the two ROUTE rules applies: the allocator asks the weaker question of a role it is
+placing to keep a promise (silence is not a refusal) and the stronger one of a role it is merely drawing, so a
+role still at or under its minimum is treated as a promise here too.
+
+**The Repair stream stays unused, deliberately.** S3 reserved one (§26) and a hill climb over a heuristically
+ordered candidate list has nothing to spend it on — a repair that depends on a draw is a repair nobody can
+reason about, and ordering the candidates is a better use of the information than shuffling them. The ordering
+is what makes the source document's own worked example (§42) come out in ONE swap: a fork offering the same shop
+twice, an event standing where it decides nothing, and the candidate tried first is the one that stands furthest
+from what the other way already offers.
+
+**Failing is loud, and it is the author's choice.** An act that promises nothing cannot break a promise, so the
+defaults never throw. Where something *was* promised: up to `MaxGenerationAttempts` whole acts, each from
+`MapSeedStreams.Attempt(n)`, and then a `StrategicMapGenerationException` carrying §25's six facts — seed,
+attempts, what went unkept, what the act held, what its thinnest route was worth, what its forks were worth. A
+spec no seed can satisfy is refused before the first seed is spent, in the S7 validator's words: "six elites in
+a twelve-row act" is an answer, "the generator gave up" is not.
+
+*Proved:* **10 000 acts (four BnB lengths × 2 500 seeds, floor 120, fork threshold 40) in 42 s, zero failures**,
+4.2 % needing a second whole act and 1.6 repairs per act. The suite keeps 3 000 of them as a standing gate, with
+every promise read back off the act that came out — budgets inside their bounds, no shortfall, no forced room,
+every route over the floor, every fork over the threshold, the shape untouched and zero crossings.
 
 **S11 — the document seam + the run remembers its generator.** `StrategicMapGeneration` on
 `RunAct`/`RunBlueprint`, `RunSetup.Generate`, `RunJson` round-trip, `RunDocumentValidator` checks + export gate,
