@@ -5,6 +5,20 @@ namespace RogueDeck.Core.Combat;
 // Read-only pool capture used inside snapshots.
 public readonly record struct PoolSnapshot(int Current, int? Max, bool CanExceedMax);
 
+// ⚠⚠ NOTHING THAT IS WRITTEN TO DISK MAY BE A TUPLE. Every one of the five types below used to be an
+// inline `(Key, Value)` — correct in memory, correct through every in-process snapshot test, and SILENTLY
+// EMPTY through `System.Text.Json`, which serializes PROPERTIES and finds only the fields `Item1`/`Item2`
+// on a ValueTuple. A saved fight therefore came back as `Resources: [{}]`, `CardZones: [{}, {}]`,
+// `Counters: [{}]` — the hero's energy, both combatants' draw piles, hands and discards, every counter,
+// gone — and the restore then asked the fight for a combatant named "" and threw. That throw was the only
+// reason any of it was ever noticed. A positional record serializes because its members are properties,
+// and it still deconstructs, so every `foreach (var (key, value) in …)` downstream reads unchanged.
+public readonly record struct CounterSnapshot(CounterId Key, int Value);
+public readonly record struct ResourcePoolSnapshot(ResourceId Key, PoolSnapshot Pool);
+public readonly record struct DefensivePoolSnapshot(DefensivePoolId Key, PoolSnapshot Pool);
+public readonly record struct CombatantCardZonesEntry(CombatantId CombatantId, CombatantCardZonesSnapshot Zones);
+public readonly record struct CountedKeySnapshot(string Key, int Count);
+
 // Immutable capture of one status instance at a point in time. The Source* / Applied* / Visibility fields are not
 // part of the determinism hash (the hasher ignores them), but ARE captured so a save can restore a status faithfully
 // (e.g. a poison that remembers who applied it). Default so existing constructions / the hash are unaffected.
@@ -17,7 +31,7 @@ public sealed record StatusInstanceSnapshot(
     int Charges,
     StatusPolarity Polarity,
     ImmutableArray<TagId> Tags,                          // sorted by value
-    ImmutableArray<(CounterId Key, int Value)> Counters, // sorted by key.value
+    ImmutableArray<CounterSnapshot> Counters,            // sorted by key.value
     CombatantId? SourceCombatantId = null,
     CardDefinitionId? SourceCardId = null,
     int AppliedRound = 1,
@@ -34,7 +48,7 @@ public sealed record CardInstanceSnapshot(
     CardDefinitionId DefinitionId,
     CardZone Zone,
     ImmutableArray<TagId> Marks = default,                       // sorted by value; default = empty
-    ImmutableArray<(CounterId Key, int Value)> MarkCounters = default, // sorted by key.value; default = empty
+    ImmutableArray<CounterSnapshot> MarkCounters = default,            // sorted by key.value; default = empty
     CombatantId? MarkSourceCombatantId = null
 );
 
@@ -55,11 +69,11 @@ public sealed record CombatantSnapshot(
     CombatantLifecycleState LifecycleState,
     int HealthCurrent,
     int HealthMax,
-    ImmutableArray<(ResourceId Key, PoolSnapshot Pool)> Resources,           // sorted by key.value
-    ImmutableArray<(DefensivePoolId Key, PoolSnapshot Pool)> DefensivePools, // sorted by key.value
+    ImmutableArray<ResourcePoolSnapshot> Resources,                          // sorted by key.value
+    ImmutableArray<DefensivePoolSnapshot> DefensivePools,                    // sorted by key.value
     ImmutableArray<StatusInstanceSnapshot> Statuses,
     ImmutableArray<TagId> Tags,                          // sorted by value
-    ImmutableArray<(CounterId Key, int Value)> Counters  // sorted by key.value
+    ImmutableArray<CounterSnapshot> Counters                                 // sorted by key.value
 );
 
 // Complete immutable snapshot of all gameplay-relevant combat state.
@@ -96,7 +110,7 @@ public sealed record CombatStateSnapshot(
     ImmutableArray<CombatantId> TurnOrder,
     ImmutableArray<CombatantSnapshot> Combatants,
     ImmutableArray<StatusInstanceSnapshot> GlobalStatuses,
-    ImmutableArray<(CombatantId CombatantId, CombatantCardZonesSnapshot Zones)> CardZones,
+    ImmutableArray<CombatantCardZonesEntry> CardZones,
     int NextStatusInstanceNumber,
     int NextCardInstanceNumber,
     int NextSummonedCombatantNumber,
@@ -108,5 +122,16 @@ public sealed record CombatStateSnapshot(
     // resources gained and spent. Empty (the default, and every snapshot taken before this field existed) is
     // a fight with no history, which is what a restore used to produce for ALL of them: every "more than last
     // turn" and "you opened with an Attack again" rule read zero on the far side of a save.
-    ImmutableArray<(CombatantId CombatantId, CardPlayTurnStatsSnapshot Stats)> CardPlayTurnStats = default
+    ImmutableArray<CombatantCardPlayTurnStatsSnapshot> CardPlayTurnStats = default
 );
+
+// ⚠⚠ A VALUE TUPLE DOES NOT SURVIVE JSON. This was `(CombatantId, CardPlayTurnStatsSnapshot)`, which is
+// correct in memory and correct through every in-process snapshot test — and `System.Text.Json` writes a
+// ValueTuple as `{}`, because Item1 and Item2 are FIELDS and it serializes properties. So a saved fight came
+// back with one empty entry per combatant, every id `default`, and the restore asked the fight for a
+// combatant called "" and threw. A player who saved mid-fight could not continue their run. A named record
+// serializes because its members are properties; that is the whole difference, and it is why nothing that is
+// written to disk may be a tuple.
+public sealed record CombatantCardPlayTurnStatsSnapshot(
+    CombatantId CombatantId,
+    CardPlayTurnStatsSnapshot Stats);

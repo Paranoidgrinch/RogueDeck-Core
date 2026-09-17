@@ -15,7 +15,7 @@ public static class CombatStateSnapshotter
 
         var cardZones = combat.TurnOrder
             .Where(id => combat.CardZonesByCombatant.ContainsKey(id))
-            .Select(id => (id, SnapshotCardZones(combat.CardZonesByCombatant[id])))
+            .Select(id => new CombatantCardZonesEntry(id, SnapshotCardZones(combat.CardZonesByCombatant[id])))
             .ToImmutableArray();
 
         var globalStatuses = combat.GlobalStatuses
@@ -60,7 +60,7 @@ public static class CombatStateSnapshotter
             TemporaryRules: temporaryRules,
             // In TurnOrder, so the capture is stable and the restore can walk it beside the combatants.
             CardPlayTurnStats: combat.TurnOrder
-                .Select(id => (id, combat.GetCardPlayTurnStats(id).Capture()))
+                .Select(id => new CombatantCardPlayTurnStatsSnapshot(id, combat.GetCardPlayTurnStats(id).Capture()))
                 .ToImmutableArray());
     }
 
@@ -73,11 +73,11 @@ public static class CombatStateSnapshotter
             HealthCurrent: c.Health.Current,
             HealthMax: c.Health.Max,
             Resources: c.Resources
-                .Select(kv => (kv.Key, new PoolSnapshot(kv.Value.Current, kv.Value.Max, kv.Value.CanExceedMax)))
+                .Select(kv => new ResourcePoolSnapshot(kv.Key, new PoolSnapshot(kv.Value.Current, kv.Value.Max, kv.Value.CanExceedMax)))
                 .OrderBy(p => p.Key.value, StringComparer.Ordinal)
                 .ToImmutableArray(),
             DefensivePools: c.DefensivePools
-                .Select(kv => (kv.Key, new PoolSnapshot(kv.Value.Current, kv.Value.Max, kv.Value.CanExceedMax)))
+                .Select(kv => new DefensivePoolSnapshot(kv.Key, new PoolSnapshot(kv.Value.Current, kv.Value.Max, kv.Value.CanExceedMax)))
                 .OrderBy(p => p.Key.value, StringComparer.Ordinal)
                 .ToImmutableArray(),
             // AllStatuses: a snapshot has to carry the pending ones too, or a save would silently drop them.
@@ -86,7 +86,7 @@ public static class CombatStateSnapshotter
                 .OrderBy(t => t.value, StringComparer.Ordinal)
                 .ToImmutableArray(),
             Counters: c.Counters
-                .Select(kv => (kv.Key, kv.Value))
+                .Select(kv => new CounterSnapshot(kv.Key, kv.Value))
                 .OrderBy(p => p.Key.value, StringComparer.Ordinal)
                 .ToImmutableArray());
 
@@ -103,7 +103,7 @@ public static class CombatStateSnapshotter
                 .OrderBy(t => t.value, StringComparer.Ordinal)
                 .ToImmutableArray(),
             Counters: s.Counters
-                .Select(kv => (kv.Key, kv.Value))
+                .Select(kv => new CounterSnapshot(kv.Key, kv.Value))
                 .OrderBy(p => p.Key.value, StringComparer.Ordinal)
                 .ToImmutableArray(),
             SourceCombatantId: s.SourceCombatantId,
@@ -130,7 +130,7 @@ public static class CombatStateSnapshotter
                 .OrderBy(t => t.value, StringComparer.Ordinal)
                 .ToImmutableArray(),
             MarkCounters: c.MarkCounters
-                .Select(kv => (kv.Key, kv.Value))
+                .Select(kv => new CounterSnapshot(kv.Key, kv.Value))
                 .OrderBy(p => p.Key.value, StringComparer.Ordinal)
                 .ToImmutableArray(),
             MarkSourceCombatantId: c.MarkSourceCombatantId);

@@ -798,8 +798,13 @@ public sealed class CombatState
             combat._globalStatuses.Add(RestoreStatus(global));
 
         // Card zones, pile by pile in order (the snapshot preserves draw order).
+        // ⚠ AN ENTRY FOR NOBODY IS SKIPPED. A save written before the snapshot's tuples became records holds
+        // one blank entry per combatant, and a blank entry names the combatant "". There is nothing to
+        // restore for a fighter who is not in this fight, and there is no reason to end the run over it.
         foreach (var (combatantId, zones) in snapshot.CardZones)
         {
+            if (zones is null || !combat.Combatants.Any(c => c.Id == combatantId))
+                continue;
             var target = combat.GetCardZones(combatantId);
             RestorePile(target, combatantId, zones.DrawPile, CardZone.DrawPile);
             RestorePile(target, combatantId, zones.Hand, CardZone.Hand);
@@ -810,9 +815,14 @@ public sealed class CombatState
 
         // What each turn remembers. Default (an older snapshot) leaves the fresh, empty stats in place, which
         // is exactly what a restore did for everyone before this was captured.
+        // ⚠ AN ENTRY FOR SOMEBODY WHO IS NOT IN THIS FIGHT IS SKIPPED, NOT THROWN AT. A save written by an
+        // older build carries one blank entry per combatant (the tuple that did not survive JSON), and a run
+        // the player left mid-fight is not worth bricking over a turn's worth of statistics. What is lost is
+        // "more than last turn" reading zero for one turn; what was lost before was the run.
         if (!snapshot.CardPlayTurnStats.IsDefault)
-            foreach (var (combatantId, stats) in snapshot.CardPlayTurnStats)
-                combat.GetCardPlayTurnStats(combatantId).Restore(stats);
+            foreach (var entry in snapshot.CardPlayTurnStats)
+                if (combat.Combatants.Any(c => c.Id == entry.CombatantId))
+                    combat.GetCardPlayTurnStats(entry.CombatantId).Restore(entry.Stats);
 
         return combat;
     }
