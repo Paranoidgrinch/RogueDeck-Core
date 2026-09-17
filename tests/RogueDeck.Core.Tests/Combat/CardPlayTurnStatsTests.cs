@@ -368,6 +368,79 @@ public class CardPlayTurnStatsTests
         Assert.Equal(1, restored.CardDrawsThisTurn);
     }
 
+    // ★ THE FIGHT'S OWN TALLY, which is the one record here that a turn boundary does NOT clear. It exists
+    // because a rule about "a card you have already played THIS COMBAT" had nothing to read: every other
+    // count on this object is wiped before the next turn can ask.
+    [Fact]
+    public void ACardsPlayCountSurvivesTheTurnItWasPlayedIn()
+    {
+        var registry = CombatTestFactory.CreateStandardRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        var hero = combat.GetCombatant(HeroId);
+        EnsureEnergy(hero, current: 9, max: 9);
+
+        void PlayAStrike()
+        {
+            var strike = AddCardToZone(combat, HeroId, StandardCombatIds.StrikeCard, CardZone.Hand);
+            new CombatCardPlayProcessor().PlayCardInstance(
+                combat, registry,
+                new CardInstancePlayRequest(strike.Id, HeroId, GoblinId));
+        }
+
+        PlayAStrike();
+        var stats = combat.GetCardPlayTurnStats(HeroId);
+        Assert.Equal(1, stats.CardsPlayedThisCombatOf(StandardCombatIds.StrikeCard));
+
+        stats.Reset();                     // the turn ends
+        Assert.Equal(0, stats.CardsPlayedThisTurn);                                   // the turn forgets…
+        Assert.Equal(1, stats.CardsPlayedThisCombatOf(StandardCombatIds.StrikeCard)); // …the fight does not
+
+        PlayAStrike();
+        Assert.Equal(2, stats.CardsPlayedThisCombatOf(StandardCombatIds.StrikeCard));
+        Assert.Equal(0, stats.CardsPlayedThisCombatOf(StandardCombatIds.DefendCard));
+    }
+
+    // ⚠⚠ AND IT SURVIVES BEING PUT DOWN AND PICKED UP. This is the only play record a resumed fight cannot
+    // re-derive from the turn that follows, so it is the only one a mid-fight save can silently lose — which
+    // is exactly the shape of the defect that once ate nine pairs of a combat snapshot.
+    [Fact]
+    public void TheFightsTallyIsCapturedAndRestored()
+    {
+        var registry = CombatTestFactory.CreateStandardRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        var hero = combat.GetCombatant(HeroId);
+        EnsureEnergy(hero, current: 9, max: 9);
+
+        var strike = AddCardToZone(combat, HeroId, StandardCombatIds.StrikeCard, CardZone.Hand);
+        new CombatCardPlayProcessor().PlayCardInstance(
+            combat, registry, new CardInstancePlayRequest(strike.Id, HeroId, GoblinId));
+
+        var captured = combat.GetCardPlayTurnStats(HeroId).Capture();
+
+        var fresh = new CombatantCardPlayTurnStats();
+        Assert.Equal(0, fresh.CardsPlayedThisCombatOf(StandardCombatIds.StrikeCard));
+        fresh.Restore(captured);
+        Assert.Equal(1, fresh.CardsPlayedThisCombatOf(StandardCombatIds.StrikeCard));
+    }
+
+    // …and an OLD snapshot, written before the fight had a tally at all, restores as an empty one rather
+    // than throwing. `default` on an ImmutableArray is not an empty array, which is the trap here.
+    [Fact]
+    public void ASnapshotFromBeforeTheTallyExistedRestoresEmpty()
+    {
+        var older = new CardPlayTurnStatsSnapshot(
+            CardsPlayedThisTurn: 2, CardsPlayedLastTurn: 0, DamageDealtThisTurn: 0,
+            ResourceGainedThisTurn: 0, ResourceSpentThisTurn: 0, FirstCardPlayedDefinitionId: null,
+            ByDefinitionThisTurn: [], ByTagThisTurn: [], ByTagLastTurn: [],
+            FirstCardTagsThisTurn: [], FirstCardTagsLastTurn: []);
+
+        var stats = new CombatantCardPlayTurnStats();
+        stats.Restore(older);
+
+        Assert.Equal(2, stats.CardsPlayedThisTurn);
+        Assert.Equal(0, stats.CardsPlayedThisCombatOf(StandardCombatIds.StrikeCard));
+    }
+
     private static void EnsureEnergy(
         CombatantState combatant,
         int current,

@@ -355,6 +355,15 @@ public interface IStealSelectedStatusNodeCore : INativeEffectOperationNode
     Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(StealStatusInstanceEffectRequest);
 }
 
+// Says that an authored rule reached its moment, in the rule's own words, from a named combatant. It changes
+// nothing — which is why it is not an INativeEffectOperationNode: there is no effect request behind it, only
+// an event other rules can hear (RuleAnnouncedCombatEvent).
+public interface IAnnounceRuleNodeCore : IEffectNode
+{
+    ICombatantTargetSelector AnnouncerSelector { get; }
+    string Rule { get; }
+}
+
 // Writes a target combatant's persistent per-fight counter (#persistent-combat-stats). Relative adds the
 // evaluated amount; otherwise sets it absolutely.
 public interface ISetCombatantCounterNodeCore : INativeEffectOperationNode

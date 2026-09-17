@@ -289,6 +289,15 @@ public static class TriggeredProgramContextAdapters
             },
             StatusStacksChangedTriggeredEffectTargetResolver.CreateActionBuildContext);
 
+    public static readonly TriggeredProgramAdapter<RuleAnnouncedCombatEvent, RuleAnnouncedTriggeredEffectContext>
+        RuleAnnounced = new(
+            (combat, registry, e) =>
+            {
+                if (!combat.TryGetCombatant(e.AnnouncerCombatantId, out var announcer)) return null;
+                return new RuleAnnouncedTriggeredEffectContext(combat, registry, e, announcer!);
+            },
+            RuleAnnouncedTriggeredEffectTargetResolver.CreateActionBuildContext);
+
     public static readonly TriggeredProgramAdapter<BlockGainedCombatEvent, BlockGainedTriggeredEffectContext>
         BlockGained = new(
             (combat, registry, e) =>

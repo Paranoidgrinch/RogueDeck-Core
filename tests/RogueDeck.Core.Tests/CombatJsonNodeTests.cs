@@ -28,6 +28,55 @@ public class CombatJsonNodeTests
         Assert.Equal(6, Assert.IsType<ConstantExpression<CardPlayContext>>(deal.Amount).Value);
     }
 
+    // ★ THE TWO NEW SEAMS GO ON THE WIRE, or content cannot use them: every authored program travels as JSON
+    // in the game document, so a node the serializer does not know is a rule that vanishes on export.
+    [Fact]
+    public void An_announcement_round_trips()
+    {
+        IEffectNode<CardPlayContext> node = new AnnounceRuleNode<CardPlayContext>(
+            new SourceCombatantTargetSelector(), "reference_fulfilled");
+
+        var json = CombatJson.ToJson(node, Options);
+        var back = CombatJson.FromJson<IEffectNode<CardPlayContext>>(json, Options);
+
+        Assert.Equal(json, CombatJson.ToJson(back, Options));
+        var announce = Assert.IsType<AnnounceRuleNode<CardPlayContext>>(back);
+        Assert.Equal("reference_fulfilled", announce.Rule);
+        Assert.IsType<SourceCombatantTargetSelector>(announce.AnnouncerSelector);
+    }
+
+    [Fact]
+    public void Reading_an_announcement_and_a_fights_play_tally_round_trip()
+    {
+        ICombatExpression<CardPlayContext, bool> named =
+            new AnnouncedRuleIsExpression<CardPlayContext>("misfiling_skipped");
+        ICombatExpression<CardPlayContext, int> plays =
+            new CardPlaysThisCombatExpression<CardPlayContext>(
+                new SourceCombatantTargetSelector(),
+                new TriggerEventCardInstanceExpression<CardPlayContext>());
+
+        var namedJson = CombatJson.ToJson(named, Options);
+        var playsJson = CombatJson.ToJson(plays, Options);
+
+        var namedBack = CombatJson.FromJson<ICombatExpression<CardPlayContext, bool>>(namedJson, Options);
+        var playsBack = CombatJson.FromJson<ICombatExpression<CardPlayContext, int>>(playsJson, Options);
+
+        Assert.Equal(namedJson, CombatJson.ToJson(namedBack, Options));
+        Assert.Equal(playsJson, CombatJson.ToJson(playsBack, Options));
+        Assert.Equal("misfiling_skipped",
+            Assert.IsType<AnnouncedRuleIsExpression<CardPlayContext>>(namedBack).Rule);
+        Assert.IsType<CardPlaysThisCombatExpression<CardPlayContext>>(playsBack);
+    }
+
+    // An announcement needs a name; a nameless one would be an event nothing could tell from another.
+    [Fact]
+    public void An_announcement_without_a_name_is_refused()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            new AnnounceRuleNode<CardPlayContext>(new SourceCombatantTargetSelector(), "  "));
+        Assert.Throws<ArgumentException>(() => new AnnouncedRuleIsExpression<CardPlayContext>(""));
+    }
+
     [Fact]
     public void Heal_and_gain_block_nodes_round_trip()
     {

@@ -3,6 +3,14 @@
 public sealed class CombatantCardPlayTurnStats
 {
     private readonly Dictionary<CardDefinitionId, int> _cardsPlayedByDefinitionThisTurn = new();
+
+    // ★ WHAT THIS WHOLE FIGHT HAS PLAYED, per card definition — the one record here that does NOT reset.
+    // Everything else on this object is about a turn, and that was the limit content kept running into: a rule
+    // about "a card you have already played THIS COMBAT" (Act II's Expunged Name — "the first time each turn
+    // the player plays a card whose name has already been played earlier in the combat") had nothing to read,
+    // because the per-turn tally is cleared before the next turn can ask about it. A name, once played, is
+    // played for the rest of the fight; this is where that is remembered.
+    private readonly Dictionary<CardDefinitionId, int> _cardsPlayedByDefinitionThisCombat = new();
     private readonly Dictionary<TagId, int> _cardsPlayedByTagThisTurn = new();
 
     // Card ORDERING within the turn: the tag set of the FIRST card played this turn (empty until one is
@@ -92,9 +100,17 @@ public sealed class CombatantCardPlayTurnStats
     // the turn-scoped sibling of CombatState.TryClaimOnceThisAction.
     public bool TryClaimOnceThisTurn(string key) => _claimedThisTurn.Add(key);
 
+    // How many times this combatant has played that card definition in this FIGHT, the current play included.
+    // Content asks "> 1" to mean "I have played this before".
+    public int CardsPlayedThisCombatOf(CardDefinitionId definition) =>
+        _cardsPlayedByDefinitionThisCombat.GetValueOrDefault(definition);
+
     public void RecordCardPlayed(CardDefinition card)
     {
         ArgumentNullException.ThrowIfNull(card);
+
+        _cardsPlayedByDefinitionThisCombat[card.Id] =
+            _cardsPlayedByDefinitionThisCombat.GetValueOrDefault(card.Id) + 1;
 
         if (CardsPlayedThisTurn == 0)
         {
@@ -183,7 +199,10 @@ public sealed class CombatantCardPlayTurnStats
         CardDrawsThisTurn,
         LastCardPlayedDefinitionId?.value,
         [.. _lastCardPlayedTags.Select(t => t.value).OrderBy(v => v, StringComparer.Ordinal)],
-        [.. _claimedThisTurn.OrderBy(v => v, StringComparer.Ordinal)]);
+        [.. _claimedThisTurn.OrderBy(v => v, StringComparer.Ordinal)],
+        [.. _cardsPlayedByDefinitionThisCombat
+            .Select(e => new CountedKeySnapshot(e.Key.value, e.Value))
+            .OrderBy(e => e.Key, StringComparer.Ordinal)]);
 
     public void Restore(CardPlayTurnStatsSnapshot snapshot)
     {
@@ -215,12 +234,28 @@ public sealed class CombatantCardPlayTurnStats
         LastCardPlayedDefinitionId = snapshot.LastCardPlayedDefinitionId is { } lastId
             ? new CardDefinitionId(lastId)
             : null;
+        // ⚠⚠ EVERY DEFAULTED ARRAY IS CHECKED, and this is a FIX, not a precaution. `default` on an
+        // ImmutableArray is not an empty array — enumerating it throws NullReferenceException — and these
+        // three fields were appended to the snapshot with `= default` precisely so that OLDER snapshots
+        // could still be read. They could not: a fight saved before this record grew its last-card tags, its
+        // claims or its combat tally crashed on the way back in, at the one moment a player has no way to
+        // recover from. MEASURED by the test that was written for the newest field and fell over on the
+        // older two.
         _lastCardPlayedTags.Clear();
-        foreach (var tag in snapshot.LastCardTagsThisTurn)
-            _lastCardPlayedTags.Add(new TagId(tag));
+        if (!snapshot.LastCardTagsThisTurn.IsDefault)
+            foreach (var tag in snapshot.LastCardTagsThisTurn)
+                _lastCardPlayedTags.Add(new TagId(tag));
         _claimedThisTurn.Clear();
-        foreach (var claim in snapshot.ClaimedThisTurn)
-            _claimedThisTurn.Add(claim);
+        if (!snapshot.ClaimedThisTurn.IsDefault)
+            foreach (var claim in snapshot.ClaimedThisTurn)
+                _claimedThisTurn.Add(claim);
+
+        // The fight's tally is the one that matters most to get right: everything else here is rebuilt by the
+        // turn that follows, while this is the only record a resumed fight cannot re-derive.
+        _cardsPlayedByDefinitionThisCombat.Clear();
+        if (!snapshot.ByDefinitionThisCombat.IsDefault)
+            foreach (var entry in snapshot.ByDefinitionThisCombat)
+                _cardsPlayedByDefinitionThisCombat[new CardDefinitionId(entry.Key)] = entry.Count;
     }
 
 }
@@ -349,4 +384,8 @@ public sealed record CardPlayTurnStatsSnapshot(
     // truth for every fight that never met a rule about succession or a once-a-turn ceiling.
     string? LastCardPlayedDefinitionId = null,
     System.Collections.Immutable.ImmutableArray<string> LastCardTagsThisTurn = default,
-    System.Collections.Immutable.ImmutableArray<string> ClaimedThisTurn = default);
+    System.Collections.Immutable.ImmutableArray<string> ClaimedThisTurn = default,
+    // ⚠ AND THE FIGHT'S OWN TALLY, which is the only thing here that outlives a turn — so it is the only
+    // thing here a mid-fight save can LOSE. Defaulted like its neighbours: a snapshot written before this
+    // existed reads "nothing has been played twice", which is what a fight with no such rule would have said.
+    System.Collections.Immutable.ImmutableArray<CountedKeySnapshot> ByDefinitionThisCombat = default);

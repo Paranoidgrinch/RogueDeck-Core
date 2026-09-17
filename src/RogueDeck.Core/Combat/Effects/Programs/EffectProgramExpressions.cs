@@ -1490,6 +1490,56 @@ public sealed class CardsPlayedThisTurnExpression<TContext> : ICombatExpression<
     }
 }
 
+// ★ HOW MANY TIMES THIS FIGHT HAS PLAYED THAT CARD — the combat-long counterpart of
+// `cardsPlayedThisTurnWithTag`, and the only play record here that survives a turn boundary.
+//
+// It answers about a CARD INSTANCE's definition, not about a name given in the program, because the rule it
+// exists for is "the card you are playing now is one you have played before" (Act II's Expunged Name) — the
+// card in question is the one in the event, and no authored program can know its id in advance.
+//
+// ⚠ THE CURRENT PLAY IS ALREADY COUNTED when a CardPlayed trigger reads this: the tally is written by
+// `TrackCardsPlayedThisTurnHandler` as the play resolves, and a trigger fires after. So "I have played this
+// before" is `> 1`, not `> 0`, and a program that asks for `> 0` is asking whether the card exists.
+public sealed class CardPlaysThisCombatExpression<TContext> : ICombatExpression<TContext, int>
+    where TContext : class
+{
+    public ICombatantTargetSelector Selector { get; }
+    public ICardInstanceExpression<TContext> Card { get; }
+
+    public CardPlaysThisCombatExpression(
+        ICombatantTargetSelector selector, ICardInstanceExpression<TContext> card)
+    {
+        ArgumentNullException.ThrowIfNull(selector);
+        ArgumentNullException.ThrowIfNull(card);
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
+        Card = card;
+    }
+
+    public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(combat);
+        var selCtx = context.GetTargetSelectionContext();
+        var targets = Selector.ResolveTargets(selCtx);
+        if (targets.Count == 0)
+            return 0;
+        if (Card.Evaluate(context, combat) is not { } instanceId)
+            return 0;
+
+        // An instance names its definition, and only its owner's zones know which instance it is — the same
+        // walk `CardInstanceBaseCostExpression` takes. A card already gone from every zone (played and
+        // exhausted in the same breath) is a card nothing can be asked about, which reads as nothing.
+        foreach (var zones in combat.CardZonesByCombatant.Values)
+        {
+            if (!zones.ContainsCard(instanceId))
+                continue;
+            return combat.GetCardPlayTurnStats(ScalarTargetExpression.RequireSingle(targets))
+                .CardsPlayedThisCombatOf(zones.GetCard(instanceId).DefinitionId);
+        }
+        return 0;
+    }
+}
+
 // Which draw of this turn is being looked at: 1 is the hand the turn opened with, 2 and up is anything a
 // card or a rule drew afterwards.
 public sealed class CardDrawsThisTurnExpression<TContext> : ICombatExpression<TContext, int>
@@ -2199,6 +2249,29 @@ public sealed class ActionDealtDamageExpression<TContext> : ICombatExpression<TC
 {
     public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat) =>
         context.SourceContext is ActionResolvedTriggeredEffectContext resolved && resolved.CombatEvent.DealtDamage;
+}
+
+// WHICH RULE JUST ANNOUNCED ITSELF. True only inside a program triggered by that announcement, and only when
+// the name matches — so one listener can tell a Delinquency resolving from a Reference being fulfilled, which
+// is what an Index counting four different moments needs. Anywhere else it is simply false.
+public sealed class AnnouncedRuleIsExpression<TContext> : ICombatExpression<TContext, bool>
+    where TContext : class
+{
+    public string Rule { get; }
+
+    public AnnouncedRuleIsExpression(string rule)
+    {
+        if (string.IsNullOrWhiteSpace(rule))
+            throw new ArgumentException("A rule name is needed to compare against.", nameof(rule));
+        Rule = rule;
+    }
+
+    public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return context.SourceContext is RuleAnnouncedTriggeredEffectContext announced
+            && string.Equals(announced.CombatEvent.Rule, Rule, StringComparison.Ordinal);
+    }
 }
 
 public sealed class TriggerEventCardInstanceExpression<TContext>

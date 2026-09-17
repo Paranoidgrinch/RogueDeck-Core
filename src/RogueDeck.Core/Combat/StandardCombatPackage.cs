@@ -176,6 +176,7 @@ public sealed class StandardCombatPackage : ICombatPackage
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.ResourceRefilled.CreateHandler());
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.StatusStacksChanged.CreateHandler());
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.BlockGained.CreateHandler());
+        registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.RuleAnnounced.CreateHandler());
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.StatusDurationChanged.CreateHandler());
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.StatusChargesChanged.CreateHandler());
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.CombatantDowned.CreateHandler());
@@ -227,6 +228,7 @@ public sealed class StandardCombatPackage : ICombatPackage
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(MarkCardInstanceNode<>), new MarkCardInstanceNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(SetCardInstanceMarkCounterNode<>), new SetCardInstanceMarkCounterNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(SetCombatantCounterNode<>), new SetCombatantCounterNodeExecutor());
+        registry.RegisterEffectNodeExecutorOpenGeneric(typeof(AnnounceRuleNode<>), new AnnounceRuleNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(RemoveSelectedStatusNode<>), new RemoveSelectedStatusNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(ModifySelectedStatusStacksNode<>), new ModifySelectedStatusStacksNodeExecutor());
         registry.RegisterEffectNodeExecutorOpenGeneric(typeof(ModifySelectedResourceNode<>), new ModifySelectedResourceNodeExecutor());

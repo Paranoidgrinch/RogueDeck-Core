@@ -71,6 +71,7 @@ public sealed class EffectNodeExecutorRegistry
         r.RegisterOpenGeneric(typeof(ModifySelectedResourceNode<>), new ModifySelectedResourceNodeExecutor());
         r.RegisterOpenGeneric(typeof(StealSelectedStatusNode<>), new StealSelectedStatusNodeExecutor());
         r.RegisterOpenGeneric(typeof(SetCombatantCounterNode<>), new SetCombatantCounterNodeExecutor());
+        r.RegisterOpenGeneric(typeof(AnnounceRuleNode<>), new AnnounceRuleNodeExecutor());
         r.RegisterOpenGeneric(typeof(MarkCardInstanceNode<>), new MarkCardInstanceNodeExecutor());
         r.RegisterOpenGeneric(typeof(SetCardInstanceMarkCounterNode<>), new SetCardInstanceMarkCounterNodeExecutor());
         r.RegisterOpenGeneric(typeof(RemoveStatusesByPolarityNode<>), new RemoveStatusesByPolarityNodeExecutor());
@@ -946,6 +947,24 @@ internal sealed class ApplyStatusNodeExecutor : IEffectNodeExecutor
         {
             combat.EnqueueContinuation(onComplete);
         }
+    }
+}
+
+internal sealed class AnnounceRuleNodeExecutor : IEffectNodeExecutor
+{
+    public void Execute(IEffectNode node, IEffectExecutionContextCore ctx, CombatState combat,
+        Action<CombatState>? onComplete, Action<IEffectNode, CombatState, Action<CombatState>?> dispatch)
+    {
+        var typed = (IAnnounceRuleNodeCore)node;
+
+        // ⚠ THE EVENT IS ENQUEUED, NOT AN EFFECT REQUEST. An announcement changes nothing about the fight, so
+        // there is nothing to request — but it must still travel the ordinary event queue, or a rule that
+        // reacts to it would run INSIDE the announcing rule's own resolution rather than after it.
+        foreach (var announcer in typed.AnnouncerSelector.ResolveTargetsTraced(ctx, combat))
+            combat.EnqueueEvent(new RuleAnnouncedCombatEvent(announcer, typed.Rule));
+
+        if (onComplete is not null)
+            combat.EnqueueContinuation(onComplete);
     }
 }
 

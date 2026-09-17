@@ -157,3 +157,59 @@ never test through hand-built registries), all suites green, and a push to `orig
 - Combat `CardInstance` = `{Id, DefinitionId(mutable), OwnerId, Zone}` — **no marks**. → gap A.
 - `DamageAmountModificationContext` = `{…, SourceCardId(def), …}` — **no instance**. → gap B.
 - `CombatantCardPlayTurnStats`: counts by definition/tag, damage, resource — **no order/first-type**. → gap C.
+
+---
+
+## Part 5 — The two seams Act II's last signatures needed (2026-09-17)
+
+Five of Act II's twenty-five standard signatures were unbuildable, and four of them for the same kind of
+reason: **the engine could not SAY the thing.** Two small additions closed them. Both are general; neither is
+about Act II.
+
+### 5.1 `node.announceRule` — a rule reporting that it reached its moment
+
+Every event in `CombatEvents.cs` was something the ENGINE did. A rule written in CONTENT had no way to report
+that it had fired — and three mechanics were written entirely about that: a body watching another body's
+signature trigger, and an Index counting a Delinquency resolving, a Reference being fulfilled and a Misfiled
+card being skipped. None of those is an engine event; each is a **conclusion another rule reached**.
+
+| piece | what it is |
+|---|---|
+| `RuleAnnouncedCombatEvent(announcer, rule)` | the event; a name and who said it |
+| `AnnounceRuleNode<TContext>` (`node.announceRule`) | raises it; put inside a signature's own program |
+| `TriggerEvent.RuleAnnounced` | listens; bearer-scoped = "when I announce", `Anywhere` = "when anybody does" |
+| `AnnouncedRuleIsExpression` (`announcedRuleIs`) | which rule it was |
+
+- ⚠ **Opt-in by construction.** An automatic "a triggered program ran" event would flood a fight with
+  hundreds a round AND still be the wrong question — a status ticking a latch is not its signature reaching
+  its moment. Content decides which moments count and names them in its own words.
+- ⚠ **The one native node that is not an `INativeEffectOperationNode`.** An announcement changes nothing, so
+  there is no effect request behind it. It is still ENQUEUED as an event rather than dispatched inline, or a
+  listener would run inside the announcing rule's own resolution instead of after it.
+- The announcer is both the context's source and its event target, which is what lets a listener find itself
+  from the announcer's side (`alliesOfSourceWithStatus(<its own marker>)` — the Oath Candle's shape).
+
+### 5.2 `cardPlaysThisCombat` — a play record that outlives the turn
+
+`CombatantCardPlayTurnStats` was entirely per-TURN and wiped by
+`ResetCardPlayTurnStatsOnTurnStartedHandler`, so "a card whose name has already been played earlier in the
+COMBAT" had nothing to read. It now keeps one dictionary that `Reset()` does not clear, captured and restored
+with the rest of the record.
+
+- ⚠ **The current play is already counted** when a `CardPlayed` trigger reads it — "I have played this
+  before" is `> 1`, not `> 0`.
+- ⚠⚠ **A pre-existing crash came out with it.** `Restore` enumerated three defaulted snapshot arrays without
+  checking `IsDefault`, and `default` on an `ImmutableArray` is not an empty array — it throws. Those fields
+  were appended with `= default` *precisely* so that older snapshots could be read, and they could not: a
+  fight saved before the record grew its last-card tags or its claims **crashed on the way back in**. Found
+  by the test written for the new field, which fell over on the older two. Every defaulted array in `Restore`
+  is now guarded.
+
+### 5.3 A third fact, which needed no new engine work at all
+
+"If the Jar dies before resolution, Stored Life is lost" looked like it wanted a third seam — a
+living-agnostic ally selector — and did not. ⚠⚠ **A guard about a just-downed body must ask through
+`sourceIncludingDowned`.** Asked about `eventTarget`, the obvious way to say "the body that went down", the
+guard is simply FALSE: an ordinary target selector will not resolve to a combatant that is no longer living.
+The allies themselves resolve fine, because they are alive. This is the same trap Part 4 records for allies,
+and it costs exactly as much when it is the downed body itself being asked about.

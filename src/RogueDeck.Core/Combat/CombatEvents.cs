@@ -147,6 +147,23 @@ public sealed record HealedCombatEvent(
 
 // A combatant actually gained Block (a gain modified down to zero raises nothing). The counterpart of
 // HealedCombatEvent for the defensive pool — what "whenever someone gains Block" hooks listen to.
+// ★ AN AUTHORED RULE REACHING ITS MOMENT, said out loud.
+//
+// Everything else in this file is something the ENGINE did: damage landed, a card moved, a status expired. A
+// rule written in content had no way to report that it had fired, and three separate mechanics wanted exactly
+// that — "the first time each round the Source's signature mechanic actually triggers" (Act II's Detached
+// Footnote), and an Index that counts a Delinquency resolving, a Reference being fulfilled and a Misfiled card
+// actually being skipped. None of those moments is an engine event; each is a CONCLUSION another rule reached.
+//
+// ⚠ IT IS OPT-IN, and that is the whole design. The alternative — raising an event whenever any triggered
+// program runs — would flood every fight with hundreds of announcements a round, and would still be wrong:
+// a status ticking its latch is not its signature reaching its moment. Content says which moment counts, by
+// putting an announcement in it, and names it in its own words.
+public sealed record RuleAnnouncedCombatEvent(
+    CombatantId AnnouncerCombatantId,
+    string Rule
+) : ICombatEvent;
+
 public sealed record BlockGainedCombatEvent(
     CombatantId TargetCombatantId,
     int GainedAmount,

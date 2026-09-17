@@ -96,6 +96,12 @@ public static class StatusDataRebuild
                 id, Program<BlockGainedTriggeredEffectContext>(data),
                 filters: Scoped<BlockGainedTriggeredEffectContext>(c => c.Combat,
                     new BlockGainedTargetHasStatusTriggerFilter(statusId))),
+            // A bearer-scoped announcement trigger means "when I announce"; Anywhere means "when anybody
+            // does", which is the interesting one — a rule that watches another body's signature.
+            TriggerEvent.RuleAnnounced => TriggeredProgramContextAdapters.RuleAnnounced.Define(
+                id, Program<RuleAnnouncedTriggeredEffectContext>(data),
+                filters: Scoped<RuleAnnouncedTriggeredEffectContext>(c => c.Combat,
+                    new RuleAnnouncedAnnouncerHasStatusTriggerFilter(statusId))),
             TriggerEvent.CardsDrawn => TriggeredProgramContextAdapters.CardsDrawn.Define(
                 id, Program<CardsDrawnTriggeredEffectContext>(data),
                 filters: Scoped<CardsDrawnTriggeredEffectContext>(c => c.Combat,

@@ -626,6 +626,30 @@ public sealed class StealSelectedStatusNode<TContext> : IStealSelectedStatusNode
     }
 }
 
+// Announces that an authored rule reached its moment (RuleAnnouncedCombatEvent). Put inside a signature's own
+// program, at the point the signature actually DID its thing — not where it was merely consulted. Heard by any
+// rule watching TriggerEvent.RuleAnnounced; `announcedRuleIs` reads which one it was, and `eventTarget` is who
+// announced it.
+public sealed class AnnounceRuleNode<TContext> : IAnnounceRuleNodeCore, IEffectNode<TContext>
+    where TContext : class
+{
+    public ICombatantTargetSelector AnnouncerSelector { get; }
+    public string Rule { get; }
+
+    public IReadOnlyList<IEffectNode<TContext>> Children => [];
+
+    public AnnounceRuleNode(ICombatantTargetSelector announcerSelector, string rule)
+    {
+        ArgumentNullException.ThrowIfNull(announcerSelector);
+        if (string.IsNullOrWhiteSpace(rule))
+            throw new ArgumentException("A rule announcement needs a name.", nameof(rule));
+        AnnouncerSelector = announcerSelector;
+        Rule = rule;
+    }
+
+    public IEnumerable<ICombatantTargetSelector> GetTargetSelectors() => [AnnouncerSelector];
+}
+
 // Writes a target combatant's persistent per-fight counter (#persistent-combat-stats): "add 1 to your combo
 // counter each time this card is played". Read it back with CombatantCounterExpression.
 public sealed class SetCombatantCounterNode<TContext> : ISetCombatantCounterNodeCore, IEffectNode<TContext>

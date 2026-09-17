@@ -286,3 +286,38 @@ public static class BlockGainedTriggeredEffectTargetResolver
             new TriggeredEffectActionSource(context.CombatEvent.TargetCombatantId));
     }
 }
+
+// ── RuleAnnounced ────────────────────────────────────────────────────────────
+// "Whenever an authored rule says it reached its moment" (RuleAnnouncedCombatEvent, raised by
+// `node.announceRule`). The ANNOUNCER is both the event target and the source, which is what lets a listener
+// find itself the way the Oath Candle does: `alliesWithStatus(<its own marker>)` resolved from the announcer
+// picks out the listeners on the announcer's side and nobody else. `announcedRuleIs` reads which rule it was.
+public sealed record RuleAnnouncedTriggeredEffectContext(
+    CombatState Combat,
+    CombatDefinitionRegistry Registry,
+    RuleAnnouncedCombatEvent CombatEvent,
+    CombatantState AnnouncerCombatant);
+
+// For a BEARER-scoped status trigger: fire only when the announcement came from the bearer itself.
+public sealed record RuleAnnouncedAnnouncerHasStatusTriggerFilter(StatusDefinitionId StatusDefinitionId)
+    : ITriggeredProgramFilter<RuleAnnouncedTriggeredEffectContext>
+{
+    public bool Matches(RuleAnnouncedTriggeredEffectContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return context.AnnouncerCombatant.Statuses.Any(status => status.DefinitionId == StatusDefinitionId);
+    }
+}
+
+public static class RuleAnnouncedTriggeredEffectTargetResolver
+{
+    public static TriggeredEffectActionBuildContext CreateActionBuildContext(
+        RuleAnnouncedTriggeredEffectContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return new TriggeredEffectActionBuildContext(
+            new CombatantTargetSelectionContext(
+                context.Combat, context.AnnouncerCombatant, context.CombatEvent.AnnouncerCombatantId),
+            new TriggeredEffectActionSource(context.CombatEvent.AnnouncerCombatantId));
+    }
+}

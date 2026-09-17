@@ -62,4 +62,9 @@ public enum TriggerEvent
     // when the bearer finishes an ACTION — one card it played, or one action it took. The event says whether
     // that action struck the other side, which is what tells a damaging action from a utility one.
     ActionResolved,
+    // ★ when an AUTHORED rule says it reached its moment (`node.announceRule`). The only trigger here that
+    // no engine event raises: content decides which moments count and names them, and a listener reads the
+    // name with `announcedRuleIs`. Opt-in by construction — see RuleAnnouncedCombatEvent for why an
+    // automatic "a program fired" event would be both a flood and the wrong question.
+    RuleAnnounced,
 }

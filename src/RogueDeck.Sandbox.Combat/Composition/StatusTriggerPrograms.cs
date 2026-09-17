@@ -64,6 +64,7 @@ public static class StatusTriggerPrograms
             [TriggerEvent.StatusApplicationPrevented] = For<StatusApplicationBlockedTriggeredEffectContext>(),
             [TriggerEvent.StatusApplicationAmplified] = For<StatusApplicationAmplifiedTriggeredEffectContext>(),
             [TriggerEvent.ActionResolved] = For<ActionResolvedTriggeredEffectContext>(),
+            [TriggerEvent.RuleAnnounced] = For<RuleAnnouncedTriggeredEffectContext>(),
         };
 
     public static StatusTriggerProgram Get(TriggerEvent ev) => ByEvent[ev];
