@@ -1,0 +1,31 @@
+<Project>
+
+  <!-- ⚠⚠ WHICH CONFIGURATIONS THIS ENGINE ADMITS TO HAVING — AND WHY IT MATTERS MORE THAN IT LOOKS.
+       MSBuild only builds a ProjectReference in the consumer's configuration if the referenced project
+       DECLARES that configuration. Undeclared, it silently falls back to Debug, and nothing anywhere says so.
+       Two consumers were hitting that, both invisibly:
+
+         · Godot exports the game in `ExportRelease`. The engine had never heard of that name, so every
+           shipped binary carried an UNOPTIMIZED engine — measured on 2026-09-18: the exported
+           RogueDeck.Core.dll was byte-for-byte the size of the Debug one, and a whole-game run out of the
+           exported binary took 38.5 s against 31.3 s for the same run on an optimized build.
+         · bnb-content's `dotnet build -c Release` builds its .slnx, and the engine projects are not IN that
+           solution — a solution assigns configurations only to its own members. The engine came out Debug
+           and was copied into `bin/Release`, where it looked like a Release build for as long as anyone
+           cared to check the folder name instead of the file size. (Build the PROJECT, not the solution.)
+
+       `Optimize` is the whole of Release here: neither repo contains a single `#if DEBUG` or `Debug.Assert`,
+       so the DEBUG constant changes nothing and the optimizer changes ~25 %. -->
+  <PropertyGroup>
+    <Configurations>Debug;Release;ExportRelease</Configurations>
+  </PropertyGroup>
+
+  <!-- MSBuild turns the optimizer on by itself only for the configuration literally named `Release`. A
+       configuration of any other name is unoptimized unless it says otherwise, which is exactly how
+       `ExportRelease` came to mean `Debug with a different folder`. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'ExportRelease'">
+    <Optimize>true</Optimize>
+    <DebugType>portable</DebugType>
+  </PropertyGroup>
+
+</Project>
