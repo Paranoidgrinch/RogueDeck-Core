@@ -2,6 +2,7 @@ using System.Diagnostics;
 using RogueDeck.Core.Combat;
 using RogueDeck.Run;
 using RogueDeck.Sandbox.Composition;
+using RogueDeck.Sandbox.Run;
 using RogueDeck.Scenario.Scripting;
 
 namespace RogueDeck.Bot;
@@ -64,6 +65,10 @@ internal sealed class BotMind
     public readonly Dictionary<int, int> DamageAtActBoss = [];
 
     private int _loggedNarration;
+    // THE RUN AS IT LAST STOOD. Both seats hand it over before every answer (Observe), and a decision that
+    // needs to know what the player already CARRIES — is this reward better than the deck I have? — reads it
+    // from here rather than asking for a parameter no seat could fill at the moment it is asked.
+    private RunState? _run;
     private string? _lastRoom;
     private int _hpBeforeRoom;
     private int _hpLastSeen;
@@ -91,6 +96,7 @@ internal sealed class BotMind
     public void Opening(RunState run)
     {
         ArgumentNullException.ThrowIfNull(run);
+        _run = run;
         _hpLastSeen = run.Health.Current;
         _log.Line($"sim: policy={_policy?.Name ?? "random"} seed={_options.Seed} maps={_options.Maps} "
             + $"character={_options.Character ?? "—"} "
@@ -120,6 +126,7 @@ internal sealed class BotMind
     public void Observe(RunState run, InteractiveCombat? combat)
     {
         ArgumentNullException.ThrowIfNull(run);
+        _run = run;
 
         var hpNow = run.Health.Current;
         if (hpNow < _hpLastSeen)
@@ -318,19 +325,86 @@ internal sealed class BotMind
         return pick;
     }
 
-    // A skippable offer is skipped now and then, on purpose: a deck that takes every card and a deck that
-    // refuses one are different games.
-    public IReadOnlyList<int> EntityPicks(IReadOnlyList<string> displays, int count, bool allowSkip, string purpose)
+    // ── WHAT IT TAKES ────────────────────────────────────────────────────────────────────────────────────
+    // A reward, a relic, a card off a shelf — offered by name, and answered by index. The name is for the log
+    // only: WHICH thing each offer is comes from `arts`, the same identity a reward screen draws its card
+    // face from (RunEntityLabeler.ArtFor), because a display string cannot be turned back into an id.
+    //
+    // ⚠ THE DICE PLAYER'S DRAWS ARE FROZEN — the golden set is recorded through them. Its arm below is the
+    // code that was here before anything was scored: the skip roll first, then the picks. The two arms are
+    // whole rather than sharing a tail so that nothing done for the policy can reach into it.
+    public IReadOnlyList<int> EntityPicks(
+        IReadOnlyList<string> displays, IReadOnlyList<EntityArt?> arts, int count, bool allowSkip, string purpose)
     {
         ArgumentNullException.ThrowIfNull(displays);
-        var take = allowSkip && (_policy is null ? _rng.NextDouble() < 0.2 : _policy.RewardSkip > 0.5)
+        ArgumentNullException.ThrowIfNull(arts);
+
+        if (_policy is null)
+        {
+            var rolled = allowSkip && _rng.NextDouble() < 0.2 ? [] : RunBot.Pick(_rng, displays.Count, count);
+            _log.Line($"  pick [{purpose}] -> "
+                + (rolled.Count == 0 ? "skipped" : string.Join(", ", rolled.Select(i => displays[i])))
+                + $" (of {displays.Count})");
+            return rolled;
+        }
+
+        // Every offer through the same evaluator that scores a card in hand. The tie is broken by ONE
+        // permutation drawn whether it is needed or not: a relic pick, where the crude features make almost
+        // everything score alike, must still vary between runs instead of always taking whatever the reward
+        // source happened to print first — and the number of dice a pick throws must depend on how many
+        // offers there were and on NOTHING ELSE, or the two seats would part company over a tie.
+        var order = RunBot.Pick(_rng, displays.Count, displays.Count);
+        var rank = new int[displays.Count];
+        for (var at = 0; at < order.Count; at++)
+            rank[order[at]] = at;
+
+        var scores = new double[displays.Count];
+        for (var i = 0; i < displays.Count; i++)
+            scores[i] = ScoreOffer(i < arts.Count ? arts[i] : null);
+
+        var ranked = Enumerable.Range(0, displays.Count)
+            .OrderByDescending(i => scores[i]).ThenBy(i => rank[i]).ToList();
+        var best = ranked[0];
+        var take = allowSkip && WalksAway(best < arts.Count ? arts[best] : null, scores[best])
             ? []
-            : RunBot.Pick(_rng, displays.Count, count);
+            : ranked.Take(count).ToList();
         _log.Line($"  pick [{purpose}] -> "
-            + (take.Count == 0 ? "skipped" : string.Join(", ", take.Select(i => displays[i])))
+            + (take.Count == 0
+                ? $"skipped (best {displays[best]} {scores[best]:0.##})"
+                : string.Join(", ", take.Select(i => $"{displays[i]} {scores[i]:0.##}")))
             + $" (of {displays.Count})");
         return take;
     }
+
+    // WHETHER TO WALK AWAY, asked the way a player asks it: is this CARD better than the ones I already
+    // carry? What is compared is not the score itself but the share of the deck it beats, against the
+    // policy's fussiness — RewardSkip 0 takes everything, 1 takes only what beats the whole deck. Scale-free
+    // on purpose: the weights are bred in a range where the absolute size of a score means nothing.
+    //
+    // ⚠⚠ ONLY A CARD IS EVER REFUSED, and the first version of this method is why the warning is here. It
+    // ranked EVERY offer against the deck, so a relic — which the crude features score at about one point,
+    // while a deck card scores several — beat almost nothing in the deck and was walked away from. One
+    // measured run left act IV with FOUR relics where the dice player had twenty-seven, and it lost about
+    // 4000 more health on the way. A relic is not a card, is not drawn, is not paid for out of a turn, and
+    // comparing the two numbers was comparing nothing: what is free is taken.
+    private bool WalksAway(EntityArt? art, double best)
+    {
+        if (art is not { Kind: EntityArt.Card } || _policy!.RewardSkip <= 0 || _run is not { Deck.Count: > 0 } run)
+            return false;
+        var beaten = run.Deck.Count(c => Score(c.DefinitionId.value) < best) / (double)run.Deck.Count;
+        return beaten < _policy.RewardSkip;
+    }
+
+    // What an offer is worth: a card by what its program does and what it costs, a relic by what its rules
+    // and run effects do. Anything the run can offer that is neither — gold, healing, a nested reward — has
+    // no identity to look up and scores as nothing, which ranks it under any card worth having and over any
+    // card that is actively bad.
+    private double ScoreOffer(EntityArt? art) => art switch
+    {
+        { Kind: EntityArt.Card } card => Score(card.Id),
+        { Kind: EntityArt.Relic } relic => Weighted(_options.Features?.ForRelic(relic.Id)),
+        _ => 0,
+    };
 
     public EventChoice Choose(EventSituation situation, IReadOnlyList<EventChoice> choices)
     {
@@ -373,8 +447,10 @@ internal sealed class BotMind
         Complete = complete,
     };
 
-    // Which door a runner takes. A shop is answered as a shop — how eagerly it spends is a weight of its
-    // own — and every other situation by one knob: the first option, the last, or somewhere in between.
+    // Which door a runner takes. A shop is answered as a shop — how eagerly it spends is a weight of its own,
+    // and WHAT it spends the gold on is the same evaluator that scores a card in hand — and every other
+    // situation still by one knob: the first option, the last, or somewhere in between. (Doors by their
+    // effect rather than by their position is B2, and it is not this change.)
     private int PickChoice(IReadOnlyList<EventChoice> choices)
     {
         if (_policy is null)
@@ -383,16 +459,40 @@ internal sealed class BotMind
             .Where(i => choices[i].Id.StartsWith("buy-", StringComparison.Ordinal)).ToList();
         var leave = choices.ToList().FindIndex(c => c.Id == "leave");
         if (leave >= 0)
-            return buys.Count > 0 && _rng.NextDouble() < _policy.ShopBuy ? buys[_rng.Next(buys.Count)] : leave;
+        {
+            if (buys.Count == 0 || _rng.NextDouble() >= _policy.ShopBuy)
+                return leave;
+            // The best thing on the shelf, and the cheaper of two that are worth the same. Price breaks a tie
+            // instead of entering the score, because what a point of score is worth in gold is a number
+            // nobody has bred — and a wrong exchange rate would be worse than none.
+            return buys
+                .OrderByDescending(i => ScoreOffer(RunEntityLabeler.ArtForGrant(choices[i].Effects)))
+                .ThenBy(i => PriceOf(choices[i]))
+                .First();
+        }
         return Math.Clamp((int)Math.Round(_policy.EventLate * (choices.Count - 1)), 0, choices.Count - 1);
     }
 
-    private double Score(string cardId)
+    // What a shelf slot takes out of the purse. A price is written as the payment that settles it, so the
+    // cheapest slot is the one whose cost effects subtract the least; a slot paid for some other way (credit,
+    // a favour) reads as free here, which is the right answer for a tiebreak and the wrong one for a term.
+    private static int PriceOf(EventChoice choice) =>
+        (choice.Costs ?? [])
+            .SelectMany(cost => cost.Pay)
+            .OfType<ChangeResourceRunEffect>()
+            .Sum(pay => Math.Max(0, -pay.Delta));
+
+    private double Score(string cardId) =>
+        Weighted(_options.Features?.For(cardId))
+        // A card is paid for out of a turn; a relic is not, which is why the cost term lives here and not in
+        // the weighing itself.
+        + _policy!.WCost * RunBot.FullCosts(_play, cardId).Sum(c => c.Amount);
+
+    private double Weighted(double[]? features)
     {
-        var f = _options.Features?.For(cardId) ?? new double[CardFeatures.Count];
-        var cost = RunBot.FullCosts(_play, cardId).Sum(c => c.Amount);
+        var f = features ?? new double[CardFeatures.Count];
         return _policy!.WDamage * f[0] + _policy.WBlock * f[1] + _policy.WStatus * f[2]
-            + _policy.WDraw * f[3] + _policy.WResource * f[4] + _policy.WCost * cost;
+            + _policy.WDraw * f[3] + _policy.WResource * f[4];
     }
 
     // The role weight of a room, so a runner can prefer elites (more spoils, more damage) or avoid them.

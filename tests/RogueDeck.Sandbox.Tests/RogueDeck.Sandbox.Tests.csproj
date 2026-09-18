@@ -24,6 +24,7 @@
     <ProjectReference Include="..\..\src\RogueDeck.Sandbox.Run\RogueDeck.Sandbox.Run.csproj" />
     <ProjectReference Include="..\..\src\RogueDeck.Scenario\RogueDeck.Scenario.csproj" />
     <ProjectReference Include="..\..\src\RogueDeck.Core\RogueDeck.Core.csproj" />
+    <ProjectReference Include="..\..\src\RogueDeck.Bot\RogueDeck.Bot.csproj" />
   </ItemGroup>
 
 </Project>

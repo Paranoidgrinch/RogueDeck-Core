@@ -12,4 +12,12 @@
     <ProjectReference Include="..\RogueDeck.Sandbox.Run\RogueDeck.Sandbox.Run.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The runner's brain is internal on purpose: no host may reach past the two seats into a decision.
+         The tests are the one exception, because WHAT it decides is the only thing worth testing about it. -->
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>RogueDeck.Sandbox.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
 </Project>

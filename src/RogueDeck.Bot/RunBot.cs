@@ -96,7 +96,10 @@ public static class RunBot
                     session.PickNode(mind.Fork(session.PendingNodeChoices).Id.Value);
                 else if (session.IsAwaitingEntities && session.PendingEntities is { } entities)
                     session.PickEntities(
-                        [.. mind.EntityPicks(entities.Displays, entities.Count, entities.AllowSkip, entities.Purpose)]);
+                        [.. mind.EntityPicks(
+                            entities.Displays,
+                            [.. Enumerable.Range(0, entities.Displays.Count).Select(entities.ArtAt)],
+                            entities.Count, entities.AllowSkip, entities.Purpose)]);
                 else if (session.IsAwaitingChoice && session.PendingSituation is { } situation)
                     session.Pick(mind.Choose(situation, session.PendingChoices).Id);
                 else if (session.IsAwaitingInterlude)

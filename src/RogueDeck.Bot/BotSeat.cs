@@ -102,7 +102,10 @@ internal sealed class BotSeat(RunPlayback play, BotOptions options, IBotLog log)
             return [];
         Begin();
         var displays = candidates.Select(c => RunEntityLabeler.Display(c, _play.Labeler)).ToArray();
-        var take = _mind.EntityPicks(displays, Math.Min(count, candidates.Count), allowSkip, purpose);
+        // WHICH thing each offer is, alongside what it is called. The replay seat reads the same list off the
+        // request it parks with; this one asks the labeler directly, because it never builds a request at all.
+        var arts = candidates.Select(c => RunEntityLabeler.ArtFor(c)).ToArray();
+        var take = _mind.EntityPicks(displays, arts, Math.Min(count, candidates.Count), allowSkip, purpose);
         Answered();
         return [.. take.Where(i => i >= 0 && i < candidates.Count).Select(i => candidates[i])];
     }
