@@ -186,6 +186,101 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
         }
     }
 
+    // The display/rules labeler for picked entities, built with everything else a run needs. Public because
+    // the runner's DIRECT seat names its picks with it — it never builds an EntitySelectionRequest to read
+    // the names off.
+    public RogueDeck.Sandbox.Run.RunEntityLabeler? Labeler { get; private set; }
+
+    // ── WHAT BOTH WAYS OF DRIVING A RUN ARE BUILT OUT OF ─────────────────────────────────────────────────
+    // The content registry the blueprint's combat library builds into, the chosen character's start, and
+    // every display map a frontend (or the runner's card evaluator) reads. Shared on purpose: a run walked
+    // through the replay session and the same run walked by a seat that answers inline must not be able to
+    // differ in what they were built from, or comparing them proves nothing.
+    private RunContentRegistry Prepare(RunBlueprint blueprint, string? characterId, out RunStart start)
+    {
+        var content = BuildContent(blueprint);
+        // The CHOSEN character's start decides the display name and the party shape — not the blueprint's
+        // default Start (a roster character may bring its own name and party).
+        start = blueprint.ResolveStart(characterId);
+        (CardCosts, CardNames, EnemyNames, HeroName) = DisplayNames(blueprint, start);
+        CardFullCosts = blueprint.Cards.ToDictionary(card => card.Id, card => card.Costs);
+        ResourceNames = blueprint.CombatResources.ToDictionary(
+            r => r.Id, r => string.IsNullOrWhiteSpace(r.DisplayName) ? r.Id : r.DisplayName);
+        ShredNames = blueprint.Shreds.ToDictionary(
+            s => s.Id, s => string.IsNullOrWhiteSpace(s.NameKey) ? s.Id : s.NameKey);
+        RelicNames = blueprint.Relics.ToDictionary(
+            r => r.Id, r => string.IsNullOrWhiteSpace(r.DisplayName) ? r.Id : r.DisplayName);
+        // A card needs a chosen target iff its play program aims at the "eventTarget" selector — detected
+        // by serializing the program and looking for that selector kind (robust across nesting).
+        var cardPlayJson = CombatJson.CreateOptions<CardPlayContext>();
+        CardNeedsTarget = blueprint.Cards.ToDictionary(
+            card => card.Id,
+            card => card.Program is { } program
+                && System.Text.Json.JsonSerializer.Serialize(program, cardPlayJson)
+                    .Contains("sel.eventTarget", StringComparison.Ordinal));
+        _shreds = blueprint.Shreds;
+        _composedCosts.Clear();
+
+        // Ability/rules text per card/relic from the presentation manifest, so reward picks show what a card
+        // DOES, not just its title. (The engine has no rules-text renderer; the description is authored
+        // presentation content — a game's card "text".)
+        var cardDescriptions = blueprint.Presentation.Cards
+            .Where(p => !string.IsNullOrWhiteSpace(p.Value.FlavorText))
+            .ToDictionary(p => p.Key, p => p.Value.FlavorText!);
+        var relicDescriptions = blueprint.Presentation.Relics
+            .Where(p => !string.IsNullOrWhiteSpace(p.Value.FlavorText))
+            .ToDictionary(p => p.Key, p => p.Value.FlavorText!);
+        Labeler = new RogueDeck.Sandbox.Run.RunEntityLabeler(
+            CardNames, RelicNames, ResourceNames, ShredNames, cardDescriptions, relicDescriptions);
+        return content;
+    }
+
+    // ── THE RUN, WALKED ONCE ─────────────────────────────────────────────────────────────────────────────
+    // No session, no replay script, no park: `seat` is the collaborator RunRunner asks — for a door, for a
+    // path, for what to pick, for how a fight goes — and it answers where it stands. The replay model exists
+    // so a single-threaded UI can park at a prompt; nothing that answers by itself needs to pay for that, and
+    // under it every answer re-runs the run from its baseline.
+    //
+    // ⚠ NOTHING IS CAUGHT HERE, deliberately. The replay session turns a fault into a string because a UI has
+    // to keep standing; a caller of this one is a program, and it decides for itself what an escaped
+    // exception means — including its own, which it threw to call the walk off.
+    //
+    // ⚠ SOLO ONLY. A party start needs the simultaneous team phase and a driver per member; a seat built for
+    // one hero would silently play a different game, so it says so instead.
+    public void StartDirect<TSeat>(
+        RunBlueprint blueprint, int seed, string? characterId, string? mapGenerator,
+        TSeat seat, Action<RunState>? before = null)
+        where TSeat : IRunChoiceProvider, IRunEntityChooser, IRunInterlude, ICombatDriver
+    {
+        ArgumentNullException.ThrowIfNull(blueprint);
+        ArgumentNullException.ThrowIfNull(seat);
+        Error = null;
+        Dispose();
+
+        var content = Prepare(blueprint, characterId, out var start);
+        if (start.StartingParty.Count > 0)
+            throw new NotSupportedException(
+                "StartDirect walks a single hero; a party start needs the simultaneous team phase.");
+
+        var defs = new RunDefinitionRegistryBuilder();
+        new StandardRunPackage(seat, content).RegisterDefinitions(defs);
+        var registry = defs.Build();
+
+        var meta = metaStore?.Load();
+        var metaRules = meta is null
+            ? null
+            : blueprint.MetaRules.Concat(ShredEngine.ShredMeta.ImplicitRecipeRules(blueprint)).ToList();
+
+        var run = blueprint.CreateInitialRun(new RunId("play"), seed, characterId, mapGenerator);
+        before?.Invoke(run);
+        new RunRunner(registry, seat, content: content, interlude: seat, meta: meta, metaRules: metaRules)
+            .Run(run);
+        // Only a walk that came back saves the profile — the same rule the session applies when it hears that
+        // a run completed without an error.
+        if (metaStore is { } store && meta is { } profile)
+            store.Save(profile);
+    }
+
     private void StartSession(
         RunBlueprint blueprint, bool interactive, Func<RunContentRegistry, RunState> makeRun,
         string? characterId = null, bool? partyOverride = null)
@@ -194,28 +289,7 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
         Dispose();
         try
         {
-            var content = BuildContent(blueprint);
-            // The CHOSEN character's start decides the display name and the party shape below — not the
-            // blueprint's default Start (a roster character may bring its own name and party).
-            var start = blueprint.ResolveStart(characterId);
-            (CardCosts, CardNames, EnemyNames, HeroName) = DisplayNames(blueprint, start);
-            CardFullCosts = blueprint.Cards.ToDictionary(card => card.Id, card => card.Costs);
-            ResourceNames = blueprint.CombatResources.ToDictionary(
-                r => r.Id, r => string.IsNullOrWhiteSpace(r.DisplayName) ? r.Id : r.DisplayName);
-            ShredNames = blueprint.Shreds.ToDictionary(
-                s => s.Id, s => string.IsNullOrWhiteSpace(s.NameKey) ? s.Id : s.NameKey);
-            RelicNames = blueprint.Relics.ToDictionary(
-                r => r.Id, r => string.IsNullOrWhiteSpace(r.DisplayName) ? r.Id : r.DisplayName);
-            // A card needs a chosen target iff its play program aims at the "eventTarget" selector — detected
-            // by serializing the program and looking for that selector kind (robust across nesting).
-            var cardPlayJson = CombatJson.CreateOptions<CardPlayContext>();
-            CardNeedsTarget = blueprint.Cards.ToDictionary(
-                card => card.Id,
-                card => card.Program is { } program
-                    && System.Text.Json.JsonSerializer.Serialize(program, cardPlayJson)
-                        .Contains("sel.eventTarget", StringComparison.Ordinal));
-            _shreds = blueprint.Shreds;
-            _composedCosts.Clear();
+            var content = Prepare(blueprint, characterId, out var start);
 
             // A party run (party deckbuilding C2) uses the simultaneous team phase. Interactive party fights are
             // driven per member by the PartyInteractiveCombatDriver; a non-interactive party run auto-resolves them
@@ -262,22 +336,11 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
                 ? null
                 : blueprint.MetaRules.Concat(ShredEngine.ShredMeta.ImplicitRecipeRules(blueprint)).ToList();
 
-            // Ability/rules text per card/relic from the presentation manifest, so reward picks show what
-            // a card DOES, not just its title. (The engine has no rules-text renderer; the description is
-            // authored/presentation content — a game's card "text".)
-            var cardDescriptions = blueprint.Presentation.Cards
-                .Where(p => !string.IsNullOrWhiteSpace(p.Value.FlavorText))
-                .ToDictionary(p => p.Key, p => p.Value.FlavorText!);
-            var relicDescriptions = blueprint.Presentation.Relics
-                .Where(p => !string.IsNullOrWhiteSpace(p.Value.FlavorText))
-                .ToDictionary(p => p.Key, p => p.Value.FlavorText!);
-            var labeler = new RogueDeck.Sandbox.Run.RunEntityLabeler(
-                CardNames, RelicNames, ResourceNames, ShredNames, cardDescriptions, relicDescriptions);
             // The session may move its replay baseline forward at every interlude, and this is how it rebuilds a
             // run from the snapshot it takes there — the same restore Resume performs, so a checkpointed run
             // stands where a saved-and-continued one would.
             var session = new InteractiveRunSession(
-                () => makeRun(content), registry, content, script, resettables, meta, metaRules, labeler,
+                () => makeRun(content), registry, content, script, resettables, meta, metaRules, Labeler,
                 restore: save => RestoreInItsAct(blueprint, save, content));
 
             // THE REPLAY BASELINE MOVES AT EVERY TURN BOUNDARY INSIDE A FIGHT, not only between nodes. The

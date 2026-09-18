@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using RogueDeck.Core.Combat;
 using RogueDeck.Run;
 using RogueDeck.Sandbox.Composition;
@@ -7,7 +6,7 @@ using RogueDeck.Scenario.Scripting;
 
 namespace RogueDeck.Bot;
 
-// ── THE RUNNER'S BRAIN, WITH NO HOST IN IT ───────────────────────────────────────────────────────────────
+// ── THE RUNNER, IN THE SEAT THE UI SITS IN ───────────────────────────────────────────────────────────────
 // A player made of dice (or of a bred policy). It walks the REAL run — every answer goes through the same
 // session and drivers the mouse drives — but it answers by itself: a fork, a door, a card at an enemy, a pick
 // from every offer. It does not play WELL; it plays BROADLY and fast, so a batch of runs touches content a
@@ -22,6 +21,10 @@ namespace RogueDeck.Bot;
 // process while each run keeps its own playback, its own RNG and its own try/catch — a crash must cost one
 // run, not the batch — and it is also what lets Godot hand over the playback its screens are already
 // watching.
+//
+// ⚠⚠ WHAT IS DECIDED HERE IS NOTHING. Every decision and every counter lives in BotMind; this file is the
+// REPLAY SEAT — the loop that polls a parked InteractiveRunSession and hands the mind's answers back through
+// the very methods a mouse click calls. `PlayDirect` is the other seat, and the two must agree; see BotSeat.
 public static class RunBot
 {
     // A turn that plays this many cards is not a turn, and a fight that needs this many turns is not a fight.
@@ -39,298 +42,141 @@ public static class RunBot
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(log);
 
-        var rng = new Random(options.Seed);
-        var clock = Stopwatch.StartNew();
         var session = play.Session;
-        var policy = options.Policy;
-
-        var rooms = new List<string>();
-        var acts = 1;
-        string? lastRoom = null;
-        var loggedNarration = 0;
-        var problems = 0;
-        var fights = 0;
-        var reason = "the run finished";
-        var crash = "";
-        var hpAtActBoss = new Dictionary<int, int>();
-        var damageAtActBoss = new Dictionary<int, int>();
-        var hpBeforeRoom = 0;
-        var damageTaken = 0;
-        var healed = 0;
-        var hpLastSeen = session?.Run.Health.Current ?? 0;
-
-        log.Line($"sim: policy={policy?.Name ?? "random"} seed={options.Seed} maps={options.Maps} "
-            + $"character={options.Character ?? "—"} "
-            + $"hp={session?.Run.Health.Current}/{session?.Run.Health.Max} deck={session?.Run.Deck.Count} "
-            + $"relics={string.Join(",", session?.Run.Relics.Select(r => r.Id.Value) ?? [])}");
-
-        // The guards. Never re-offer a play the engine refused; never repeat a play that moved nothing on the
-        // table (a card may put a copy of itself back in hand for ever); give both the turn and the fight a
-        // ceiling.
-        var inFight = false;
-        var turn = 0;
-        var playsThisTurn = 0;
-        var refused = new HashSet<CardInstanceId>();
-        var barren = new HashSet<string>(StringComparer.Ordinal);
-        string? lastPlayed = null;
-        var tableBeforeThePlay = "";
-        void NewTurn()
-        {
-            playsThisTurn = 0;
-            lastPlayed = null;
-            refused.Clear();
-            barren.Clear();
-        }
+        var mind = new BotMind(play, options, log);
+        if (session is not null)
+            mind.Opening(session.Run);
 
         try
         {
             for (var step = 0; step < options.Budget && session is not null && !session.IsComplete; step++)
             {
-                // Fold in the game's own narration since the last answer: what the engine SAID happened.
-                var narration = session.Run.Log;
-                for (; loggedNarration < narration.Count; loggedNarration++)
-                    log.Line($"    | {narration[loggedNarration].Message}");
+                mind.Step = step;
+                mind.Narrate(session.Run);
 
                 if (session.Error is not null || play.Error is not null)
                 {
-                    reason = "an error was raised";
+                    mind.Reason = "an error was raised";
                     break;
                 }
                 if (step % 20 == 19 && breathe is not null)
                     await breathe().ConfigureAwait(true);
 
-                var hpNow = session.Run.Health.Current;
-                if (hpNow < hpLastSeen)
-                    damageTaken += hpLastSeen - hpNow;
-                else if (hpNow > hpLastSeen)
-                    healed += hpNow - hpLastSeen;
-                hpLastSeen = hpNow;
-
-                if (session.Run.CurrentNodeId?.Value is { } here && here != lastRoom)
-                {
-                    lastRoom = here;
-                    var node = session.Run.Map.Nodes.FirstOrDefault(n => n.Id.Value == here);
-                    var role = node is null ? "?" : MapRole.Of(node);
-                    rooms.Add($"{session.Run.ActNumber}:{role}");
-                    acts = Math.Max(acts, session.Run.ActNumber);
-                    var spent = hpBeforeRoom == 0 ? 0 : hpBeforeRoom - session.Run.Health.Current;
-                    hpBeforeRoom = session.Run.Health.Current;
-                    if (node is not null && node.HasTag(MapNodeTags.Boss))
-                    {
-                        hpAtActBoss[session.Run.ActNumber] = session.Run.Health.Current;
-                        damageAtActBoss[session.Run.ActNumber] = damageTaken;
-                    }
-                    log.Line($"[{clock.Elapsed.TotalSeconds,6:0.0}s {step,5}] ROOM {Where(session)} {role} "
-                        + $"cost={spent} hp={session.Run.Health.Current}/{session.Run.Health.Max} "
-                        + $"gold={session.Run.GetResource(StandardRunIds.Gold)} "
-                        + $"deck={session.Run.Deck.Count} relics={session.Run.Relics.Count}");
-                }
-
-                if (play.CombatDriver?.Current is null && inFight)
-                {
-                    inFight = false;
-                    log.Line($"  fight ends: hp={session.Run.Health.Current}/{session.Run.Health.Max} "
-                        + $"after {turn} turns");
-                    turn = 0;
-                    NewTurn();
-                }
+                mind.Observe(session.Run, play.CombatDriver?.Current);
 
                 if (play.CombatDriver is { Current: not null } driver)
                 {
-                    if (!inFight)
-                    {
-                        inFight = true;
-                        fights++;
-                        var enemies = driver.Current!.State.Combatants
-                            .Where(c => c.Id != driver.Current.HeroId)
-                            .Select(c => $"{c.Id.value}({c.Health.Current})");
-                        log.Line($"  FIGHT {Where(session)} vs {string.Join(" ", enemies)}");
-                    }
+                    mind.FightStarts(session.Run, driver.Current);
 
-                    if (driver.PendingOptionChoice is { } options2)
-                    {
-                        var picks = Pick(rng, options2.Count, driver.PendingOptionChoiceCount);
-                        log.Line($"    option {string.Join(",", picks)} of {options2.Count}");
-                        driver.SupplyOptionChoice(picks);
-                    }
+                    if (driver.PendingOptionChoice is { } offered)
+                        driver.SupplyOptionChoice(
+                            [.. mind.OptionPicks(offered, driver.PendingOptionChoiceCount)]);
                     else if (driver.PendingCardChoice is { } cards)
-                    {
-                        var picks = Pick(rng, cards.Count, driver.PendingCardChoiceCount);
-                        log.Line($"    card-choice {string.Join(",", picks.Select(i => cards[i].DefinitionId.value))}");
-                        driver.SupplyCardChoice([.. picks.Select(i => cards[i].Id)]);
-                    }
+                        driver.SupplyCardChoice(
+                            [.. mind.CardChoicePicks(cards, driver.PendingCardChoiceCount).Select(i => cards[i].Id)]);
                     else if (driver.Current!.IsHeroTurn)
                     {
                         var combat = driver.Current;
-                        if (lastPlayed is { } finished)
+                        if (mind.ChoosePlay(combat) is { } chosen)
                         {
-                            if (TableState(combat) == tableBeforeThePlay)
-                                barren.Add(finished);
-                            lastPlayed = null;
-                        }
-
-                        var hero = combat.State.GetCombatant(combat.HeroId);
-                        var playable = combat.Hand
-                            .Where(c => !refused.Contains(c.Id) && !barren.Contains(c.DefinitionId.value)
-                                && CanPay(play, hero, c.DefinitionId.value))
-                            .ToList();
-                        var living = combat.State.Combatants
-                            .Where(c => c.Id != combat.HeroId && c.IsAlive && c.TeamId == StandardCombatIds.EnemyTeam)
-                            .ToList();
-                        // A random player ends the turn early sometimes — the same hand played to the last
-                        // point every time never shows what a held card does on the enemy's turn.
-                        CardInstance? card;
-                        if (policy is null)
-                            card = playable.Count > 0 && rng.NextDouble() > 0.12
-                                ? playable[rng.Next(playable.Count)]
-                                : null;
-                        else
-                        {
-                            // The best card in hand, and a turn that ends when the best is not worth it.
-                            var best = playable
-                                .Select(c => (card: c, score: Score(play, options, policy, c.DefinitionId.value)))
-                                .OrderByDescending(x => x.score)
-                                .FirstOrDefault();
-                            card = best.card is not null && best.score >= policy.EndTurnBelow ? best.card : null;
-                        }
-                        if (card is not null)
-                        {
-                            var target = living.Count == 0 ? (CombatantId?)null
-                                : policy is null ? living[rng.Next(living.Count)].Id
-                                : rng.NextDouble() < policy.TargetLowestHp
-                                    ? living.OrderBy(e => e.Health.Current).First().Id
-                                    : living.OrderByDescending(e => e.Health.Current).First().Id;
-                            var stepsBefore = combat.Steps.Count;
-                            tableBeforeThePlay = TableState(combat);
-                            lastPlayed = card.DefinitionId.value;
-                            log.Line($"    play {card.DefinitionId.value} -> {target?.value ?? "—"} "
-                                + $"(hp {hero.Health.Current}, hand {combat.Hand.Count})");
-                            driver.PlayCard(card.Id, target);
-                            foreach (var bad in (driver.Current?.Steps ?? []).Skip(stepsBefore)
-                                .Where(s => s.HasProblems))
-                            {
-                                // Two of these are the engine working, not failing: a card the rules REFUSE
-                                // (a random player will try a curse) and a card that PARKS to ask its own
-                                // question (the replay model reports the park as a throw, and the prompt the
-                                // bot answers next arrives right behind it). Everything else is a finding.
-                                var text = string.Join(" | ", bad.Problems);
-                                var expected = text.Contains("was not played", StringComparison.Ordinal)
-                                    || text.Contains("ReplayParked", StringComparison.Ordinal);
-                                if (expected)
-                                {
-                                    log.Line($"    (refused/asked: {card.DefinitionId.value})");
-                                    continue;
-                                }
-                                problems++;
-                                log.Line($"    !! PROBLEM playing {card.DefinitionId.value} at {Where(session)}: "
-                                    + text);
-                            }
-                            if (Refused(driver.Current, stepsBefore))
-                                refused.Add(card.Id);
-                            if (++playsThisTurn >= PlaysInATurnNobodyMakes)
-                            {
-                                reason = $"a turn at {Where(session)} played {playsThisTurn} cards without "
-                                    + $"ending — last '{card.DefinitionId.value}'";
-                                break;
-                            }
+                            driver.PlayCard(chosen.Card.Id, chosen.Target);
+                            mind.AfterPlay(session.Run, driver.Current, chosen);
                         }
                         else
                         {
-                            log.Line($"    end turn {turn + 1} (hp {hero.Health.Current}, hand {combat.Hand.Count})");
+                            mind.EndingTurn(combat);
                             driver.EndTurn();
-                            NewTurn();
-                            if (++turn >= TurnsAFightShouldNotNeed)
-                            {
-                                reason = $"the fight at {Where(session)} did not end in {turn} turns";
-                                break;
-                            }
+                            mind.AfterEndTurn(session.Run);
                         }
                     }
                     else
-                    {
-                        reason = $"the fight at {Where(session)} parked on the enemy's turn";
-                        break;
-                    }
+                        mind.EnemyTurnWall(session.Run);
                 }
                 else if (session.IsAwaitingNodeChoice)
-                {
-                    var forks = session.PendingNodeChoices;
-                    var pick = policy is null
-                        ? forks[rng.Next(forks.Count)]
-                        : forks.OrderByDescending(n => PathWeight(policy, n)).First();
-                    log.Line($"  fork -> {pick.Id.Value} {MapRole.Of(pick)} "
-                        + $"(of {string.Join(" ", forks.Select(MapRole.Of))})");
-                    session.PickNode(pick.Id.Value);
-                }
+                    session.PickNode(mind.Fork(session.PendingNodeChoices).Id.Value);
                 else if (session.IsAwaitingEntities && session.PendingEntities is { } entities)
-                {
-                    // A skippable offer is skipped now and then, on purpose: a deck that takes every card
-                    // and a deck that refuses one are different games.
-                    var take = entities.AllowSkip && (policy is null ? rng.NextDouble() < 0.2 : policy.RewardSkip > 0.5)
-                        ? []
-                        : Pick(rng, entities.Displays.Count, entities.Count);
-                    log.Line($"  pick [{entities.Purpose}] -> "
-                        + (take.Count == 0 ? "skipped" : string.Join(", ", take.Select(i => entities.Displays[i])))
-                        + $" (of {entities.Displays.Count})");
-                    session.PickEntities(take);
-                }
+                    session.PickEntities(
+                        [.. mind.EntityPicks(entities.Displays, entities.Count, entities.AllowSkip, entities.Purpose)]);
                 else if (session.IsAwaitingChoice && session.PendingSituation is { } situation)
-                {
-                    var choices = session.PendingChoices;
-                    var choice = choices[PickChoice(policy, rng, choices)];
-                    log.Line($"  choice [{situation.Id}] -> {choice.Id} "
-                        + $"(of {string.Join(" ", choices.Select(c => c.Id))})");
-                    session.Pick(choice.Id);
-                }
+                    session.Pick(mind.Choose(situation, session.PendingChoices).Id);
                 else if (session.IsAwaitingInterlude)
                     session.Continue();
                 else
                 {
-                    reason = $"nothing at {Where(session)} was awaiting an answer";
+                    mind.Reason = $"nothing at {Where(session.Run)} was awaiting an answer";
                     break;
                 }
 
+                if (mind.Stopped)
+                    break;
                 if (step == options.Budget - 1)
-                    reason = $"the step budget ran out at {Where(session)}";
+                    mind.Reason = $"the step budget ran out at {Where(session.Run)}";
             }
         }
         catch (Exception ex)
         {
-            crash = ex.ToString();
-            reason = $"an exception escaped at {(session is null ? "—" : Where(session))}";
-            log.Line($"!! CRASH {crash}");
+            mind.Crashed(session?.Run, ex);
         }
 
-        return new BotResult
+        return mind.Finish(session?.Run, session?.Error ?? play.Error, session?.IsComplete ?? false);
+    }
+
+    // ── THE OTHER SEAT ───────────────────────────────────────────────────────────────────────────────────
+    // The same mind, walking the run ONCE. No park, no replay, no re-execution: BotSeat is the collaborator
+    // RunRunner asks, and it answers where it stands. The replay model exists so a single-threaded UI can
+    // park at a prompt; a bot never parks, so it need not pay for the ability to.
+    //
+    // ⚠ IT IS NOT A DIFFERENT RUNNER. Both seats build their run through the same RunPlayback, out of the
+    // same blueprint, content and registry, and both hand every decision to the same BotMind. The only
+    // difference is who calls whom — which is exactly what `golden.sh --console --direct` exists to prove.
+    public static BotResult PlayDirect(
+        RunPlayback play, RunBlueprint blueprint, string? characterId, string? mapGenerator,
+        BotOptions options, IBotLog log)
+    {
+        ArgumentNullException.ThrowIfNull(play);
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(log);
+
+        var seat = new BotSeat(play, options, log);
+        string? error = null;
+        var complete = false;
+        try
         {
-            Seed = options.Seed,
-            Maps = options.Maps,
-            Policy = policy?.Name ?? "random",
-            Result = session?.Run.Result.ToString() ?? "",
-            Acts = acts,
-            Fights = fights,
-            Health = session?.Run.Health.Current ?? 0,
-            MaxHealth = session?.Run.Health.Max ?? 0,
-            Problems = problems,
-            Error = session?.Error ?? play.Error ?? "none",
-            Seconds = clock.Elapsed.TotalSeconds,
-            Reason = reason,
-            Crash = crash,
-            Rooms = rooms,
-            DamageTaken = damageTaken,
-            Healed = healed,
-            DamageAtActBoss = damageAtActBoss,
-            HealthAtActBoss = hpAtActBoss,
-            Complete = session?.IsComplete ?? false,
-        };
+            play.StartDirect(blueprint, options.Seed, characterId, mapGenerator, seat, seat.BeforeTheFirstQuestion);
+            complete = true;
+        }
+        catch (BotStopException)
+        {
+            // The runner called the walk off and has already written down why. A run stopped by a guard is
+            // INCOMPLETE, exactly as it is under the replay seat, where the guard broke the loop and left
+            // the session standing — and an incomplete run is never clean.
+        }
+        catch (Exception ex)
+        {
+            // The same words the replay session puts on an escaped exception, and the same escape hatch: a
+            // walk under ROGUEDECK_TRACE prints the whole thing to stderr on its way into the string. The
+            // run counts as COMPLETE because it is over and will answer nothing further — which is what the
+            // session says too — and `error=` is what makes it unclean.
+            if (Environment.GetEnvironmentVariable("ROGUEDECK_TRACE") is not null)
+                Console.Error.WriteLine(ex);
+            error = $"{ex.GetType().Name}: {ex.Message}";
+            complete = true;
+        }
+        return seat.Finish(error, complete);
     }
 
     // Where the run stands, in the two names that identify a room: its map id and what is being fought there.
     public static string Where(InteractiveRunSession session)
     {
         ArgumentNullException.ThrowIfNull(session);
-        var here = session.Run.CurrentNodeId?.Value ?? "nowhere";
-        var node = session.Run.Map.Nodes.FirstOrDefault(n => n.Id.Value == here);
+        return Where(session.Run);
+    }
+
+    public static string Where(RunState run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        var here = run.CurrentNodeId?.Value ?? "nowhere";
+        var node = run.Map.Nodes.FirstOrDefault(n => n.Id.Value == here);
         var content = node?.Payload switch
         {
             EncounterRef fight => fight.Id.Value,
@@ -339,7 +185,7 @@ public static class RunBot
             { } payload => payload.GetType().Name,
             _ => "—",
         };
-        return $"act {session.Run.ActNumber} {here} ({content})";
+        return $"act {run.ActNumber} {here} ({content})";
     }
 
     // Everything about the table a play could visibly move. The EXHAUST PILE is deliberately not in it: a card
@@ -362,13 +208,23 @@ public static class RunBot
     }
 
     // Did the play go through? The fight records every attempt as a step, and a refused one carries the
-    // reason; nothing new at all means the driver dropped it (a prompt opened, say).
+    // reason; nothing new at all means the driver dropped it.
+    //
+    // ⚠⚠ A CARD THAT ASKS SOMETHING HAS NOT BEEN REFUSED. Under the replay seat a play that opens a prompt
+    // PARKS, and the park is written into the step as a problem — so this read it as a refusal and struck the
+    // card off the turn, even though the very next answer resolved the play. Under the direct seat nothing
+    // parks, the card simply resolves, and it stays offered. That single disagreement was enough to make the
+    // two seats play different games from the same seed: a card that comes back to hand was played again by
+    // one of them and not by the other. A park is the engine working; only what the RULES refuse counts here.
     public static bool Refused(InteractiveCombat? combat, int stepsBefore)
     {
         if (combat is null)
             return false;
         var steps = combat.Steps;
-        return steps.Count <= stepsBefore || steps.Skip(stepsBefore).Any(step => step.HasProblems);
+        if (steps.Count <= stepsBefore)
+            return true;
+        return steps.Skip(stepsBefore).Any(step => step.HasProblems
+            && !string.Join(" | ", step.Problems).Contains("ReplayParked", StringComparison.Ordinal));
     }
 
     public static IReadOnlyList<ResourceCost> FullCosts(RunPlayback play, string definitionId)
@@ -401,37 +257,4 @@ public static class RunBot
         }
         return picked;
     }
-
-    // Which door a runner takes. A shop is answered as a shop — how eagerly it spends is a weight of its
-    // own — and every other situation by one knob: the first option, the last, or somewhere in between.
-    private static int PickChoice(BotPolicy? policy, Random rng, IReadOnlyList<EventChoice> choices)
-    {
-        if (policy is null)
-            return rng.Next(choices.Count);
-        var buys = Enumerable.Range(0, choices.Count)
-            .Where(i => choices[i].Id.StartsWith("buy-", StringComparison.Ordinal)).ToList();
-        var leave = choices.ToList().FindIndex(c => c.Id == "leave");
-        if (leave >= 0)
-            return buys.Count > 0 && rng.NextDouble() < policy.ShopBuy ? buys[rng.Next(buys.Count)] : leave;
-        return Math.Clamp((int)Math.Round(policy.EventLate * (choices.Count - 1)), 0, choices.Count - 1);
-    }
-
-    private static double Score(RunPlayback play, BotOptions options, BotPolicy policy, string cardId)
-    {
-        var f = options.Features?.For(cardId) ?? new double[CardFeatures.Count];
-        var cost = FullCosts(play, cardId).Sum(c => c.Amount);
-        return policy.WDamage * f[0] + policy.WBlock * f[1] + policy.WStatus * f[2]
-            + policy.WDraw * f[3] + policy.WResource * f[4] + policy.WCost * cost;
-    }
-
-    // The role weight of a room, so a runner can prefer elites (more spoils, more damage) or avoid them.
-    private static double PathWeight(BotPolicy policy, Node node) => MapRole.Of(node) switch
-    {
-        "elite" => policy.PathElite,
-        "shop" => policy.PathShop,
-        "rest" => policy.PathRest,
-        "event" => policy.PathEvent,
-        "treasure" => policy.PathTreasure,
-        _ => policy.PathCombat,
-    };
 }

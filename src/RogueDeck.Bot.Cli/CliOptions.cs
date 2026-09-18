@@ -12,6 +12,13 @@ public sealed record CliOptions
     public int Timeout { get; init; } = 1800;
     public int? Health { get; init; }
     public bool Legacy { get; init; }
+
+    // ⚠ DRIVE THE RUN THROUGH THE REPLAY MODEL the UI needs, instead of walking it once with the bot in the
+    // seat the engine asks (R5). It is the same brain, the same answers and the same report either way —
+    // `golden.sh --console` proves that by playing the whole set both ways — but the replay model re-executes
+    // the run from its baseline behind EVERY answer, which is about twice the work. Kept because that second
+    // driver is what the proof is made of, and because it is the driver the frontend actually uses.
+    public bool Replay { get; init; }
     public string? PolicyPath { get; init; }
     public string? OutDir { get; init; }
 
@@ -26,6 +33,8 @@ public sealed record CliOptions
           --immortal         a body that survives the whole game (9999 hp)
           --health N         a stated body
           --legacy           walk the OLD maps (v0.0.0) instead of the design's v0.0.1
+          --replay           drive through the replay model instead of answering the engine inline (slower;
+                             it is the driver the frontend uses, and half of what golden.sh checks)
           --policy <file>    a bred policy (tools/train.py); without one the runner plays at random
           --out <dir>        write one full log per run into this directory
         """;
@@ -41,6 +50,7 @@ public sealed record CliOptions
         var timeout = 1800;
         int? health = null;
         var legacy = false;
+        var replay = false;
         string? policy = null;
         string? outDir = null;
 
@@ -60,6 +70,7 @@ public sealed record CliOptions
                 case "--immortal": health = 9999; break;
                 case "--health": health = Number(Next()); break;
                 case "--legacy": legacy = true; break;
+                case "--replay": replay = true; break;
                 case "--policy": policy = Next(); break;
                 case "--out": outDir = Next(); break;
                 default: return null;
@@ -79,6 +90,7 @@ public sealed record CliOptions
             Timeout = timeout,
             Health = health,
             Legacy = legacy,
+            Replay = replay,
             PolicyPath = policy,
             OutDir = outDir,
         };

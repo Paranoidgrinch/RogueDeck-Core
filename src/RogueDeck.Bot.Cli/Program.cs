@@ -74,7 +74,8 @@ public static class Program
         Console.WriteLine($"roguedeck-bot: {options.Runs} runs "
             + $"(seeds {options.SeedFrom}..{options.SeedFrom + options.Runs - 1}, "
             + $"{(options.Health is { } h ? $"{h} hp" : "authored health")}, maps {maps}, "
-            + $"policy {policy?.Name ?? "random"}, {options.Jobs} at a time, one process)");
+            + $"policy {policy?.Name ?? "random"}, {options.Jobs} at a time, one process, "
+            + $"{(options.Replay ? "through the replay model" : "answering the engine inline")})");
 
         var lines = new ConcurrentDictionary<int, string>();
         var failures = 0;
@@ -152,9 +153,7 @@ public static class Program
         var character = roster.Count > 0 ? roster[new Random(seed).Next(roster.Count)].Id : null;
 
         using var play = new RunPlayback(() => { }, meta);
-        play.Start(blueprint, seed, interactive: true, character, generator);
-
-        var result = await RunBot.Play(play, new BotOptions
+        var how = new BotOptions
         {
             Seed = seed,
             Budget = options.Steps,
@@ -162,7 +161,21 @@ public static class Program
             Character = character,
             Policy = policy,
             Features = features,
-        }, log).ConfigureAwait(false);
+        };
+
+        // ⚠⚠ TWO SEATS, ONE BRAIN (R5). By default the run is walked ONCE, with the bot answering the engine
+        // where it stands. `--replay` drives it through the replay model the UI needs instead, which
+        // re-executes the run from its baseline behind every single answer. The same log has to come out of
+        // both, and `golden.sh --console` plays the whole set each way to say so — which is the strongest
+        // statement this project has made that replay and direct play are the same game.
+        BotResult result;
+        if (options.Replay)
+        {
+            play.Start(blueprint, seed, interactive: true, character, generator);
+            result = await RunBot.Play(play, how, log).ConfigureAwait(false);
+        }
+        else
+            result = RunBot.PlayDirect(play, blueprint, character, generator, how, log);
 
         foreach (var line in BotReport.ActLines(result))
             text.AppendLine(line);

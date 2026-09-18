@@ -317,17 +317,9 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
         _script.Advance(new EntityPicksEntry(indices));
     }
 
-    // Readable name for a picked entity — a reward offer described by what it grants, a deck card / relic
-    // by its display name. Falls back to raw ids only when no labeler was supplied (older test rigs).
-    private string Display(object? candidate) => candidate switch
-    {
-        RewardOffer offer => _labeler?.Offer(offer) ?? offer.Id,
-        RunCardInstance card => _labeler is { } labeler
-            ? labeler.Card(card.DefinitionId, card.UpgradeLevel)
-            : card.UpgradeLevel > 0 ? $"{card.DefinitionId} +{card.UpgradeLevel}" : card.DefinitionId.ToString(),
-        RelicInstance relic => _labeler?.Relic(relic.Id) ?? relic.Id.ToString(),
-        _ => candidate?.ToString() ?? "?",
-    };
+    // Readable name for a picked entity — RunEntityLabeler.Display owns the spelling, because the direct
+    // seat of the runner names the same things without ever building an EntitySelectionRequest.
+    private string Display(object? candidate) => RunEntityLabeler.Display(candidate, _labeler);
 
     public void Dispose()
     {

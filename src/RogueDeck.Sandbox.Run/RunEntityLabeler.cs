@@ -21,6 +21,21 @@ public readonly record struct EntityArt(string Kind, string Id, int UpgradeLevel
 // picks from one place. Built from the blueprint's display-name maps (RunPlayback owns them).
 public sealed class RunEntityLabeler
 {
+    // THE ONE SPELLING OF A PICKED THING'S NAME. Both seats a bot can sit in put these strings in their log
+    // — the replay seat reads them off EntitySelectionRequest.Displays, the direct seat never builds one —
+    // so the naming has to be here rather than inside whoever happened to ask first. A reward offer is
+    // described by what it grants, a deck card / relic by its display name; raw ids appear only when no
+    // labeler was supplied (older test rigs).
+    public static string Display(object? candidate, RunEntityLabeler? labeler) => candidate switch
+    {
+        RewardOffer offer => labeler?.Offer(offer) ?? offer.Id,
+        RunCardInstance card => labeler is { } known
+            ? known.Card(card.DefinitionId, card.UpgradeLevel)
+            : card.UpgradeLevel > 0 ? $"{card.DefinitionId} +{card.UpgradeLevel}" : card.DefinitionId.ToString(),
+        RelicInstance relic => labeler?.Relic(relic.Id) ?? relic.Id.ToString(),
+        _ => candidate?.ToString() ?? "?",
+    };
+
     private readonly IReadOnlyDictionary<string, string> _cards;
     private readonly IReadOnlyDictionary<string, string> _relics;
     private readonly IReadOnlyDictionary<string, string> _resources;
