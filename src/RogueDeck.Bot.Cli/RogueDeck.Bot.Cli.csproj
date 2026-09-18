@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>RogueDeck.Bot.Cli</RootNamespace>
+    <AssemblyName>roguedeck-bot</AssemblyName>
+    <Deterministic>true</Deterministic>
+    <InvariantGlobalization>true</InvariantGlobalization>
+
+    <!-- ⚠⚠ SIX RUNS IN ONE PROCESS SHARE ONE HEAP, AND THE DEFAULT COLLECTOR IS TUNED FOR ONE. This walk is
+         allocation-heavy by construction — under the replay model every answer re-runs the run from its
+         checkpoint — so six of them on workstation GC spend their time collecting each other's garbage.
+         MEASURED 2026-09-18, twelve immortal runs six at a time: 184.6 s without this, and the
+         process-per-run batch it was meant to beat did the same work in 148.0 s. -->
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RogueDeck.Bot\RogueDeck.Bot.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,6 +1,8 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/RogueDeck.ConsoleSandbox/RogueDeck.ConsoleSandbox.csproj" />
+    <Project Path="src/RogueDeck.Bot/RogueDeck.Bot.csproj" />
+    <Project Path="src/RogueDeck.Bot.Cli/RogueDeck.Bot.Cli.csproj" />
     <Project Path="src/RogueDeck.Core/RogueDeck.Core.csproj" />
     <Project Path="src/RogueDeck.Sandbox.Combat/RogueDeck.Sandbox.Combat.csproj" />
     <Project Path="src/RogueDeck.Sandbox.Run/RogueDeck.Sandbox.Run.csproj" />
