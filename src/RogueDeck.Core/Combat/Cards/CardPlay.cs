@@ -194,6 +194,16 @@ public sealed class CombatCardPlayProcessor
             combat.AddLogEntry(
                 StandardCombatLogTypes.CardMovedToZone,
                 $"Card '{queuedInstanceId}' was queued by '{source.Id}'.");
+            // ⚠⚠ QUEUEING IS A WHOLE ACTION, AND IT HAS TO BE CLOSED LIKE ONE. This returned without closing
+            // the scope opened above, so every queued card left one open FOR EVER — the stack only ever grew.
+            // A scope that outlives its action is not harmless bookkeeping: "once per action" is claimed
+            // AGAINST THE OPEN SCOPE, so with a stale one standing, rules that may fire once per action
+            // started firing at status ticks and turn boundaries, where the engine's own rule is that no
+            // claim can succeed at all. Found on 2026-09-18 by walking one run through two drivers: a fight
+            // rebuilt from its capture (which cannot carry an open scope) spent a Doubt stack where the live
+            // fight did not. Closed behind the effect list exactly as a program-less card's action is — the
+            // card's own program is a separate action later, and QueueResolution opens its own scope for it.
+            combat.EnqueueContinuation(c => CloseAction(c, actor));
             return;
         }
 

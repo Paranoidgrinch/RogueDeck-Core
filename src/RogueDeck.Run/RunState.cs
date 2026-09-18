@@ -430,8 +430,17 @@ public sealed class RunState
     {
         // Spend an unrestricted step only if this walk could not have been made along an edge. Asked BEFORE the
         // move, because afterwards there is no way to tell a shortcut from an ordinary step.
+        //
+        // ⚠⚠ STANDING STILL IS NOT CROSSING. A run resumed INSIDE a fight re-enters the room it is already in
+        // (RunRunner.WalkGraph's resuming arm), and a node is never its own successor — so without this guard
+        // the re-entry read as a step off the paths and quietly SPENT the player's free step. Every save taken
+        // mid-fight cost one, and the replay model takes that save at every turn boundary, so a long fight ate
+        // the step within a round of its being granted. Found on 2026-09-18 by walking one run through both
+        // drivers: the walk that never resumed still had its step at the fork and was offered the whole row;
+        // the one that resumed was offered a single door.
         if (UnrestrictedSteps > 0
             && CurrentNodeId is { } from
+            && from != nodeId
             && Map.Edges.Count > 0
             && !Map.SuccessorIds(from).Contains(nodeId))
         {

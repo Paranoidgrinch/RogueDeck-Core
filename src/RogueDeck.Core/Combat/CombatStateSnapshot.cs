@@ -49,7 +49,11 @@ public sealed record CardInstanceSnapshot(
     CardZone Zone,
     ImmutableArray<TagId> Marks = default,                       // sorted by value; default = empty
     ImmutableArray<CounterSnapshot> MarkCounters = default,            // sorted by key.value; default = empty
-    CombatantId? MarkSourceCombatantId = null
+    CombatantId? MarkSourceCombatantId = null,
+    // WHO A QUEUED CARD WAS AIMED AT. Queueing pays the cost and locks the target NOW; the card waits in the
+    // queue until its resolution window. Without this a restored queue would resolve at whoever the rules
+    // pick instead of whoever the player chose. Null for every card that is not waiting.
+    CombatantId? QueuedTargetId = null
 );
 
 // Immutable capture of a combatant's card zones, in pile order.
@@ -58,7 +62,14 @@ public sealed record CombatantCardZonesSnapshot(
     ImmutableArray<CardInstanceSnapshot> Hand,
     ImmutableArray<CardInstanceSnapshot> DiscardPile,
     ImmutableArray<CardInstanceSnapshot> ExhaustPile,
-    ImmutableArray<CardInstanceSnapshot> BanishedPile
+    ImmutableArray<CardInstanceSnapshot> BanishedPile,
+    // ⚠⚠ THE QUEUE, AND IT IS NOT AN AFTERTHOUGHT. Cards that have been PLAYED — paid for, targeted — and
+    // whose effect has not happened yet. It was missing here until 2026-09-18, which meant a fight captured
+    // with anything waiting came back WITHOUT IT: the cards were gone, the cost had been paid for nothing,
+    // and nothing said so. That is every save taken mid-fight, and it was every turn boundary of the replay
+    // model as well. Defaulted so a save written before this reads as an empty queue, which is what those
+    // saves effectively had.
+    ImmutableArray<CardInstanceSnapshot> QueuePile = default
 );
 
 // Immutable capture of a single combatant at a point in time.

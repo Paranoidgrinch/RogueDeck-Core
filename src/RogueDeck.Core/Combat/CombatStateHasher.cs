@@ -125,6 +125,10 @@ public static class CombatStateHasher
         AppendCards(sb, "disc", zones.DiscardPile);
         AppendCards(sb, "exh", zones.ExhaustPile);
         AppendCards(sb, "ban", zones.BanishedPile);
+        // Appended LAST and skipped when empty, so every hash already on the wire keeps its value: a fight
+        // with nothing waiting hashes exactly as it did before the queue was captured at all.
+        if (!zones.QueuePile.IsDefaultOrEmpty)
+            AppendCards(sb, "queue", zones.QueuePile);
     }
 
     private static void AppendCards(
@@ -147,6 +151,10 @@ public static class CombatStateHasher
 
             if (card.MarkSourceCombatantId is { } src)
                 sb.Append(" msrc:").Append(src.value);
+
+            // Only a waiting card has one, so no hash already recorded moves.
+            if (card.QueuedTargetId is { } aimed)
+                sb.Append(" qat:").Append(aimed.value);
 
             sb.Append('\n');
         }

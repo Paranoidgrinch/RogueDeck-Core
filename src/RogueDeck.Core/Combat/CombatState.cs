@@ -811,6 +811,10 @@ public sealed class CombatState
             RestorePile(target, combatantId, zones.DiscardPile, CardZone.DiscardPile);
             RestorePile(target, combatantId, zones.ExhaustPile, CardZone.ExhaustPile);
             RestorePile(target, combatantId, zones.BanishedPile, CardZone.BanishedPile);
+            // The queue LAST, so it keeps its own order, and guarded because a save written before the queue
+            // was captured carries no array at all.
+            if (!zones.QueuePile.IsDefault)
+                RestorePile(target, combatantId, zones.QueuePile, CardZone.QueuePile);
         }
 
         // What each turn remembers. Default (an older snapshot) leaves the fresh, empty stats in place, which
@@ -840,13 +844,19 @@ public sealed class CombatState
         System.Collections.Immutable.ImmutableArray<CardInstanceSnapshot> pile, CardZone zone)
     {
         foreach (var card in pile)
-            zones.AddCard(new CardInstance(
+        {
+            var instance = new CardInstance(
                 card.Id, card.DefinitionId, owner, zone,
                 initialMarks: card.Marks.IsDefault ? null : card.Marks,
                 initialMarkCounters: card.MarkCounters.IsDefault
                     ? null
                     : card.MarkCounters.Select(c => new KeyValuePair<CounterId, int>(c.Key, c.Value)),
-                markSourceCombatantId: card.MarkSourceCombatantId));
+                markSourceCombatantId: card.MarkSourceCombatantId);
+            // A waiting card comes back aimed where the player aimed it, not where the rules would aim it now.
+            if (card.QueuedTargetId is { } locked)
+                instance.SetQueuedTarget(locked);
+            zones.AddCard(instance);
+        }
     }
 
     public void AddLogEntry(string type, string message)

@@ -119,7 +119,8 @@ public static class CombatStateSnapshotter
             Hand: zones.Hand.Select(SnapshotCard).ToImmutableArray(),
             DiscardPile: zones.DiscardPile.Select(SnapshotCard).ToImmutableArray(),
             ExhaustPile: zones.ExhaustPile.Select(SnapshotCard).ToImmutableArray(),
-            BanishedPile: zones.BanishedPile.Select(SnapshotCard).ToImmutableArray());
+            BanishedPile: zones.BanishedPile.Select(SnapshotCard).ToImmutableArray(),
+            QueuePile: zones.Queue.Select(SnapshotCard).ToImmutableArray());
 
     private static CardInstanceSnapshot SnapshotCard(CardInstance c) =>
         new(
@@ -133,5 +134,6 @@ public static class CombatStateSnapshotter
                 .Select(kv => new CounterSnapshot(kv.Key, kv.Value))
                 .OrderBy(p => p.Key.value, StringComparer.Ordinal)
                 .ToImmutableArray(),
-            MarkSourceCombatantId: c.MarkSourceCombatantId);
+            MarkSourceCombatantId: c.MarkSourceCombatantId,
+            QueuedTargetId: c.QueuedTargetId);
 }

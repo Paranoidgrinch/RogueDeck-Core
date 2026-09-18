@@ -103,6 +103,69 @@ public class QueueTortureTests
         return new Fight(play, combat.State.Combatants.First(c => c.Id != combat.HeroId).Id);
     }
 
+    // ⚠⚠ A SAVE TAKEN WITH WORK WAITING USED TO THROW THE WORK AWAY. The mid-fight capture carried five card
+    // zones and not the sixth: the Queue. So a player who saved with anything queued came back without it —
+    // the cost paid, the card gone, and nothing anywhere saying so. The replay model took that capture at
+    // EVERY turn boundary, which is how it was finally found (2026-09-18: one run walked through both
+    // drivers, and only the one that never restored kept its Queue).
+    [Fact]
+    public void A_save_taken_with_a_card_waiting_brings_it_back_still_waiting_and_still_aimed()
+    {
+        var blueprint = Duel(["deferred", "counter", "counter"]);
+        var fight = Start(blueprint);
+        string save;
+        CombatantId enemy = fight.EnemyId;
+        int enemyHealth;
+        using (fight.Play)
+        {
+            fight.Play_("deferred");
+            Assert.Single(fight.Queue);
+            enemyHealth = fight.Enemy.Health.Current;
+            save = fight.Play.SaveJson()!;
+            Assert.NotNull(save);
+        }
+
+        using var resumed = new RunPlayback(() => { });
+        resumed.Resume(blueprint, RunSaveJson.FromJson(save), interactive: true);
+        Assert.Null(resumed.Error);
+        Assert.Null(resumed.Session!.Error);
+
+        var back = resumed.CombatDriver!.Current!;
+        var waiting = Assert.Single(back.State.GetCardZones(back.HeroId).Queue);
+        Assert.Equal("deferred", waiting.DefinitionId.value);
+        // And aimed where the player aimed it, not where the rules would aim it now.
+        Assert.Equal(enemy, waiting.QueuedTargetId);
+
+        resumed.CombatDriver!.EndTurn();
+        Assert.Null(resumed.Session!.Error);
+        Assert.Equal(
+            enemyHealth - 13,
+            resumed.CombatDriver!.Current!.State.GetCombatant(enemy).Health.Current);
+    }
+
+    // ⚠⚠ QUEUEING OPENED AN ACTION AND NEVER CLOSED IT. "Once per action" is claimed against whatever action
+    // is open, and outside one no claim can succeed at all — that is the whole guarantee. A queued play
+    // returned early, past the close, so its scope stood for the rest of the fight and rules that may fire
+    // once per action began firing at status ticks and turn boundaries. Same day, same evidence: a fight
+    // rebuilt from a capture cannot carry an open scope, so it spent a Doubt stack where the live one did not.
+    [Fact]
+    public void Queueing_closes_its_action_instead_of_leaving_the_scope_standing()
+    {
+        var fight = Start(Duel(["deferred", "counter", "counter"]));
+        using (fight.Play)
+        {
+            // Nothing is happening, so nothing can be claimed.
+            Assert.False(fight.Combat.State.TryClaimOnceThisAction("probe.before"));
+
+            fight.Play_("deferred");
+            Assert.Single(fight.Queue);
+
+            // The play is over and the card is merely waiting. A claim that SUCCEEDS here would mean the
+            // action it opened is still standing, and everything after it would inherit that ledger.
+            Assert.False(fight.Combat.State.TryClaimOnceThisAction("probe.after"));
+        }
+    }
+
     [Fact]
     public void Queueing_pays_now_and_resolves_at_the_next_turn_start()
     {

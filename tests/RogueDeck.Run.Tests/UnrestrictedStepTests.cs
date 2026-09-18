@@ -82,6 +82,23 @@ public class UnrestrictedStepTests
         Assert.Empty(run.CurrentReachableNodes());
     }
 
+    // ⚠⚠ STANDING STILL IS NOT CROSSING. A run resumed inside a fight re-enters the room it is already in,
+    // and a node is never listed among its own successors — so the re-entry read as a step off the paths and
+    // spent the charge. Every mid-fight save cost the player their free step, and the replay model takes that
+    // save at every turn boundary, so a long fight ate it within a round of its being granted.
+    [Fact]
+    public void Re_entering_the_room_it_is_already_in_does_not_spend_the_step()
+    {
+        var run = NewRun();
+        run.AdvanceToNode(new NodeId("b"));
+        run.GrantUnrestrictedStep();
+
+        run.AdvanceToNode(new NodeId("b")); // a resumed fight re-enters its own node
+
+        Assert.Equal(1, run.UnrestrictedSteps);
+        Assert.Equal(["d", "e"], run.CurrentReachableNodes().Select(n => n.Id.Value).Order());
+    }
+
     [Fact]
     public void A_visited_node_is_not_reopened_by_a_step()
     {
