@@ -180,6 +180,7 @@ public static class Program
         foreach (var line in BotReport.ActLines(result))
             text.AppendLine(line);
         text.AppendLine(BotReport.Fitness(result));
+        text.AppendLine(BotReport.Clearance(result));
         text.AppendLine(BotReport.Result(result));
         return (result, text.ToString());
     }

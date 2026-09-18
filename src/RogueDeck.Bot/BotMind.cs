@@ -64,6 +64,12 @@ internal sealed class BotMind
     public readonly Dictionary<int, int> HealthAtActBoss = [];
     public readonly Dictionary<int, int> DamageAtActBoss = [];
 
+    // WHERE THE RUN WAS STANDING, in the words the log uses. A run that dies has one thing worth knowing
+    // about it beyond the fact — the room it died in — and by the time anyone asks, the run is over and the
+    // map is gone. So it is kept as it goes past.
+    public string Where = "—";
+    public string WhereRole = "—";
+
     private int _loggedNarration;
     // THE RUN AS IT LAST STOOD. Both seats hand it over before every answer (Observe), and a decision that
     // needs to know what the player already CARRIES — is this reward better than the deck I have? — reads it
@@ -140,6 +146,8 @@ internal sealed class BotMind
             _lastRoom = here;
             var node = run.Map.Nodes.FirstOrDefault(n => n.Id.Value == here);
             var role = node is null ? "?" : MapRole.Of(node);
+            Where = RunBot.Where(run);
+            WhereRole = role;
             Rooms.Add($"{run.ActNumber}:{role}");
             Acts = Math.Max(Acts, run.ActNumber);
             var spent = _hpBeforeRoom == 0 ? 0 : _hpBeforeRoom - run.Health.Current;
@@ -445,6 +453,8 @@ internal sealed class BotMind
         DamageAtActBoss = DamageAtActBoss,
         HealthAtActBoss = HealthAtActBoss,
         Complete = complete,
+        Where = Where,
+        WhereRole = WhereRole,
     };
 
     // Which door a runner takes. A shop is answered as a shop — how eagerly it spends is a weight of its own,

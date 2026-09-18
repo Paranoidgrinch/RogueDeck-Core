@@ -37,6 +37,20 @@ public static class BotReport
             + $"rooms={r.Rooms.Count} result={r.Result}";
     }
 
+    // ⚠⚠ THE LINE B6 ADDED, AND WHY IT IS ITS OWN LINE. `tools/golden.sh` diffs the fitness and result lines
+    // field for field against a recording in git; adding a field to either would move fifteen recorded runs
+    // for a change that alters no behaviour at all. A third line is invisible to that gate and complete for
+    // whoever is asking the balance question — which is not "what did the boss cost to reach" but "did a
+    // real body get through, and if not, where did it stop".
+    public static string Clearance(BotResult r)
+    {
+        ArgumentNullException.ThrowIfNull(r);
+        return $"sim-clearance: seed={r.Seed} policy={r.Policy} maps={r.Maps} "
+            + $"cleared={r.ClearedActs} reached={r.Acts} result={r.Result} "
+            + $"hp={r.Health}/{r.MaxHealth} rooms={r.Rooms.Count} "
+            + $"stopped={r.WhereRole} at={r.Where}";
+    }
+
     public static string Result(BotResult r)
     {
         ArgumentNullException.ThrowIfNull(r);

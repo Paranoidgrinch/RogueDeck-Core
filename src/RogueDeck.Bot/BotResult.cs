@@ -36,6 +36,21 @@ public sealed record BotResult
     public required IReadOnlyDictionary<int, int> DamageAtActBoss { get; init; }
     public required IReadOnlyDictionary<int, int> HealthAtActBoss { get; init; }
 
+    // The last room the run stood in, as the log names it ("act 4 r12c0 (labyrinth_hall_duo_01)"), and what
+    // kind of room it was. For a run that DIED this is where it died, which is the one thing a balance sweep
+    // wants back from a loss: a list of seeds is a complaint, a list of rooms is a lead.
+    public required string Where { get; init; }
+    public required string WhereRole { get; init; }
+
+    // ⚠⚠ THE ONLY QUESTION V-7 ASKS: how far did a real body get? An act is CLEARED when its boss is beaten,
+    // and the proof of that is standing in the next act — so a run that died in act 4 cleared three, and only
+    // a victory clears the act it ended in. Note what this does NOT say: nothing about how much health it
+    // cost. That was the old question (damage taken at 9999 hp), and it is answerable by a runner that never
+    // attacks, never dies and never wins.
+    public int ClearedActs => string.Equals(Result, "Victory", StringComparison.Ordinal)
+        ? Acts
+        : Math.Max(0, Acts - 1);
+
     // A lost run is a NORMAL outcome. Only something the run could not answer for — an engine error, a
     // refused play, a wall, a thrown exception — is worth a batch's attention.
     public bool Clean => Crash.Length == 0 && Error == "none" && Problems == 0 && Complete;
