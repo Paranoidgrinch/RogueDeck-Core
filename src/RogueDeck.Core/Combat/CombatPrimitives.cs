@@ -178,12 +178,22 @@ public sealed class ValuePoolState
     // than ignoring it. Energy that carries from one turn to the next is the case it exists for — a pool that
     // refills to its max cannot also keep what was left in it without briefly standing above that max. The
     // ceiling is not changed and reasserts itself at the next ordinary refill.
+    //
+    // ⚠⚠ A POOL THAT IS ALREADY OVER ITS CEILING MAY STILL BE SPENT FROM. The guard refuses a write that
+    // RAISES the value above the ceiling; it must not refuse one that LOWERS an overfilled pool, because such
+    // a write does not create the overfill — it is paying it down, toward the ceiling the guard is protecting.
+    // Without this the deliberate overfill above is a trap: the decree "what is unspent passes into tomorrow"
+    // hands the player 6 energy over a ceiling of 3, and the next card they play writes back 5 through the
+    // ordinary overload and THROWS — the card is lost, the fight reports a problem, and nothing in the rule
+    // the player can see says why. Found by the run simulator against Enlil, Voice of the Unalterable Decree
+    // (act V), where it read as a fault in whichever card happened to be played first that turn.
     public void SetCurrent(int value, bool allowExceedingMax)
     {
         if (value < 0)
             throw new ArgumentOutOfRangeException(nameof(value), "Pool value cannot be negative.");
 
-        if (Max.HasValue && value > Max.Value && !CanExceedMax && !allowExceedingMax)
+        var raisesAboveMax = Max.HasValue && value > Max.Value && value > Current;
+        if (raisesAboveMax && !CanExceedMax && !allowExceedingMax)
             throw new ArgumentOutOfRangeException(nameof(value), "Pool value cannot exceed max.");
 
         Current = value;

@@ -143,6 +143,35 @@ public class CombatDecreeTests
     }
 
     [Fact]
+    public void What_carried_over_can_actually_be_spent()
+    {
+        var (combat, registry) = Court(new CombatRuleSpec(CombatRule.UnspentResourceCarries));
+        var hero = combat.GetCombatant(HeroId);
+        Energy(hero, 3);
+        Refill(combat, registry);
+
+        // Six standing over a ceiling of three: the decree, working.
+        Assert.Equal(6, hero.Resources[StandardCombatIds.EnergyResource].Current);
+
+        // ⚠⚠ THE STEP THE TEST ABOVE STOPS ONE SHORT OF, and the whole bug lived in it. Holding energy over
+        // the ceiling is only half the decree; the half the player notices is SPENDING it. Paying a cost
+        // writes the pool back through the ordinary setter, and a pool still above its ceiling AFTER the
+        // payment used to be refused — so the first card of such a turn threw and was lost, with nothing in
+        // the rule the player can read to say why. Found by the run simulator against Enlil (act V).
+        Play(combat, registry, Deal(combat, StandardCombatIds.StrikeCard));
+
+        Assert.Equal(5, hero.Resources[StandardCombatIds.EnergyResource].Current);
+
+        // And on down, through the ceiling and out the other side — the ceiling reasserts itself at the next
+        // ordinary refill, not by refusing the payments in between.
+        Play(combat, registry, Deal(combat, StandardCombatIds.StrikeCard));
+        Play(combat, registry, Deal(combat, StandardCombatIds.StrikeCard));
+        Play(combat, registry, Deal(combat, StandardCombatIds.StrikeCard));
+
+        Assert.Equal(2, hero.Resources[StandardCombatIds.EnergyResource].Current);
+    }
+
+    [Fact]
     public void Without_the_decree_the_refill_overwrites_what_was_left()
     {
         var (combat, registry) = Court();
