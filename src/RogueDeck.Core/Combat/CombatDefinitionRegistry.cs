@@ -86,6 +86,32 @@ public sealed class CombatDefinitionRegistry
 
     public EffectNodeExecutorRegistry EffectNodeExecutors => _nodeExecutorRegistry;
 
+    // The collections as they really are, immutable. Internal because they exist for ONE caller:
+    // CombatDefinitionRegistryBuilder starting a new builder from this built registry (see its base-registry
+    // constructor). It adds to these rather than copying them out, which is the whole point: adding a handful
+    // of definitions to an immutable dictionary costs a handful of nodes, while copying one out and back
+    // would cost the whole library, every time, and there would be nothing saved.
+    internal ImmutableDictionary<StatusDefinitionId, StatusDefinition> StatusesImmutable => _statusDefinitions;
+    internal ImmutableDictionary<CardDefinitionId, CardDefinition> CardsImmutable => _cardDefinitions;
+    internal ImmutableDictionary<Type, IEffectRequestHandler> EffectRequestHandlersImmutable => _effectRequestHandlers;
+    internal ImmutableDictionary<EnemyActionDefinitionId, EnemyActionDefinition> EnemyActionsImmutable => _enemyActionDefinitions;
+    internal ImmutableDictionary<TriggeredEffectDefinitionId, ITriggeredEffectDefinition> TriggeredEffectsImmutable
+        => _triggeredEffectDefinitions;
+    internal ImmutableDictionary<TriggeredEffectDefinitionId, ITriggeredEffectDefinition> TemporaryRulesImmutable
+        => _temporaryRuleDefinitions;
+    internal ImmutableDictionary<DefensivePoolId, DefensivePoolDefinition> DefensivePoolsImmutable
+        => _defensivePoolDefinitions;
+    internal ImmutableDictionary<Type, ImmutableArray<ICombatEventHandler>> CombatEventHandlersImmutable
+        => _combatEventHandlers;
+    internal ImmutableArray<IDamageAmountModifier> DamageAmountModifiersImmutable => _damageAmountModifiers;
+    internal ImmutableArray<ICardPlayValidator> CardPlayValidatorsImmutable => _cardPlayValidators;
+    internal ImmutableArray<ICardCostModifier> CardCostModifiersImmutable => _cardCostModifiers;
+    internal ImmutableArray<IStatusApplicationInterceptor> StatusApplicationInterceptorsImmutable
+        => _statusApplicationInterceptors;
+    internal ImmutableArray<IPreDownInterceptor> PreDownInterceptorsImmutable => _preDownInterceptors;
+    internal ImmutableArray<IDamageSplitter> DamageSplittersImmutable => _damageSplitters;
+    internal ImmutableArray<IBlockAmountModifier> BlockAmountModifiersImmutable => _blockAmountModifiers;
+
     public IReadOnlyDictionary<StatusDefinitionId, StatusDefinition> StatusDefinitions => _statusDefinitions;
     public IReadOnlyDictionary<CardDefinitionId, CardDefinition> CardDefinitions => _cardDefinitions;
     public IReadOnlyDictionary<Type, IEffectRequestHandler> EffectRequestHandlers => _effectRequestHandlers;

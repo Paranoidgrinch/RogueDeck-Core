@@ -29,10 +29,54 @@ public sealed class CombatDefinitionRegistryBuilder
     private readonly Dictionary<TriggeredEffectDefinitionId, ITriggeredEffectDefinition> _temporaryRuleDefinitions = new();
     private readonly Dictionary<EnemyActionDefinitionId, EnemyActionDefinition> _enemyActionDefinitions = new();
 
-    private readonly EffectNodeExecutorRegistry _nodeExecutorRegistry = new();
+    // The node executors this builder writes to. A builder started from a built registry does NOT copy them
+    // until it has one of its own to register — a fight that adds no executors reads the base's sealed set.
+    private EffectNodeExecutorRegistry? _ownNodeExecutors;
+
+    // The already-built registry this builder stands on, or null when it builds from nothing. It is REFERENCED,
+    // never copied: its definitions stay where they are and Build() adds this builder's own to them. Copying a
+    // library out into mutable dictionaries and back again would cost the whole library for every fight, which
+    // is exactly the cost this seam exists to remove.
+    private readonly CombatDefinitionRegistry? _base;
 
     private bool _allowUnsafeSideEffects;
     private CombatDefinitionRegistry? _built;
+
+    public CombatDefinitionRegistryBuilder()
+    {
+    }
+
+    /// <summary>
+    /// Start from a registry that is already built, and add to it. Every definition of the base is carried
+    /// over as-is; whatever is registered afterwards is validated and duplicate-checked as usual.
+    ///
+    /// This exists so a game's authored library — the cards, statuses and enemy actions that are the same in
+    /// every fight — can be compiled ONCE and shared, instead of being recompiled and re-validated for each
+    /// fight. It shares definition INSTANCES, which is already how a library behaves today: definitions are
+    /// read-only after Build(), and the registry hands the same instances to every combat built from it.
+    ///
+    /// ⚠ Registration only ever ADDS. That is what makes skipping the base's validation sound: a program was
+    /// checked against a set of request handlers, node executors and the unsafe-side-effect flag, and none of
+    /// those can shrink here — a handler cannot be unregistered, an executor cannot be removed, and the flag
+    /// is inherited. A definition that validated in the base therefore still validates in the result.
+    /// </summary>
+    public CombatDefinitionRegistryBuilder(CombatDefinitionRegistry baseRegistry)
+    {
+        ArgumentNullException.ThrowIfNull(baseRegistry);
+        _base = baseRegistry;
+        _allowUnsafeSideEffects = baseRegistry.AllowsUnsafeSideEffects;
+    }
+
+    // The executors to read when validating: this builder's own if it made a copy, else the base's, else a
+    // fresh empty one (a builder standing on nothing).
+    private EffectNodeExecutorRegistry NodeExecutors =>
+        _ownNodeExecutors ?? _base?.EffectNodeExecutors ?? OwnNodeExecutors;
+
+    // The executors to WRITE to — taking a copy of the base's sealed set the first time one is registered.
+    private EffectNodeExecutorRegistry OwnNodeExecutors =>
+        _ownNodeExecutors ??= _base is null
+            ? new EffectNodeExecutorRegistry()
+            : new EffectNodeExecutorRegistry(_base.EffectNodeExecutors);
 
     public bool IsBuilt => _built is not null;
 
@@ -50,14 +94,14 @@ public sealed class CombatDefinitionRegistryBuilder
     {
         EnsureNotBuilt();
         ArgumentNullException.ThrowIfNull(executor);
-        _nodeExecutorRegistry.Register(nodeType, executor);
+        OwnNodeExecutors.Register(nodeType, executor);
     }
 
     public void RegisterEffectNodeExecutorOpenGeneric(Type openGenericNodeType, IEffectNodeExecutor executor)
     {
         EnsureNotBuilt();
         ArgumentNullException.ThrowIfNull(executor);
-        _nodeExecutorRegistry.RegisterOpenGeneric(openGenericNodeType, executor);
+        OwnNodeExecutors.RegisterOpenGeneric(openGenericNodeType, executor);
     }
 
     public void RegisterStatus(StatusDefinition definition)
@@ -69,7 +113,7 @@ public sealed class CombatDefinitionRegistryBuilder
             throw new ArgumentException(
                 "Status definition ID cannot be empty or whitespace.", nameof(definition));
 
-        if (_statusDefinitions.ContainsKey(definition.Id))
+        if (_statusDefinitions.ContainsKey(definition.Id) || _base?.StatusesImmutable.ContainsKey(definition.Id) == true)
             throw new InvalidOperationException($"Status definition '{definition.Id}' is already registered.");
 
         _statusDefinitions.Add(definition.Id, definition);
@@ -96,7 +140,7 @@ public sealed class CombatDefinitionRegistryBuilder
             throw new ArgumentException(
                 "Card definition ID cannot be empty or whitespace.", nameof(definition));
 
-        if (_cardDefinitions.ContainsKey(definition.Id))
+        if (_cardDefinitions.ContainsKey(definition.Id) || _base?.CardsImmutable.ContainsKey(definition.Id) == true)
             throw new InvalidOperationException($"Card definition '{definition.Id}' is already registered.");
 
         _cardDefinitions.Add(definition.Id, definition);
@@ -123,7 +167,7 @@ public sealed class CombatDefinitionRegistryBuilder
             throw new ArgumentException(
                 "Enemy action definition ID cannot be empty or whitespace.", nameof(definition));
 
-        if (_enemyActionDefinitions.ContainsKey(definition.Id))
+        if (_enemyActionDefinitions.ContainsKey(definition.Id) || _base?.EnemyActionsImmutable.ContainsKey(definition.Id) == true)
             throw new InvalidOperationException($"Enemy action definition '{definition.Id}' is already registered.");
 
         _enemyActionDefinitions.Add(definition.Id, definition);
@@ -229,7 +273,7 @@ public sealed class CombatDefinitionRegistryBuilder
             throw new ArgumentException(
                 "Defensive pool id cannot be empty or whitespace.", nameof(definition));
 
-        if (_defensivePoolDefinitions.ContainsKey(definition.Id))
+        if (_defensivePoolDefinitions.ContainsKey(definition.Id) || _base?.DefensivePoolsImmutable.ContainsKey(definition.Id) == true)
             throw new InvalidOperationException(
                 $"Defensive pool '{definition.Id}' is already registered.");
 
@@ -241,7 +285,8 @@ public sealed class CombatDefinitionRegistryBuilder
         EnsureNotBuilt();
         ArgumentNullException.ThrowIfNull(handler);
 
-        if (_effectRequestHandlers.ContainsKey(handler.RequestType))
+        if (_effectRequestHandlers.ContainsKey(handler.RequestType)
+            || _base?.EffectRequestHandlersImmutable.ContainsKey(handler.RequestType) == true)
             throw new InvalidOperationException(
                 $"Effect request handler for '{handler.RequestType.Name}' is already registered.");
 
@@ -257,7 +302,8 @@ public sealed class CombatDefinitionRegistryBuilder
             throw new ArgumentException(
                 "Triggered effect definition ID cannot be empty or whitespace.", nameof(definition));
 
-        if (_triggeredEffectDefinitions.ContainsKey(definition.Id))
+        if (_triggeredEffectDefinitions.ContainsKey(definition.Id)
+            || _base?.TriggeredEffectsImmutable.ContainsKey(definition.Id) == true)
             throw new InvalidOperationException(
                 $"Triggered effect definition '{definition.Id}' is already registered.");
 
@@ -277,7 +323,8 @@ public sealed class CombatDefinitionRegistryBuilder
             throw new ArgumentException(
                 "Temporary rule definition ID cannot be empty or whitespace.", nameof(definition));
 
-        if (_temporaryRuleDefinitions.ContainsKey(definition.Id))
+        if (_temporaryRuleDefinitions.ContainsKey(definition.Id)
+            || _base?.TemporaryRulesImmutable.ContainsKey(definition.Id) == true)
             throw new InvalidOperationException(
                 $"Temporary rule definition '{definition.Id}' is already registered.");
 
@@ -295,7 +342,11 @@ public sealed class CombatDefinitionRegistryBuilder
             _combatEventHandlers.Add(handler.EventType, handlers);
         }
 
-        if (handlers.Any(existing => existing.GetType() == handler.GetType()))
+        var alreadyThere = handlers.Any(existing => existing.GetType() == handler.GetType());
+        if (!alreadyThere && _base is not null
+            && _base.CombatEventHandlersImmutable.TryGetValue(handler.EventType, out var inherited))
+            alreadyThere = inherited.Any(existing => existing.GetType() == handler.GetType());
+        if (alreadyThere)
             throw new InvalidOperationException(
                 $"Combat event handler '{handler.GetType().Name}' for event '{handler.EventType.Name}' is already registered.");
 
@@ -314,6 +365,8 @@ public sealed class CombatDefinitionRegistryBuilder
 
         var diagnostics = new List<CombatDiagnostic>();
 
+        // Only what THIS builder registered is walked. A base's programs were walked when the base was built,
+        // and nothing since can have invalidated them — see the base constructor.
         foreach (var (cardId, card) in _cardDefinitions)
             if (card.Program is { } p)
                 ValidateEffectProgramTree(
@@ -335,36 +388,97 @@ public sealed class CombatDefinitionRegistryBuilder
         if (diagnostics.Count > 0)
             throw new CombatDefinitionBuildException(diagnostics);
 
-        _nodeExecutorRegistry.Seal();
+        NodeExecutors.Seal();
 
         // Deep-freeze status definitions so their tag sets cannot change after build (the runtime
-        // registry stores these exact instances).
+        // registry stores these exact instances). A base's are already frozen.
         foreach (var status in _statusDefinitions.Values)
             status.Freeze();
 
         _built = new CombatDefinitionRegistry(
-            _statusDefinitions.ToImmutableDictionary(),
-            _cardDefinitions.ToImmutableDictionary(),
-            _effectRequestHandlers.ToImmutableDictionary(),
-            _enemyActionDefinitions.ToImmutableDictionary(),
-            _triggeredEffectDefinitions.ToImmutableDictionary(),
-            _temporaryRuleDefinitions.ToImmutableDictionary(),
-            _damageAmountModifiers.ToImmutableArray(),
-            _cardPlayValidators.ToImmutableArray(),
-            _cardCostModifiers.ToImmutableArray(),
-            _statusApplicationInterceptors.ToImmutableArray(),
-            _preDownInterceptors.ToImmutableArray(),
-            _damageSplitters.ToImmutableArray(),
-            _blockAmountModifiers.ToImmutableArray(),
-            _defensivePoolDefinitions.ToImmutableDictionary(),
-            _combatEventHandlers.ToImmutableDictionary(
-                pair => pair.Key,
-                pair => pair.Value.ToImmutableArray()),
-            _nodeExecutorRegistry,
+            Merged(_base?.StatusesImmutable, _statusDefinitions),
+            Merged(_base?.CardsImmutable, _cardDefinitions),
+            Merged(_base?.EffectRequestHandlersImmutable, _effectRequestHandlers),
+            Merged(_base?.EnemyActionsImmutable, _enemyActionDefinitions),
+            Merged(_base?.TriggeredEffectsImmutable, _triggeredEffectDefinitions),
+            Merged(_base?.TemporaryRulesImmutable, _temporaryRuleDefinitions),
+            MergedAndSorted(_base?.DamageAmountModifiersImmutable, _damageAmountModifiers,
+                m => m.Priority, m => m.ModifierId),
+            MergedAndSorted(_base?.CardPlayValidatorsImmutable, _cardPlayValidators,
+                v => v.Priority, v => v.ModifierId),
+            MergedAndSorted(_base?.CardCostModifiersImmutable, _cardCostModifiers,
+                m => m.Priority, m => m.ModifierId),
+            MergedAndSorted(_base?.StatusApplicationInterceptorsImmutable, _statusApplicationInterceptors,
+                i => i.Priority, i => i.ModifierId),
+            MergedAndSorted(_base?.PreDownInterceptorsImmutable, _preDownInterceptors,
+                i => i.Priority, i => i.InterceptorId),
+            MergedAndSorted(_base?.DamageSplittersImmutable, _damageSplitters,
+                sp => sp.Priority, sp => sp.SplitterId),
+            MergedAndSorted(_base?.BlockAmountModifiersImmutable, _blockAmountModifiers,
+                m => m.Priority, m => m.ModifierId),
+            Merged(_base?.DefensivePoolsImmutable, _defensivePoolDefinitions),
+            MergedEventHandlers(),
+            NodeExecutors,
             _allowUnsafeSideEffects);
 
         return _built;
     }
+
+    // The base's entries plus this builder's own. Adding to an immutable dictionary shares the base's nodes
+    // instead of rebuilding it, so a fight that adds three triggers to a library of thousands pays for three.
+    private static ImmutableDictionary<TKey, TValue> Merged<TKey, TValue>(
+        ImmutableDictionary<TKey, TValue>? baseEntries, Dictionary<TKey, TValue> own)
+        where TKey : notnull =>
+        baseEntries is null
+            ? own.ToImmutableDictionary()
+            : own.Count == 0 ? baseEntries : baseEntries.AddRange(own);
+
+    // Modifiers and interceptors apply in one order: priority first, then id. Merging re-sorts so an addition
+    // takes its proper place among the base's rather than being appended after them.
+    private static ImmutableArray<T> MergedAndSorted<T>(
+        ImmutableArray<T>? baseEntries, List<T> own, Func<T, int> priority, Func<T, string> id)
+    {
+        if (baseEntries is not { } inherited)
+            return own.ToImmutableArray();
+        if (own.Count == 0)
+            return inherited;
+        var merged = inherited.ToList();
+        merged.AddRange(own);
+        SortByPriorityThenId(merged, priority, id);
+        return merged.ToImmutableArray();
+    }
+
+    private ImmutableDictionary<Type, ImmutableArray<ICombatEventHandler>> MergedEventHandlers()
+    {
+        var own = _combatEventHandlers.ToImmutableDictionary(
+            pair => pair.Key,
+            pair => pair.Value.ToImmutableArray());
+        if (_base is null)
+            return own;
+        if (own.Count == 0)
+            return _base.CombatEventHandlersImmutable;
+
+        // A handler registered here for an event the base already handles joins that event's handlers, after
+        // the base's — the order they were registered in is the order they run in.
+        var merged = _base.CombatEventHandlersImmutable;
+        foreach (var (eventType, handlers) in own)
+            merged = merged.SetItem(
+                eventType,
+                merged.TryGetValue(eventType, out var inherited) ? inherited.AddRange(handlers) : handlers);
+        return merged;
+    }
+
+    // What this builder can see: its own registrations AND the base's. A program validated here belongs to a
+    // fight standing on a library, and the status or card it names is usually the library's.
+    private bool KnowsStatus(StatusDefinitionId id) =>
+        _statusDefinitions.ContainsKey(id) || _base?.StatusesImmutable.ContainsKey(id) == true;
+
+    private bool KnowsCard(CardDefinitionId id) =>
+        _cardDefinitions.ContainsKey(id) || _base?.CardsImmutable.ContainsKey(id) == true;
+
+    private bool KnowsEffectRequestHandler(Type requestType) =>
+        _effectRequestHandlers.ContainsKey(requestType)
+        || _base?.EffectRequestHandlersImmutable.ContainsKey(requestType) == true;
 
     private void EnsureNotBuilt()
     {
@@ -387,7 +501,7 @@ public sealed class CombatDefinitionRegistryBuilder
                 code, CombatDiagnosticSeverity.Error, ownerKind, ownerId, programId, path.Value,
                 $"{ownerLabel}: {message}", selectorName));
 
-        if (!_nodeExecutorRegistry.TryGet(node.GetType(), out _))
+        if (!NodeExecutors.TryGet(node.GetType(), out _))
             Add(CombatDiagnosticCode.MissingNodeExecutor,
                 $"no executor registered for '{node.GetType().Name}'");
 
@@ -398,7 +512,7 @@ public sealed class CombatDefinitionRegistryBuilder
                 "(set CombatDefinitionRegistryBuilder.AllowUnsafeSideEffects = true to permit it in tests)");
 
         if (node is INativeEffectOperationNode native &&
-            !_effectRequestHandlers.ContainsKey(native.ProducedEffectRequestType))
+            !KnowsEffectRequestHandler(native.ProducedEffectRequestType))
             Add(CombatDiagnosticCode.MissingRequestHandler,
                 $"no handler registered for '{native.ProducedEffectRequestType.Name}' " +
                 $"(required by '{node.GetType().Name}')");
@@ -434,17 +548,17 @@ public sealed class CombatDefinitionRegistryBuilder
         }
 
         if (node is IApplyStatusNodeCore applyStatus &&
-            !_statusDefinitions.ContainsKey(applyStatus.StatusDefinitionId))
+            !KnowsStatus(applyStatus.StatusDefinitionId))
             Add(CombatDiagnosticCode.MissingStatusDefinition,
                 $"referenced status '{applyStatus.StatusDefinitionId}' is not registered");
 
         if (node is IRemoveStatusNodeCore removeStatus &&
-            !_statusDefinitions.ContainsKey(removeStatus.StatusDefinitionId))
+            !KnowsStatus(removeStatus.StatusDefinitionId))
             Add(CombatDiagnosticCode.MissingStatusDefinition,
                 $"referenced status '{removeStatus.StatusDefinitionId}' is not registered");
 
         if (node is ICreateCardInstanceNodeCore createCard &&
-            !_cardDefinitions.ContainsKey(createCard.CardDefinitionId))
+            !KnowsCard(createCard.CardDefinitionId))
             Add(CombatDiagnosticCode.MissingCardDefinition,
                 $"referenced card definition '{createCard.CardDefinitionId}' is not registered");
 

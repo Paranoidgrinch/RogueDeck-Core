@@ -39,8 +39,18 @@ public interface IEffectNodeExecutor
 
 public sealed class EffectNodeExecutorRegistry
 {
-    private readonly Dictionary<Type, IEffectNodeExecutor> _executors = new();
+    private readonly Dictionary<Type, IEffectNodeExecutor> _executors;
     private bool _sealed;
+
+    public EffectNodeExecutorRegistry() => _executors = new Dictionary<Type, IEffectNodeExecutor>();
+
+    // Copy an existing registry's executors into a fresh, UNSEALED one. A registry that has been built is
+    // sealed, so a builder that starts from a built registry needs its own copy to be able to add to it.
+    internal EffectNodeExecutorRegistry(EffectNodeExecutorRegistry source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        _executors = new Dictionary<Type, IEffectNodeExecutor>(source._executors);
+    }
 
     public static EffectNodeExecutorRegistry Default { get; } = CreateDefault();
 

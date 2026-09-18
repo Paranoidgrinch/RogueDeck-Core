@@ -137,6 +137,12 @@ public sealed class EncounterCatalog
     // builder). Keyed by encounter id; registered into that encounter's combat in Build. Empty when unused.
     private readonly IReadOnlyDictionary<EncounterId, IReadOnlyList<ITriggeredEffectDefinition>> _encounterTriggers;
 
+    // The shared content compiled ONCE and handed to every fight this catalog builds (see
+    // CompiledCombatLibrary). Keyed by the per-turn draw count, because that number is baked into the standard
+    // package's draw handler and an encounter may set its own; in practice a game uses one or two.
+    private readonly Dictionary<int, CompiledCombatLibrary> _compiledLibraries = new();
+    private readonly object _compileGate = new();
+
     public EncounterCatalog(
         CombatContentLibrary library,
         IEnumerable<EncounterDefinition> encounters,
@@ -168,16 +174,14 @@ public sealed class EncounterCatalog
         // The encounter's authored per-turn draw count (null keeps the blueprint's engine default).
         if (encounter.CardsDrawnPerTurn is { } cardsDrawnPerTurn)
             blueprint.CardsDrawnPerTurn = cardsDrawnPerTurn;
-        // Shared definitions (read-only during Compile, so sharing the instances across fights is safe).
-        foreach (var card in _library.Cards) blueprint.Cards.Add(card);
-        foreach (var action in _library.EnemyActions) blueprint.EnemyActions.Add(action);
-        foreach (var status in _library.Statuses) blueprint.Statuses.Add(status);
-        foreach (var trigger in _library.TriggeredPrograms) blueprint.TriggeredPrograms.Add(trigger);
+        // The shared definitions are not copied onto this blueprint and compiled again for this one fight:
+        // they are compiled once per catalog and named here. What stays on the blueprint below is what is
+        // genuinely this fight's own. (The instances were shared across fights before this too — the library
+        // is read-only during Compile — so what changed is the repetition, not the sharing.)
+        blueprint.Library = CompiledLibrary(blueprint.CardsDrawnPerTurn);
         // Encounter-scoped cross-combatant triggers (enemy passives reacting to player actions), this fight only.
         if (_encounterTriggers.TryGetValue(id, out var encounterTriggers))
             foreach (var trigger in encounterTriggers) blueprint.TriggeredPrograms.Add(trigger);
-        foreach (var interceptor in _library.PreDownInterceptors) blueprint.PreDownInterceptors.Add(interceptor);
-        foreach (var interceptor in _library.StatusApplicationInterceptors) blueprint.StatusApplicationInterceptors.Add(interceptor);
 
         // Hero shell: HP from the run; resources / starting statuses from the encounter; deck projected later.
         blueprint.Hero = new HeroBlueprint("hero")
@@ -194,8 +198,6 @@ public sealed class EncounterCatalog
         foreach (var resource in _library.HeroResources)
             if (heroResourceIds.Add(resource.Resource))
                 blueprint.Hero.Resources.Add(resource);
-        foreach (var refill in _library.HeroResourceRefills)
-            blueprint.TurnStartResourceRefills.Add(refill);
 
         foreach (var spec in encounter.Enemies)
         {
@@ -209,5 +211,29 @@ public sealed class EncounterCatalog
         }
 
         return new Playthrough(blueprint, new ScenarioScript().Build(), combatId: id.Value, randomSeed: randomSeed);
+    }
+
+    // Compile the shared content the first time a fight with this draw count asks for it, then hand the same
+    // library to every later fight. Nothing run-dependent goes in here — no deck, no relic, no hero — so there
+    // is no key to get wrong: this is the AUTHORED content, which is the same in every fight of the game.
+    private CompiledCombatLibrary CompiledLibrary(int cardsDrawnPerTurn)
+    {
+        lock (_compileGate)
+        {
+            if (_compiledLibraries.TryGetValue(cardsDrawnPerTurn, out var compiled))
+                return compiled;
+
+            compiled = CompiledCombatLibrary.Compile(
+                cardsDrawnPerTurn,
+                statuses: _library.Statuses,
+                cards: _library.Cards,
+                enemyActions: _library.EnemyActions,
+                triggeredPrograms: _library.TriggeredPrograms,
+                preDownInterceptors: _library.PreDownInterceptors,
+                statusApplicationInterceptors: _library.StatusApplicationInterceptors,
+                turnStartResourceRefills: _library.HeroResourceRefills);
+            _compiledLibraries[cardsDrawnPerTurn] = compiled;
+            return compiled;
+        }
     }
 }

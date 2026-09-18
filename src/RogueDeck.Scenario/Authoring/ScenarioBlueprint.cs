@@ -54,26 +54,56 @@ public sealed class ScenarioBlueprint
     // Innate cards are still pulled to the top AFTER the shuffle, so they stay in the opening hand.
     public bool ShuffleDrawPileOnStart { get; set; }
 
+    // The shared, already-compiled half of this game's combat content (see CompiledCombatLibrary). When set,
+    // Compile() starts from the library's built registry instead of building the standard package and the
+    // library's definitions again — which is what makes assembling a fight cheap. Null (the default) keeps the
+    // self-contained behaviour: everything this blueprint needs is authored on this blueprint.
+    public CompiledCombatLibrary? Library { get; set; }
+
     public CompiledScenario Compile()
     {
         if (Hero is null)
             throw new InvalidOperationException("A scenario needs a hero.");
         if (Enemies.Count == 0)
             throw new InvalidOperationException("A scenario needs at least one enemy.");
+        if (Library is { } mismatched && mismatched.CardsDrawnPerTurn != CardsDrawnPerTurn)
+            throw new InvalidOperationException(
+                $"This scenario draws {CardsDrawnPerTurn} card(s) per turn but its library was compiled for "
+                + $"{mismatched.CardsDrawnPerTurn}. Compile a library for this draw count instead — the draw "
+                + "handler lives in the library's standard package and cannot be corrected afterwards.");
 
-        var builder = new CombatDefinitionRegistryBuilder();
-        new StandardCombatPackage(CardsDrawnPerTurn).RegisterDefinitions(builder);
+        // With a library: start from its built registry and add only what this fight brings. Without one:
+        // build the whole thing, exactly as before.
+        var builder = Library is { } library
+            ? new CombatDefinitionRegistryBuilder(library.Registry)
+            : new CombatDefinitionRegistryBuilder();
+        if (Library is null)
+            new StandardCombatPackage(CardsDrawnPerTurn).RegisterDefinitions(builder);
 
         foreach (var status in Statuses)
             builder.RegisterStatus(status.Compile());
         foreach (var card in Cards)
             builder.RegisterCard(card.Compile());
 
-        var intents = new Dictionary<EnemyActionDefinitionId, ActionIntent>();
-        foreach (var action in EnemyActions)
+        // The library's intents, plus this blueprint's own when it has any. A fight that adds no enemy actions
+        // — which is every fight assembled from a catalog — reads the library's dictionary where it lies,
+        // rather than copying a few hundred entries to change none of them.
+        IReadOnlyDictionary<EnemyActionDefinitionId, ActionIntent> intents;
+        if (EnemyActions.Count == 0 && Library is { } onlyTheLibrarys)
         {
-            builder.RegisterEnemyAction(action.Compile());
-            intents[action.DefinitionId] = action.Intent;
+            intents = onlyTheLibrarys.Intents;
+        }
+        else
+        {
+            var mine = Library is { } withIntents
+                ? new Dictionary<EnemyActionDefinitionId, ActionIntent>(withIntents.Intents)
+                : new Dictionary<EnemyActionDefinitionId, ActionIntent>();
+            foreach (var action in EnemyActions)
+            {
+                builder.RegisterEnemyAction(action.Compile());
+                mine[action.DefinitionId] = action.Intent;
+            }
+            intents = mine;
         }
 
         if (TurnStartResourceRefills.Count > 0)
@@ -93,13 +123,16 @@ public sealed class ScenarioBlueprint
         // Atomic, validated build of the whole definition set.
         var registry = builder.Build();
 
-        ValidateReferences(registry);
+        ValidateReferences(registry, intents);
 
         return new CompiledScenario(
             registry, intents, Hero, Enemies, Allies, CellExclusive, SimultaneousTeamTurns, ShuffleDrawPileOnStart);
     }
 
-    private void ValidateReferences(CombatDefinitionRegistry registry)
+    // The known actions are the COMPILED ones (library + this blueprint's own), not this blueprint's list:
+    // with a library, the actions an enemy names are registered there and this blueprint's list is empty.
+    private void ValidateReferences(
+        CombatDefinitionRegistry registry, IReadOnlyDictionary<EnemyActionDefinitionId, ActionIntent> intents)
     {
         foreach (var entry in Hero!.Deck)
             if (!registry.TryGetCard(entry.Card, out _))
@@ -119,8 +152,7 @@ public sealed class ScenarioBlueprint
                         $"Enemy '{enemy.Id}' intent rule references unknown action '{rule.Action}'. Add an EnemyActionBlueprint for it.");
         }
 
-        bool intentsContain(EnemyActionDefinitionId id) =>
-            EnemyActions.Exists(a => a.DefinitionId == id);
+        bool intentsContain(EnemyActionDefinitionId id) => intents.ContainsKey(id);
     }
 }
 

@@ -12,8 +12,11 @@ public class EncounterTests
 {
     private static readonly EncounterId GoblinFight = new("goblin-fight");
 
-    // The authored-once combat content: a 6-damage smite and a goblin slam.
-    private static CombatContentLibrary Library() => new(
+    // The authored-once combat content: a 6-damage smite and a goblin slam. A test that needs run-global
+    // combat resources passes them in; everything else gets the plain library.
+    private static CombatContentLibrary Library(
+        IReadOnlyList<ResourceSpec>? heroResources = null,
+        IReadOnlyList<ResourceRefillSpec>? heroResourceRefills = null) => new(
         cards: new[]
         {
             new CardBlueprint("smite") { Program = Effects.Program(Effects.DealDamage(Targets.EventTarget, 6)) },
@@ -25,7 +28,9 @@ public class EncounterTests
                 Program = new EffectProgram<EnemyActionContext>(new DealDamageNode<EnemyActionContext>(
                     CombatantTargetSelectors.EventTarget, new ConstantExpression<EnemyActionContext>(4))),
             },
-        });
+        },
+        heroResources: heroResources,
+        heroResourceRefills: heroResourceRefills);
 
     private static EncounterDefinition GoblinEncounter(int goblinHp = 12) => new(
         GoblinFight,
@@ -53,6 +58,28 @@ public class EncounterTests
         return run;
     }
 
+    // Plays a goblin fight to the hero's second turn and reports the mana left in the pool. The library grants
+    // 2 mana with a max of 5; only a per-turn refill can make that 5.
+    private static int ManaAcrossATurn(bool withRefill)
+    {
+        var catalog = new EncounterCatalog(
+            Library(
+                heroResources: new[] { new ResourceSpec(new ResourceId("mana"), 2, 5) },
+                heroResourceRefills: withRefill
+                    ? new[] { new ResourceRefillSpec(new ResourceId("mana"), 5) }
+                    : null),
+            new[] { GoblinEncounter() });
+        var playthrough = catalog.Build(GoblinFight, NewRun(), randomSeed: 1);
+        var compiled = playthrough.Blueprint.Compile();
+        var combat = new InteractiveCombat(
+            compiled, EnemyIntentSelectors.Build(compiled), playthrough.CombatId, playthrough.RandomSeed);
+        combat.EndTurn(); // the goblin slams, then the hero's next turn starts
+        return combat.State.TryGetCombatant(compiled.Hero.CombatantId, out var hero) && hero is not null
+            && hero.Resources.TryGetValue(new ResourceId("mana"), out var pool)
+            ? pool.Current
+            : -1;
+    }
+
     [Fact]
     public void A_data_encounter_node_runs_to_victory_through_the_run()
     {
@@ -72,19 +99,27 @@ public class EncounterTests
     public void Run_global_combat_resources_are_injected_into_every_hero_with_refills()
     {
         // A custom "mana" resource defined run-global (via the library) must appear on the fight's hero with its
-        // starting/max, plus a per-turn refill — alongside the encounter's own energy.
-        var library = new CombatContentLibrary(
-            heroResources: new[] { new ResourceSpec(new ResourceId("mana"), 2, 5) },
-            heroResourceRefills: new[] { new ResourceRefillSpec(new ResourceId("mana"), 5) });
-        var catalog = new EncounterCatalog(library, new[] { GoblinEncounter() });
+        // starting/max, alongside the encounter's own energy — and must top up at every turn start. The refill
+        // is asked of the FIGHT, not of a list on the blueprint: it is installed in the compiled content, so
+        // only a turn actually played can say whether the hero really gets its mana back.
+        var catalog = new EncounterCatalog(
+            Library(
+                heroResources: new[] { new ResourceSpec(new ResourceId("mana"), 2, 5) },
+                heroResourceRefills: new[] { new ResourceRefillSpec(new ResourceId("mana"), 5) }),
+            new[] { GoblinEncounter() });
 
         var playthrough = catalog.Build(GoblinFight, NewRun(), randomSeed: 1);
 
-        var mana = Assert.Single(playthrough.Blueprint.Hero.Resources, r => r.Resource.value == "mana");
+        var mana = Assert.Single(playthrough.Blueprint.Hero!.Resources, r => r.Resource.value == "mana");
         Assert.Equal(2, mana.Current);
         Assert.Equal(5, mana.Max);
-        Assert.Contains(playthrough.Blueprint.TurnStartResourceRefills, r => r.Resource.value == "mana" && r.Max == 5);
         Assert.Contains(playthrough.Blueprint.Hero.Resources, r => r.Resource == StandardCombatIds.EnergyResource);
+
+        // The same fight WITHOUT the refill spec is what tells 2 from 5 apart: the blueprint grants 2, so a
+        // hero sitting on 5 can only have been topped up. Asserting 5 alone would also pass on a pool that
+        // simply started full.
+        Assert.Equal(2, ManaAcrossATurn(withRefill: false));
+        Assert.Equal(5, ManaAcrossATurn(withRefill: true));
     }
 
     [Fact]
