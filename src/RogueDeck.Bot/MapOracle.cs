@@ -185,6 +185,55 @@ public static class MapOracle
         return surveys;
     }
 
+    // ── EVERY ROUTE THROUGH ONE ACT, AS ROOMS TO WALK ────────────────────────────────────────────────────
+    // The survey above reduces the field to numbers; this hands the field itself over, so each route can be
+    // WALKED (BotOptions.Route). That is the difference between asking how far a player gets — which mixes
+    // navigation with difficulty — and asking whether a way through the act exists for that player at all.
+    //
+    // ⚠ Ordered as the depth-first walk finds them, which is stable for a given map and means nothing else.
+    public static IReadOnlyList<IReadOnlyList<string>> Routes(RunMap map, int budget = 100_000)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        var onward = new Dictionary<string, IReadOnlyList<NodeId>>(StringComparer.Ordinal);
+        foreach (var node in map.Nodes)
+            onward[node.Id.Value] = map.SuccessorIds(node.Id);
+
+        var routes = new List<IReadOnlyList<string>>();
+        if (map.Edges.Count == 0)
+        {
+            routes.Add([.. map.Nodes.Select(n => n.Id.Value)]);
+            return routes;
+        }
+
+        void Walk(string id, List<string> path)
+        {
+            if (routes.Count >= budget || !onward.TryGetValue(id, out var next))
+                return;
+            path.Add(id);
+            if (next.Count == 0)
+                routes.Add([.. path]);
+            else
+                foreach (var step in next)
+                    Walk(step.Value, path);
+            path.RemoveAt(path.Count - 1);
+        }
+
+        foreach (var start in map.EntryNodeIds.Count > 0 ? map.EntryNodeIds : map.RootIds())
+            Walk(start.Value, []);
+        return routes;
+    }
+
+    // The routes through ONE act of the run a seed lays out, without playing a step.
+    public static IReadOnlyList<IReadOnlyList<string>> RoutesOfAct(
+        RunBlueprint blueprint, int seed, int act, string? characterId = null, string? mapGenerator = null)
+    {
+        ArgumentNullException.ThrowIfNull(blueprint);
+        var loadout = new BalanceCalculator(blueprint.Balance, blueprint.Encounters)
+            .LoadoutStrength(blueprint.ResolveStart(characterId), blueprint.Deck, characterId);
+        var acts = blueprint.BuildActPlan(seed, loadout, mapGenerator);
+        return act >= 1 && act <= acts.Count ? Routes(acts[act - 1].Map) : [];
+    }
+
     public static ActSurvey Survey(
         int act, string actId, RunMap map, Weights weights,
         IReadOnlyList<string>? walked = null, int pathBudget = 100_000)

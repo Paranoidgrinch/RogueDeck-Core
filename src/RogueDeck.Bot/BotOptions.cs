@@ -20,6 +20,19 @@ public sealed record BotOptions
 
     public BotPolicy? Policy { get; init; }
 
+    // ── THE ROUTE THIS RUN IS TOLD TO WALK (O3) ──────────────────────────────────────────────────────────
+    // Node ids, in order. At a fork, if one of the doors is the next id on this list, it is taken and no
+    // policy is consulted; anywhere the list has nothing to say, the runner decides as it always would.
+    //
+    // ⚠⚠ IT IS NOT A BETTER RUNNER, IT IS A DIFFERENT QUESTION. A policy runner answers "how far does this
+    // player get?", which mixes the player's navigation with the act's difficulty. Handing it the route
+    // takes navigation off the table: play every route an act HAS, and what comes back is "does a way
+    // through this act exist for this player at all?" — which is the question V-7 asks.
+    //
+    // ⚠ A ROUTE IS NOT A PROOF EITHER WAY. Cleared on some route is a constructive yes. Cleared on none is
+    // "this player found none", never "none exists" — the same honesty the autopsy keeps (see FightSolver).
+    public IReadOnlyList<string>? Route { get; init; }
+
     // What each card DOES, read once out of the shipped document — only a policy runner needs it.
     public CardFeatures? Features { get; init; }
 

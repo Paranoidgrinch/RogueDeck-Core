@@ -86,6 +86,9 @@ public static class Program
         if (options.OracleOnly)
             return SurveyOnly(played, options, maps, generator);
 
+        if (options.Routes > 0)
+            return WalkEveryRoute(played, options, maps, generator, policy, features);
+
         var lines = new ConcurrentDictionary<int, string>();
         var failures = 0;
         using var slots = new SemaphoreSlim(options.Jobs);
@@ -165,7 +168,8 @@ public static class Program
     // ONE RUN, WHOLE AND ON ITS OWN: its own playback, its own profile, its own RNG.
     private static async Task<(BotResult Result, string Log, IReadOnlyList<string> Oracle)> PlayOne(
         RunBlueprint blueprint, int seed, string maps, string generator,
-        BotPolicy? policy, CardFeatures? features, CliOptions options)
+        BotPolicy? policy, CardFeatures? features, CliOptions options,
+        IReadOnlyList<string>? route = null)
     {
         var text = new System.Text.StringBuilder();
         var log = new DelegateBotLog(line => text.AppendLine(line));
@@ -182,6 +186,7 @@ public static class Program
             Character = character,
             Policy = policy,
             Features = features,
+            Route = route,
             Champion = options.Champion,
             Autopsy = options.Autopsy,
             AutopsySeconds = options.AutopsySeconds,
@@ -213,6 +218,100 @@ public static class Program
         foreach (var line in survey)
             text.AppendLine(line);
         return (result, text.ToString(), survey);
+    }
+
+    // ── EVERY ROUTE THROUGH ONE ACT (O3) ─────────────────────────────────────────────────────────────────
+    // One run per route, with the route TOLD rather than chosen. That takes navigation off the table, and
+    // what is left is the question V-7 actually asks: is there a way through this act for this player?
+    //
+    // ⚠⚠ ONLY ONE OF THE TWO ANSWERS IS A FINDING. "Cleared on 3 of 9" is constructive — three walks got
+    // through and their rooms are named. "Cleared on 0 of 9" is NOT "this act is impossible": it is this
+    // player, on this seed, finding no way. The same honesty the autopsy keeps, and for the same reason.
+    //
+    // ⚠ AN ACT PAST THE FIRST HAS TO BE REACHED BEFORE ITS ROUTE MEANS ANYTHING. The route names act N's
+    // rooms; a run that dies in act one never sees them and is reported as what it is — not reaching the
+    // act is a different outcome from failing inside it, and the line says which.
+    private static int WalkEveryRoute(
+        RunBlueprint blueprint, CliOptions options, string maps, string generator,
+        BotPolicy? policy, CardFeatures? features)
+    {
+        var act = options.Routes;
+        var lines = new ConcurrentDictionary<int, string>();
+        var unreadable = 0;
+
+        for (var seed = options.SeedFrom; seed < options.SeedFrom + options.Runs; seed++)
+        {
+            var character = RollCharacter(blueprint, seed);
+            var routes = MapOracle.RoutesOfAct(blueprint, seed, act, character, generator);
+            if (routes.Count == 0)
+            {
+                unreadable++;
+                lines[seed] = $"sim-clearable: seed={seed} maps={maps} act={act} NO ROUTES — "
+                    + $"this run has no act {act}";
+                continue;
+            }
+
+            var told = new string[routes.Count];
+            using var slots = new SemaphoreSlim(options.Jobs);
+            var work = routes.Select((route, index) => Task.Run(async () =>
+            {
+                await slots.WaitAsync().ConfigureAwait(false);
+                try
+                {
+                    var (result, log, _) =
+                        await PlayOne(blueprint, seed, maps, generator, policy, features, options, route)
+                            .ConfigureAwait(false);
+                    if (options.OutDir is { } into)
+                        File.WriteAllText(Path.Combine(into, $"route-{seed:0000}-{index:00}.log"), log);
+                    told[index] = $"  sim-route: seed={seed} act={act} route={index + 1}/{routes.Count} "
+                        + $"result={result.Result} reached={result.Acts} cleared={result.ClearedActs} "
+                        + $"rooms={result.Rooms.Count} hp={result.Health}/{result.MaxHealth} "
+                        + $"stopped={result.WhereRole} at={result.Where}";
+                }
+                catch (Exception ex)
+                {
+                    told[index] = $"  sim-route: seed={seed} act={act} route={index + 1}/{routes.Count} "
+                        + $"NO RESULT — {ex.GetType().Name}: {ex.Message}";
+                }
+                finally
+                {
+                    slots.Release();
+                }
+            })).ToArray();
+            Task.WaitAll(work);
+
+            // CLEARED means the act's boss went down, which the result reports as `cleared` reaching it.
+            // REACHED only means the run arrived — the two differ by exactly the act this is asking about.
+            var through = told.Count(line => Cleared(line) >= act);
+            var arrived = told.Count(line => Reached(line) >= act);
+            lines[seed] = $"sim-clearable: seed={seed} maps={maps} act={act} routes={routes.Count} "
+                + $"reached={arrived}/{routes.Count} cleared={through}/{routes.Count}"
+                + Environment.NewLine + string.Join(Environment.NewLine, told);
+        }
+
+        foreach (var seed in lines.Keys.OrderBy(k => k))
+            Console.WriteLine(lines[seed]);
+
+        Console.WriteLine();
+        Console.WriteLine(unreadable == 0
+            ? $"roguedeck-bot: walked every route through act {act} of {options.Runs} seeds"
+            : $"roguedeck-bot: {unreadable} of {options.Runs} seeds have no act {act}");
+        return unreadable == 0 ? 0 : 1;
+    }
+
+    private static int Cleared(string line) => Field(line, "cleared=");
+
+    private static int Reached(string line) => Field(line, "reached=");
+
+    private static int Field(string line, string name)
+    {
+        var at = line.IndexOf(name, StringComparison.Ordinal);
+        if (at < 0)
+            return -1;
+        var rest = line[(at + name.Length)..];
+        var end = rest.IndexOf(' ', StringComparison.Ordinal);
+        return int.TryParse(end < 0 ? rest : rest[..end], NumberStyles.Integer,
+            CultureInfo.InvariantCulture, out var value) ? value : -1;
     }
 
     // ── THE SWEEP THAT PLAYS NOTHING ─────────────────────────────────────────────────────────────────────

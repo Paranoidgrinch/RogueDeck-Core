@@ -566,6 +566,19 @@ internal sealed class BotMind
     public Node Fork(IReadOnlyList<Node> forks)
     {
         ArgumentNullException.ThrowIfNull(forks);
+
+        // TOLD, NOT CHOSEN. A run walking a named route takes the door the route names and asks nothing. The
+        // route may run out (it names one act, the run walks five) — past its end the runner decides again,
+        // which is what lets one act be interrogated while the rest of the run stays itself.
+        if (_options.Route is { Count: > 0 } route
+            && forks.FirstOrDefault(n => route.Contains(n.Id.Value, StringComparer.Ordinal)
+                                         && !_walkedRoute.Contains(n.Id.Value)) is { } told)
+        {
+            _walkedRoute.Add(told.Id.Value);
+            _log.Line($"  fork -> {told.Id.Value} {MapRole.Of(told)} (told)");
+            return told;
+        }
+
         var seeing = Foresight();
         var pick = _policy is null
             ? forks[_rng.Next(forks.Count)]
@@ -596,6 +609,11 @@ internal sealed class BotMind
         }
         return _foresight;
     }
+
+    // Which rooms of the told route have already been walked. Node ids repeat across acts on a generated
+    // map (r3c1 is a row and a column, not a name), so a route naming act one's rooms would otherwise be
+    // matched again in act two by coincidence of naming.
+    private readonly HashSet<string> _walkedRoute = new(StringComparer.Ordinal);
 
     private RunMap? _foresightMap;
     private MapForesight? _foresight;

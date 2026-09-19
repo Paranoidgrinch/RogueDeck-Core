@@ -30,6 +30,11 @@ public sealed record CliOptions
     // thousand-seed map sweep fits into seconds.
     public bool Oracle { get; init; }
     public bool OracleOnly { get; init; }
+
+    // ⚠ WALK EVERY ROUTE THROUGH ONE ACT, one run each (O3). Not a better runner — a different question:
+    // "how far does this player get?" mixes navigation with difficulty, while "does a way through this act
+    // exist for this player?" is the one V-7 asks. 0 = off.
+    public int Routes { get; init; }
     public string? OutDir { get; init; }
 
     public const string Usage = """
@@ -67,6 +72,11 @@ public sealed record CliOptions
                              measure of it — the spread and the rank are what survive that
           --oracle-only      survey the maps and play NOTHING. Seconds for a sweep a batch of runs would
                              spend days on
+          --routes N         walk EVERY route through act N, one run per route, and say how many of them
+                             got through it. Navigation is off the table, so what comes back is about the
+                             ACT rather than about the runner's doors. ⚠ Cleared on some route is a
+                             constructive yes; cleared on none is "this player found none", never "none
+                             exists"
           --out <dir>        write one full log per run into this directory
         """;
 
@@ -85,6 +95,7 @@ public sealed record CliOptions
         var autopsyPositions = 60_000;
         var oracle = false;
         var oracleOnly = false;
+        var routes = 0;
         int? health = null;
         var legacy = false;
         var replay = false;
@@ -115,6 +126,7 @@ public sealed record CliOptions
                 case "--autopsy-positions": autopsyPositions = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--oracle": oracle = true; break;
                 case "--oracle-only": oracleOnly = oracle = true; break;
+                case "--routes": routes = Number(Next()); break;
                 case "--out": outDir = Next(); break;
                 default: return null;
             }
@@ -141,6 +153,7 @@ public sealed record CliOptions
             AutopsyPositions = autopsyPositions,
             Oracle = oracle,
             OracleOnly = oracleOnly,
+            Routes = routes,
             OutDir = outDir,
         };
     }

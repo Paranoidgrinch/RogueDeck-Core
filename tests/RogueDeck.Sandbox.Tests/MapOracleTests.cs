@@ -211,6 +211,67 @@ public class MapOracleTests
         Assert.Equal(-60, Scale(Enemy("ogre", 60)).Of(mimic));
     }
 
+    // ── THE ROUTES THEMSELVES (O3) ───────────────────────────────────────────────────────────────────────
+    // The survey reduces the field to numbers; `Routes` hands the field over as rooms to walk, so each one
+    // can be played. That is what turns "how far does this player get?" — which mixes navigation with
+    // difficulty — into "is there a way through this act for this player at all?".
+
+    [Fact]
+    public void Every_route_through_the_map_is_handed_over()
+    {
+        var map = Diamond(Fight("hard", "ogre"), Quiet("easy", MapNodeTags.Rest));
+        var routes = MapOracle.Routes(map);
+
+        Assert.Equal(2, routes.Count);
+        Assert.Contains(routes, r => r.SequenceEqual(new[] { "entry", "hard", "boss" }));
+        Assert.Contains(routes, r => r.SequenceEqual(new[] { "entry", "easy", "boss" }));
+    }
+
+    // ⚠ THE TWO READINGS OF ONE MAP MUST AGREE. The survey counts paths to report a spread; Routes hands
+    // them over to be walked. A map where the two disagreed would mean a route was measured that nobody can
+    // walk, or walked that nobody measured.
+    [Fact]
+    public void The_routes_handed_over_are_the_paths_that_were_counted()
+    {
+        var blueprint = Generated();
+        var run = blueprint.CreateInitialRun(new RunId("r"), randomSeed: 11);
+        var weights = MapOracle.Weights.For(blueprint);
+
+        for (var act = 1; act <= run.Acts.Count; act++)
+        {
+            var map = run.Acts[act - 1].Map;
+            Assert.Equal(
+                MapOracle.Survey(act, "act", map, weights).Paths,
+                MapOracle.Routes(map).Count);
+        }
+    }
+
+    [Fact]
+    public void A_route_is_asked_for_by_act_and_comes_back_walkable()
+    {
+        var blueprint = Generated();
+        var run = blueprint.CreateInitialRun(new RunId("r"), randomSeed: 11);
+        var rooms = run.Acts[1].Map.Nodes.Select(n => n.Id.Value).ToHashSet(StringComparer.Ordinal);
+
+        var routes = MapOracle.RoutesOfAct(blueprint, seed: 11, act: 2);
+
+        Assert.NotEmpty(routes);
+        foreach (var route in routes)
+        {
+            Assert.All(route, room => Assert.Contains(room, rooms));
+            // A route visits each room once: a repeat would be a cycle, and these maps are DAGs.
+            Assert.Equal(route.Count, route.Distinct(StringComparer.Ordinal).Count());
+        }
+    }
+
+    // An act the run does not have is answered with nothing rather than with an exception or act one.
+    [Fact]
+    public void An_act_that_does_not_exist_has_no_routes()
+    {
+        Assert.Empty(MapOracle.RoutesOfAct(Generated(), seed: 11, act: 9));
+        Assert.Empty(MapOracle.RoutesOfAct(Generated(), seed: 11, act: 0));
+    }
+
     // ── The surveyed map is the map the run walks ────────────────────────────────────────────────────────
 
     // ⚠⚠ THE WHOLE INSTRUMENT RESTS ON THIS. The oracle does not watch a run; it rebuilds the run's maps from
