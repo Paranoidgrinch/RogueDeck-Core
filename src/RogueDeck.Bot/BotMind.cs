@@ -566,13 +566,39 @@ internal sealed class BotMind
     public Node Fork(IReadOnlyList<Node> forks)
     {
         ArgumentNullException.ThrowIfNull(forks);
+        var seeing = Foresight();
         var pick = _policy is null
             ? forks[_rng.Next(forks.Count)]
-            : forks.OrderByDescending(n => PathWeight(_policy, n)).First();
+            : seeing is null
+                ? forks.OrderByDescending(n => PathWeight(_policy, n)).First()
+                : forks.OrderByDescending(seeing.Of).First();
         _log.Line($"  fork -> {pick.Id.Value} {MapRole.Of(pick)} "
-            + $"(of {string.Join(" ", forks.Select(MapRole.Of))})");
+            + $"(of {string.Join(" ", forks.Select(MapRole.Of))})"
+            + (seeing is null ? "" : $" route={seeing.Of(pick):0.##}"));
         return pick;
     }
+
+    // ── THE ROUTE READER, BUILT ONCE PER ACT ─────────────────────────────────────────────────────────────
+    // Null unless a policy asked to see past the next room. Kept against the map it was built for, because
+    // an act boundary hands the run a different graph and a route table for the wrong map is worse than
+    // none: it would answer confidently about rooms that are not there.
+    private MapForesight? Foresight()
+    {
+        if (_policy is null || _run is null)
+            return null;
+        var horizon = (int)Math.Round(_policy.Foresight);
+        if (horizon < 2)
+            return null;
+        if (!ReferenceEquals(_foresightMap, _run.Map))
+        {
+            _foresightMap = _run.Map;
+            _foresight = new MapForesight(_run.Map, node => PathWeight(_policy, node), horizon);
+        }
+        return _foresight;
+    }
+
+    private RunMap? _foresightMap;
+    private MapForesight? _foresight;
 
     // ── WHAT IT TAKES ────────────────────────────────────────────────────────────────────────────────────
     // A reward, a relic, a card off a shelf — offered by name, and answered by index. The name is for the log

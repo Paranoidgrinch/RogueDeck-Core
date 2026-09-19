@@ -22,6 +22,20 @@ public sealed class BotPolicy
     public double EndTurnBelow { get; set; }      // a hand whose best card scores under this is done
     public double TargetLowestHp { get; set; }    // 1 = finish the weakest, 0 = hit the strongest
 
+    // ── HOW FAR DOWN THE ROUTE A DOOR IS JUDGED (O2) ─────────────────────────────────────────────────────
+    // 0 or 1 ⇒ the door is worth what the ROOM BEHIND IT is worth, and nothing past it exists. That was the
+    // only reading this runner ever had, and the map oracle measured what it costs: over twenty-four
+    // champion runs the door choice landed at the 50th percentile of the routes on offer — a coin.
+    //
+    // Above 1, a door is judged by the best the next N rooms can be worth (MapForesight), so a rest two rows
+    // down is a reason to turn left. ⚠ It reads the map the way a PLAYER reads it — roles, mimics still
+    // disguised — never what is inside a fight; see the header of MapForesight.
+    //
+    // ⚠⚠ THE DEFAULT IS 0 ON PURPOSE. A runner is an instrument, and changing what it finds must be a
+    // decision somebody makes rather than something that arrives with a new build: at 0 this file's
+    // behaviour is byte-identical to before, which is what lets the golden set keep meaning something.
+    public double Foresight { get; set; }
+
     // Which room to walk into, by the role the map generated it for.
     public double PathCombat { get; set; }
     public double PathElite { get; set; }
