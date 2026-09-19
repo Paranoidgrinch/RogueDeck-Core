@@ -23,6 +23,12 @@ public sealed record CliOptions
     public bool Champion { get; init; }
     public bool Autopsy { get; init; }
     public int AutopsySeconds { get; init; } = 60;
+
+    // ⚠ THE ORACLE IS NOT A RUNNER AND COSTS NOTHING A RUNNER COSTS. It reads the maps a seed lays out and
+    // says what the doors on them are worth; `--oracle-only` never starts a run at all, which is how a
+    // thousand-seed map sweep fits into seconds.
+    public bool Oracle { get; init; }
+    public bool OracleOnly { get; init; }
     public string? OutDir { get; init; }
 
     public const string Usage = """
@@ -48,6 +54,14 @@ public sealed record CliOptions
                              the enemies answer, and what is left is what decides. Costs a fight-clone per
                              candidate and buys the one thing scoring cannot -- it sees what is coming. The
                              policy's Aggression is its only knob (0 survive, 1 empty the enemy)
+          --oracle           after the run, read the MAPS it walked: every path through every act, what
+                             the lightest and heaviest of them are worth in authored threat (spread), and
+                             where the runner's own doors ranked in that field. A wide spread the runner
+                             keeps ranking badly in is a statement about the RUNNER; a narrow one says the
+                             doors are not where it is losing. ⚠ Threat is a proxy for difficulty, never a
+                             measure of it — the spread and the rank are what survive that
+          --oracle-only      survey the maps and play NOTHING. Seconds for a sweep a batch of runs would
+                             spend days on
           --out <dir>        write one full log per run into this directory
         """;
 
@@ -63,6 +77,8 @@ public sealed record CliOptions
         var champion = false;
         var autopsy = false;
         var autopsySeconds = 60;
+        var oracle = false;
+        var oracleOnly = false;
         int? health = null;
         var legacy = false;
         var replay = false;
@@ -90,6 +106,8 @@ public sealed record CliOptions
                 case "--champion": champion = true; break;
                 case "--autopsy": autopsy = true; break;
                 case "--autopsy-seconds": autopsySeconds = int.Parse(Next(), CultureInfo.InvariantCulture); break;
+                case "--oracle": oracle = true; break;
+                case "--oracle-only": oracleOnly = oracle = true; break;
                 case "--out": outDir = Next(); break;
                 default: return null;
             }
@@ -113,6 +131,8 @@ public sealed record CliOptions
             Champion = champion,
             Autopsy = autopsy,
             AutopsySeconds = autopsySeconds,
+            Oracle = oracle,
+            OracleOnly = oracleOnly,
             OutDir = outDir,
         };
     }

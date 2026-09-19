@@ -25,6 +25,10 @@ public sealed record BotResult
     // Every room entered, as "<act>:<role>", in order.
     public required IReadOnlyList<string> Rooms { get; init; }
 
+    // The same walk as "<act>:<node id>" — which rooms, rather than what kind. Only the map oracle reads it:
+    // a survey of an act's paths can only say where this walk RANKED if it can find the walk on the map.
+    public IReadOnlyList<string> Walked { get; init; } = [];
+
     // The number the balance question actually wants: every point of health the run has taken off, ADDED UP.
     // A remaining-health reading cannot be it — the content heals, and one door in act II puts a runner back
     // to full, which would erase everything the act had cost up to there. Healing is counted on its own,

@@ -83,6 +83,9 @@ public static class Program
             + $"{options.Jobs} at a time, one process, "
             + $"{(options.Replay ? "through the replay model" : "answering the engine inline")})");
 
+        if (options.OracleOnly)
+            return SurveyOnly(played, options, maps, generator);
+
         var lines = new ConcurrentDictionary<int, string>();
         var failures = 0;
         using var slots = new SemaphoreSlim(options.Jobs);
@@ -107,12 +110,13 @@ public static class Program
                     return;
                 }
 
-                var (result, log) = await one.ConfigureAwait(false);
+                var (result, log, oracle) = await one.ConfigureAwait(false);
                 if (options.OutDir is { } into)
                     File.WriteAllText(Path.Combine(into, $"run-{seed:0000}.log"), log);
                 if (!result.Clean)
                     Interlocked.Increment(ref failures);
-                lines[seed] = Report(seed, result.Clean ? 0 : 1, BotReport.Result(result));
+                lines[seed] = string.Join(Environment.NewLine,
+                    [Report(seed, result.Clean ? 0 : 1, BotReport.Result(result)), .. oracle.Select(Indent)]);
             }
             catch (Exception ex)
             {
@@ -140,23 +144,34 @@ public static class Program
         return failures == 0 ? 0 : 1;
     }
 
+    // ⚠ THE SAME ROLL GODOT MAKES, IN THE SAME ORDER. Boot picks the character with a Random of its own,
+    // seeded the same and then thrown away; the bot's answers come from a second, independent Random on the
+    // same seed. Get this wrong and the two hosts play different games from the same number.
+    //
+    // ⚠⚠ THE ORACLE HAS TO MAKE THE SAME ROLL. Who is walking decides the starting loadout, the loadout
+    // decides how the maps are balanced, and a survey of a DIFFERENT character's maps would be a careful
+    // measurement of a game nobody played.
+    private static string? RollCharacter(RunBlueprint blueprint, int seed)
+    {
+        var roster = MetaProgression.AvailableCharacters(blueprint, new InMemoryMetaStore().Load());
+        return roster.Count > 0 ? roster[new Random(seed).Next(roster.Count)].Id : null;
+    }
+
+    private static string Indent(string line) => $"           {line}";
+
     private static string Report(int seed, int exit, string line) =>
         string.Format(CultureInfo.InvariantCulture, "seed {0,-5} exit {1,-3} {2}", seed, exit, line);
 
     // ONE RUN, WHOLE AND ON ITS OWN: its own playback, its own profile, its own RNG.
-    private static async Task<(BotResult Result, string Log)> PlayOne(
+    private static async Task<(BotResult Result, string Log, IReadOnlyList<string> Oracle)> PlayOne(
         RunBlueprint blueprint, int seed, string maps, string generator,
         BotPolicy? policy, CardFeatures? features, CliOptions options)
     {
         var text = new System.Text.StringBuilder();
         var log = new DelegateBotLog(line => text.AppendLine(line));
 
-        // ⚠ THE SAME ROLL GODOT MAKES, IN THE SAME ORDER. Boot picks the character with a Random of its own,
-        // seeded the same and then thrown away; the bot's answers come from a second, independent Random on
-        // the same seed. Get this wrong and the two hosts play different games from the same number.
         var meta = new InMemoryMetaStore();
-        var roster = MetaProgression.AvailableCharacters(blueprint, meta.Load());
-        var character = roster.Count > 0 ? roster[new Random(seed).Next(roster.Count)].Id : null;
+        var character = RollCharacter(blueprint, seed);
 
         using var play = new RunPlayback(() => { }, meta);
         var how = new BotOptions
@@ -193,8 +208,52 @@ public static class Program
         if (BotReport.Autopsy(result) is { } autopsy)
             text.AppendLine(autopsy);
         text.AppendLine(BotReport.Result(result));
-        return (result, text.ToString());
+        var survey = Survey(blueprint, seed, maps, character, generator, result.Walked, options);
+        foreach (var line in survey)
+            text.AppendLine(line);
+        return (result, text.ToString(), survey);
     }
+
+    // ── THE SWEEP THAT PLAYS NOTHING ─────────────────────────────────────────────────────────────────────
+    // What a seed's maps are, without a body walking them. A run costs seconds to minutes; this costs the
+    // time to lay the maps out, which is why the question "do these maps hand out one game or several?" can
+    // be asked of a thousand seeds in the time one run takes.
+    //
+    // ⚠ IT CANNOT FAIL THE WAY A RUN FAILS, so it does not pretend to: there is nothing here to crash in a
+    // fight, no wall to walk into, no verdict on whether anything is beatable. It reports what the maps ARE
+    // and exits 0 unless a map could not be built at all.
+    private static int SurveyOnly(RunBlueprint blueprint, CliOptions options, string maps, string generator)
+    {
+        var broken = 0;
+        for (var seed = options.SeedFrom; seed < options.SeedFrom + options.Runs; seed++)
+        {
+            try
+            {
+                foreach (var act in MapOracle.SurveyRun(blueprint, seed, RollCharacter(blueprint, seed), generator))
+                    Console.WriteLine(BotReport.Oracle(seed, maps, act));
+            }
+            catch (Exception ex)
+            {
+                broken++;
+                Console.WriteLine($"sim-oracle: seed={seed} maps={maps} NO MAP — {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+
+        Console.WriteLine();
+        Console.WriteLine(broken == 0
+            ? $"roguedeck-bot: surveyed {options.Runs} seeds, played none"
+            : $"roguedeck-bot: {broken} of {options.Runs} seeds could not lay a map out");
+        return broken == 0 ? 0 : 1;
+    }
+
+    // The maps this seed lays out, and — when a run walked them — where its doors ranked. Empty unless asked.
+    private static IReadOnlyList<string> Survey(
+        RunBlueprint blueprint, int seed, string maps, string? character, string? generator,
+        IReadOnlyList<string>? walked, CliOptions options) =>
+        !options.Oracle
+            ? []
+            : [.. MapOracle.SurveyRun(blueprint, seed, character, generator, walked)
+                .Select(act => BotReport.Oracle(seed, maps, act))];
 
     // A body that survives the whole game, for coverage runs: a walk that dies in the first act never reaches
     // the second one. The same transform Godot's `--sim-immortal` applies.

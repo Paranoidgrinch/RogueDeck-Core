@@ -61,6 +61,11 @@ internal sealed class BotMind
     public int Healed;
     public double Seconds => _clock.Elapsed.TotalSeconds;
     public readonly List<string> Rooms = [];
+
+    // Every room entered as "<act>:<node id>", in order. Rooms says what KIND of room each one was, which is
+    // what a report reads; this says WHICH ROOM, which is what the map oracle needs to find the walk again on
+    // the map it surveyed. Two lists because the first is a contract golden.sh diffs and the second is not.
+    public readonly List<string> Walked = [];
     public readonly Dictionary<int, int> HealthAtActBoss = [];
     public readonly Dictionary<int, int> DamageAtActBoss = [];
 
@@ -161,6 +166,7 @@ internal sealed class BotMind
             Where = RunBot.Where(run);
             WhereRole = role;
             Rooms.Add($"{run.ActNumber}:{role}");
+            Walked.Add($"{run.ActNumber}:{here}");
             Acts = Math.Max(Acts, run.ActNumber);
             var spent = _hpBeforeRoom == 0 ? 0 : _hpBeforeRoom - run.Health.Current;
             _hpBeforeRoom = run.Health.Current;
@@ -724,6 +730,7 @@ internal sealed class BotMind
         Reason = Reason,
         Crash = Crash,
         Rooms = Rooms,
+        Walked = Walked,
         DamageTaken = DamageTaken,
         Healed = Healed,
         DamageAtActBoss = DamageAtActBoss,

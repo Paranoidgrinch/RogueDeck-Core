@@ -1,4 +1,5 @@
 using System.Globalization;
+using RogueDeck.Run;
 
 namespace RogueDeck.Bot;
 
@@ -56,6 +57,39 @@ public static class BotReport
     {
         ArgumentNullException.ThrowIfNull(r);
         return r.Autopsy.Length == 0 ? null : $"sim-autopsy: seed={r.Seed} {r.Autopsy}";
+    }
+
+    // ── THE MAP'S OWN LINE ───────────────────────────────────────────────────────────────────────────────
+    // One act, read off the map rather than out of a run (MapOracle). Its own line for the same reason the
+    // clearance line is: `tools/golden.sh` diffs the fitness and result lines field for field, and a line it
+    // does not know about cannot move fifteen recordings.
+    //
+    //   scale        which weight every number here is on — `authored` (the BalanceManifest) or `enemy-hp`
+    //                (summed enemy health) when no author filled the manifest in. ⚠ `scale=enemy-hp` is
+    //                itself the report that the manifest is empty
+    //   weight       the lightest, middling and heaviest path, on that scale
+    //   spread       lightest minus heaviest — what the doors on this map are WORTH
+    //   len          how many rooms the shortest and longest path hold; a spread read without this would
+    //                credit "a longer way round" to difficulty
+    //   taken/rank   where the walk that was handed in fell, 1 = lightest of the field
+    //   shape=full   the walk reached the act's end; `partial` means it stopped on the way, and is ranked
+    //                against the prefixes of its own length instead
+    //   rests/elites what the walk got, against the best any path on this map could have done
+    public static string Oracle(int seed, string maps, MapOracle.ActSurvey s)
+    {
+        ArgumentNullException.ThrowIfNull(s);
+        var taken = s.Taken;
+        string Num(int value) => value.ToString(CultureInfo.InvariantCulture);
+        string OfTaken(Func<MapOracle.OraclePath, int> read) => taken is null ? "—" : Num(read(taken));
+
+        return $"sim-oracle: seed={seed} maps={maps} act={s.Act} nodes={s.Nodes} scale={s.Scale} "
+            + $"paths={(s.CutShort ? ">=" : "")}{s.Paths} len={s.ShortestPath}-{s.LongestPath} "
+            + $"weight={s.Lightest.Weight}:{s.MedianWeight}:{s.Heaviest.Weight} spread={s.Spread} "
+            + $"taken={OfTaken(p => p.Weight)} "
+            + $"rank={(taken is null ? "—/—" : $"{s.Rank}/{s.Field}")} "
+            + $"shape={(taken is null ? "—" : s.Partial ? "partial" : "full")} "
+            + $"rests={OfTaken(p => p.Count(MapNodeTags.Rest))}/{s.MostRests} "
+            + $"elites={OfTaken(p => p.Count(MapNodeTags.Elite))}/{s.FewestElites}";
     }
 
     public static string Result(BotResult r)
