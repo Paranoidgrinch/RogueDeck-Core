@@ -474,10 +474,32 @@ internal sealed class BotMind
         var forever = (double)RunBot.TurnsAFightShouldNotNeed;
         var dealt = enemyBefore - Standing(after);
         var taken = heroBefore - after.HeroHealth;
-        var toKill = dealt <= 0 ? forever : Math.Min(forever, Standing(after) / (double)dealt);
         var toDie = taken <= 0 ? forever : Math.Min(forever, after.HeroHealth / (double)taken);
+
+        // ⚠⚠ A TURN THAT TAKES NOTHING OFF THEM IS NOT A CHEAP TURN, IT IS A LOST ONE — and the first
+        // version of this line said the opposite, out loud, in a real fight. Against the Contradictory
+        // Signpost, which punishes acting, standing still costs no health: with both ceilings in play a
+        // stall scored (1-lean)·100 - lean·100, which is POSITIVE for any runner leaning at all defensive —
+        // and the bred champion leaned 0.43. It stood there for three turns at a time with a full hand,
+        // and paid 52 of its 70 health for a single act-I room.
+        //
+        // A fight that never ends is a fight that is lost (the runner's own ceiling says so), so a turn
+        // that brings the end no closer is worth less than any turn that does. Among stalls, still prefer
+        // the one that survives — and a turn that KILLS the hero is worth less than any of them, which the
+        // Defeat branch above already says.
+        if (dealt <= 0)
+            return -forever + toDie;
+
+        // ⚠ AND THE TWO BANDS MUST NOT OVERLAP. Standing still sits at a fixed value; a turn that makes
+        // progress but kills slowly goes NEGATIVE, and at a high lean it goes below the stall — so the
+        // runner went back to waiting, just for the opposite reason. Progress is therefore lifted clear of
+        // the stall band entirely: any turn that takes something off them and does not kill the hero beats
+        // any turn that does nothing. That is a deliberate bias, and it is the one a horizon of a single
+        // turn needs — it cannot see the enemy's damage ramping while it waits, so it is not allowed to
+        // wait. A turn that would KILL the hero is not in this band at all (the Defeat branch above).
+        var toKill = Math.Min(forever, Standing(after) / (double)dealt);
         var lean = _policy?.Aggression ?? 0.5;
-        return (1 - lean) * toDie - lean * toKill;
+        return forever + (1 - lean) * toDie - lean * toKill;
     }
 
     // What the fight recorded about the play that was just made — and whether the turn has now gone on longer
