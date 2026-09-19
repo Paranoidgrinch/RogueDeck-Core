@@ -267,7 +267,12 @@ public sealed class InteractiveCombat
     // End the hero's turn; every enemy then acts its intent for the current round, in turn order, until
     // the turn wraps back to the hero (whose next turn starts automatically). No-op unless it is the
     // hero's turn.
-    public void EndTurn()
+    public void EndTurn() => EndTurn(watch: null);
+
+    // `watch` is handed each enemy's blow as it lands — who acted, with what, and what it cost the hero in
+    // health and in guard. Only a FORK ever passes one (see Foresee); a real fight passes null and this is
+    // the method it always was.
+    private void EndTurn(Action<CombatantId, EnemyActionDefinitionId?, int, int>? watch)
     {
         if (!IsHeroTurn)
             return;
@@ -290,10 +295,16 @@ public sealed class InteractiveCombat
                 var before = _collector.Events.Count;
                 var round = _combat.CurrentRound;
                 var turn = _combat.CurrentTurn;
+                var healthBefore = HeroHealth;
+                var guardBefore = HeroGuard;
                 _combat.EnqueueEffect(new ExecuteEnemyActionEffectRequest(enemyId, id, _heroId));
                 _queues.ResolvePendingQueues(_combat, _registry);
                 Record(new EnemyActs(enemyId.value, id.value, _heroId.value), round, turn, enemyId, new List<string>(), before);
+                watch?.Invoke(enemyId, id, Math.Max(0, healthBefore - HeroHealth),
+                    Math.Max(0, guardBefore - HeroGuard));
             }
+            else
+                watch?.Invoke(enemyId, actionId, 0, 0);
 
             if (_combat.Result != CombatResult.Ongoing)
                 break;
@@ -305,6 +316,61 @@ public sealed class InteractiveCombat
             if (++guard > maxSteps)
                 break;
         }
+    }
+
+    // ── WHAT IS ABOUT TO HAPPEN (B4) ─────────────────────────────────────────────────────────────────────
+    // An intent used to be a WORD. `ActionIntent` carries a label and a kind, and the number it is about to
+    // apply lived only inside the action's program — behind an amount expression, a strength stack, a
+    // vulnerability, a guard and every passive modifier in the fight. So the screen showed "⚔ Shuffle
+    // Forward" where every game in this genre shows a number, and the bot could not block the right amount,
+    // which is the single most important skill there is.
+    //
+    // ⚠⚠ THE NUMBER IS NOT ANNOTATED, IT IS PLAYED OUT. Annotating it would mean authoring the same number
+    // twice — once in the program that applies it and once in the label that promises it — and the two
+    // would part company on the first relic that changes damage. Instead the fight is FORKED and the enemies
+    // simply take their turn on the copy. What comes back is not an estimate: it is what will happen, with
+    // every modifier already in it, because it is the same code that will happen.
+    //
+    // ⚠ A FORK HAS NOBODY SITTING AT IT. Its card and option choosers are not carried over, so an enemy
+    // action that ASKS something is answered by the headless default (the first option) on the fork while
+    // the real fight will ask the player. A projection of such an action can therefore differ from the
+    // event; nothing else can.
+    public InteractiveCombat Fork() =>
+        new(_compiled, CombatState.Restore(_combat.CreateSnapshot(), _registry), _enemyIntent,
+            startOpeningTurn: false);
+
+    public int HeroHealth => _combat.TryGetCombatant(_heroId, out var hero) && hero is not null
+        ? hero.Health.Current
+        : 0;
+
+    public int HeroGuard =>
+        _combat.TryGetCombatant(_heroId, out var hero) && hero is not null
+        && hero.DefensivePools.TryGetValue(StandardCombatIds.BlockDefensivePool, out var pool)
+            ? pool.Current
+            : 0;
+
+    // What ending the turn right now would cost: blow by blow, and in total. Null when there is nothing to
+    // foresee (the fight is over, or it is not the hero's turn to end).
+    public Foresight? Foresee()
+    {
+        if (IsOver || !IsHeroTurn)
+            return null;
+
+        var fork = Fork();
+        var blows = new List<IncomingBlow>();
+        fork.EndTurn(watch: (enemy, action, health, guard) => blows.Add(new IncomingBlow(
+            enemy,
+            action is { } id ? _compiled.IntentFor(id) : null,
+            health + guard,
+            health,
+            guard)));
+
+        return new Foresight(
+            blows.Sum(b => b.Amount),
+            blows.Sum(b => b.Health),
+            fork.HeroHealth,
+            fork.Result == CombatResult.Defeat || fork.HeroHealth <= 0,
+            blows);
     }
 
     private void Record(ScenarioStep step, int round, int turn, CombatantId? actor, List<string> problems, int before)
@@ -322,3 +388,21 @@ public sealed class InteractiveCombat
     private int ResourceMax(ResourceId id) =>
         _combat.GetCombatant(_heroId).Resources.TryGetValue(id, out var pool) ? (pool.Max ?? pool.Current) : 0;
 }
+
+// One enemy's blow, as it will land: who throws it, what it is telegraphed as, and what it costs. `Amount`
+// is everything the blow takes off — the health it removes plus the guard it eats — because a player
+// deciding how much to block wants the size of the swing, not what is left of it after this turn's guard.
+public readonly record struct IncomingBlow(
+    CombatantId Enemy,
+    ActionIntent? Intent,
+    int Amount,
+    int Health,
+    int Guard);
+
+// What ending the turn now would cost, in the fight's own numbers rather than in words.
+public sealed record Foresight(
+    int Amount,
+    int Health,
+    int HeroHealthAfter,
+    bool HeroDies,
+    IReadOnlyList<IncomingBlow> Blows);
