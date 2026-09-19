@@ -35,6 +35,13 @@ public sealed class BotPolicy
     // is worth, when a turn is done, whom to hit — it works out by playing the card and looking.
     public double Aggression { get; set; } = 0.5;
 
+    // ── WHAT A DOOR IS WORTH (B2) ────────────────────────────────────────────────────────────────────────
+    // A door's effects are read and added up in the same unit everything else is scored in: what an average
+    // card of this game is worth. Two of the things a door can hand over are not cards, so the search is
+    // given their exchange rate rather than being told one.
+    public double DoorHealth { get; set; } = 3;   // a FULL health bar, in average cards
+    public double DoorGold { get; set; } = 1;     // a HUNDRED gold, in average cards
+
     // Below this share of full health, a door that heals is taken over anything else it is offered beside.
     // ⚠ It exists because a rest site says "leave" like a shop does, and for the whole history of this runner
     // that was enough to walk it straight back out again — see the note in BotMind.PickChoice.

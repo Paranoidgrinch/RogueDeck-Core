@@ -22,6 +22,12 @@ public interface IRunEntityChooser
     // skipping is purely a UI affordance an interactive chooser opts into.
     IReadOnlyList<T> ChooseEntities<T>(IReadOnlyList<T> candidates, int count, string purpose, bool allowSkip) =>
         ChooseEntities(candidates, count, purpose);
+
+    // What the selection is FOR (see RunChoiceIntent). Defaulted so that every chooser written before this
+    // existed keeps working and keeps meaning exactly what it meant.
+    IReadOnlyList<T> ChooseEntities<T>(
+        IReadOnlyList<T> candidates, int count, string purpose, bool allowSkip, RunChoiceIntent intent) =>
+        ChooseEntities(candidates, count, purpose, allowSkip);
 }
 
 public interface IRunSelector<out T>
@@ -201,7 +207,7 @@ public sealed class ChooseSelector<T> : IRunSelector<T>
                 $"A player-choice selector ('{Purpose}') was evaluated without a chooser in context.");
 
         var take = Math.Min(Count, candidates.Count);
-        return context.Chooser.ChooseEntities(candidates, take, Purpose);
+        return context.Chooser.ChooseEntities(candidates, take, Purpose, allowSkip: false, context.Intent);
     }
 }
 

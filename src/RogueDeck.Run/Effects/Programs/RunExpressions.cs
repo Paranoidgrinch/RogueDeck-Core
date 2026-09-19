@@ -13,30 +13,52 @@ namespace RogueDeck.Run;
 // run, plus whatever is in scope: the triggering event (during a reaction), the current card (under a card
 // selector filter or a ForEach), and the player chooser (when interactive selection is possible). A bare
 // RunState converts implicitly to a context with nothing else in scope, so the common callers stay terse.
+// ⚠⚠ WHY A CHOICE IS BEING ASKED FOR, which is not the same as what is being chosen between.
+//
+// "Choose a card" is the same request whether the card is about to be UPGRADED or about to be TAKEN AWAY,
+// and the candidates look identical either way — the player's own deck. A frontend can read the purpose
+// text; a bot cannot, and read it wrong for the whole history of this project: it scored the candidates and
+// took the best one, which is right for an upgrade and exactly backwards for a removal. It threw away its
+// best card, forty-three times over in this game's authored events alone.
+//
+// So the effect that CONSUMES the selection says what it means to do with it. Keep is the default and is
+// what every existing caller means; nothing that does not opt in changes behaviour.
+public enum RunChoiceIntent
+{
+    Keep,
+    Remove,
+}
+
 public sealed class RunEvalContext
 {
     public RunState Run { get; }
     public IRunEvent? Event { get; }
     public RunCardInstance? Card { get; }
     public IRunEntityChooser? Chooser { get; }
+    public RunChoiceIntent Intent { get; }
 
     public RunEvalContext(
         RunState run,
         IRunEvent? triggeringEvent = null,
         RunCardInstance? card = null,
-        IRunEntityChooser? chooser = null)
+        IRunEntityChooser? chooser = null,
+        RunChoiceIntent intent = RunChoiceIntent.Keep)
     {
         ArgumentNullException.ThrowIfNull(run);
         Run = run;
         Event = triggeringEvent;
         Card = card;
         Chooser = chooser;
+        Intent = intent;
     }
 
     public static implicit operator RunEvalContext(RunState run) => new(run);
 
     // Derive a context with a card in scope, preserving run + event + chooser.
-    public RunEvalContext WithCard(RunCardInstance card) => new(Run, Event, card, Chooser);
+    public RunEvalContext WithCard(RunCardInstance card) => new(Run, Event, card, Chooser, Intent);
+
+    // Derive a context that says what the selection it is about to make is FOR.
+    public RunEvalContext For(RunChoiceIntent intent) => new(Run, Event, Card, Chooser, intent);
 }
 
 public interface IRunExpression<out TValue>

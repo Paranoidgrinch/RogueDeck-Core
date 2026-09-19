@@ -94,7 +94,11 @@ internal sealed class BotSeat(RunPlayback play, BotOptions options, IBotLog log)
     public IReadOnlyList<T> ChooseEntities<T>(IReadOnlyList<T> candidates, int count, string purpose) =>
         ChooseEntities(candidates, count, purpose, allowSkip: false);
 
-    public IReadOnlyList<T> ChooseEntities<T>(IReadOnlyList<T> candidates, int count, string purpose, bool allowSkip)
+    public IReadOnlyList<T> ChooseEntities<T>(IReadOnlyList<T> candidates, int count, string purpose, bool allowSkip) =>
+        ChooseEntities(candidates, count, purpose, allowSkip, RunChoiceIntent.Keep);
+
+    public IReadOnlyList<T> ChooseEntities<T>(
+        IReadOnlyList<T> candidates, int count, string purpose, bool allowSkip, RunChoiceIntent intent)
     {
         ArgumentNullException.ThrowIfNull(candidates);
         // The same two doors the session's chooser closes before it ever publishes a request.
@@ -105,7 +109,8 @@ internal sealed class BotSeat(RunPlayback play, BotOptions options, IBotLog log)
         // WHICH thing each offer is, alongside what it is called. The replay seat reads the same list off the
         // request it parks with; this one asks the labeler directly, because it never builds a request at all.
         var arts = candidates.Select(c => RunEntityLabeler.ArtFor(c)).ToArray();
-        var take = _mind.EntityPicks(displays, arts, Math.Min(count, candidates.Count), allowSkip, purpose);
+        var take = _mind.EntityPicks(
+            displays, arts, Math.Min(count, candidates.Count), allowSkip, purpose, intent);
         Answered();
         return [.. take.Where(i => i >= 0 && i < candidates.Count).Select(i => candidates[i])];
     }

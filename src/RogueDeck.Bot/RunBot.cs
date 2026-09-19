@@ -99,7 +99,7 @@ public static class RunBot
                         [.. mind.EntityPicks(
                             entities.Displays,
                             [.. Enumerable.Range(0, entities.Displays.Count).Select(entities.ArtAt)],
-                            entities.Count, entities.AllowSkip, entities.Purpose)]);
+                            entities.Count, entities.AllowSkip, entities.Purpose, entities.Intent)]);
                 else if (session.IsAwaitingChoice && session.PendingSituation is { } situation)
                     session.Pick(mind.Choose(situation, session.PendingChoices).Id);
                 else if (session.IsAwaitingInterlude)

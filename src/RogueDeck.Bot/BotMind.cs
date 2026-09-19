@@ -538,7 +538,8 @@ internal sealed class BotMind
     // code that was here before anything was scored: the skip roll first, then the picks. The two arms are
     // whole rather than sharing a tail so that nothing done for the policy can reach into it.
     public IReadOnlyList<int> EntityPicks(
-        IReadOnlyList<string> displays, IReadOnlyList<EntityArt?> arts, int count, bool allowSkip, string purpose)
+        IReadOnlyList<string> displays, IReadOnlyList<EntityArt?> arts, int count, bool allowSkip, string purpose,
+        RunChoiceIntent intent = RunChoiceIntent.Keep)
     {
         ArgumentNullException.ThrowIfNull(displays);
         ArgumentNullException.ThrowIfNull(arts);
@@ -546,7 +547,7 @@ internal sealed class BotMind
         if (_policy is null)
         {
             var rolled = allowSkip && _rng.NextDouble() < 0.2 ? [] : RunBot.Pick(_rng, displays.Count, count);
-            _log.Line($"  pick [{purpose}] -> "
+            _log.Line($"  pick [{purpose}{(intent == RunChoiceIntent.Remove ? ", giving up" : "")}] -> "
                 + (rolled.Count == 0 ? "skipped" : string.Join(", ", rolled.Select(i => displays[i])))
                 + $" (of {displays.Count})");
             return rolled;
@@ -566,10 +567,17 @@ internal sealed class BotMind
         for (var i = 0; i < displays.Count; i++)
             scores[i] = ScoreOffer(i < arts.Count ? arts[i] : null);
 
-        var ranked = Enumerable.Range(0, displays.Count)
-            .OrderByDescending(i => scores[i]).ThenBy(i => rank[i]).ToList();
+        // ⚠⚠ WHICH END OF THE LIST IS THE GOOD END DEPENDS ON WHAT THE CHOICE IS FOR, and until the engine
+        // was made to say so (RunChoiceIntent) this method always took the best — which is right for a
+        // reward or an upgrade and exactly backwards for a removal. Asked to give up a card, the runner
+        // handed over its best one, at forty-three authored prompts in this game alone.
+        var ranked = intent == RunChoiceIntent.Remove
+            ? [.. Enumerable.Range(0, displays.Count).OrderBy(i => scores[i]).ThenBy(i => rank[i])]
+            : Enumerable.Range(0, displays.Count)
+                .OrderByDescending(i => scores[i]).ThenBy(i => rank[i]).ToList();
         var best = ranked[0];
-        var take = allowSkip && WalksAway(best < arts.Count ? arts[best] : null, scores[best])
+        var take = intent != RunChoiceIntent.Remove
+            && allowSkip && WalksAway(best < arts.Count ? arts[best] : null, scores[best])
             ? []
             : ranked.Take(count).ToList();
         _log.Line($"  pick [{purpose}] -> "
@@ -684,6 +692,19 @@ internal sealed class BotMind
                 return heals.OrderByDescending(x => x.heal).ThenBy(x => x.at).First().at;
         }
 
+        // ⚠⚠ EVERY OTHER DOOR, READ BY WHAT IT DOES (B2). Until this existed a door was chosen by WHERE IT
+        // WAS PRINTED: one weight, clamped into the list's index. A bred EventLate of 0.1 meant "always take
+        // the first door", through every event in the game, sight unseen. EventLate is still the answer for
+        // a situation whose doors say nothing this can read — a conversation, a flag, a program by id — so
+        // the gene keeps its meaning where it is the only thing there is.
+        if (buys.Count == 0)
+        {
+            var worth = choices.Select(DoorWorth).ToArray();
+            if (worth.Any(w => Math.Abs(w) > 0.0001))
+                return Enumerable.Range(0, choices.Count)
+                    .OrderByDescending(i => worth[i]).ThenBy(i => i).First();
+        }
+
         if (leave >= 0)
         {
             if (buys.Count == 0 || _rng.NextDouble() >= _policy.ShopBuy)
@@ -697,6 +718,73 @@ internal sealed class BotMind
                 .First();
         }
         return Math.Clamp((int)Math.Round(_policy.EventLate * (choices.Count - 1)), 0, choices.Count - 1);
+    }
+
+    // What a door is worth, in average cards — the same unit a reward offer is scored in, so that a door
+    // handing over a card and a door handing over gold can be held against each other at all. What it COSTS
+    // is subtracted by the same reckoning: a door is its whole bargain, not its better half.
+    //
+    // ⚠ What cannot be read scores nothing rather than something: a flag, a program named by id, a rule
+    // installed for the next fight. A door made only of those falls through to EventLate, which is honest —
+    // the runner has no opinion, and says so by keeping the one it always had.
+    private double DoorWorth(EventChoice choice) =>
+        choice.Effects.Sum(Worth)
+        // A price pays for itself: it is written as the effects that settle it, and gold leaving the purse
+        // is a negative delta, so the cost side needs no sign of its own.
+        + (choice.Costs ?? []).Sum(cost => cost.Pay.Sum(Worth));
+
+    private double Worth(IRunEffectRequest effect)
+    {
+        var run = _run;
+        var max = run?.Health.Max ?? 0;
+        double InHealth(double points) => max <= 0 ? 0 : points / max * _policy!.DoorHealth;
+
+        return effect switch
+        {
+            HealRunEffect heal => InHealth(Math.Min(heal.Amount, max - (run?.Health.Current ?? 0))),
+            ComputedHealRunEffect computed when run is not null =>
+                InHealth(Math.Min(computed.Amount.Evaluate(run), max - run.Health.Current)),
+            ApplyRunDamageRunEffect hurt => -InHealth(hurt.Amount),
+            ComputedDamageRunEffect hurt when run is not null => -InHealth(hurt.Amount.Evaluate(run)),
+            ChangeMaxHealthRunEffect change => InHealth(change.Delta),
+            // Gold, and the same line pays for the cost side: a price is a negative delta.
+            ChangeResourceRunEffect resource => resource.Delta / 100.0 * _policy!.DoorGold,
+            ComputedResourceRunEffect resource when run is not null =>
+                resource.Amount.Evaluate(run) / 100.0 * _policy!.DoorGold,
+            AddCardToDeckRunEffect card => Score(card.Card.value),
+            AddRelicByIdRunEffect relic => Weighted(_options.Features?.ForRelic(relic.Relic.Value)),
+            AddRelicRunEffect relic => Weighted(_options.Features?.ForRelic(relic.Relic.Id.Value)),
+            // A reward that opens a reward: what is behind it is not rolled yet, so it is worth what an
+            // average card is worth, which is what the unit is defined as.
+            OfferRewardRunEffect further => Math.Max(1, further.PickCount),
+            // Giving up the worst card in a deck is worth exactly what it costs that deck to carry it.
+            RemoveCardsRunEffect => Thinning(),
+            UpgradeCardsRunEffect upgrade => Sharpening() * Math.Max(1, upgrade.Levels),
+            ConditionalRunEffect branch => 0,
+            _ => 0,
+        };
+    }
+
+    // What the deck gains by losing its worst card: the distance from that card to an ordinary one. A deck
+    // of nothing but good cards gains nothing by thinning, and says so.
+    private double Thinning()
+    {
+        if (_run is not { Deck.Count: > 1 } run)
+            return 0;
+        var scores = run.Deck.Select(c => Score(c.DefinitionId.value)).ToList();
+        return Math.Max(0, scores.Average() - scores.Min());
+    }
+
+    // And what it gains by improving its best: an upgrade is worth a share of the card it sharpens. The
+    // share is a guess and is named as one — the engine does not say what a level is worth until the
+    // upgraded card exists.
+    private const double AnUpgradeIsWorth = 0.25;
+
+    private double Sharpening()
+    {
+        if (_run is not { Deck.Count: > 0 } run)
+            return 0;
+        return AnUpgradeIsWorth * run.Deck.Max(c => Score(c.DefinitionId.value));
     }
 
     // What a door would put back on the hero, in health. A rest that heals a SHARE of the maximum and one

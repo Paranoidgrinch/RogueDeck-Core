@@ -291,7 +291,13 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
         ChooseEntities(candidates, count, purpose, allowSkip: false);
 
     // Skippable variant (a declinable reward): the player may confirm with 0 picked, which grants nothing.
-    public IReadOnlyList<T> ChooseEntities<T>(IReadOnlyList<T> candidates, int count, string purpose, bool allowSkip)
+    public IReadOnlyList<T> ChooseEntities<T>(IReadOnlyList<T> candidates, int count, string purpose, bool allowSkip) =>
+        ChooseEntities(candidates, count, purpose, allowSkip, RunChoiceIntent.Keep);
+
+    // …and what the selection is FOR, which a screen showing "choose a card to remove" wants as much as the
+    // bot does: the same candidates mean the opposite thing.
+    public IReadOnlyList<T> ChooseEntities<T>(
+        IReadOnlyList<T> candidates, int count, string purpose, bool allowSkip, RunChoiceIntent intent)
     {
         if (candidates.Count == 0 || count <= 0)
             return Array.Empty<T>();
@@ -305,7 +311,8 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
             candidates.Select(c => Display(c)).ToArray(),
             candidates.Select(c => _labeler?.Description(c) ?? string.Empty).ToArray(),
             allowSkip,
-            candidates.Select(c => RunEntityLabeler.ArtFor(c)).ToArray());
+            candidates.Select(c => RunEntityLabeler.ArtFor(c)).ToArray(),
+            intent);
         throw new ReplayParkedException();
     }
 
@@ -340,7 +347,8 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
 // carries null, and a frontend falls back to the words, which is what every frontend did before.
 public sealed record EntitySelectionRequest(
     string Purpose, int Count, IReadOnlyList<string> Displays, IReadOnlyList<string> Descriptions,
-    bool AllowSkip = false, IReadOnlyList<EntityArt?>? Arts = null)
+    bool AllowSkip = false, IReadOnlyList<EntityArt?>? Arts = null,
+    RunChoiceIntent Intent = RunChoiceIntent.Keep)
 {
     // Back-compat ctor: no descriptions (all empty).
     public EntitySelectionRequest(string purpose, int count, IReadOnlyList<string> displays)

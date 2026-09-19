@@ -202,13 +202,155 @@ public class RestSiteTests
         Assert.NotEqual("rest", mind.Choose(Situation, Situation.Choices).Id);
     }
 
+    // ⚠ SINCE B2 THE GENE IS A PRE-EMPTION, NOT THE ONLY ROAD TO A BED. Doors are scored by what they do, so
+    // a runner at one health takes the healing door on its merits even with RestBelow at zero — and that is
+    // the better behaviour: a gene saying "never rest" should not mean "bleed to death rather than sleep".
+    // What RestBelow still buys is the OVERRIDE: below it, healing beats anything else on the table, however
+    // good the card the other door is holding.
     [Fact]
-    public void A_policy_that_never_rests_still_never_rests()
+    public void Even_a_policy_that_never_rests_heals_when_the_door_is_worth_it()
     {
         var mind = Mind(restBelow: 0);
-        var run = Hurt(1);
-        mind.Observe(run, null);
+        mind.Observe(Hurt(1), null);
 
-        Assert.NotEqual("rest", mind.Choose(Situation, Situation.Choices).Id);
+        Assert.Equal("rest", mind.Choose(Situation, Situation.Choices).Id);
+    }
+}
+
+// ⚠⚠ ASKED TO GIVE UP A CARD, THE RUNNER HANDED OVER ITS BEST ONE. It scored the candidates and took the
+// highest, which is right for a reward or an upgrade and exactly backwards for a removal — and this game
+// asks for a removal at forty-three authored prompts. The engine now says what a selection is FOR
+// (RunChoiceIntent), and which end of the list is the good end follows from that.
+public class GivingUpACardTests
+{
+    private static string Damages(int amount) =>
+        "{ \"kind\": \"node.dealDamage\", \"value\": { \"TargetSelector\": "
+        + "{ \"kind\": \"sel.eventTarget\", \"value\": {} }, \"Amount\": "
+        + "{ \"kind\": \"const\", \"value\": { \"Value\": " + amount + " } } } }";
+
+    private static readonly string Document =
+        "{ \"Cards\": ["
+        + "{ \"Id\": \"axe\",  \"Program\": { \"Root\": " + Damages(12) + " } },"
+        + "{ \"Id\": \"twig\", \"Program\": { \"Root\": " + Damages(1) + " } }"
+        + "] }";
+
+    private static BotMind Mind()
+    {
+        var play = new RunPlayback(() => { }, new InMemoryMetaStore());
+        return new BotMind(
+            play,
+            new BotOptions
+            {
+                Seed = 1,
+                Policy = new BotPolicy { Name = "test", WDamage = 2, WCost = 0 },
+                Features = CardFeatures.FromDocument(Document),
+            },
+            NullBotLog.Instance);
+    }
+
+    private static readonly IReadOnlyList<string> Names = ["Axe", "Twig"];
+    private static readonly IReadOnlyList<EntityArt?> Cards =
+        [new EntityArt(EntityArt.Card, "axe"), new EntityArt(EntityArt.Card, "twig")];
+
+    [Fact]
+    public void What_is_given_up_is_the_worst_card_and_what_is_taken_is_the_best()
+    {
+        var mind = Mind();
+        mind.Observe(SampleProject.Build().CreateInitialRun(new RunId("give"), randomSeed: 5), null);
+
+        Assert.Equal([0], mind.EntityPicks(Names, Cards, 1, false, "a reward", RunChoiceIntent.Keep));
+        Assert.Equal([1], mind.EntityPicks(Names, Cards, 1, false, "remove a card", RunChoiceIntent.Remove));
+    }
+
+    // A removal is not declinable by the fussiness that governs rewards: being asked to give something up is
+    // not an offer, and walking away from it is not a move the runner has.
+    [Fact]
+    public void A_removal_is_not_skipped_however_fussy_the_policy_is()
+    {
+        var play = new RunPlayback(() => { }, new InMemoryMetaStore());
+        var mind = new BotMind(
+            play,
+            new BotOptions
+            {
+                Seed = 1,
+                Policy = new BotPolicy { Name = "fussy", WDamage = 2, RewardSkip = 1 },
+                Features = CardFeatures.FromDocument(Document),
+            },
+            NullBotLog.Instance);
+        mind.Observe(SampleProject.Build().CreateInitialRun(new RunId("give"), randomSeed: 5), null);
+
+        Assert.Equal([1], mind.EntityPicks(Names, Cards, 1, true, "remove a card", RunChoiceIntent.Remove));
+    }
+}
+
+// ⚠⚠ THE RUNNER PICKED ITS DOORS BY WHERE THEY WERE PRINTED. One weight (EventLate) clamped into the choice
+// list's index — a bred value of 0.1 means "always take the first door", through every event in the game,
+// sight unseen. B2 reads what a door DOES instead, in the same unit a reward is scored in.
+public class DoorsByEffectTests
+{
+    private static BotMind Mind(BotPolicy policy)
+    {
+        var play = new RunPlayback(() => { }, new InMemoryMetaStore());
+        var mind = new BotMind(
+            play,
+            new BotOptions { Seed = 1, Policy = policy, Features = CardFeatures.FromDocument("{}") },
+            NullBotLog.Instance);
+        var run = SampleProject.Build().CreateInitialRun(new RunId("doors"), randomSeed: 5);
+        run.Health.SetCurrent(run.Health.Max / 2);
+        mind.Observe(run, null);
+        return mind;
+    }
+
+    private static EventChoice Door(string id, params IRunEffectRequest[] effects) => new(id, effects);
+
+    private static EventSituation Situation(params EventChoice[] doors) =>
+        new("start", "a corridor", doors);
+
+    // EventLate 0 means "always the first door". The healing one is second, and is taken anyway.
+    [Fact]
+    public void A_door_that_helps_is_taken_over_the_one_that_happens_to_be_printed_first()
+    {
+        var mind = Mind(new BotPolicy { Name = "test", EventLate = 0, RestBelow = 0, DoorHealth = 3 });
+        var situation = Situation(
+            Door("nothing"),
+            Door("bandage", new HealRunEffect(20)));
+
+        Assert.Equal("bandage", mind.Choose(situation, situation.Choices).Id);
+    }
+
+    [Fact]
+    public void A_door_that_hurts_is_left_alone()
+    {
+        var mind = Mind(new BotPolicy { Name = "test", EventLate = 0, RestBelow = 0, DoorHealth = 3 });
+        var situation = Situation(
+            Door("trap", new ApplyRunDamageRunEffect(20)),
+            Door("nothing"));
+
+        Assert.Equal("nothing", mind.Choose(situation, situation.Choices).Id);
+    }
+
+    // A door is its whole bargain: what it gives, minus what it takes.
+    [Fact]
+    public void A_price_is_weighed_against_what_it_buys()
+    {
+        var mind = Mind(new BotPolicy { Name = "test", EventLate = 0, RestBelow = 0, DoorGold = 1, DoorHealth = 3 });
+        var dear = new EventChoice("dear", [new ChangeResourceRunEffect(StandardRunIds.Gold, 10)],
+            Costs: [new RunCost(RunExpr.HasResource(StandardRunIds.Gold, 500),
+                [new ChangeResourceRunEffect(StandardRunIds.Gold, -500)])]);
+        var situation = Situation(dear, Door("nothing"));
+
+        Assert.Equal("nothing", mind.Choose(situation, situation.Choices).Id);
+    }
+
+    // ⚠ A door made of things this cannot read keeps the behaviour it always had — the positional weight.
+    [Fact]
+    public void Doors_that_say_nothing_readable_are_still_answered_by_the_old_weight()
+    {
+        var mind = Mind(new BotPolicy { Name = "test", EventLate = 1, RestBelow = 0 });
+        var situation = Situation(
+            Door("speak", new SetFlagRunEffect(new RunFlagId("spoke"), true)),
+            Door("listen", new SetFlagRunEffect(new RunFlagId("listened"), true)));
+
+        Assert.Equal("listen", mind.Choose(situation, situation.Choices).Id);
     }
 }

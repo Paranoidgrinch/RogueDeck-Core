@@ -33,7 +33,9 @@ public sealed class RemoveCardsRunEffectHandler : RunEffectHandler<RemoveCardsRu
 {
     protected override void Resolve(RunState run, RunDefinitionRegistry registry, RemoveCardsRunEffect request)
     {
-        foreach (var card in request.Selector.Select(run.SelectorContext).ToArray())
+        // ⚠ The selection is for a REMOVAL, and whoever answers it deserves to be told: the same prompt with
+        // the same candidates means "pick your worst" here and "pick your best" one effect over.
+        foreach (var card in request.Selector.Select(run.SelectorContext.For(RunChoiceIntent.Remove)).ToArray())
         {
             if (!run.RemoveDeckCard(card.Id))
                 continue;
