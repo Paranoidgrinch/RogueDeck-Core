@@ -30,4 +30,11 @@ public sealed record BotOptions
     // walls and unreachable content over hundreds of seeds; the champion is slow, careful, and is the only
     // one whose failure to clear an act is evidence ABOUT THE ACT.
     public bool Champion { get; init; }
+
+    // ⚠ WHEN A RUN DIES, PLAY THE FIGHT IT DIED IN AGAIN — every way it could have gone, and say whether ANY
+    // of them wins (see FightSolver). Off by default because it costs a search per death; on, it is the only
+    // thing this project has that can tell a fight that was lost from a fight that could not be won.
+    public bool Autopsy { get; init; }
+
+    public int AutopsySeconds { get; init; } = 60;
 }

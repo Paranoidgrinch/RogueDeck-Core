@@ -168,6 +168,8 @@ public static class Program
             Policy = policy,
             Features = features,
             Champion = options.Champion,
+            Autopsy = options.Autopsy,
+            AutopsySeconds = options.AutopsySeconds,
         };
 
         // ⚠⚠ TWO SEATS, ONE BRAIN (R5). By default the run is walked ONCE, with the bot answering the engine
@@ -188,6 +190,8 @@ public static class Program
             text.AppendLine(line);
         text.AppendLine(BotReport.Fitness(result));
         text.AppendLine(BotReport.Clearance(result));
+        if (BotReport.Autopsy(result) is { } autopsy)
+            text.AppendLine(autopsy);
         text.AppendLine(BotReport.Result(result));
         return (result, text.ToString());
     }

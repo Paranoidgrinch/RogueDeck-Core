@@ -51,6 +51,13 @@ public static class BotReport
             + $"stopped={r.WhereRole} at={r.Where}";
     }
 
+    // What the fight the run died in turned out to be. Its own line, and only when someone asked.
+    public static string? Autopsy(BotResult r)
+    {
+        ArgumentNullException.ThrowIfNull(r);
+        return r.Autopsy.Length == 0 ? null : $"sim-autopsy: seed={r.Seed} {r.Autopsy}";
+    }
+
     public static string Result(BotResult r)
     {
         ArgumentNullException.ThrowIfNull(r);

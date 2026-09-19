@@ -21,6 +21,8 @@ public sealed record CliOptions
     public bool Replay { get; init; }
     public string? PolicyPath { get; init; }
     public bool Champion { get; init; }
+    public bool Autopsy { get; init; }
+    public int AutopsySeconds { get; init; } = 60;
     public string? OutDir { get; init; }
 
     public const string Usage = """
@@ -37,6 +39,11 @@ public sealed record CliOptions
           --replay           drive through the replay model instead of answering the engine inline (slower;
                              it is the driver the frontend uses, and half of what golden.sh checks)
           --policy <file>    a bred policy (tools/train.py); without one the runner plays at random
+          --autopsy          when a run DIES, play the fight it died in again -- every way it could have
+                             gone -- and say whether any of them wins. UNWINNABLE is a proof (the searcher
+                             can see the deck, so it is stronger than any fair player); WINNABLE is not a
+                             claim that a fair player would find the line
+          --autopsy-seconds N  how long one autopsy may search (default 60)
           --champion         decide each play by FORKING the fight and looking: the card is played on a copy,
                              the enemies answer, and what is left is what decides. Costs a fight-clone per
                              candidate and buys the one thing scoring cannot -- it sees what is coming. The
@@ -54,6 +61,8 @@ public sealed record CliOptions
         var steps = 40000;
         var timeout = 1800;
         var champion = false;
+        var autopsy = false;
+        var autopsySeconds = 60;
         int? health = null;
         var legacy = false;
         var replay = false;
@@ -79,6 +88,8 @@ public sealed record CliOptions
                 case "--replay": replay = true; break;
                 case "--policy": policy = Next(); break;
                 case "--champion": champion = true; break;
+                case "--autopsy": autopsy = true; break;
+                case "--autopsy-seconds": autopsySeconds = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--out": outDir = Next(); break;
                 default: return null;
             }
@@ -100,6 +111,8 @@ public sealed record CliOptions
             Replay = replay,
             PolicyPath = policy,
             Champion = champion,
+            Autopsy = autopsy,
+            AutopsySeconds = autopsySeconds,
             OutDir = outDir,
         };
     }

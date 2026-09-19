@@ -51,6 +51,9 @@ public sealed record BotResult
         ? Acts
         : Math.Max(0, Acts - 1);
 
+    // What the fight the run died in turned out to be, when anyone asked (--autopsy). Empty otherwise.
+    public string Autopsy { get; init; } = "";
+
     // A lost run is a NORMAL outcome. Only something the run could not answer for — an engine error, a
     // refused play, a wall, a thrown exception — is worth a batch's attention.
     public bool Clean => Crash.Length == 0 && Error == "none" && Problems == 0 && Complete;

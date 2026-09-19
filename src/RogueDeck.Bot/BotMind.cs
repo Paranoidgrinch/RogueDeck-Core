@@ -83,6 +83,15 @@ internal sealed class BotMind
     // Never re-offer a play the engine refused; never repeat a play that moved nothing on the table (a card
     // may put a copy of itself back in hand for ever); give both the turn and the fight a ceiling.
     private bool _inFight;
+    // THE FIGHT AS IT STOOD AT THE DOOR, kept for the autopsy: one copy per fight, replaced at the next
+    // bell, so what is left at the end of a run is the fight the run died in.
+    // ⚠ NOT THE DOOR BUT THE LAST FEW TURNS. The whole fight is too big a tree to decide (see FightSolver),
+    // and the sharp question is smaller anyway: how far back was the death still avoidable? So the start of
+    // each of the hero's turns is kept, and only the last handful of them are asked about.
+    private readonly Queue<InteractiveCombat> _turnsBack = new();
+    private const int TurnsKept = 5;
+    private bool _keptThisTurn;
+    private string _doorName = "—";
     private int _enemyHealthAtFightStart;
     private int _turn;
     private int _playsThisTurn;
@@ -94,6 +103,7 @@ internal sealed class BotMind
     private void NewTurn()
     {
         _plan.Clear();
+        _keptThisTurn = false;
         _playsThisTurn = 0;
         _lastPlayed = null;
         _refused.Clear();
@@ -193,6 +203,12 @@ internal sealed class BotMind
             return;
         _inFight = true;
         Fights++;
+        if (_options.Autopsy)
+        {
+            _turnsBack.Clear();
+            _keptThisTurn = false;
+            _doorName = RunBot.Where(run);
+        }
         // The denominator the champion measures its progress against, fixed at the bell so that emptying the
         // enemy is worth the same at the start of the fight as at the end of it.
         _enemyHealthAtFightStart = combat.State.Combatants
@@ -226,6 +242,7 @@ internal sealed class BotMind
     public CardPlay? ChoosePlay(InteractiveCombat combat)
     {
         ArgumentNullException.ThrowIfNull(combat);
+        KeepThisTurn(combat);
         if (_options.Champion)
             return ChampionPlay(combat);
 
@@ -636,6 +653,39 @@ internal sealed class BotMind
         _log.Line($"!! CRASH {Crash}");
     }
 
+    // ⚠ ONLY A RUN THAT DIED IS WORTH OPENING UP. A walk that stopped because a guard tripped or the budget
+    // ran out did not lose the fight; it was never allowed to finish it.
+    public string Autopsy(RunState? run)
+    {
+        if (!_options.Autopsy || _turnsBack.Count == 0 || run?.Result != RunResult.Defeat)
+            return "";
+
+        var found = new FightSolver(seconds: _options.AutopsySeconds).Examine([.. _turnsBack]);
+        var read = found.Verdict switch
+        {
+            FightVerdict.Avoidable =>
+                $"the hero could still have lived {found.LastChance} turns before it died — this loss is the runner's",
+            FightVerdict.Unavoidable =>
+                $"nothing survives the last {found.Looked} turns, not even a player who could see the deck",
+            _ => $"the last {found.ProvenLost} turns were already lost; further back the search ran out",
+        };
+        _log.Line($"  AUTOPSY {_doorName}: {found.Verdict} — {read} "
+            + $"({found.Positions} positions, {found.Seconds:0.0}s)");
+        return $"verdict={found.Verdict} lastChance={found.LastChance} provenLost={found.ProvenLost} "
+            + $"kept={found.Looked} positions={found.Positions} seconds={found.Seconds:0.0} at={_doorName}";
+    }
+
+    // The start of a hero turn, kept for the autopsy: one fork per turn, and only the last few.
+    private void KeepThisTurn(InteractiveCombat combat)
+    {
+        if (!_options.Autopsy || _keptThisTurn)
+            return;
+        _keptThisTurn = true;
+        _turnsBack.Enqueue(combat.Fork());
+        while (_turnsBack.Count > TurnsKept)
+            _turnsBack.Dequeue();
+    }
+
     public BotResult Finish(RunState? run, string? error, bool complete) => new()
     {
         Seed = _options.Seed,
@@ -659,6 +709,7 @@ internal sealed class BotMind
         Complete = complete,
         Where = Where,
         WhereRole = WhereRole,
+        Autopsy = Autopsy(run),
     };
 
     // Which door a runner takes. A shop is answered as a shop — how eagerly it spends is a weight of its own,
