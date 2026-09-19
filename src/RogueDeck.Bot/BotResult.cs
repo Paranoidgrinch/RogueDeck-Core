@@ -55,6 +55,10 @@ public sealed record BotResult
         ? Acts
         : Math.Max(0, Acts - 1);
 
+    // How the champion did against a proof, over the positions it actually stood in (--exam). Empty
+    // otherwise. ⚠ It grades the FIGHTING alone: no rooms, no doors, no luck of five acts.
+    public string Exam { get; init; } = "";
+
     // What the fight the run died in turned out to be, when anyone asked (--autopsy). Empty otherwise.
     public string Autopsy { get; init; } = "";
 

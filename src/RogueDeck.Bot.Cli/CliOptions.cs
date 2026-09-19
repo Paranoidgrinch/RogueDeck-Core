@@ -35,6 +35,12 @@ public sealed record CliOptions
     // "how far does this player get?" mixes navigation with difficulty, while "does a way through this act
     // exist for this player?" is the one V-7 asks. 0 = off.
     public int Routes { get; init; }
+
+    // ⚠ SIT THE CHAMPION AN EXAM (C0): of the positions a proof calls survivable, how many did it survive?
+    // A grade for the FIGHTING alone -- no rooms, no doors, no variance of five acts.
+    public bool Exam { get; init; }
+    public int ExamTurns { get; init; } = 3;
+    public int ExamSeconds { get; init; } = 5;
     public string? OutDir { get; init; }
 
     public const string Usage = """
@@ -77,6 +83,14 @@ public sealed record CliOptions
                              ACT rather than about the runner's doors. ⚠ Cleared on some route is a
                              constructive yes; cleared on none is "this player found none", never "none
                              exists"
+          --exam             grade the FIGHTING on its own: every hero-turn the run stood in is put to a
+                             proof (is a line that survives N turns available from here?) and to the
+                             champion (does it survive them?). A position the proof calls survivable and
+                             the player dies in is a MISS, and a miss is not an opinion. ⚠ `held` alone is
+                             not a grade -- a player that blocks forever holds everything and wins nothing,
+                             so `dealt` is reported beside it
+          --exam-turns N     how many hero-turns both are asked to get through (default 3)
+          --exam-seconds N   how long ONE position's proof may search (default 5)
           --out <dir>        write one full log per run into this directory
         """;
 
@@ -96,6 +110,9 @@ public sealed record CliOptions
         var oracle = false;
         var oracleOnly = false;
         var routes = 0;
+        var exam = false;
+        var examTurns = 3;
+        var examSeconds = 5;
         int? health = null;
         var legacy = false;
         var replay = false;
@@ -127,6 +144,9 @@ public sealed record CliOptions
                 case "--oracle": oracle = true; break;
                 case "--oracle-only": oracleOnly = oracle = true; break;
                 case "--routes": routes = Number(Next()); break;
+                case "--exam": exam = true; break;
+                case "--exam-turns": examTurns = Number(Next()); break;
+                case "--exam-seconds": examSeconds = Number(Next()); break;
                 case "--out": outDir = Next(); break;
                 default: return null;
             }
@@ -154,6 +174,9 @@ public sealed record CliOptions
             Oracle = oracle,
             OracleOnly = oracleOnly,
             Routes = routes,
+            Exam = exam,
+            ExamTurns = examTurns,
+            ExamSeconds = examSeconds,
             OutDir = outDir,
         };
     }

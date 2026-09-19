@@ -48,6 +48,69 @@ public class AutopsyTests
         return new InteractiveCombat(compiled, EnemyIntentSelectors.Build(compiled));
     }
 
+    // ── SURVIVING IS NOT WINNING (C0) ────────────────────────────────────────────────────────────────────
+    // ⚠⚠ THE EXAM LEARNT THIS THE EXPENSIVE WAY. Graded on survival, the champion held 186 of 187 positions
+    // and lost every run it was in — because a player that blocks is perfect at not dying. A ceiling a
+    // player is already standing on measures nothing, so the solver has to be able to ask the other
+    // question, and the two must not collapse into one.
+    //
+    // A twenty-health enemy against a hero who can block for ever but hits for one: survivable on any
+    // horizon, winnable on none of them.
+    private static InteractiveCombat Standoff(int hit = 1)
+    {
+        var s = new ScenarioBlueprint();
+        s.Cards.Add(new CardBlueprint("tap")
+        {
+            Program = Effects.Program(Effects.DealDamage(Targets.EventTarget, hit)),
+        }.Cost(Energy, 0));
+        s.Cards.Add(new CardBlueprint("shield")
+        {
+            Program = Effects.Program(Effects.GainBlock(Targets.Source, 30)),
+        }.Cost(Energy, 0));
+
+        s.EnemyActions.Add(new EnemyActionBlueprint("poke", new ActionIntent("Poke", IntentKind.Attack))
+        {
+            Program = new EffectProgram<EnemyActionContext>(new DealDamageNode<EnemyActionContext>(
+                CombatantTargetSelectors.EventTarget, new ConstantExpression<EnemyActionContext>(2))),
+        });
+
+        s.Hero = new HeroBlueprint("clerk") { MaxHealth = 60 };
+        for (var i = 0; i < 4; i++)
+        {
+            s.Hero.Deck.Add(new DeckEntry(new CardDefinitionId("shield")));
+            s.Hero.Deck.Add(new DeckEntry(new CardDefinitionId("tap")));
+        }
+        s.Hero.Resources.Add(new ResourceSpec(Energy, 3, 3));
+
+        var enemy = new EnemyBlueprint("wall") { MaxHealth = 20 };
+        enemy.Actions.Add(new EnemyActionDefinitionId("poke"));
+        s.Enemies.Add(enemy);
+
+        var compiled = s.Compile();
+        return new InteractiveCombat(compiled, EnemyIntentSelectors.Build(compiled));
+    }
+
+    [Fact]
+    public void A_standoff_is_survivable_and_not_winnable()
+    {
+        Assert.Equal(FightVerdict.Avoidable, new FightSolver(seconds: 20).CanSurvive(Standoff(), 3));
+        Assert.Equal(FightVerdict.Unavoidable, new FightSolver(seconds: 20).CanWin(Standoff(), 3));
+    }
+
+    // …and the same fight with a card that can actually finish it is called winnable, so the two questions
+    // are not one question under two names. Only the card's damage differs between this and the standoff.
+    //
+    // ⚠⚠ THIS TEST FOUND A DEFECT THAT HAD BEEN THERE SINCE THE AUTOPSY WAS BUILT. A hero holding a card
+    // that kills the enemy outright was told no win existed, over 559 positions of looking: a position that
+    // is already DECIDED was still being forked and told to end its turn, and the copy that came back was
+    // no longer the win. Survival never noticed — it always had another line to find — so only asking about
+    // winning brought it out.
+    [Fact]
+    public void A_fight_that_can_be_finished_is_called_winnable()
+    {
+        Assert.Equal(FightVerdict.Avoidable, new FightSolver(seconds: 20).CanWin(Standoff(hit: 20), 3));
+    }
+
     [Fact]
     public void A_death_that_could_have_been_blocked_is_the_runners_fault()
     {

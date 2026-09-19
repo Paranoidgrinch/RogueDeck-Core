@@ -119,7 +119,9 @@ public static class Program
                 if (!result.Clean)
                     Interlocked.Increment(ref failures);
                 lines[seed] = string.Join(Environment.NewLine,
-                    [Report(seed, result.Clean ? 0 : 1, BotReport.Result(result)), .. oracle.Select(Indent)]);
+                    [Report(seed, result.Clean ? 0 : 1, BotReport.Result(result)),
+                     .. (BotReport.Exam(result) is { Length: > 0 } sat ? new[] { Indent(sat) } : []),
+                     .. oracle.Select(Indent)]);
             }
             catch (Exception ex)
             {
@@ -191,6 +193,9 @@ public static class Program
             Autopsy = options.Autopsy,
             AutopsySeconds = options.AutopsySeconds,
             AutopsyPositions = options.AutopsyPositions,
+            Exam = options.Exam,
+            ExamTurns = options.ExamTurns,
+            ExamSeconds = options.ExamSeconds,
         };
 
         // ⚠⚠ TWO SEATS, ONE BRAIN (R5). By default the run is walked ONCE, with the bot answering the engine
@@ -213,6 +218,8 @@ public static class Program
         text.AppendLine(BotReport.Clearance(result));
         if (BotReport.Autopsy(result) is { } autopsy)
             text.AppendLine(autopsy);
+        if (BotReport.Exam(result) is { Length: > 0 } exam)
+            text.AppendLine(exam);
         text.AppendLine(BotReport.Result(result));
         var survey = Survey(blueprint, seed, maps, character, generator, result.Walked, options);
         foreach (var line in survey)

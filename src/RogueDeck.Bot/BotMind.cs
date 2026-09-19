@@ -299,37 +299,16 @@ internal sealed class BotMind
         return new CardPlay(card, target, combat.Steps.Count);
     }
 
-    // ── THE CHAMPION (B5) ────────────────────────────────────────────────────────────────────────────────
-    // Every other way this class decides a play asks what a card is WORTH — a number read off the card, the
-    // same whoever is holding it and whatever is standing opposite. The champion does not ask. It FORKS the
-    // fight, plays the cards on the copy, lets the enemies answer, and looks at what is left.
-    //
-    // ⚠⚠ IT PLANS THE WHOLE TURN, NOT THE NEXT CARD. The first version picked the best single card, played
-    // it, and asked again — which is greedy, and a greedy player can never find "A alone is worse than doing
-    // nothing, but A then B wins". So the search is over SEQUENCES: at every point it may stop (end the turn
-    // and be scored) or play one more card, and what is compared is whole turns.
-    //
-    // What makes that affordable is that a fight is a DETERMINISTIC PUZZLE. The dice are bound to the seed
-    // and the step count, so a fork draws what the real fight would draw; the enemy's intent is a function of
-    // the state; and CombatStateHasher gives every position a fingerprint. Orders that arrive at the same
-    // position are therefore the same position, and are searched once. That single fact is what collapses a
-    // combinatorial fan-out into a few hundred forks.
-    //
-    // ⚠ THE TWO CEILINGS ARE NAMED, because an unbounded search is not a plan but a hang: a turn is planned
-    // to at most PlansAhead cards deep and ForksPerTurn positions wide. Both are hit only by hands that loop
-    // (a card that puts a copy of itself back), and hitting them costs the turn its optimality, not its
-    // correctness.
-    //
-    // ⚠⚠ NO DICE ARE THROWN HERE. The search is deterministic, so the champion draws nothing from the run's
-    // Random — which is what lets the two seats still walk the same run (see the contract at the top).
-    private const int PlansAhead = 6;
-    private const int ForksPerTurn = 500;
-
+    // ── THE CHAMPION ─────────────────────────────────────────────────────────────────────────────────────
+    // The player itself lives in Champion.cs, alone, so that it can be measured alone (C0). What is left
+    // here is the SEAT's half of it: holding the plan the champion made, handing it out one card at a time
+    // the way the seat asks, and noticing when the real fight has gone somewhere the plan did not.
     // The turn as planned, handed out one card at a time because that is how the seat asks — plus the
     // position the fight is expected to be in before each of them. If the real fight ever disagrees with the
     // plan (a card that asked the player something and was answered differently on the fork), the plan is
     // torn up and the turn is planned again from where it actually stands.
-    private readonly Queue<(CardInstanceId Card, CombatantId? Target, string Expected)> _plan = new();
+    private readonly Queue<Champion.PlannedPlay> _plan = new();
+    private Champion? _champion;
 
     private CardPlay? ChampionPlay(InteractiveCombat combat)
     {
@@ -340,7 +319,7 @@ internal sealed class BotMind
             _lastPlayed = null;
         }
 
-        var standing = Position(combat);
+        var standing = Champion.Position(combat);
         if (_plan.Count > 0 && _plan.Peek().Expected != standing)
         {
             _log.Line("    (the fight went somewhere the plan did not — planning the turn again)");
@@ -348,7 +327,16 @@ internal sealed class BotMind
         }
 
         if (_plan.Count == 0)
-            PlanTheTurn(combat);
+        {
+            _champion ??= new Champion(_play, _policy);
+            var planned = _champion.PlanTurn(combat, _refused, _barren);
+            _plan.Clear();
+            foreach (var step in planned.Plays)
+                _plan.Enqueue(step);
+            if (Environment.GetEnvironmentVariable("ROGUEDECK_PLANS") is not null)
+                _log.Line($"    (turn planned: {_plan.Count} cards, {planned.Forks} forks, "
+                    + $"worth {planned.Worth:0.###})");
+        }
 
         if (_plan.Count == 0)
             return null;
@@ -368,144 +356,6 @@ internal sealed class BotMind
         _log.Line($"    play {card.DefinitionId.value} -> {next.Target?.value ?? "—"} "
             + $"(hp {hero.Health.Current}, hand {combat.Hand.Count})");
         return new CardPlay(card, next.Target, combat.Steps.Count);
-    }
-
-    // Search every way this turn could be played, and keep the best whole turn.
-    private void PlanTheTurn(InteractiveCombat combat)
-    {
-        var heroBefore = combat.HeroHealth;
-        var enemyBefore = Standing(combat);
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        var forks = 0;
-
-        // Doing nothing at all, played out to the same depth as every plan: the turn ends, the enemies answer.
-        var idle = combat.Fork();
-        idle.EndTurn();
-        var best = Worth(idle, heroBefore, enemyBefore);
-        List<(CardInstanceId, CombatantId?, string)>? plan = null;
-
-        void Explore(InteractiveCombat node, List<(CardInstanceId, CombatantId?, string)> path)
-        {
-            if (path.Count >= PlansAhead || forks >= ForksPerTurn || node.IsOver || !node.IsHeroTurn)
-                return;
-
-            var hero = node.State.GetCombatant(node.HeroId);
-            var playable = node.Hand
-                .Where(c => !_refused.Contains(c.Id) && !_barren.Contains(c.DefinitionId.value)
-                    && RunBot.CanPay(_play, hero, c.DefinitionId.value))
-                .ToList();
-            var living = node.State.Combatants
-                .Where(c => c.Id != node.HeroId && c.IsAlive && c.TeamId == StandardCombatIds.EnemyTeam)
-                .Select(c => (CombatantId?)c.Id)
-                .ToList();
-
-            foreach (var card in playable)
-                foreach (var target in living.Count == 0 ? [null] : living)
-                {
-                    if (forks >= ForksPerTurn)
-                        return;
-
-                    var after = node.Fork();
-                    forks++;
-                    var steps = after.Steps.Count;
-                    after.PlayCard(card.Id, target);
-                    // A play the RULES refuse is not a candidate, and the fork is where that is found out
-                    // for free — the real fight never hears about it.
-                    if (RunBot.Refused(after, steps))
-                        continue;
-
-                    var position = Position(after);
-                    // ⚠ THE WHOLE SEARCH RESTS ON THIS LINE. Two orders that arrive at the same table are
-                    // the same turn from here on, and the second one is not worth walking.
-                    if (!seen.Add(position))
-                        continue;
-
-                    var here = new List<(CardInstanceId, CombatantId?, string)>(path)
-                        { (card.Id, target, Position(node)) };
-
-                    // Stopping here is a candidate turn in its own right: the energy left over may be worth
-                    // less than the guard already standing.
-                    var stopped = after.Fork();
-                    forks++;
-                    stopped.EndTurn();
-                    var worth = Worth(stopped, heroBefore, enemyBefore);
-                    if (worth > best)
-                    {
-                        best = worth;
-                        plan = here;
-                    }
-
-                    Explore(after, here);
-                }
-        }
-
-        Explore(combat, []);
-
-        _plan.Clear();
-        foreach (var step in plan ?? [])
-            _plan.Enqueue(step);
-        if (Environment.GetEnvironmentVariable("ROGUEDECK_PLANS") is not null)
-            _log.Line($"    (turn planned: {_plan.Count} cards, {forks} forks, worth {best:0.###})");
-    }
-
-    // A position's fingerprint — the same one the engine uses to prove two fights are the same fight.
-    private static string Position(InteractiveCombat combat) =>
-        CombatStateHasher.ComputeHash(combat.State.CreateSnapshot());
-
-    private static int Standing(InteractiveCombat combat) => combat.State.Combatants
-        .Where(c => c.Id != combat.HeroId && c.IsAlive && c.TeamId == StandardCombatIds.EnemyTeam)
-        .Sum(c => c.Health.Current);
-
-    // ⚠⚠ A FIGHT IS A RACE, AND THE FIRST VERSION OF THIS METHOD DID NOT KNOW THAT. It scored a turn by what
-    // was left of each side — health kept against enemy health removed — and the champion promptly stopped
-    // playing cards altogether. It was not confused: the very first enemy of this game, the Contradictory
-    // Signpost, PUNISHES ACTING. Measured on the fork: ending the turn having done nothing cost 0 health;
-    // playing a six-damage jab cost 15. At one ply, and on a scale where standing still is free, refusing to
-    // play is correct — and it lost every fight, because the enemy's damage ramps while you wait.
-    //
-    // So what is scored is not what is LEFT but how the race is going, in the only currency a fight has:
-    // TURNS. This turn removed so much of them and cost so much of me — at that rate, how many turns until
-    // they are down, and how many until I am? A turn that removes nothing never ends the fight, and says so
-    // by naming the ceiling. Both rates are MEASURED on the fork; nothing here is a model of the game.
-    //
-    // The ceiling is the runner's own: a fight that has not ended in this many turns is already written off
-    // (RunBot.TurnsAFightShouldNotNeed), so "never" and "not within the fight" are the same number.
-    private double Worth(InteractiveCombat after, int heroBefore, int enemyBefore)
-    {
-        if (after.Result == CombatResult.Victory)
-            return 1000;
-        if (after.Result == CombatResult.Defeat)
-            return -1000;
-
-        var forever = (double)RunBot.TurnsAFightShouldNotNeed;
-        var dealt = enemyBefore - Standing(after);
-        var taken = heroBefore - after.HeroHealth;
-        var toDie = taken <= 0 ? forever : Math.Min(forever, after.HeroHealth / (double)taken);
-
-        // ⚠⚠ A TURN THAT TAKES NOTHING OFF THEM IS NOT A CHEAP TURN, IT IS A LOST ONE — and the first
-        // version of this line said the opposite, out loud, in a real fight. Against the Contradictory
-        // Signpost, which punishes acting, standing still costs no health: with both ceilings in play a
-        // stall scored (1-lean)·100 - lean·100, which is POSITIVE for any runner leaning at all defensive —
-        // and the bred champion leaned 0.43. It stood there for three turns at a time with a full hand,
-        // and paid 52 of its 70 health for a single act-I room.
-        //
-        // A fight that never ends is a fight that is lost (the runner's own ceiling says so), so a turn
-        // that brings the end no closer is worth less than any turn that does. Among stalls, still prefer
-        // the one that survives — and a turn that KILLS the hero is worth less than any of them, which the
-        // Defeat branch above already says.
-        if (dealt <= 0)
-            return -forever + toDie;
-
-        // ⚠ AND THE TWO BANDS MUST NOT OVERLAP. Standing still sits at a fixed value; a turn that makes
-        // progress but kills slowly goes NEGATIVE, and at a high lean it goes below the stall — so the
-        // runner went back to waiting, just for the opposite reason. Progress is therefore lifted clear of
-        // the stall band entirely: any turn that takes something off them and does not kill the hero beats
-        // any turn that does nothing. That is a deliberate bias, and it is the one a horizon of a single
-        // turn needs — it cannot see the enemy's damage ramping while it waits, so it is not allowed to
-        // wait. A turn that would KILL the hero is not in this band at all (the Defeat branch above).
-        var toKill = Math.Min(forever, Standing(after) / (double)dealt);
-        var lean = _policy?.Aggression ?? 0.5;
-        return forever + (1 - lean) * toDie - lean * toKill;
     }
 
     // What the fight recorded about the play that was just made — and whether the turn has now gone on longer
@@ -750,12 +600,42 @@ internal sealed class BotMind
     // The start of a hero turn, kept for the autopsy: one fork per turn, and only the last few.
     private void KeepThisTurn(InteractiveCombat combat)
     {
-        if (!_options.Autopsy || _keptThisTurn)
+        if (_keptThisTurn || (!_options.Autopsy && !_options.Exam))
             return;
         _keptThisTurn = true;
+
+        // ⚠ THE EXAM KEEPS EVERY TURN, THE AUTOPSY ONLY THE LAST FEW. They want different things from the
+        // same fork: the autopsy asks how a death came about and only the end of the fight can answer that,
+        // while the exam grades the player and every position it stood in is a question. The ceiling is
+        // memory, not meaning — a run holds a few hundred hero-turns and each one is a fight-sized copy.
+        if (_options.Exam && _satAt.Count < SeatsInAnExam)
+            _satAt.Add(combat.Fork());
+
+        if (!_options.Autopsy)
+            return;
         _turnsBack.Enqueue(combat.Fork());
         while (_turnsBack.Count > TurnsKept)
             _turnsBack.Dequeue();
+    }
+
+    private const int SeatsInAnExam = 300;
+    private readonly List<InteractiveCombat> _satAt = [];
+
+    // What the champion did with the positions it actually stood in, against what a proof says was possible.
+    // Empty unless someone asked.
+    public string Exam()
+    {
+        if (!_options.Exam || _satAt.Count == 0)
+            return "";
+
+        var champion = new Champion(_play, _policy);
+        var sat = ChampionExam.Sit(_satAt, champion, _options.ExamTurns, _options.ExamSeconds);
+        _log.Line($"  EXAM won {sat.Won}/{sat.Winnable} winnable, held {sat.Held}/{sat.Survivable} "
+            + $"({sat.Hopeless} hopeless, {sat.Undecided} undecided)");
+        return $"turns={_options.ExamTurns} positions={sat.Positions} "
+            + $"won={sat.Won}/{sat.Winnable} held={sat.Held}/{sat.Survivable} "
+            + $"hopeless={sat.Hopeless} undecided={sat.Undecided} "
+            + $"dealt={sat.Dealt} seconds={sat.Seconds:0.0}";
     }
 
     public BotResult Finish(RunState? run, string? error, bool complete) => new()
@@ -783,6 +663,7 @@ internal sealed class BotMind
         Where = Where,
         WhereRole = WhereRole,
         Autopsy = Autopsy(run),
+        Exam = Exam(),
     };
 
     // Which door a runner takes. A shop is answered as a shop — how eagerly it spends is a weight of its own,

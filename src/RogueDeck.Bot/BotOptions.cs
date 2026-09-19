@@ -51,6 +51,19 @@ public sealed record BotOptions
 
     public int AutopsySeconds { get; init; } = 60;
 
+    // ── SIT THE CHAMPION AN EXAM (C0) ────────────────────────────────────────────────────────────────────
+    // Keep every hero-turn start of every fight, and at the end hold the player against a proof: of the
+    // positions a searcher can prove survivable, how many did the champion actually survive? See
+    // ChampionExam. Off by default — it costs a search per position, which is the price of an answer that
+    // needs no whole runs and has no variance of five acts in it.
+    public bool Exam { get; init; }
+
+    // How many hero-turns forward both the proof and the player are asked to get through.
+    public int ExamTurns { get; init; } = 3;
+
+    // How long ONE position's proof may search before it answers "undecided" rather than guessing.
+    public int ExamSeconds { get; init; } = 5;
+
     // ⚠ HOW MANY POSITIONS ONE AUTOPSY MAY OPEN. It is a separate ceiling from the clock because the two
     // answer different questions: the clock keeps a batch moving, this one asks how big the tree ACTUALLY
     // is. Raised far past the default, the verdict stops being "the search ran out" and starts being a

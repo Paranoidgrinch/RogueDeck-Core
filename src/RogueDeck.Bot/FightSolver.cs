@@ -27,7 +27,7 @@ namespace RogueDeck.Bot;
 // ⚠ A fork has nobody sitting at it, so a card that ASKS something is answered on the copy by the headless
 // default. A fight whose cards ask a lot is explored through one of its answers, not all of them; the
 // verdict is then about that reading of the fight. Nothing here pretends otherwise.
-internal enum FightVerdict
+public enum FightVerdict
 {
     // The hero could still have come out of this alive, and did not: the loss was the runner's.
     Avoidable,
@@ -39,7 +39,7 @@ internal enum FightVerdict
     Undecided,
 }
 
-internal sealed record FightAutopsy(
+public sealed record FightAutopsy(
     FightVerdict Verdict,
     int LastChance,     // how many turns before the end the hero could still have avoided dying
     int ProvenLost,     // how many of the last turns were searched OUT and found to have no way to live
@@ -47,7 +47,7 @@ internal sealed record FightAutopsy(
     int Positions,
     double Seconds);
 
-internal sealed class FightSolver(int positionBudget = 60_000, int seconds = 60)
+public sealed class FightSolver(int positionBudget = 60_000, int seconds = 60)
 {
     // How many cards one turn may lay down while being searched. Beyond this the turn is explored no
     // further — a hand that loops would otherwise have no end.
@@ -127,6 +127,49 @@ internal sealed class FightSolver(int positionBudget = 60_000, int seconds = 60)
             _clock.Elapsed.TotalSeconds);
     }
 
+    // ── THE ONE QUESTION, ASKED DIRECTLY (C0) ────────────────────────────────────────────────────────────
+    // `Examine` walks a death backwards to find when it became unavoidable. This asks the single question
+    // underneath it about ONE position, which is what lets a PLAYER be held against a proof: from here, does
+    // a line exist that is still standing `turns` hero-turns later?
+    //
+    // ⚠ The same three answers and the same honesty. Yes is a line a searcher that SEES THE DECK can walk,
+    // so it is an upper bound on any fair player rather than a promise. No is the proof — nothing survives.
+    // Undecided says the budget ran out rather than guessing.
+    public FightVerdict CanSurvive(InteractiveCombat from, int turns) => Ask(from, turns, mustWin: false);
+
+    // ⚠⚠ AND THE QUESTION THAT ACTUALLY MATTERS, WHICH IS NOT THE SAME ONE. Surviving is not winning, and
+    // a player graded only on surviving is graded on the one thing a standstill is perfect at — measured:
+    // the champion held 186 of 187 survivable positions and still lost every run it was in. A ceiling a
+    // player is already at measures nothing.
+    //
+    // So: from here, is there a line that has the fight WON within `turns`? Same search, same three answers,
+    // one different goal — and a far harder question, because surviving accepts any line that is still
+    // standing while winning has to put something down. Expect more `Undecided`, and read it as the budget
+    // speaking rather than as a verdict.
+    public FightVerdict CanWin(InteractiveCombat from, int turns) => Ask(from, turns, mustWin: true);
+
+    private FightVerdict Ask(InteractiveCombat from, int turns, bool mustWin)
+    {
+        ArgumentNullException.ThrowIfNull(from);
+        _clock.Restart();
+        _positions = 0;
+        _cutShort = false;
+        _mustWin = mustWin;
+        _seen.Clear();
+
+        if (Survives(from, turns))
+            return FightVerdict.Avoidable;
+        return _cutShort ? FightVerdict.Undecided : FightVerdict.Unavoidable;
+    }
+
+    // Whether the goal is to have WON by the horizon rather than merely to be standing at it. Held on the
+    // solver rather than threaded through the recursion because the recursion is the same walk either way.
+    private bool _mustWin;
+
+    public int Positions => _positions;
+
+    public double Seconds => _clock.Elapsed.TotalSeconds;
+
     // Is there ANY way to still be standing `turns` hero-turns from here?
     private bool Survives(InteractiveCombat at, int turns)
     {
@@ -137,8 +180,10 @@ internal sealed class FightSolver(int positionBudget = 60_000, int seconds = 60)
         // Winning is surviving, and better.
         if (at.Result == CombatResult.Victory)
             return true;
+        // ⚠ THE HORIZON MEANS THE OPPOSITE THING FOR THE TWO QUESTIONS. Still standing when the turns run
+        // out is a SURVIVAL; it is not a win, and for the winning question it is the line failing.
         if (turns <= 0)
-            return true;
+            return !_mustWin;
         if (OutOfBudget())
             return false;
 
@@ -166,6 +211,25 @@ internal sealed class FightSolver(int positionBudget = 60_000, int seconds = 60)
     {
         if (ends.Count >= PositionsPerTurn || OutOfBudget())
             return;
+
+        // ⚠⚠ A FIGHT THAT IS ALREADY DECIDED HAS NO TURN LEFT TO PLAY OUT, and treating it as if it had was
+        // a real defect: the code below forks it and calls EndTurn on the copy, and the position that came
+        // back was no longer the win. So a line that WON was invisible to the search — measured, when the
+        // winning question was added: a hero holding a card that kills the enemy outright was told no win
+        // existed, over 559 positions of looking. Survival never noticed, because it had other lines to
+        // find; only asking about winning brought it out.
+        //
+        // A decided position is therefore handed over AS ITSELF and the walk stops there.
+        // ⚠ AND IT IS ADDED WITHOUT ASKING `_seen`, which is the second half of the same defect. The caller
+        // fingerprints a position BEFORE walking into it, so by the time the walk arrives the position is
+        // already in `_seen` — and a dedup check here would drop the very thing it came to hand over. A
+        // decided position is terminal: there is no subtree behind it to walk twice.
+        if (node.IsOver)
+        {
+            _positions++;
+            ends.Add((node, played.Count == 0 ? "(nothing)" : string.Join(" + ", played)));
+            return;
+        }
 
         // Stopping here is a way the turn can go.
         var stopped = node.Fork();

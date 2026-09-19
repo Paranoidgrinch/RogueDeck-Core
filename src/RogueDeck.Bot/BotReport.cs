@@ -92,6 +92,15 @@ public static class BotReport
             + $"elites={OfTaken(p => p.Count(MapNodeTags.Elite))}/{s.FewestElites}";
     }
 
+    // The exam's own line (C0): what the player did with the positions it stood in, against what a proof
+    // says was possible. ⚠ `held` alone is not a grade — a player that blocks forever holds everything and
+    // wins nothing, so `dealt` is on the line beside it and the two are read together.
+    public static string Exam(BotResult r)
+    {
+        ArgumentNullException.ThrowIfNull(r);
+        return r.Exam.Length == 0 ? "" : $"sim-exam: seed={r.Seed} policy={r.Policy} {r.Exam}";
+    }
+
     public static string Result(BotResult r)
     {
         ArgumentNullException.ThrowIfNull(r);
