@@ -79,7 +79,7 @@ public static class Program
         Console.WriteLine($"roguedeck-bot: {options.Runs} runs "
             + $"(seeds {options.SeedFrom}..{options.SeedFrom + options.Runs - 1}, "
             + $"{(options.Health is { } h ? $"{h} hp" : "authored health")}, maps {maps}, "
-            + $"policy {policy?.Name ?? "random"}{(options.Champion ? " (champion: one ply of lookahead)" : "")}, "
+            + $"policy {policy?.Name ?? "random"}{Lookahead(policy, options)}, "
             + $"{options.Jobs} at a time, one process, "
             + $"{(options.Replay ? "through the replay model" : "answering the engine inline")})");
 
@@ -160,6 +160,25 @@ public static class Program
     {
         var roster = MetaProgression.AvailableCharacters(blueprint, new InMemoryMetaStore().Load());
         return roster.Count > 0 ? roster[new Random(seed).Next(roster.Count)].Id : null;
+    }
+
+    // ⚠ THE HEADER HAS TO SAY HOW FAR THE CHAMPION LOOKS, because since C2 that is a property of the POLICY
+    // and not of the runner. It said "one ply of lookahead" for every champion run, which was true until the
+    // horizon became a gene and then quietly became a lie printed above every batch.
+    //
+    // ⚠⚠ AND IT SAYS WHEN THE PLAYER IS NO LONGER A FAIR ONE. Above a horizon of 1 the search plans around
+    // cards nobody has drawn, so what the batch produces is an upper bound rather than a player's result —
+    // and a reader who was not told that will read it as skill.
+    private static string Lookahead(BotPolicy? policy, CliOptions options)
+    {
+        if (!options.Champion)
+            return "";
+        var horizon = Math.Max(1, (int)Math.Round(policy?.Horizon ?? 0));
+        if (horizon <= 1)
+            return " (champion: one turn of lookahead)";
+        var beam = Math.Max(1, (int)Math.Round(policy?.Beam ?? 0));
+        return $" (champion: {horizon} turns of lookahead, beam {beam} — ⚠ SEES UNDRAWN CARDS, "
+            + "so this is an upper bound, not a fair player)";
     }
 
     private static string Indent(string line) => $"           {line}";
