@@ -27,8 +27,23 @@ namespace RogueDeck.Bot;
 //
 //     HELD   — of the positions a line survives, how many did the champion survive? A guard against
 //              regressions, near its ceiling, and never read as a score.
-//     WON    — of the positions a line WINS from within the horizon, how many did the champion win? This is
-//              the number. It cannot be farmed by playing safe: blocking forever wins none of them.
+//     WON    — of the positions a line WINS from within the horizon, how many did the champion win?
+//
+// ⚠⚠ AND BOTH OF THOSE TURNED OUT TO BE CEILINGS TOO: held 186/187, won 82/84. "Winnable within three
+// turns" only ever means the enemy is nearly dead, so the grade was being taken over the easy positions and
+// the hard ones were exactly the `undecided` ones. A grade a player is already standing on measures nothing.
+//
+//     BEATEN — the one with an answer at EVERY position. The solver returns the PARETO FRONTIER of what was
+//              reachable (FightSolver.Frontier), and the champion's own outcome is held against it: was
+//              there a line that kept at least as much health AND took at least as much off them, with
+//              strictly more of one? No trade between health and damage is invented anywhere — which
+//              matters, because every number this project has invented for that trade has eventually
+//              rewarded standing still. Blocking forever does not farm it either: a line that keeps
+//              everything and deals nothing is only on the frontier while nothing else deals more at the
+//              same health.
+//
+// `beaten` is the grade. `lostHealth` and `lostDamage` say by how much, added up, so that a smaller number
+// of worse mistakes is not confused with a larger number of small ones.
 //
 // ⚠ THE PROOF SEES THE DECK AND THE PLAYER DOES NOT — at one turn of horizon. A champion given a deeper
 // horizon would start seeing it too, and then this comparison would be a player graded against itself. That
@@ -45,6 +60,10 @@ public static class ChampionExam
         int Hopeless,        // positions nothing survives — not counted either way
         int Undecided,       // a proof ran out of budget and said so
         int Dealt,           // enemy health the champion took off
+        int Judged,          // positions whose frontier the search could afford
+        int Beaten,          // …at which a line beat the champion on both counts. THE GRADE.
+        int LostHealth,      // health those lines would have kept and it did not, added up
+        int LostDamage,      // damage those lines would have dealt and it did not, added up
         double Seconds);
 
     // `positions` are hero-turn starts, taken off real fights. Each is asked about on its own: the proof
@@ -58,6 +77,7 @@ public static class ChampionExam
 
         var clock = System.Diagnostics.Stopwatch.StartNew();
         int survivable = 0, held = 0, winnable = 0, won = 0, hopeless = 0, undecided = 0, dealt = 0;
+        int judged = 0, beaten = 0, lostHealth = 0, lostDamage = 0;
 
         foreach (var position in positions)
         {
@@ -77,21 +97,40 @@ public static class ChampionExam
             // would grade a different walk, and the two answers would no longer be about one decision.
             survivable++;
             var before = Champion.Standing(position);
-            var (alive, beaten, after) = Play(position.Fork(), champion, turns);
+            var (alive, finished, after, health) = Play(position.Fork(), champion, turns);
             if (alive)
                 held++;
             dealt += Math.Max(0, before - after);
 
             if (new FightSolver(solverPositions, solverSeconds).CanWin(position.Fork(), turns)
-                != FightVerdict.Avoidable)
+                == FightVerdict.Avoidable)
+            {
+                winnable++;
+                if (finished)
+                    won++;
+            }
+
+            // ── AND THE GRADE THAT HAS AN ANSWER HERE WHATEVER HAPPENED ──────────────────────────────────
+            var frontier = new FightSolver(solverPositions, solverSeconds).Frontier(position.Fork(), turns);
+            if (frontier.Count == 0)
+                continue;   // the search could not afford this one; it says so rather than scoring it
+
+            judged++;
+            var mine = new FightSolver.Outcome(health, Math.Max(0, before - after));
+            var over = frontier.Where(o => o.Beats(mine)).ToList();
+            if (over.Count == 0)
                 continue;
-            winnable++;
-            if (beaten)
-                won++;
+
+            beaten++;
+            // How much was left on the table: the most health any beating line kept, and the most damage
+            // any of them dealt. Not one line's numbers — the frontier is not a single plan, and quoting
+            // one point of it as "what it should have done" would be a claim nobody measured.
+            lostHealth += over.Max(o => o.HeroHealth) - mine.HeroHealth;
+            lostDamage += over.Max(o => o.Dealt) - mine.Dealt;
         }
 
         return new Verdict(positions.Count, survivable, held, winnable, won, hopeless, undecided, dealt,
-            clock.Elapsed.TotalSeconds);
+            judged, beaten, lostHealth, lostDamage, clock.Elapsed.TotalSeconds);
     }
 
     // The champion playing `turns` of its own hero-turns on a copy, exactly as the seat would drive it:
@@ -100,7 +139,7 @@ public static class ChampionExam
     // ⚠ A PLAN THAT RUNS OUT IS AN ENDED TURN, not a stuck one. The champion may plan no cards at all —
     // doing nothing is a candidate turn it is allowed to prefer — and that must end the turn rather than
     // spin. The guard below is the same ceiling a real turn has.
-    private static (bool Alive, bool Won, int EnemyHealth) Play(
+    private static (bool Alive, bool Won, int EnemyHealth, int HeroHealth) Play(
         InteractiveCombat combat, Champion champion, int turns)
     {
         for (var turn = 0; turn < turns && !combat.IsOver; turn++)
@@ -138,6 +177,9 @@ public static class ChampionExam
         }
 
         return (combat.Result != CombatResult.Defeat, combat.Result == CombatResult.Victory,
-            Champion.Standing(combat));
+            Champion.Standing(combat),
+            // ⚠ A DEAD HERO KEEPS NOTHING, and the frontier says the same about the lines that die, so the
+            // two are comparable. Reading the corpse's health here would put it above lines that lived.
+            combat.Result == CombatResult.Defeat ? 0 : combat.HeroHealth);
     }
 }

@@ -92,9 +92,16 @@ public static class BotReport
             + $"elites={OfTaken(p => p.Count(MapNodeTags.Elite))}/{s.FewestElites}";
     }
 
-    // The exam's own line (C0): what the player did with the positions it stood in, against what a proof
-    // says was possible. ⚠ `held` alone is not a grade — a player that blocks forever holds everything and
-    // wins nothing, so `dealt` is on the line beside it and the two are read together.
+    // The exam's own line (C0): what the player did with the positions it stood in, against what was
+    // reachable from them.
+    //
+    //   beaten=k/n   THE GRADE. At k of the n positions the search could afford, a line existed that kept
+    //                at least as much health AND took at least as much off them, with strictly more of one.
+    //                No trade between the two is invented anywhere, which is what keeps a standstill from
+    //                scoring well — this project has invented that trade twice and been punished both times.
+    //   lostHp/Dmg   by how much, added up, so few bad mistakes are not confused with many small ones
+    //   won/held     the older yes/no questions, kept as regression guards. ⚠ Both are near their ceiling
+    //                (82/84 and 186/187) and neither is a score.
     public static string Exam(BotResult r)
     {
         ArgumentNullException.ThrowIfNull(r);

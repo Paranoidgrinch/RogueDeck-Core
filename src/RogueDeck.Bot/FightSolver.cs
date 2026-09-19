@@ -170,6 +170,89 @@ public sealed class FightSolver(int positionBudget = 60_000, int seconds = 60)
 
     public double Seconds => _clock.Elapsed.TotalSeconds;
 
+    // ── WHAT WAS ACTUALLY AVAILABLE FROM HERE (C0b) ──────────────────────────────────────────────────────
+    // The yes/no questions above are only asked where the answer is interesting, and that turned out to be a
+    // narrow place: "winnable within three turns" only ever means "the enemy is nearly dead", and over four
+    // runs the champion won 82 of the 84 such positions. A grade a player is already at the ceiling of
+    // measures nothing, which is exactly what `CanSurvive` had to be replaced for.
+    //
+    // So this asks a question with an answer at EVERY position: what outcomes were reachable at all?
+    //
+    // ⚠⚠ AND IT REFUSES TO WEIGH THEM AGAINST EACH OTHER, because that is where this project keeps going
+    // wrong. "Best" needs a trade between health kept and damage dealt, and every number we have invented
+    // for that trade has eventually rewarded standing still — twice in the champion's own evaluator. So no
+    // trade is invented here. What comes back is the PARETO FRONTIER: every outcome that nothing else beats
+    // on both counts at once.
+    //
+    // A player is then graded by DOMINANCE, which needs no weights: is there a line that would have kept at
+    // least as much health AND taken at least as much off them, and strictly more of one? If there is, the
+    // player left something on the table, and the amount is not an opinion. If there is not, it played on
+    // the frontier — whatever trade it chose was a defensible one.
+    //
+    // ⚠ Blocking forever cannot farm this. A line that keeps every point of health and deals nothing is on
+    // the frontier only while nothing else deals more at the same health, which in a real fight is rare.
+    public readonly record struct Outcome(int HeroHealth, int Dealt)
+    {
+        public bool Beats(Outcome other) =>
+            HeroHealth >= other.HeroHealth && Dealt >= other.Dealt
+            && (HeroHealth > other.HeroHealth || Dealt > other.Dealt);
+    }
+
+    // Every outcome reachable in `turns` hero-turns that nothing else beats on both counts. Empty means the
+    // search could not afford an answer — which it says rather than pretending the frontier is empty.
+    public IReadOnlyList<Outcome> Frontier(InteractiveCombat from, int turns)
+    {
+        ArgumentNullException.ThrowIfNull(from);
+        _clock.Restart();
+        _positions = 0;
+        _cutShort = false;
+        _mustWin = false;
+        _seen.Clear();
+
+        var standing = Enemies(from);
+        var found = Reachable(from, turns, standing);
+        return _cutShort ? [] : found;
+    }
+
+    private List<Outcome> Reachable(InteractiveCombat at, int turns, int enemiesAtTheStart)
+    {
+        // A decided fight is one outcome and no further question. Death keeps no health whatever it dealt,
+        // which is what puts it under every line that is still standing.
+        if (at.Result == CombatResult.Defeat)
+            return [new Outcome(0, enemiesAtTheStart - Enemies(at))];
+        if (at.Result == CombatResult.Victory || turns <= 0)
+            return [new Outcome(at.HeroHealth, enemiesAtTheStart - Enemies(at))];
+        if (OutOfBudget())
+            return [];
+
+        var ends = new List<(InteractiveCombat After, string Played)>();
+        Turn(at, depth: 0, played: [], ends);
+
+        var frontier = new List<Outcome>();
+        foreach (var (after, _) in ends)
+        {
+            if (OutOfBudget())
+                return frontier;
+            foreach (var outcome in Reachable(after, turns - 1, enemiesAtTheStart))
+                Keep(frontier, outcome);
+        }
+        return frontier;
+    }
+
+    // Add an outcome and drop everything it beats; skip it if anything already there beats it.
+    private static void Keep(List<Outcome> frontier, Outcome candidate)
+    {
+        foreach (var held in frontier)
+            if (held.Beats(candidate) || held == candidate)
+                return;
+        frontier.RemoveAll(candidate.Beats);
+        frontier.Add(candidate);
+    }
+
+    private static int Enemies(InteractiveCombat combat) => combat.State.Combatants
+        .Where(c => c.Id != combat.HeroId && c.IsAlive && c.TeamId == StandardCombatIds.EnemyTeam)
+        .Sum(c => c.Health.Current);
+
     // Is there ANY way to still be standing `turns` hero-turns from here?
     private bool Survives(InteractiveCombat at, int turns)
     {

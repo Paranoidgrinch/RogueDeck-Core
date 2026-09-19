@@ -56,17 +56,20 @@ public class AutopsyTests
     //
     // A twenty-health enemy against a hero who can block for ever but hits for one: survivable on any
     // horizon, winnable on none of them.
+    // ⚠ THE ENERGY IS THE POINT. With free cards there is no trade — the hero blocks AND swings, the frontier
+    // collapses to one outcome, and a test written on it would prove nothing about a frontier. One energy a
+    // turn is what makes "keep health" and "deal damage" two different choices.
     private static InteractiveCombat Standoff(int hit = 1)
     {
         var s = new ScenarioBlueprint();
         s.Cards.Add(new CardBlueprint("tap")
         {
             Program = Effects.Program(Effects.DealDamage(Targets.EventTarget, hit)),
-        }.Cost(Energy, 0));
+        }.Cost(Energy, 1));
         s.Cards.Add(new CardBlueprint("shield")
         {
             Program = Effects.Program(Effects.GainBlock(Targets.Source, 30)),
-        }.Cost(Energy, 0));
+        }.Cost(Energy, 1));
 
         s.EnemyActions.Add(new EnemyActionBlueprint("poke", new ActionIntent("Poke", IntentKind.Attack))
         {
@@ -80,7 +83,7 @@ public class AutopsyTests
             s.Hero.Deck.Add(new DeckEntry(new CardDefinitionId("shield")));
             s.Hero.Deck.Add(new DeckEntry(new CardDefinitionId("tap")));
         }
-        s.Hero.Resources.Add(new ResourceSpec(Energy, 3, 3));
+        s.Hero.Resources.Add(new ResourceSpec(Energy, 1, 1));
 
         var enemy = new EnemyBlueprint("wall") { MaxHealth = 20 };
         enemy.Actions.Add(new EnemyActionDefinitionId("poke"));
@@ -88,6 +91,54 @@ public class AutopsyTests
 
         var compiled = s.Compile();
         return new InteractiveCombat(compiled, EnemyIntentSelectors.Build(compiled));
+    }
+
+    // ── WHAT WAS REACHABLE AT ALL (C0b) ──────────────────────────────────────────────────────────────────
+    // ⚠⚠ THE YES/NO QUESTIONS WERE BOTH CEILINGS: the champion held 186 of 187 survivable positions and won
+    // 82 of 84 winnable ones. "Winnable within three turns" only ever means the enemy is nearly dead, so the
+    // grade was being taken over the easy positions. The frontier has an answer at every position instead —
+    // and it refuses to weigh health against damage, because every number this project has invented for
+    // that trade has eventually rewarded standing still.
+
+    [Fact]
+    public void The_frontier_holds_the_two_ends_of_the_trade()
+    {
+        // A hand of shields and taps: block everything and deal nothing, or swing and take the hit.
+        var frontier = new FightSolver(seconds: 20).Frontier(Standoff(), 1);
+
+        Assert.NotEmpty(frontier);
+        // Something on it keeps every point of health, and something else took more off them than that did.
+        var safest = frontier.MaxBy(o => o.HeroHealth);
+        Assert.True(frontier.Any(o => o.Dealt > safest.Dealt),
+            "a frontier holding only the safest outcome would have weighed the trade after all");
+        // …and nothing on the frontier beats anything else on it, which is what makes it a frontier.
+        foreach (var a in frontier)
+            foreach (var b in frontier)
+                Assert.False(a.Beats(b) && b.Beats(a));
+    }
+
+    // ⚠ THE GRADE IS DOMINANCE AND NEEDS NO WEIGHTS. An outcome that is worse on BOTH counts than something
+    // reachable is beaten, and that is not an opinion; one that trades health for damage is not.
+    [Fact]
+    public void Beating_needs_no_opinion_about_the_trade()
+    {
+        var kept = new FightSolver.Outcome(HeroHealth: 50, Dealt: 10);
+        var traded = new FightSolver.Outcome(HeroHealth: 40, Dealt: 20);
+        var wasted = new FightSolver.Outcome(HeroHealth: 40, Dealt: 5);
+
+        Assert.False(kept.Beats(traded));    // neither is better on both counts…
+        Assert.False(traded.Beats(kept));    // …so the frontier holds them both
+        Assert.True(kept.Beats(wasted));     // this one is simply worse, on both
+        Assert.True(traded.Beats(wasted));
+        Assert.False(kept.Beats(kept));      // and nothing beats itself
+    }
+
+    // ⚠ A SEARCH THAT COULD NOT AFFORD AN ANSWER SAYS SO. An empty frontier is "the budget ran out", never
+    // "nothing was reachable" — and the exam skips those positions rather than scoring them.
+    [Fact]
+    public void A_frontier_nobody_could_afford_comes_back_empty()
+    {
+        Assert.Empty(new FightSolver(positionBudget: 1, seconds: 20).Frontier(Standoff(), 3));
     }
 
     [Fact]

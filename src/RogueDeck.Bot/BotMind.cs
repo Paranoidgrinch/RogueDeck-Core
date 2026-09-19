@@ -630,9 +630,10 @@ internal sealed class BotMind
 
         var champion = new Champion(_play, _policy);
         var sat = ChampionExam.Sit(_satAt, champion, _options.ExamTurns, _options.ExamSeconds);
-        _log.Line($"  EXAM won {sat.Won}/{sat.Winnable} winnable, held {sat.Held}/{sat.Survivable} "
-            + $"({sat.Hopeless} hopeless, {sat.Undecided} undecided)");
+        _log.Line($"  EXAM beaten at {sat.Beaten}/{sat.Judged} positions "
+            + $"(won {sat.Won}/{sat.Winnable}, held {sat.Held}/{sat.Survivable})");
         return $"turns={_options.ExamTurns} positions={sat.Positions} "
+            + $"beaten={sat.Beaten}/{sat.Judged} lostHp={sat.LostHealth} lostDmg={sat.LostDamage} "
             + $"won={sat.Won}/{sat.Winnable} held={sat.Held}/{sat.Survivable} "
             + $"hopeless={sat.Hopeless} undecided={sat.Undecided} "
             + $"dealt={sat.Dealt} seconds={sat.Seconds:0.0}";
