@@ -42,6 +42,35 @@ public sealed class Champion(RunPlayback play, BotPolicy? policy)
 
     public sealed record Plan(IReadOnlyList<PlannedPlay> Plays, double Worth, int Forks);
 
+    // ── HOW MANY TURNS AHEAD (C2) ────────────────────────────────────────────────────────────────────────
+    // ⚠⚠ THE EXAM SAID THIS WAS THE PROBLEM, AND SAID IT WITH NUMBERS. Graded against the Pareto frontier of
+    // what was reachable, the champion is beaten at 10 % of positions over ONE turn and at 70 % over THREE
+    // — and what it loses is health, almost never damage (`lostDmg` ≈ 0, 3 to 11 health a position). It
+    // chooses this turn about as well as anything could and then walks into the next one.
+    //
+    // So a turn is no longer scored where it ends. Above a horizon of 1 the search plays the turn, lets the
+    // enemies answer, and goes again — keeping the best `Beam` positions at each boundary rather than every
+    // one of them, because keeping every one is the fan-out this whole file exists to avoid.
+    //
+    // ⚠⚠ AND THE EVALUATOR'S THUMB ON THE SCALE HAS TO BE UNDERSTOOD BEFORE THE DEPTH IS ADDED, or the two
+    // fight each other. `Worth` deliberately refuses to let a turn that takes nothing off them beat one that
+    // does — a bias put there BECAUSE a one-turn horizon "cannot see the enemy's damage ramping while it
+    // waits, so it is not allowed to wait". A deeper search CAN see the ramp. The bias is kept anyway and
+    // kept honest by measuring both ends over the WHOLE window: `Worth` is applied at the leaf against the
+    // health and the enemies as they stood at the ROOT, so "took nothing off them" now means "took nothing
+    // off them in N turns", which is a lost fight by any reading rather than a lost tempo.
+    //
+    // ⚠ DEPTH BUYS SIGHT OF CARDS THE PLAYER HAS NOT DRAWN. A fork draws what the real fight would draw, so
+    // a three-turn plan is built around a hand nobody has seen yet. At a horizon of 1 that is harmless — you
+    // know your own hand — and past it this player is no longer a fair one. That is the switch the arc still
+    // has to decide (C4); until it is decided, a deep champion's results are an upper bound and must be read
+    // as one.
+    //
+    // 0 or 1 ⇒ exactly the search this file has always done, which is what keeps the golden set meaningful.
+    public int Horizon => Math.Max(1, (int)Math.Round(policy?.Horizon ?? 0));
+
+    public int Beam => Math.Max(1, (int)Math.Round(policy?.Beam ?? 0));
+
     // Search every way this turn could be played, and keep the best whole turn.
     //
     // `refused` and `barren` are the seat's memory of plays the rules turned down and plays that moved
@@ -55,6 +84,14 @@ public sealed class Champion(RunPlayback play, BotPolicy? policy)
         refused ??= new HashSet<CardInstanceId>();
         barren ??= new HashSet<string>(StringComparer.Ordinal);
 
+        return Horizon > 1
+            ? PlanAhead(combat, refused, barren)
+            : PlanOneTurn(combat, refused, barren);
+    }
+
+    private Plan PlanOneTurn(
+        InteractiveCombat combat, IReadOnlySet<CardInstanceId> refused, IReadOnlySet<string> barren)
+    {
         var heroBefore = combat.HeroHealth;
         var enemyBefore = Standing(combat);
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -122,6 +159,125 @@ public sealed class Champion(RunPlayback play, BotPolicy? policy)
 
         Explore(combat, []);
         return new Plan(plan ?? [], best, forks);
+    }
+
+    // ── THE SAME TURN, PLAYED OUT AND THEN ANSWERED, AS MANY TIMES AS THE HORIZON SAYS ───────────────────
+    // A beam, not a tree. Every whole turn reachable from a position is enumerated exactly as above, the
+    // best `Beam` of them are kept, and each of those is played on to the next hero-turn. What is compared
+    // at the end is the LEAF, scored against the root — so a line is judged by where N turns leave the
+    // fight, not by where this one does.
+    //
+    // ⚠ WHAT IS RETURNED IS STILL ONE TURN. The seat asks for cards to play now, and the rest of the line
+    // is a reason rather than a promise: the plan is re-made at the next turn anyway, from wherever the
+    // fight actually stands. Keeping the tail would only be a way of being wrong for longer.
+    private Plan PlanAhead(
+        InteractiveCombat combat, IReadOnlySet<CardInstanceId> refused, IReadOnlySet<string> barren)
+    {
+        var heroBefore = combat.HeroHealth;
+        var enemyBefore = Standing(combat);
+        var forks = 0;
+        var budget = ForksPerTurn * Horizon;
+
+        // A line under consideration: where the fight now stands, and the FIRST turn that led there.
+        var level = new List<(InteractiveCombat At, List<PlannedPlay> Opening)> { (combat, []) };
+        var leaves = new List<(double Worth, List<PlannedPlay> Opening)>();
+
+        for (var depth = 0; depth < Horizon; depth++)
+        {
+            var next = new List<(InteractiveCombat At, List<PlannedPlay> Opening, double Worth)>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var (at, opening) in level)
+            {
+                foreach (var (after, plays) in WholeTurns(at, refused, barren, seen, ref forks, budget))
+                {
+                    // The opening turn is what the seat will be handed; deeper turns only justify it.
+                    var first = depth == 0 ? plays : opening;
+                    var worth = Worth(after, heroBefore, enemyBefore);
+
+                    // A fight that has ended cannot be played on, so it is a leaf wherever it is found —
+                    // and a won fight found at depth 1 must not be thrown away for a line that is still
+                    // going at depth 3.
+                    if (after.IsOver || !after.IsHeroTurn || depth == Horizon - 1)
+                        leaves.Add((worth, first));
+                    else
+                        next.Add((after, first, worth));
+                }
+                if (forks >= budget)
+                    break;
+            }
+
+            if (next.Count == 0)
+                break;
+            level = [.. next.OrderByDescending(n => n.Worth).Take(Beam).Select(n => (n.At, n.Opening))];
+        }
+
+        if (leaves.Count == 0)
+            return new Plan([], double.NegativeInfinity, forks);
+
+        var best = leaves.MaxBy(l => l.Worth);
+        return new Plan(best.Opening, best.Worth, forks);
+    }
+
+    // Every whole turn playable from here, each handed back as the position the enemies have already
+    // answered — the same enumeration PlanOneTurn walks, kept instead of collapsed to its best.
+    private IEnumerable<(InteractiveCombat After, List<PlannedPlay> Plays)> WholeTurns(
+        InteractiveCombat from, IReadOnlySet<CardInstanceId> refused, IReadOnlySet<string> barren,
+        HashSet<string> seen, ref int forks, int budget)
+    {
+        var found = new List<(InteractiveCombat, List<PlannedPlay>)>();
+        var spent = forks;
+
+        void Walk(InteractiveCombat node, List<PlannedPlay> path)
+        {
+            if (path.Count >= PlansAhead || spent >= budget || node.IsOver || !node.IsHeroTurn)
+                return;
+
+            var hero = node.State.GetCombatant(node.HeroId);
+            var playable = node.Hand
+                .Where(c => !refused.Contains(c.Id) && !barren.Contains(c.DefinitionId.value)
+                    && RunBot.CanPay(play, hero, c.DefinitionId.value))
+                .ToList();
+            var living = node.State.Combatants
+                .Where(c => c.Id != node.HeroId && c.IsAlive && c.TeamId == StandardCombatIds.EnemyTeam)
+                .Select(c => (CombatantId?)c.Id)
+                .ToList();
+
+            foreach (var card in playable)
+                foreach (var target in living.Count == 0 ? [null] : living)
+                {
+                    if (spent >= budget)
+                        return;
+
+                    var after = node.Fork();
+                    spent++;
+                    var steps = after.Steps.Count;
+                    after.PlayCard(card.Id, target);
+                    if (RunBot.Refused(after, steps))
+                        continue;
+                    if (!seen.Add(Position(after)))
+                        continue;
+
+                    var here = new List<PlannedPlay>(path) { new(card.Id, target, Position(node)) };
+
+                    var stopped = after.Fork();
+                    spent++;
+                    stopped.EndTurn();
+                    found.Add((stopped, here));
+
+                    Walk(after, here);
+                }
+        }
+
+        // Ending the turn having played nothing is a whole turn too, and the one a stall would choose.
+        var idle = from.Fork();
+        spent++;
+        idle.EndTurn();
+        found.Add((idle, []));
+
+        Walk(from, []);
+        forks = spent;
+        return found;
     }
 
     // ── THE EVALUATOR ────────────────────────────────────────────────────────────────────────────────────

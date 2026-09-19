@@ -44,6 +44,27 @@ public sealed class BotPolicy
     public double PathEvent { get; set; }
     public double PathTreasure { get; set; }
 
+    // ── HOW FAR THE CHAMPION LOOKS, AND HOW WIDE (C2) ────────────────────────────────────────────────────
+    // ⚠⚠ THE EXAM SAID THIS WAS THE PROBLEM. Graded against the Pareto frontier of what was reachable
+    // (ChampionExam), the champion is beaten at 10 % of positions over ONE turn and at 70 % over THREE —
+    // and what it gives up is health, almost never damage. It chooses this turn about as well as anything
+    // could, and then walks into the next one.
+    //
+    // Horizon is how many hero-turns a line is followed before it is scored; Beam is how many lines survive
+    // each turn boundary. Beam is what keeps the fan-out affordable: every whole turn is enumerated, only
+    // the best few are played on.
+    //
+    // ⚠⚠ 0 OR 1 IS EXACTLY THE SEARCH THIS RUNNER HAS ALWAYS DONE, and that is the default on purpose. A
+    // runner is an instrument; changing what it finds is a decision somebody makes, not something that
+    // arrives with a build — and it is what lets the golden set keep meaning something.
+    //
+    // ⚠ ABOVE 1 THE PLAYER IS NO LONGER A FAIR ONE. A fork draws what the real fight would draw, so a
+    // three-turn plan is built around cards nobody has seen yet. At 1 that is harmless (you know your own
+    // hand); past it, results are an upper bound on what a fair player could do and must be read as one.
+    public double Horizon { get; set; }
+
+    public double Beam { get; set; } = 4;
+
     // ⚠ THE CHAMPION'S ONLY KNOB (B5). Its lookahead needs one trade-off and no more: 0 plays to survive the
     // turn it can see, 1 plays to empty the enemy. Everything else it would otherwise be told — what a card
     // is worth, when a turn is done, whom to hit — it works out by playing the card and looking.
