@@ -23,6 +23,7 @@ public sealed record CliOptions
     public bool Champion { get; init; }
     public bool Autopsy { get; init; }
     public int AutopsySeconds { get; init; } = 60;
+    public int AutopsyPositions { get; init; } = 60_000;
 
     // ⚠ THE ORACLE IS NOT A RUNNER AND COSTS NOTHING A RUNNER COSTS. It reads the maps a seed lays out and
     // says what the doors on them are worth; `--oracle-only` never starts a run at all, which is how a
@@ -50,6 +51,10 @@ public sealed record CliOptions
                              can see the deck, so it is stronger than any fair player); WINNABLE is not a
                              claim that a fair player would find the line
           --autopsy-seconds N  how long one autopsy may search (default 60)
+          --autopsy-positions N  how many positions one autopsy may open (default 60000). Raised far
+                             past that, a verdict stops saying "the search ran out" and starts being
+                             a statement about the FIGHT -- which is how you find out what an
+                             exhaustive answer costs here instead of guessing
           --champion         decide each play by FORKING the fight and looking: the card is played on a copy,
                              the enemies answer, and what is left is what decides. Costs a fight-clone per
                              candidate and buys the one thing scoring cannot -- it sees what is coming. The
@@ -77,6 +82,7 @@ public sealed record CliOptions
         var champion = false;
         var autopsy = false;
         var autopsySeconds = 60;
+        var autopsyPositions = 60_000;
         var oracle = false;
         var oracleOnly = false;
         int? health = null;
@@ -106,6 +112,7 @@ public sealed record CliOptions
                 case "--champion": champion = true; break;
                 case "--autopsy": autopsy = true; break;
                 case "--autopsy-seconds": autopsySeconds = int.Parse(Next(), CultureInfo.InvariantCulture); break;
+                case "--autopsy-positions": autopsyPositions = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--oracle": oracle = true; break;
                 case "--oracle-only": oracleOnly = oracle = true; break;
                 case "--out": outDir = Next(); break;
@@ -131,6 +138,7 @@ public sealed record CliOptions
             Champion = champion,
             Autopsy = autopsy,
             AutopsySeconds = autopsySeconds,
+            AutopsyPositions = autopsyPositions,
             Oracle = oracle,
             OracleOnly = oracleOnly,
             OutDir = outDir,

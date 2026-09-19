@@ -114,7 +114,7 @@ public static class RunSetup
                 // different maps rather than the same walk twice.
                 seed + index * ActSeedStride,
                 startingLoadout,
-                mapGenerator)));
+                mapGenerator), act.Opening));
         }
         return plan;
     }

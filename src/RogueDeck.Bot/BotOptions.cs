@@ -37,4 +37,11 @@ public sealed record BotOptions
     public bool Autopsy { get; init; }
 
     public int AutopsySeconds { get; init; } = 60;
+
+    // ⚠ HOW MANY POSITIONS ONE AUTOPSY MAY OPEN. It is a separate ceiling from the clock because the two
+    // answer different questions: the clock keeps a batch moving, this one asks how big the tree ACTUALLY
+    // is. Raised far past the default, the verdict stops being "the search ran out" and starts being a
+    // statement about the fight — which is the only way to find out what an exhaustive answer costs here
+    // rather than guessing at it.
+    public int AutopsyPositions { get; init; } = 60_000;
 }

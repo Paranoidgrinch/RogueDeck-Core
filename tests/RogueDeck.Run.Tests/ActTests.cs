@@ -162,6 +162,71 @@ public class ActTests
         Assert.DoesNotContain("ActFlags", json, StringComparison.Ordinal);
     }
 
+    // ── WHAT AN ACT DOES AT ITS OWN GATES (RunAct.Opening) ───────────────────────────────────────────────
+    // A rule of the PLACE rather than a thing the player carries. The one the content uses it for is putting
+    // the body back together, and the reason is not only kindness: health is the single number that ties one
+    // act's difficulty to the previous act's luck, and cutting it at the boundary is what makes a run
+    // decomposable — what crosses is then only the deck, the relics and the purse.
+
+    [Fact]
+    public void An_act_resolves_its_own_opening_when_it_begins()
+    {
+        var run = Walk([
+            new RunActPlan("one", OneMap("a")),
+            new RunActPlan("two", OneMap("b"), [new ChangeResourceRunEffect(Gold, 500)]),
+        ]);
+
+        // Two nodes paid 10 each, and act two's gates paid 500.
+        Assert.Equal(520, run.GetResource(Gold));
+    }
+
+    // ⚠ THE ACT THE RUN OPENS ON IS AN ACT. A rule about "each act" that skipped the first would be a rule
+    // about "each act but the first", and every content author would have to remember which.
+    [Fact]
+    public void The_act_a_run_opens_on_has_its_gates_too()
+    {
+        var run = Walk([new RunActPlan("one", OneMap("a"), [new ChangeResourceRunEffect(Gold, 500)])]);
+
+        Assert.Equal(510, run.GetResource(Gold));
+    }
+
+    // ⚠ AN OPENING IS NOT A REWARD FOR FINISHING THE ACT BEFORE IT. The difference shows on a run that does
+    // not live to arrive: nothing at act two's gates fires for a run that died in act one.
+    [Fact]
+    public void An_act_that_is_never_reached_never_opens()
+    {
+        var run = NewRun([
+            new RunActPlan("one", OneMap("a")),
+            new RunActPlan("two", OneMap("b"), [new ChangeResourceRunEffect(Gold, 500)]),
+        ]);
+        run.SetResult(RunResult.Defeat);
+        new RunRunner(Registry(), new ScriptedChoiceProvider("gold")).Run(run);
+
+        // Act one's node paid its 10 and the walk then stopped where the run did. The 500 at act two's gates
+        // is the whole assertion: it is not waiting to be collected, it simply never happens.
+        Assert.Equal(10, run.GetResource(Gold));
+        Assert.Equal(1, run.ActNumber);
+    }
+
+    // What the content actually installs: heal whatever is missing. A body that walks in hurt walks on whole,
+    // and a body that walks in whole is not handed anything.
+    [Fact]
+    public void The_gates_of_an_act_put_a_hurt_body_back_together()
+    {
+        var acts = new RunActPlan[]
+        {
+            new("one", OneMap("a")),
+            new("two", OneMap("b"), [new ComputedHealRunEffect(RunExpr.MissingHealth)]),
+        };
+        var run = new RunState(new RunId("run"), new HealthState(30, 40), acts[0].Map);
+        run.SetActPlan(acts);
+        run.Health.SetCurrent(7);
+
+        new RunRunner(Registry(), new ScriptedChoiceProvider("gold")).Run(run);
+
+        Assert.Equal(40, run.Health.Current);
+    }
+
     // ── harness ────────────────────────────────────────────────────────────────
 
     // One node that pays 10 Gold when its only choice is taken.

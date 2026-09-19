@@ -185,6 +185,7 @@ public static class Program
             Champion = options.Champion,
             Autopsy = options.Autopsy,
             AutopsySeconds = options.AutopsySeconds,
+            AutopsyPositions = options.AutopsyPositions,
         };
 
         // ⚠⚠ TWO SEATS, ONE BRAIN (R5). By default the run is walked ONCE, with the bot answering the engine

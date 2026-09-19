@@ -714,7 +714,7 @@ internal sealed class BotMind
         if (!_options.Autopsy || _turnsBack.Count == 0 || run?.Result != RunResult.Defeat)
             return "";
 
-        var found = new FightSolver(seconds: _options.AutopsySeconds).Examine([.. _turnsBack]);
+        var found = new FightSolver(_options.AutopsyPositions, _options.AutopsySeconds).Examine([.. _turnsBack]);
         var read = found.Verdict switch
         {
             FightVerdict.Avoidable =>

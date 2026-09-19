@@ -81,10 +81,7 @@ public sealed class RunRunner
         // Announce the act the walk is in, the first one included: a rule about "each act" should need no
         // special case for the act the run happens to open on.
         if (!resuming)
-        {
-            run.RaiseEvent(new ActStartedRunEvent(run.CurrentActId, run.ActNumber));
-            _processor.ResolvePending(run, _registry);
-        }
+            OpenAct(run);
 
         // A run is one walk through its acts in order. Each act is walked exactly as a whole run used to be —
         // two map shapes over one traversal contract: a linear map (no edges) walks its nodes in order; a graph
@@ -108,8 +105,7 @@ public sealed class RunRunner
                 break;
 
             run.AdvanceTo(-1); // a linear act starts at its own first node, not where the last one stopped
-            run.RaiseEvent(new ActStartedRunEvent(run.CurrentActId, run.ActNumber));
-            _processor.ResolvePending(run, _registry);
+            OpenAct(run);
         }
 
         if (run.Result == RunResult.Ongoing)
@@ -253,6 +249,26 @@ public sealed class RunRunner
         if (entries.Count > 0)
             return entries;
         return map.Nodes.Count > 0 ? [map.Nodes[0]] : [];
+    }
+
+    // ── AN ACT BEGINS ────────────────────────────────────────────────────────────────────────────────────
+    // Announce it, then resolve whatever the act itself says happens at its gates (RunAct.Opening) — a body
+    // restored, a card given, a toll taken. Announcement first, so that a relic listening for "each act"
+    // has already spoken by the time the act's own rule lands and the log reads in the order it happened.
+    //
+    // ⚠ THE ACT THE RUN OPENS ON IS AN ACT. A rule about "each act" that skipped the first one would be a
+    // rule about "each act after the first", and every content author would have to remember which. That is
+    // also why the announcement was already made here rather than only on a transition.
+    private void OpenAct(RunState run)
+    {
+        run.RaiseEvent(new ActStartedRunEvent(run.CurrentActId, run.ActNumber));
+        _processor.ResolvePending(run, _registry);
+
+        if (run.Acts.Count <= run.ActIndex || run.Acts[run.ActIndex].Opening is not { Count: > 0 } opening)
+            return;
+        foreach (var effect in opening)
+            run.EnqueueEffect(effect);
+        _processor.ResolvePending(run, _registry);
     }
 
     // Grant the hero's starting relics (RunState.StartingRelicIds, seeded from RunStart) now that content is
