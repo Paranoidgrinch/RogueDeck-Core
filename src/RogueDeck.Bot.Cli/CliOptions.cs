@@ -20,6 +20,7 @@ public sealed record CliOptions
     // driver is what the proof is made of, and because it is the driver the frontend actually uses.
     public bool Replay { get; init; }
     public string? PolicyPath { get; init; }
+    public bool Champion { get; init; }
     public string? OutDir { get; init; }
 
     public const string Usage = """
@@ -36,6 +37,10 @@ public sealed record CliOptions
           --replay           drive through the replay model instead of answering the engine inline (slower;
                              it is the driver the frontend uses, and half of what golden.sh checks)
           --policy <file>    a bred policy (tools/train.py); without one the runner plays at random
+          --champion         decide each play by FORKING the fight and looking: the card is played on a copy,
+                             the enemies answer, and what is left is what decides. Costs a fight-clone per
+                             candidate and buys the one thing scoring cannot -- it sees what is coming. The
+                             policy's Aggression is its only knob (0 survive, 1 empty the enemy)
           --out <dir>        write one full log per run into this directory
         """;
 
@@ -48,6 +53,7 @@ public sealed record CliOptions
         var jobs = Environment.ProcessorCount;
         var steps = 40000;
         var timeout = 1800;
+        var champion = false;
         int? health = null;
         var legacy = false;
         var replay = false;
@@ -72,6 +78,7 @@ public sealed record CliOptions
                 case "--legacy": legacy = true; break;
                 case "--replay": replay = true; break;
                 case "--policy": policy = Next(); break;
+                case "--champion": champion = true; break;
                 case "--out": outDir = Next(); break;
                 default: return null;
             }
@@ -92,6 +99,7 @@ public sealed record CliOptions
             Legacy = legacy,
             Replay = replay,
             PolicyPath = policy,
+            Champion = champion,
             OutDir = outDir,
         };
     }

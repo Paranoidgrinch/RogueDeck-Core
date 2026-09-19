@@ -143,3 +143,72 @@ public class RunnerPicksTests
         Assert.Equal(wanted, picks);
     }
 }
+
+// ⚠⚠ THE REST SITE THE RUNNER WALKED OUT OF FOR THE WHOLE HISTORY OF THIS PROJECT.
+//
+// A shop is answered as a shop: if there is a "leave" on the table and nothing worth buying, leave. A rest
+// site ALSO says "leave" — it offers `rest`, `amend` and `leave` and has nothing to buy — so the runner
+// walked in, walked out, and never healed once in a whole act. `healed=0` over eighteen rooms.
+//
+// Nobody saw it for the entire arc, and the reason is exactly why B6 had to happen: every measurement until
+// then was taken on a 9999-hp body, where never resting costs precisely nothing.
+public class RestSiteTests
+{
+    private static BotMind Mind(double restBelow)
+    {
+        var play = new RunPlayback(() => { }, new InMemoryMetaStore());
+        return new BotMind(
+            play,
+            new BotOptions { Seed = 1, Policy = new BotPolicy { Name = "test", RestBelow = restBelow } },
+            NullBotLog.Instance);
+    }
+
+    private static readonly EventChoice Rest =
+        new("rest", [new HealRunEffect(20)]);
+    private static readonly EventChoice Amend =
+        new("amend", []);
+    private static readonly EventChoice Leave =
+        new("leave", []);
+
+    private static readonly EventSituation Situation =
+        new("start", "a bench", [Rest, Amend, Leave]);
+
+    private static RunState Hurt(int health)
+    {
+        var run = SampleProject.Build().CreateInitialRun(new RunId("rest"), randomSeed: 7);
+        run.Health.SetCurrent(health);
+        return run;
+    }
+
+    [Fact]
+    public void A_hurt_runner_rests_instead_of_walking_back_out()
+    {
+        var mind = Mind(restBelow: 0.7);
+        var run = Hurt((int)(SampleProject.Build().Start.MaxHealth * 0.5));
+        mind.Observe(run, null);
+
+        Assert.Equal("rest", mind.Choose(Situation, Situation.Choices).Id);
+    }
+
+    // The gene is a threshold, not a switch: a runner that is barely scratched has better things to do with
+    // the room than sleep in it.
+    [Fact]
+    public void A_runner_at_full_health_does_not_spend_the_room_on_a_nap()
+    {
+        var mind = Mind(restBelow: 0.7);
+        var run = Hurt(SampleProject.Build().Start.MaxHealth);
+        mind.Observe(run, null);
+
+        Assert.NotEqual("rest", mind.Choose(Situation, Situation.Choices).Id);
+    }
+
+    [Fact]
+    public void A_policy_that_never_rests_still_never_rests()
+    {
+        var mind = Mind(restBelow: 0);
+        var run = Hurt(1);
+        mind.Observe(run, null);
+
+        Assert.NotEqual("rest", mind.Choose(Situation, Situation.Choices).Id);
+    }
+}

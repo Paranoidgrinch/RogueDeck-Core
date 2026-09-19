@@ -60,6 +60,11 @@ public static class Program
             }
         }
         // Only a policy runner scores cards; the dice player never asks what a card does.
+        //
+        // ⚠ THE CHAMPION NEEDS THEM TOO, and leaving them out was a measured mistake: it decides what to PLAY
+        // by forking the fight, but what to TAKE — a reward, a relic, a slot in a shop — is still scored, and
+        // a champion without features scored every offer at nothing and built its deck by the tie-break.
+        // A lookahead over a random deck is a careful player holding a bad hand.
         var features = policy is null ? null : CardFeatures.FromDocument(documentJson);
 
         // The body, applied to the blueprint ONCE for the whole batch — every run shares this record, which
@@ -74,7 +79,8 @@ public static class Program
         Console.WriteLine($"roguedeck-bot: {options.Runs} runs "
             + $"(seeds {options.SeedFrom}..{options.SeedFrom + options.Runs - 1}, "
             + $"{(options.Health is { } h ? $"{h} hp" : "authored health")}, maps {maps}, "
-            + $"policy {policy?.Name ?? "random"}, {options.Jobs} at a time, one process, "
+            + $"policy {policy?.Name ?? "random"}{(options.Champion ? " (champion: one ply of lookahead)" : "")}, "
+            + $"{options.Jobs} at a time, one process, "
             + $"{(options.Replay ? "through the replay model" : "answering the engine inline")})");
 
         var lines = new ConcurrentDictionary<int, string>();
@@ -161,6 +167,7 @@ public static class Program
             Character = character,
             Policy = policy,
             Features = features,
+            Champion = options.Champion,
         };
 
         // ⚠⚠ TWO SEATS, ONE BRAIN (R5). By default the run is walked ONCE, with the bot answering the engine

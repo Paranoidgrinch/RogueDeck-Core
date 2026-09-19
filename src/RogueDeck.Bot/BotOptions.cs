@@ -22,4 +22,12 @@ public sealed record BotOptions
 
     // What each card DOES, read once out of the shipped document — only a policy runner needs it.
     public CardFeatures? Features { get; init; }
+
+    // ⚠ THE CHAMPION IS A DIFFERENT INSTRUMENT, NOT A BETTER SETTING (B5). It decides a play by FORKING the
+    // fight, playing the card on the copy, letting the enemies answer and looking at what is left — so it
+    // costs a fight-clone per candidate and buys the one skill the scoring runner cannot have: it knows what
+    // is coming at it. Two runners for two questions: the coverage runner is fast, dumb and finds crashes,
+    // walls and unreachable content over hundreds of seeds; the champion is slow, careful, and is the only
+    // one whose failure to clear an act is evidence ABOUT THE ACT.
+    public bool Champion { get; init; }
 }

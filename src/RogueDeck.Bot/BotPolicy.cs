@@ -30,6 +30,16 @@ public sealed class BotPolicy
     public double PathEvent { get; set; }
     public double PathTreasure { get; set; }
 
+    // ⚠ THE CHAMPION'S ONLY KNOB (B5). Its lookahead needs one trade-off and no more: 0 plays to survive the
+    // turn it can see, 1 plays to empty the enemy. Everything else it would otherwise be told — what a card
+    // is worth, when a turn is done, whom to hit — it works out by playing the card and looking.
+    public double Aggression { get; set; } = 0.5;
+
+    // Below this share of full health, a door that heals is taken over anything else it is offered beside.
+    // ⚠ It exists because a rest site says "leave" like a shop does, and for the whole history of this runner
+    // that was enough to walk it straight back out again — see the note in BotMind.PickChoice.
+    public double RestBelow { get; set; } = 0.7;
+
     public double RewardSkip { get; set; }        // > 0.5: decline what may be declined
     public double ShopBuy { get; set; }           // how eagerly gold is spent
     public double EventLate { get; set; }         // 0 = always the first door, 1 = always the last

@@ -83,6 +83,7 @@ internal sealed class BotMind
     // Never re-offer a play the engine refused; never repeat a play that moved nothing on the table (a card
     // may put a copy of itself back in hand for ever); give both the turn and the fight a ceiling.
     private bool _inFight;
+    private int _enemyHealthAtFightStart;
     private int _turn;
     private int _playsThisTurn;
     private readonly HashSet<CardInstanceId> _refused = [];
@@ -191,6 +192,11 @@ internal sealed class BotMind
             return;
         _inFight = true;
         Fights++;
+        // The denominator the champion measures its progress against, fixed at the bell so that emptying the
+        // enemy is worth the same at the start of the fight as at the end of it.
+        _enemyHealthAtFightStart = combat.State.Combatants
+            .Where(c => c.Id != combat.HeroId && c.TeamId == StandardCombatIds.EnemyTeam)
+            .Sum(c => c.Health.Current);
         var enemies = combat.State.Combatants
             .Where(c => c.Id != combat.HeroId)
             .Select(c => $"{c.Id.value}({c.Health.Current})");
@@ -219,6 +225,8 @@ internal sealed class BotMind
     public CardPlay? ChoosePlay(InteractiveCombat combat)
     {
         ArgumentNullException.ThrowIfNull(combat);
+        if (_options.Champion)
+            return ChampionPlay(combat);
 
         // A play only counts as barren once it has fully resolved, which is the answer AFTER it was made.
         if (_lastPlayed is { } finished)
@@ -265,6 +273,111 @@ internal sealed class BotMind
         _log.Line($"    play {card.DefinitionId.value} -> {target?.value ?? "—"} "
             + $"(hp {hero.Health.Current}, hand {combat.Hand.Count})");
         return new CardPlay(card, target, combat.Steps.Count);
+    }
+
+    // ── THE CHAMPION (B5) ────────────────────────────────────────────────────────────────────────────────
+    // Every other way this class decides a play asks what a card is WORTH — a number read off the card, the
+    // same whoever is holding it and whatever is standing opposite. The champion does not ask. It FORKS the
+    // fight, plays the card on the copy, lets the enemies answer, and looks at what is left. What that buys
+    // is the one skill a scoring runner cannot have at any weight: it can see what is coming, so it can
+    // block the right amount, finish a dying enemy, and refuse to spend a turn that would kill it.
+    //
+    // ⚠ ONE PLY, AND THE BASELINE IS DOING NOTHING. Each candidate is compared against ENDING THE TURN NOW,
+    // and only a play that is strictly better than that is made. A combo is not planned; it falls out —
+    // the best card is played, and then the question is asked again with that card gone.
+    //
+    // ⚠⚠ NO DICE ARE THROWN HERE. The lookahead is deterministic, so the champion draws nothing from the
+    // run's Random — which is what lets the two seats still walk the same run (see the contract at the top).
+    private CardPlay? ChampionPlay(InteractiveCombat combat)
+    {
+        if (_lastPlayed is { } finished)
+        {
+            if (RunBot.TableState(combat) == _tableBeforeThePlay)
+                _barren.Add(finished);
+            _lastPlayed = null;
+        }
+
+        var hero = combat.State.GetCombatant(combat.HeroId);
+        var playable = combat.Hand
+            .Where(c => !_refused.Contains(c.Id) && !_barren.Contains(c.DefinitionId.value)
+                && RunBot.CanPay(_play, hero, c.DefinitionId.value))
+            .ToList();
+        var living = combat.State.Combatants
+            .Where(c => c.Id != combat.HeroId && c.IsAlive && c.TeamId == StandardCombatIds.EnemyTeam)
+            .Select(c => (CombatantId?)c.Id)
+            .ToList();
+        if (playable.Count == 0)
+            return null;
+
+        var heroBefore = combat.HeroHealth;
+        var enemyBefore = Standing(combat);
+
+        // Doing nothing, played out to the same depth as every candidate: the turn ends, the enemies answer.
+        var doingNothing = combat.Fork();
+        doingNothing.EndTurn();
+        var best = Worth(doingNothing, heroBefore, enemyBefore);
+        CardPlay? choice = null;
+
+        foreach (var card in playable)
+            foreach (var target in living.Count == 0 ? [null] : living)
+            {
+                var fork = combat.Fork();
+                var steps = fork.Steps.Count;
+                fork.PlayCard(card.Id, target);
+                // A play the RULES refuse is not a candidate, and the fork is where that is found out for
+                // free — the real fight never hears about it.
+                if (RunBot.Refused(fork, steps))
+                    continue;
+                fork.EndTurn();
+                var worth = Worth(fork, heroBefore, enemyBefore);
+                if (worth <= best)
+                    continue;
+                best = worth;
+                choice = new CardPlay(card, target, combat.Steps.Count);
+            }
+
+        if (choice is null)
+            return null;
+
+        _tableBeforeThePlay = RunBot.TableState(combat);
+        _lastPlayed = choice.Card.DefinitionId.value;
+        _log.Line($"    play {choice.Card.DefinitionId.value} -> {choice.Target?.value ?? "—"} "
+            + $"(hp {hero.Health.Current}, hand {combat.Hand.Count}, worth {best:0.###})");
+        return choice;
+    }
+
+    private static int Standing(InteractiveCombat combat) => combat.State.Combatants
+        .Where(c => c.Id != combat.HeroId && c.IsAlive && c.TeamId == StandardCombatIds.EnemyTeam)
+        .Sum(c => c.Health.Current);
+
+    // ⚠⚠ A FIGHT IS A RACE, AND THE FIRST VERSION OF THIS METHOD DID NOT KNOW THAT. It scored a turn by what
+    // was left of each side — health kept against enemy health removed — and the champion promptly stopped
+    // playing cards altogether. It was not confused: the very first enemy of this game, the Contradictory
+    // Signpost, PUNISHES ACTING. Measured on the fork: ending the turn having done nothing cost 0 health;
+    // playing a six-damage jab cost 15. At one ply, and on a scale where standing still is free, refusing to
+    // play is correct — and it lost every fight, because the enemy's damage ramps while you wait.
+    //
+    // So what is scored is not what is LEFT but how the race is going, in the only currency a fight has:
+    // TURNS. This turn removed so much of them and cost so much of me — at that rate, how many turns until
+    // they are down, and how many until I am? A turn that removes nothing never ends the fight, and says so
+    // by naming the ceiling. Both rates are MEASURED on the fork; nothing here is a model of the game.
+    //
+    // The ceiling is the runner's own: a fight that has not ended in this many turns is already written off
+    // (RunBot.TurnsAFightShouldNotNeed), so "never" and "not within the fight" are the same number.
+    private double Worth(InteractiveCombat after, int heroBefore, int enemyBefore)
+    {
+        if (after.Result == CombatResult.Victory)
+            return 1000;
+        if (after.Result == CombatResult.Defeat)
+            return -1000;
+
+        var forever = (double)RunBot.TurnsAFightShouldNotNeed;
+        var dealt = enemyBefore - Standing(after);
+        var taken = heroBefore - after.HeroHealth;
+        var toKill = dealt <= 0 ? forever : Math.Min(forever, Standing(after) / (double)dealt);
+        var toDie = taken <= 0 ? forever : Math.Min(forever, after.HeroHealth / (double)taken);
+        var lean = _policy?.Aggression ?? 0.5;
+        return (1 - lean) * toDie - lean * toKill;
     }
 
     // What the fight recorded about the play that was just made — and whether the turn has now gone on longer
@@ -468,6 +581,26 @@ internal sealed class BotMind
         var buys = Enumerable.Range(0, choices.Count)
             .Where(i => choices[i].Id.StartsWith("buy-", StringComparison.Ordinal)).ToList();
         var leave = choices.ToList().FindIndex(c => c.Id == "leave");
+
+        // ⚠⚠ A REST SITE HAS A WAY OUT TOO, AND FOR THE WHOLE HISTORY OF THIS RUNNER THAT WAS ENOUGH TO MAKE
+        // IT LEAVE. The shop arm below asked only whether a door said "leave" — a rest site says it, offers
+        // `rest` and `amend` beside it, and has nothing to buy, so the runner walked in, walked out, and
+        // never healed once. `healed=0` over eighteen rooms. Nobody saw it for the whole arc because every
+        // measurement until B6 was taken on a 9999-hp body, where never resting costs exactly nothing.
+        //
+        // A body that can die rests when it is hurt. How hurt is a question for the search (RestBelow), not
+        // for this comment. (Reading EVERY door by what it does, rather than these two by name, is B2.)
+        if (buys.Count == 0 && _run is { } run && run.Health.Max > 0
+            && run.Health.Current < run.Health.Max * (_policy.RestBelow <= 0 ? 0 : _policy.RestBelow))
+        {
+            var heals = Enumerable.Range(0, choices.Count)
+                .Select(i => (at: i, heal: Heals(choices[i])))
+                .Where(x => x.heal > 0)
+                .ToList();
+            if (heals.Count > 0)
+                return heals.OrderByDescending(x => x.heal).ThenBy(x => x.at).First().at;
+        }
+
         if (leave >= 0)
         {
             if (buys.Count == 0 || _rng.NextDouble() >= _policy.ShopBuy)
@@ -481,6 +614,21 @@ internal sealed class BotMind
                 .First();
         }
         return Math.Clamp((int)Math.Round(_policy.EventLate * (choices.Count - 1)), 0, choices.Count - 1);
+    }
+
+    // What a door would put back on the hero, in health. A rest that heals a SHARE of the maximum and one
+    // that heals a flat amount are the same question to whoever is standing there hurt.
+    private int Heals(EventChoice choice)
+    {
+        var run = _run;
+        return choice.Effects.Sum(effect => effect switch
+        {
+            HealRunEffect heal => heal.Amount,
+            // "A quarter of your maximum, rounded up" is an expression OVER THE RUN, and the run is standing
+            // right here — so the number is read off the door rather than guessed at.
+            ComputedHealRunEffect computed when run is not null => Math.Max(0, computed.Amount.Evaluate(run)),
+            _ => 0,
+        });
     }
 
     // What a shelf slot takes out of the purse. A price is written as the payment that settles it, so the
