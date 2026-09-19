@@ -234,6 +234,62 @@ public static class MapOracle
         return act >= 1 && act <= acts.Count ? Routes(acts[act - 1].Map) : [];
     }
 
+    // ── WHERE A LOSING WALK WAS STILL SAVABLE (O4) ───────────────────────────────────────────────────────
+    // Walking every route of an act says how many got through. This says something sharper about the ones
+    // that did not: UNTIL WHICH ROOM was the walk still on a line that clears?
+    //
+    // A failing route and a clearing route run together for a while and then part. The room where they part
+    // is the last moment the run was savable — everything after it, on this map, is committed. So for each
+    // failing route: the deepest room it shares with any route that cleared. The door taken AFTER that room
+    // is the one that cost the act.
+    //
+    // ⚠⚠ "NO EXIT" IS THE FINDING, NOT A GAP IN THE DATA. When nothing cleared, no failing route shares a
+    // room with a winner because there is no winner, and the reading is `savable=0` — no door on this map
+    // led anywhere this player could finish. That is a statement about the map and this player together,
+    // and still never about what a better player could do.
+    //
+    // ⚠ IT IS A DOOR-LEVEL READING AND ONLY THAT. A run that walked the one clearing route and still died
+    // was not killed by a door, and this says so by finding its exit at the very last room: the fault lies
+    // in a fight, which is the fight autopsy's question (FightSolver), not this one's.
+    public sealed record RouteVerdict(IReadOnlyList<string> Rooms, bool Cleared);
+
+    public sealed record SealedReading(int Failing, int Savable, string? LastExit, int LastExitDepth, int Rooms);
+
+    public static SealedReading WhereItWasSealed(IReadOnlyList<RouteVerdict> routes)
+    {
+        ArgumentNullException.ThrowIfNull(routes);
+        var won = routes.Where(r => r.Cleared).ToList();
+        var lost = routes.Where(r => !r.Cleared).ToList();
+
+        var savable = 0;
+        string? deepest = null;
+        var deepestAt = -1;
+        var length = routes.Count > 0 ? routes.Max(r => r.Rooms.Count) : 0;
+
+        foreach (var route in lost)
+        {
+            var exit = -1;
+            foreach (var winner in won)
+            {
+                var together = 0;
+                while (together < route.Rooms.Count && together < winner.Rooms.Count
+                       && string.Equals(route.Rooms[together], winner.Rooms[together], StringComparison.Ordinal))
+                    together++;
+                exit = Math.Max(exit, together - 1);
+            }
+            if (exit < 0)
+                continue;
+            savable++;
+            if (exit > deepestAt)
+            {
+                deepestAt = exit;
+                deepest = route.Rooms[exit];
+            }
+        }
+
+        return new SealedReading(lost.Count, savable, deepest, deepestAt + 1, length);
+    }
+
     public static ActSurvey Survey(
         int act, string actId, RunMap map, Weights weights,
         IReadOnlyList<string>? walked = null, int pathBudget = 100_000)

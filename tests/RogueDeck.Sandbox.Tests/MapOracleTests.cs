@@ -272,6 +272,70 @@ public class MapOracleTests
         Assert.Empty(MapOracle.RoutesOfAct(Generated(), seed: 11, act: 0));
     }
 
+    // ── WHERE A LOSING WALK WAS STILL SAVABLE (O4) ───────────────────────────────────────────────────────
+    // A failing route and a clearing route run together for a while and then part. Where they part is the
+    // last moment the run was savable; the door taken after it is the one that cost the act.
+
+    private static MapOracle.RouteVerdict Route(bool cleared, params string[] rooms) => new(rooms, cleared);
+
+    [Fact]
+    public void The_last_exit_is_the_room_where_the_winner_and_the_loser_parted()
+    {
+        var reading = MapOracle.WhereItWasSealed([
+            Route(true,  "a", "b", "win", "boss"),
+            Route(false, "a", "b", "lose", "boss"),
+        ]);
+
+        Assert.Equal(1, reading.Failing);
+        Assert.Equal(1, reading.Savable);
+        Assert.Equal("b", reading.LastExit);   // they were together through b and parted after it
+        Assert.Equal(2, reading.LastExitDepth);
+    }
+
+    // ⚠ THE DEEPEST EXIT ACROSS THE LOSING ROUTES, because that is the latest anything could still have been
+    // done. A route that went wrong at the first door does not make the map hopeless from the first door.
+    [Fact]
+    public void The_reading_reports_the_latest_chance_anyone_had()
+    {
+        var reading = MapOracle.WhereItWasSealed([
+            Route(true,  "a", "b", "c", "win"),
+            Route(false, "a", "off", "x", "y"),      // parted after a
+            Route(false, "a", "b", "c", "lose"),     // parted after c — the latest chance
+        ]);
+
+        Assert.Equal(2, reading.Failing);
+        Assert.Equal(2, reading.Savable);
+        Assert.Equal("c", reading.LastExit);
+        Assert.Equal(3, reading.LastExitDepth);
+    }
+
+    // ⚠⚠ "NO EXIT" IS THE FINDING, NOT A GAP. Nothing cleared, so no losing route shares a room with a
+    // winner — because there is no winner. No door on this map led anywhere this player could finish.
+    [Fact]
+    public void A_map_where_nothing_cleared_offers_no_exit_at_all()
+    {
+        var reading = MapOracle.WhereItWasSealed([
+            Route(false, "a", "b", "x"),
+            Route(false, "a", "c", "y"),
+        ]);
+
+        Assert.Equal(2, reading.Failing);
+        Assert.Equal(0, reading.Savable);
+        Assert.Null(reading.LastExit);
+    }
+
+    // ⚠ A DOOR-LEVEL READING AND ONLY THAT. When every route clears, nothing failed and there is nothing to
+    // explain — the fault, if a particular walk still died, belongs to a fight and to the fight autopsy.
+    [Fact]
+    public void A_map_where_everything_cleared_has_nothing_to_explain()
+    {
+        var reading = MapOracle.WhereItWasSealed([Route(true, "a", "b"), Route(true, "a", "c")]);
+
+        Assert.Equal(0, reading.Failing);
+        Assert.Equal(0, reading.Savable);
+        Assert.Null(reading.LastExit);
+    }
+
     // ── The surveyed map is the map the run walks ────────────────────────────────────────────────────────
 
     // ⚠⚠ THE WHOLE INSTRUMENT RESTS ON THIS. The oracle does not watch a run; it rebuilds the run's maps from

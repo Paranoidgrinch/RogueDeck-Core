@@ -252,6 +252,7 @@ public static class Program
             }
 
             var told = new string[routes.Count];
+            var cleared = new bool[routes.Count];
             using var slots = new SemaphoreSlim(options.Jobs);
             var work = routes.Select((route, index) => Task.Run(async () =>
             {
@@ -263,6 +264,7 @@ public static class Program
                             .ConfigureAwait(false);
                     if (options.OutDir is { } into)
                         File.WriteAllText(Path.Combine(into, $"route-{seed:0000}-{index:00}.log"), log);
+                    cleared[index] = result.ClearedActs >= act;
                     told[index] = $"  sim-route: seed={seed} act={act} route={index + 1}/{routes.Count} "
                         + $"result={result.Result} reached={result.Acts} cleared={result.ClearedActs} "
                         + $"rooms={result.Rooms.Count} hp={result.Health}/{result.MaxHealth} "
@@ -284,8 +286,18 @@ public static class Program
             // REACHED only means the run arrived — the two differ by exactly the act this is asking about.
             var through = told.Count(line => Cleared(line) >= act);
             var arrived = told.Count(line => Reached(line) >= act);
+            // ── AND WHERE THE LOSING WALKS WERE STILL SAVABLE (O4) ───────────────────────────────────────
+            // `savable=0` is not a hole in the data: it means no losing route ever shared a room with a
+            // winner, because there was no winner. No door on this map led anywhere this player finished.
+            var fate = MapOracle.WhereItWasSealed(
+                [.. routes.Select((r, i) => new MapOracle.RouteVerdict(r, cleared[i]))]);
+            var exit = fate.LastExit is null
+                ? "lastExit=none"
+                : $"lastExit={fate.LastExit} depth={fate.LastExitDepth}/{fate.Rooms}";
+
             lines[seed] = $"sim-clearable: seed={seed} maps={maps} act={act} routes={routes.Count} "
-                + $"reached={arrived}/{routes.Count} cleared={through}/{routes.Count}"
+                + $"reached={arrived}/{routes.Count} cleared={through}/{routes.Count} "
+                + $"savable={fate.Savable}/{fate.Failing} {exit}"
                 + Environment.NewLine + string.Join(Environment.NewLine, told);
         }
 
