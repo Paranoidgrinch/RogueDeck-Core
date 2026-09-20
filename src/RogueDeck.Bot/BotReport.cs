@@ -186,6 +186,74 @@ public static class BotReport
         }
     }
 
+    // ── THE BALANCE MAP'S LINES (P3) ─────────────────────────────────────────────────────────────────────
+    // Four kinds, each answering one question and none of them answering two:
+    //
+    //   sim-balance          how much of the sweep this is made of, so no line below is read as more than
+    //                        it is: how many runs, what they spent, how much of it has a name.
+    //   sim-balance-act      what a room of each ROLE costs in that act, as the median room of that role,
+    //                        with how many rooms that median is made of (`elite:14.5x6`). This is the line
+    //                        a designer reads first: it is the act's shape in one sentence.
+    //   sim-balance-room     the rooms that cost the most AGAINST THEIR OWN KIND. `x2.4` is "two and a half
+    //                        times what the median room of this role cost this player", which is the only
+    //                        yardstick this content has — its BalanceManifest is empty. `deaths` is how
+    //                        many runs stopped there.
+    //   sim-balance-depth    health on entering, by how many rooms into the act — the budget curve.
+    //                        ⚠ `runs=` falls as the sweep dies off, and a mean that RISES late is survivor
+    //                        bias, not recovery. The count is printed first so it cannot be read the other
+    //                        way round.
+    //   sim-balance-death    which authored room the runs stopped in, most first.
+    public static IEnumerable<string> Balance(
+        IReadOnlyList<BotResult> runs, int top = 6, int leastVisits = 3)
+    {
+        ArgumentNullException.ThrowIfNull(runs);
+        if (runs.Count == 0)
+            yield break;
+
+        var map = BalanceMap.Of(runs);
+        if (map.Rooms.Count == 0)
+            yield break;
+
+        yield return $"sim-balance: runs={map.Runs} rooms={map.Rooms.Count} "
+            + $"spent={map.Health} named={map.Named} unnamed={map.Health - map.Named} "
+            + $"visits={map.Rooms.Sum(r => r.Visits)}";
+
+        // ⚠ PER ACT, NOT ONE LIST. A single ranking is won by whichever act the sweep saw least of: with 500
+        // runs at 70 health, act III is four visits deep and its median is made of almost nothing, so its
+        // rooms take every top place and act I — the act this player actually lives in, at a hundred and
+        // forty visits a room — never appears at all. Each act is asked about separately and says how much
+        // evidence it is standing on.
+        foreach (var act in map.Rooms.Select(r => r.Act).Distinct().Order())
+        {
+            var here = map.Rooms.Where(r => r.Act == act).ToList();
+            yield return $"sim-balance-act: act={act} rooms={here.Count} "
+                + $"visits={here.Sum(r => r.Visits)} hp={here.Sum(r => r.Health)} "
+                + $"typical=" + string.Join(",", here
+                    .Select(r => r.Role).Distinct().OrderBy(x => x, StringComparer.Ordinal)
+                    .Select(role => $"{role}:"
+                        + BalanceMap.Typical(here, act, role).ToString("0.0", CultureInfo.InvariantCulture)
+                        + $"x{here.Count(r => r.Visits > 0 && r.Role == role)}"));
+
+            foreach (var (room, factor) in BalanceMap.Outliers(here, leastVisits, top))
+                yield return $"  sim-balance-room: act={room.Act} role={room.Role} room={room.Content} "
+                    + $"visits={room.Visits} hp={room.Health} "
+                    + $"perVisit={room.PerVisit.ToString("0.0", CultureInfo.InvariantCulture)} "
+                    + $"vsRole=x{factor.ToString("0.00", CultureInfo.InvariantCulture)} "
+                    + $"blocked={room.Blocked} deaths={room.Deaths}";
+        }
+
+        foreach (var act in map.Curve.Select(c => c.Act).Distinct())
+            yield return $"sim-balance-depth: act={act} "
+                + string.Join(" ", map.Curve.Where(c => c.Act == act)
+                    .Select(c => $"{c.Index}:{c.Runs}runs:"
+                        + c.Health.ToString("0.0", CultureInfo.InvariantCulture)));
+
+        yield return "sim-balance-death: "
+            + string.Join(",", map.Deaths.OrderByDescending(d => d.Value)
+                .ThenBy(d => d.Key, StringComparer.Ordinal)
+                .Take(top).Select(d => $"{d.Key}:{d.Value}"));
+    }
+
     public static string Result(BotResult r)
     {
         ArgumentNullException.ThrowIfNull(r);

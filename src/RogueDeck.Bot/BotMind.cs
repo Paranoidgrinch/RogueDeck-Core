@@ -76,6 +76,14 @@ internal sealed class BotMind
     // what a report reads; this says WHICH ROOM, which is what the map oracle needs to find the walk again on
     // the map it surveyed. Two lists because the first is a contract golden.sh diffs and the second is not.
     public readonly List<string> Walked = [];
+
+    // ── EVERY ROOM, AS THE BALANCE MAP NEEDS IT (P3) ─────────────────────────────────────────────────────
+    // `Rooms` says what KIND each room was and `Walked` says WHICH node — neither says what was authored in
+    // it, and a tally kept per node id cannot be added up across seeds because the node is a different room
+    // in the next one. This does: the act, the content's own id, its role, and the health the runner walked
+    // in with. The last of those is what turns a heap of damage into a curve — where in an act the budget
+    // actually breaks.
+    public readonly List<BotResult.RoomVisit> Visits = [];
     public readonly Dictionary<int, int> HealthAtActBoss = [];
     public readonly Dictionary<int, int> DamageAtActBoss = [];
 
@@ -198,11 +206,12 @@ internal sealed class BotMind
             _lastRoom = here;
             var node = run.Map.Nodes.FirstOrDefault(n => n.Id.Value == here);
             var role = node is null ? "?" : MapRole.Of(node);
+            _roomContent = RunBot.Content(run);
             Where = RunBot.Where(run);
             WhereRole = role;
-            _roomContent = RunBot.Content(run);
             Rooms.Add($"{run.ActNumber}:{role}");
             Walked.Add($"{run.ActNumber}:{here}");
+            Visits.Add(new BotResult.RoomVisit(run.ActNumber, _roomContent, role, run.Health.Current));
             Acts = Math.Max(Acts, run.ActNumber);
             var spent = _hpBeforeRoom == 0 ? 0 : _hpBeforeRoom - run.Health.Current;
             _hpBeforeRoom = run.Health.Current;
@@ -717,6 +726,8 @@ internal sealed class BotMind
         Complete = complete,
         Where = Where,
         WhereRole = WhereRole,
+        WhereContent = _roomContent,
+        Visits = Visits,
         Autopsy = Autopsy(run),
         Exam = Exam(),
         Damage = Ledger,

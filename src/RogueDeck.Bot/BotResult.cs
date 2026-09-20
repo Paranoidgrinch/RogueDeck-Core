@@ -51,6 +51,16 @@ public sealed record BotResult
     public required string Where { get; init; }
     public required string WhereRole { get; init; }
 
+    // …and what was AUTHORED there, which is the name a sweep can add up across seeds (the node id cannot
+    // be: it is a different room in the next seed). For a run that died, this is what killed it.
+    public string WhereContent { get; init; } = "—";
+
+    // One entry per room entered: the act, what was authored in it, its role, and the health the runner
+    // walked in with. The balance map is made of these and the damage ledger and nothing else.
+    public IReadOnlyList<RoomVisit> Visits { get; init; } = [];
+
+    public readonly record struct RoomVisit(int Act, string Content, string Role, int HealthOnEntry);
+
     // ⚠⚠ THE ONLY QUESTION V-7 ASKS: how far did a real body get? An act is CLEARED when its boss is beaten,
     // and the proof of that is standing in the next act — so a run that died in act 4 cleared three, and only
     // a victory clears the act it ended in. Note what this does NOT say: nothing about how much health it

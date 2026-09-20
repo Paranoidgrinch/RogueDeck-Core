@@ -147,6 +147,8 @@ public static class Program
         Console.WriteLine();
         foreach (var line in BotReport.DamageAcrossRuns([.. receipts]))
             Console.WriteLine(line);
+        foreach (var line in BotReport.Balance([.. receipts]))
+            Console.WriteLine(line);
 
         Console.WriteLine(failures == 0
             ? $"roguedeck-bot: all {options.Runs} runs came back clean"
@@ -272,6 +274,7 @@ public static class Program
         var lines = new ConcurrentDictionary<int, string>();
         var unreadable = 0;
 
+        var receipts = new List<BotResult>();
         for (var seed = options.SeedFrom; seed < options.SeedFrom + options.Runs; seed++)
         {
             var character = RollCharacter(blueprint, seed);
@@ -286,6 +289,7 @@ public static class Program
 
             var told = new string[routes.Count];
             var cleared = new bool[routes.Count];
+            var walked = new BotResult?[routes.Count];
             using var slots = new SemaphoreSlim(options.Jobs);
             var work = routes.Select((route, index) => Task.Run(async () =>
             {
@@ -298,6 +302,7 @@ public static class Program
                     if (options.OutDir is { } into)
                         File.WriteAllText(Path.Combine(into, $"route-{seed:0000}-{index:00}.log"), log);
                     cleared[index] = result.ClearedActs >= act;
+                    walked[index] = result;
                     told[index] = $"  sim-route: seed={seed} act={act} route={index + 1}/{routes.Count} "
                         + $"result={result.Result} reached={result.Acts} cleared={result.ClearedActs} "
                         + $"rooms={result.Rooms.Count} hp={result.Health}/{result.MaxHealth} "
@@ -328,6 +333,7 @@ public static class Program
                 ? "lastExit=none"
                 : $"lastExit={fate.LastExit} depth={fate.LastExitDepth}/{fate.Rooms}";
 
+            receipts.AddRange(walked.OfType<BotResult>());
             lines[seed] = $"sim-clearable: seed={seed} maps={maps} act={act} routes={routes.Count} "
                 + $"reached={arrived}/{routes.Count} cleared={through}/{routes.Count} "
                 + $"savable={fate.Savable}/{fate.Failing} {exit}"
@@ -338,6 +344,12 @@ public static class Program
             Console.WriteLine(lines[seed]);
 
         Console.WriteLine();
+        // ⚠⚠ THE SWEEP'S WHOLE POINT (P3). Every route of every seed is one run with a receipt; added up,
+        // they are the only statement about the CONTENT this project can make from play rather than from
+        // reading the document. A route walk without this printed the same information and threw it away.
+        foreach (var line in BotReport.Balance(receipts))
+            Console.WriteLine(line);
+
         Console.WriteLine(unreadable == 0
             ? $"roguedeck-bot: walked every route through act {act} of {options.Runs} seeds"
             : $"roguedeck-bot: {unreadable} of {options.Runs} seeds have no act {act}");
