@@ -278,7 +278,6 @@ public static class Program
         BotPolicy? policy, CardFeatures? features)
     {
         var act = options.Routes;
-        var lines = new ConcurrentDictionary<int, string>();
         var unreadable = 0;
 
         var receipts = new List<BotResult>();
@@ -289,8 +288,8 @@ public static class Program
             if (routes.Count == 0)
             {
                 unreadable++;
-                lines[seed] = $"sim-clearable: seed={seed} maps={maps} act={act} NO ROUTES — "
-                    + $"this run has no act {act}";
+                Console.WriteLine($"sim-clearable: seed={seed} maps={maps} act={act} NO ROUTES — "
+                    + $"this run has no act {act}");
                 continue;
             }
 
@@ -341,14 +340,15 @@ public static class Program
                 : $"lastExit={fate.LastExit} depth={fate.LastExitDepth}/{fate.Rooms}";
 
             receipts.AddRange(walked.OfType<BotResult>());
-            lines[seed] = $"sim-clearable: seed={seed} maps={maps} act={act} routes={routes.Count} "
+            // ⚠ SAID AS IT IS LEARNT, not when the last seed is in. A champion sweep of eight seeds is
+            // hours, and a run that prints nothing for hours is indistinguishable from a run that hung —
+            // which is exactly what it looked like the first time one was left going overnight.
+            Console.WriteLine($"sim-clearable: seed={seed} maps={maps} act={act} "
+                + $"routes={routes.Count} "
                 + $"reached={arrived}/{routes.Count} cleared={through}/{routes.Count} "
                 + $"savable={fate.Savable}/{fate.Failing} {exit}"
-                + Environment.NewLine + string.Join(Environment.NewLine, told);
+                + Environment.NewLine + string.Join(Environment.NewLine, told));
         }
-
-        foreach (var seed in lines.Keys.OrderBy(k => k))
-            Console.WriteLine(lines[seed]);
 
         Console.WriteLine();
         // ⚠⚠ THE SWEEP'S WHOLE POINT (P3). Every route of every seed is one run with a receipt; added up,
