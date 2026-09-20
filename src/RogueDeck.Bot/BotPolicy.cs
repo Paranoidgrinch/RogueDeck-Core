@@ -65,6 +65,17 @@ public sealed class BotPolicy
 
     public double Beam { get; set; } = 4;
 
+    // ── HOW MANY DECKS THE SEARCH HAS TO BE RIGHT ABOUT (C4) ─────────────────────────────────────────────
+    // Above 1, the fight is forked several times with its own draw pile shuffled differently in each, and an
+    // opening play is scored by what it is worth ON AVERAGE across those worlds. That is what makes a deep
+    // champion a FAIR player: without it a three-turn plan is built around cards nobody has drawn, and every
+    // number it produces is an upper bound rather than a result.
+    //
+    // ⚠ It costs `Samples` searches per decision, and the decision is taken per card rather than per turn.
+    // 0 or 1 ⇒ the search this runner has always done, which is the default and what the golden set rests
+    // on. See the header of Champion.PlanAcrossDecks.
+    public double Samples { get; set; }
+
     // ⚠ THE CHAMPION'S ONLY KNOB (B5). Its lookahead needs one trade-off and no more: 0 plays to survive the
     // turn it can see, 1 plays to empty the enemy. Everything else it would otherwise be told — what a card
     // is worth, when a turn is done, whom to hit — it works out by playing the card and looking.

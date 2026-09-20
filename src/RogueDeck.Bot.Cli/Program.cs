@@ -184,8 +184,15 @@ public static class Program
         if (horizon <= 1)
             return " (champion: one turn of lookahead)";
         var beam = Math.Max(1, (int)Math.Round(policy?.Beam ?? 0));
-        return $" (champion: {horizon} turns of lookahead, beam {beam} — ⚠ SEES UNDRAWN CARDS, "
-            + "so this is an upper bound, not a fair player)";
+        var samples = Math.Max(1, (int)Math.Round(policy?.Samples ?? 0));
+        // ⚠⚠ THE HEADER SAYS WHETHER THE PLAYER IS FAIR, because that is the difference between a result and
+        // an upper bound, and a reader who was not told will read one as the other. Above one sample the
+        // unseen draw pile is shuffled per world (C4), so the depth no longer buys sight of the future.
+        return samples > 1
+            ? $" (champion: {horizon} turns of lookahead, beam {beam}, {samples} shuffled decks per "
+                + "decision — a fair player: it does not see what it has not drawn)"
+            : $" (champion: {horizon} turns of lookahead, beam {beam} — ⚠ SEES UNDRAWN CARDS, "
+                + "so this is an upper bound, not a fair player)";
     }
 
     private static string Indent(string line) => $"           {line}";

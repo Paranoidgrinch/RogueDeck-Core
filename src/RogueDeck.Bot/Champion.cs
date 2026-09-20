@@ -71,6 +71,38 @@ public sealed class Champion(RunPlayback play, BotPolicy? policy)
 
     public int Beam => Math.Max(1, (int)Math.Round(policy?.Beam ?? 0));
 
+    // ── HOW MANY DECKS IT IS ALLOWED TO BE WRONG ABOUT (C4) ──────────────────────────────────────────────
+    // ⚠⚠ ABOVE A HORIZON OF 1 THE SEARCH WAS NOT A PLAYER, IT WAS A PROPHET. A fork draws what the real
+    // fight would draw, so a three-turn plan was built around the cards nobody had drawn yet — every
+    // result past a horizon of 1 has had to be read as an upper bound, and the whole arc has said so in
+    // every table it printed.
+    //
+    // This is the switch that closes it. Above 1, the fight is forked SEVERAL times and the part of it the
+    // player cannot see — the order of its own draw pile — is shuffled differently in each. Every world is
+    // searched, and what is compared is not one world's best line but what each OPENING PLAY is worth ON
+    // AVERAGE across the worlds. A card that only works if the next draw is kind wins in one world and
+    // loses in the others; a card that works whatever comes up wins the mean. That is the standard reading
+    // of an imperfect-information game, and it is the first time this player has been asked to make one
+    // decision that has to survive more than one future.
+    //
+    // ⚠ WHAT IT COSTS. One decision is now `Samples` searches instead of one, and the decision is taken per
+    // CARD rather than per turn (only the first play of the chosen line is kept — with the rest unknown,
+    // promising four cards in a row is promising the future). The runs are several times dearer, which is
+    // the trade the player asked for: a bot as strong as it can be made, and honest about it.
+    //
+    // ⚠ WHAT IS STILL NOT SHUFFLED: the discard pile. The player knows what is in it, and the engine's
+    // reshuffle when the draw pile runs dry is bound to the seed, so a search that reaches that far still
+    // sees the true order of the refill. It is a turn or two past where these searches reach, and it is
+    // named here rather than papered over.
+    //
+    // 0 or 1 ⇒ exactly the search this file has always done. That is the default, and it is what keeps the
+    // golden set meaningful.
+    public int Samples => Math.Max(1, (int)Math.Round(policy?.Samples ?? 0));
+
+    // What an opening was worth, and what it was. An opening is the part of a planned turn that every world
+    // agrees exists — see Known.
+    public readonly record struct Opening(IReadOnlyList<PlannedPlay> Plays, double Worth);
+
     // Search every way this turn could be played, and keep the best whole turn.
     //
     // `refused` and `barren` are the seat's memory of plays the rules turned down and plays that moved
@@ -84,16 +116,163 @@ public sealed class Champion(RunPlayback play, BotPolicy? policy)
         refused ??= new HashSet<CardInstanceId>();
         barren ??= new HashSet<string>(StringComparer.Ordinal);
 
+        if (Samples > 1)
+            return PlanAcrossDecks(combat, refused, barren);
+
         return Horizon > 1
             ? PlanAhead(combat, refused, barren)
             : PlanOneTurn(combat, refused, barren);
     }
 
-    private Plan PlanOneTurn(
+    // ── ONE DECISION, WEIGHED OVER SEVERAL DECKS (C4) ────────────────────────────────────────────────────
+    // Each sample is the same fight with its unseen draw pile in a different order. The searches are the
+    // ones above, unchanged; all this does is ask each of them what every OPENING was worth in its world
+    // and then average.
+    //
+    // ⚠ THE OPENINGS ARE COMPARABLE ACROSS THE WORLDS, and that is not luck: a card's instance id belongs
+    // to the card, and shuffling a pile moves the same cards into different places. The hand is identical
+    // in every world, so "play this card at that enemy" names the same decision in all of them.
+    private Plan PlanAcrossDecks(
         InteractiveCombat combat, IReadOnlySet<CardInstanceId> refused, IReadOnlySet<string> barren)
     {
+        var totals = new Dictionary<string, (double Sum, int Seen, Opening Play)>(StringComparer.Ordinal);
+        var forks = 0;
+
+        // ⚠⚠ THE WORLDS SHARE ONE DECISION'S THINKING, they do not each get their own. Six full searches per
+        // card was measured before this line existed and it is not a runner, it is a weekend: the searches
+        // are per CARD rather than per turn, so the cost multiplies twice over. What a sample buys is not
+        // more search, it is search that cannot see the future — so the same budget is spread over the
+        // worlds, and what the sweep pays for fairness is depth inside each one rather than hours.
+        var each = Math.Max(1, ForksPerTurn * Horizon / Samples);
+
+        for (var sample = 0; sample < Samples; sample++)
+        {
+            var world = Shuffled(combat, sample);
+            var openings = new Dictionary<string, Opening>(StringComparer.Ordinal);
+            var plan = Horizon > 1
+                ? PlanAhead(world, refused, barren, openings, each)
+                : PlanOneTurn(world, refused, barren, openings, each);
+            forks += plan.Forks;
+
+            foreach (var (key, opening) in openings)
+            {
+                var (sum, seen, _) = totals.GetValueOrDefault(key);
+                totals[key] = (sum + opening.Worth, seen + 1, opening);
+            }
+        }
+
+        if (totals.Count == 0)
+            return new Plan([], double.NegativeInfinity, forks);
+
+        // ⚠ AVERAGED OVER THE WORLDS THAT COULD OFFER IT, not over all of them. An opening the search never
+        // reached in one world (its budget ran out there) is not an opening that scored badly there, and
+        // scoring it as though it had would punish the widest lines hardest.
+        var best = totals
+            .OrderByDescending(x => x.Value.Sum / x.Value.Seen)
+            .ThenBy(x => x.Key, StringComparer.Ordinal)
+            .First();
+
+        // ⚠ THE EXPECTATIONS ARE TAKEN FROM THE REAL FIGHT, not from the world that suggested the line. The
+        // seat tears a plan up the moment the fight disagrees with the position it expected, and a
+        // shuffled world's positions disagree with the real one by construction — so the chosen cards are
+        // laid down once on a fork of the fight as it actually stands, and it is those positions the seat
+        // is given.
+        return new Plan(Expect(combat, best.Value.Play.Plays), best.Value.Sum / best.Value.Seen, forks);
+    }
+
+    private static List<PlannedPlay> Expect(InteractiveCombat combat, IReadOnlyList<PlannedPlay> plays)
+    {
+        var walk = combat.Fork();
+        var expected = new List<PlannedPlay>();
+        foreach (var play in plays)
+        {
+            if (walk.IsOver || !walk.IsHeroTurn || walk.Hand.All(c => c.Id != play.Card))
+                break;
+            expected.Add(play with { Expected = Position(walk) });
+            var steps = walk.Steps.Count;
+            walk.PlayCard(play.Card, play.Target);
+            if (RunBot.Refused(walk, steps))
+            {
+                expected.RemoveAt(expected.Count - 1);
+                break;
+            }
+        }
+        return expected;
+    }
+
+    // The same fight with its draw pile in a different order — the one thing about this position the player
+    // is not entitled to know.
+    //
+    // ⚠ NO DICE ARE THROWN FOR THIS EITHER. The order comes from the position's own fingerprint and the
+    // sample's number, through the engine's own shuffle, so two seats walking the same run still make the
+    // same decisions — and a stable hash is used rather than string.GetHashCode, which is randomised per
+    // process and would make a recorded run unreproducible in the next one.
+    private static InteractiveCombat Shuffled(InteractiveCombat combat, int sample)
+    {
+        var fork = combat.Fork();
+        var zones = fork.State.GetCardZones(fork.HeroId);
+        var pile = zones.GetCardsInZone(CardZone.DrawPile);
+        if (pile.Count > 1)
+            zones.ReorderDrawPile(
+                CombatRandom.CreateShuffledIndexes(pile.Count, Fingerprint(Position(combat)), sample));
+        return fork;
+    }
+
+    private static HashSet<CardInstanceId> Held(InteractiveCombat combat) =>
+        [.. combat.Hand.Select(c => c.Id)];
+
+    private static int Fingerprint(string position)
+    {
+        unchecked
+        {
+            var hash = (int)2166136261;
+            foreach (var c in position)
+                hash = (hash ^ c) * 16777619;
+            return hash;
+        }
+    }
+
+    // ── WHAT THE WORLDS ARE ALLOWED TO COMPARE ───────────────────────────────────────────────────────────
+    // ⚠⚠ AN OPENING IS KEPT ONLY AS FAR AS THE HAND THE PLAYER IS HOLDING. Every world starts from the same
+    // hand, so "play this card, then that one" names the same decision in all of them; the moment a line
+    // plays a card it DREW, it is talking about its own world and nobody else's. So a line is cut at its
+    // first drawn card and what survives is the part that is comparable.
+    //
+    // ⚠ AND CUTTING THERE IS WHAT MAKES THIS AFFORDABLE. Keeping only the first play would be safer still,
+    // and it was the first version: it forces a fresh decision after every single card, which measured at
+    // more than three and a half times the cost of the unfair search — twenty-four times the ordinary
+    // runner — for four runs that had not finished. A turn's worth of known cards is decided at once, and
+    // the fight is asked again at the next bell.
+    private void Keep(
+        Dictionary<string, Opening>? openings, IReadOnlyList<PlannedPlay> plays,
+        IReadOnlySet<CardInstanceId> hand, double worth)
+    {
+        if (openings is null)
+            return;
+
+        var known = new List<PlannedPlay>();
+        foreach (var play in plays)
+        {
+            if (!hand.Contains(play.Card))
+                break;
+            known.Add(play);
+        }
+
+        var key = known.Count == 0
+            ? "stop"
+            : string.Join("|", known.Select(p => $"{p.Card}@{p.Target?.value ?? "—"}"));
+        if (!openings.TryGetValue(key, out var held) || worth > held.Worth)
+            openings[key] = new Opening(known, worth);
+    }
+
+    private Plan PlanOneTurn(
+        InteractiveCombat combat, IReadOnlySet<CardInstanceId> refused, IReadOnlySet<string> barren,
+        Dictionary<string, Opening>? openings = null, int? ceiling = null)
+    {
+        var allowed = ceiling ?? ForksPerTurn;
         var heroBefore = combat.HeroHealth;
         var enemyBefore = Standing(combat);
+        var hand = Held(combat);
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var forks = 0;
 
@@ -102,10 +281,11 @@ public sealed class Champion(RunPlayback play, BotPolicy? policy)
         idle.EndTurn();
         var best = Worth(idle, heroBefore, enemyBefore);
         List<PlannedPlay>? plan = null;
+        Keep(openings, [], hand, best);
 
         void Explore(InteractiveCombat node, List<PlannedPlay> path)
         {
-            if (path.Count >= PlansAhead || forks >= ForksPerTurn || node.IsOver || !node.IsHeroTurn)
+            if (path.Count >= PlansAhead || forks >= allowed || node.IsOver || !node.IsHeroTurn)
                 return;
 
             var hero = node.State.GetCombatant(node.HeroId);
@@ -121,7 +301,7 @@ public sealed class Champion(RunPlayback play, BotPolicy? policy)
             foreach (var card in playable)
                 foreach (var target in living.Count == 0 ? [null] : living)
                 {
-                    if (forks >= ForksPerTurn)
+                    if (forks >= allowed)
                         return;
 
                     var after = node.Fork();
@@ -147,6 +327,7 @@ public sealed class Champion(RunPlayback play, BotPolicy? policy)
                     forks++;
                     stopped.EndTurn();
                     var worth = Worth(stopped, heroBefore, enemyBefore);
+                    Keep(openings, here, hand, worth);
                     if (worth > best)
                     {
                         best = worth;
@@ -171,12 +352,14 @@ public sealed class Champion(RunPlayback play, BotPolicy? policy)
     // is a reason rather than a promise: the plan is re-made at the next turn anyway, from wherever the
     // fight actually stands. Keeping the tail would only be a way of being wrong for longer.
     private Plan PlanAhead(
-        InteractiveCombat combat, IReadOnlySet<CardInstanceId> refused, IReadOnlySet<string> barren)
+        InteractiveCombat combat, IReadOnlySet<CardInstanceId> refused, IReadOnlySet<string> barren,
+        Dictionary<string, Opening>? openings = null, int? ceiling = null)
     {
         var heroBefore = combat.HeroHealth;
         var enemyBefore = Standing(combat);
+        var hand = Held(combat);
         var forks = 0;
-        var budget = ForksPerTurn * Horizon;
+        var budget = ceiling ?? (ForksPerTurn * Horizon);
 
         // A line under consideration: where the fight now stands, and the FIRST turn that led there.
         var level = new List<(InteractiveCombat At, List<PlannedPlay> Opening)> { (combat, []) };
@@ -199,9 +382,14 @@ public sealed class Champion(RunPlayback play, BotPolicy? policy)
                     // and a won fight found at depth 1 must not be thrown away for a line that is still
                     // going at depth 3.
                     if (after.IsOver || !after.IsHeroTurn || depth == Horizon - 1)
+                    {
                         leaves.Add((worth, first));
+                        Keep(openings, first, hand, worth);
+                    }
                     else
+                    {
                         next.Add((after, first, worth));
+                    }
                 }
                 if (forks >= budget)
                     break;
