@@ -36,6 +36,12 @@ public sealed record CliOptions
     // exist for this player?" is the one V-7 asks. 0 = off.
     public int Routes { get; init; }
 
+    // ⚠ END THE RUN THE MOMENT ACT N IS CLEARED (T0). The tail past the question is paid for and never read,
+    // and it is the EXPENSIVE part: with the fair champion an act-I death costs 423 s and the run that
+    // reached act IV cost 4571 s, so a breeding generation gets dearer exactly as the population gets
+    // better. 0 = play the game out.
+    public int StopAfterAct { get; init; }
+
     // ⚠ SIT THE CHAMPION AN EXAM (C0): of the positions a proof calls survivable, how many did it survive?
     // A grade for the FIGHTING alone -- no rooms, no doors, no variance of five acts.
     public bool Exam { get; init; }
@@ -91,6 +97,11 @@ public sealed record CliOptions
                              so `dealt` is reported beside it
           --exam-turns N     how many hero-turns both are asked to get through (default 3)
           --exam-seconds N   how long ONE position's proof may search (default 5)
+          --stop-after-act N  end each run the moment act N is cleared, i.e. at the gates of act N+1.
+                             The run reports acts 1..N exactly as it would have without the flag; what is
+                             dropped is the tail nobody was measuring. ⚠ Those runs end as `Ongoing` and
+                             `calledOff=asked` on the clearance line -- a run CALLED OFF is not a run that
+                             stood still, and anything scoring them must tell the two apart
           --out <dir>        write one full log per run into this directory
         """;
 
@@ -110,6 +121,7 @@ public sealed record CliOptions
         var oracle = false;
         var oracleOnly = false;
         var routes = 0;
+        var stopAfterAct = 0;
         var exam = false;
         var examTurns = 3;
         var examSeconds = 5;
@@ -144,6 +156,7 @@ public sealed record CliOptions
                 case "--oracle": oracle = true; break;
                 case "--oracle-only": oracleOnly = oracle = true; break;
                 case "--routes": routes = Number(Next()); break;
+                case "--stop-after-act": stopAfterAct = Number(Next()); break;
                 case "--exam": exam = true; break;
                 case "--exam-turns": examTurns = Number(Next()); break;
                 case "--exam-seconds": examSeconds = Number(Next()); break;
@@ -152,7 +165,7 @@ public sealed record CliOptions
             }
         }
 
-        if (game is null || runs < 1 || jobs < 1 || steps < 1 || timeout < 1)
+        if (game is null || runs < 1 || jobs < 1 || steps < 1 || timeout < 1 || stopAfterAct < 0)
             return null;
 
         return new CliOptions
@@ -174,6 +187,7 @@ public sealed record CliOptions
             Oracle = oracle,
             OracleOnly = oracleOnly,
             Routes = routes,
+            StopAfterAct = stopAfterAct,
             Exam = exam,
             ExamTurns = examTurns,
             ExamSeconds = examSeconds,

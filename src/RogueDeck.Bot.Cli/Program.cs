@@ -81,6 +81,9 @@ public static class Program
             + $"{(options.Health is { } h ? $"{h} hp" : "authored health")}, maps {maps}, "
             + $"policy {policy?.Name ?? "random"}{Lookahead(policy, options)}, "
             + $"{options.Jobs} at a time, one process, "
+            + (options.StopAfterAct > 0
+                ? $"each run ends when act {options.StopAfterAct} is cleared, "
+                : "")
             + $"{(options.Replay ? "through the replay model" : "answering the engine inline")})");
 
         if (options.OracleOnly)
@@ -229,6 +232,7 @@ public static class Program
             Exam = options.Exam,
             ExamTurns = options.ExamTurns,
             ExamSeconds = options.ExamSeconds,
+            StopAfterAct = options.StopAfterAct,
         };
 
         // ⚠⚠ TWO SEATS, ONE BRAIN (R5). By default the run is walked ONCE, with the bot answering the engine

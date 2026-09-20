@@ -1,6 +1,8 @@
 using RogueDeck.Bot;
 using RogueDeck.Core.Combat;
+using RogueDeck.Run;
 using RogueDeck.Sandbox.Composition;
+using RogueDeck.Sandbox.Run;
 using RogueDeck.Scenario.Authoring;
 using RogueDeck.Scenario.Dsl;
 using RogueDeck.Scenario.Scripting;
@@ -192,6 +194,37 @@ public class DamageLedgerTests
 
         Assert.Equal(3, Health(ledger, "status/ink_poisoning"));
         Assert.Equal(60 - fight.HeroHealth, ledger.Named);
+    }
+
+    // ── THE CLOSING EXCHANGE OF EVERY FIGHT (found by T0's gate) ─────────────────────────────────────────
+    // The ledger is read on every ANSWER, and once the last blow has landed there are no more answers in that
+    // fight — so what a fight wrote after its final decision was read only for the LAST fight of a run, which
+    // is the one `Finish` looks at again. Every other fight quietly lost its closing exchange into `unnamed`.
+    //
+    // It surfaced holding a run bounded at act II against the same run played out: the bounded one named 23
+    // MORE points in act II, because it ended where the other had already moved on. Over the four immortal
+    // golden seeds, reading a fight once more as it ends took `unnamed` from 1685 of 34758 to 533.
+    [Fact]
+    public void What_a_fight_writes_after_its_last_decision_is_still_named()
+    {
+        var run = SampleProject.Build().CreateInitialRun(new RunId("receipt"), randomSeed: 3);
+        var mind = new BotMind(
+            new RunPlayback(() => { }, new InMemoryMetaStore()),
+            new BotOptions { Seed = 1 },
+            NullBotLog.Instance);
+        var fight = Combat();
+
+        // The seat's order, exactly: the fight is handed over, then announced, then answered.
+        mind.Observe(run, fight);
+        mind.FightStarts(run, fight);
+        mind.EndingTurn(fight);
+        fight.EndTurn();
+
+        // …and nobody asks again, because the bailiff's swing is the last thing that happens. Before this the
+        // ledger stopped at the hero's last decision and those nine points had no name.
+        Assert.Equal(0, mind.Ledger.Named);
+        mind.Observe(run, null);
+        Assert.Equal(9, Health(mind.Ledger, "bailiff/summons"));
     }
 
     // Health lost with no fight running — a door that bites, a curse collected at a shrine — is the room's,

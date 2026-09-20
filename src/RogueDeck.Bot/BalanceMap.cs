@@ -74,7 +74,12 @@ public static class BalanceMap
                 g => g.Key,
                 g => (Health: g.Sum(x => x.Tally.Health), Blocked: g.Sum(x => x.Tally.Blocked)));
 
+        // ⚠ A RUN THAT WAS CALLED OFF DID NOT STOP THERE, IT WAS STOPPED THERE (--stop-after-act). Without
+        // this every run of a bounded sweep would file the act's boss room as the room that killed it, and
+        // `sim-balance-death` — the line that names what the content kills runs with — would be a list of
+        // the acts' last rooms.
         var deaths = runs
+            .Where(r => !r.AskedToStop)
             .Where(r => !string.Equals(r.Result, "Victory", StringComparison.Ordinal))
             .GroupBy(r => r.WhereContent, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);

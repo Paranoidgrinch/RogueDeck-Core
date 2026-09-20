@@ -83,8 +83,18 @@ public sealed record BotResult
     public string Autopsy { get; init; } = "";
 
     // A lost run is a NORMAL outcome. Only something the run could not answer for — an engine error, a
-    // refused play, a wall, a thrown exception — is worth a batch's attention.
-    public bool Clean => Crash.Length == 0 && Error == "none" && Problems == 0 && Complete;
+    // refused play, a wall, a thrown exception — is worth a batch's attention. ⚠ A run CALLED OFF ON
+    // PURPOSE is not: it is incomplete in exactly the way a walled run is, and a bounded batch that flagged
+    // every single run as worth reading would be a batch whose exit code had stopped meaning anything.
+    public bool Clean =>
+        Crash.Length == 0 && Error == "none" && Problems == 0 && (Complete || AskedToStop);
 
     public required bool Complete { get; init; }
+
+    // ⚠ THE RUN WAS CALLED OFF BECAUSE IT WAS ASKED TO BE (--stop-after-act), not because a guard tripped.
+    // An incomplete run is normally a fault; this one answered the only question that was put to it and then
+    // stopped paying for a tail nobody reads. It is a field rather than a phrasing of `Reason` because the
+    // trainer has to tell the two apart — a run that measured nothing scores as nothing, and a run that
+    // measured exactly what was asked must not be filed under that.
+    public bool AskedToStop { get; init; }
 }

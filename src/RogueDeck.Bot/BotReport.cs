@@ -48,6 +48,7 @@ public static class BotReport
         ArgumentNullException.ThrowIfNull(r);
         return $"sim-clearance: seed={r.Seed} policy={r.Policy} maps={r.Maps} "
             + $"cleared={r.ClearedActs} reached={r.Acts} result={r.Result} "
+            + $"calledOff={(r.AskedToStop ? "asked" : "no")} "
             + $"hp={r.Health}/{r.MaxHealth} rooms={r.Rooms.Count} "
             + $"stopped={r.WhereRole} at={r.Where}";
     }

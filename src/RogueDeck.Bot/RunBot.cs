@@ -116,6 +116,14 @@ public static class RunBot
                     mind.Reason = $"the step budget ran out at {Where(session.Run)}";
             }
         }
+        catch (BotStopException)
+        {
+            // A GUARD THAT UNWINDS, in the seat that has a loop to break out of. Most of the runner's
+            // ceilings set `Stopped` and let the loop below notice after the answer is given; one that must
+            // stop the walk BEFORE its next answer (--stop-after-act) cannot, because by then the answer has
+            // moved the run and the two seats would end in different states. It has already written down
+            // why, and an unwound walk is INCOMPLETE — exactly as it is under the direct seat.
+        }
         catch (Exception ex)
         {
             mind.Crashed(session?.Run, ex);

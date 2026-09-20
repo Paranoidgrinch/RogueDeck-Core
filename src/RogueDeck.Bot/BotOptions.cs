@@ -70,4 +70,19 @@ public sealed record BotOptions
     // statement about the fight — which is the only way to find out what an exhaustive answer costs here
     // rather than guessing at it.
     public int AutopsyPositions { get; init; } = 60_000;
+
+    // ── WHERE THE MEASUREMENT ENDS (T0) ──────────────────────────────────────────────────────────────────
+    // End the run the moment act N is CLEARED — the moment the runner stands at the gates of act N+1. 0 (the
+    // default) plays the game out, and the golden set is recorded with it off.
+    //
+    // ⚠⚠ IT IS A BOUND ON THE TAIL, NOT A HANDICAP. A breeding question is "did it clear act N?", and
+    // everything the runner does after that answer is paid for and never read. Measured 2026-09-20 with the
+    // fair champion: an act-I death costs 423 s, the median run 470 s and the one run that reached act IV
+    // 4571 s — so the cost of a generation RISES as the population improves, and a night that fits at
+    // generation 1 may not fit at generation 12. This is what takes that risk out.
+    //
+    // ⚠ IT STOPS BEFORE THE NEXT ANSWER, NEVER AFTER IT, by the same throw every other guard uses, so both
+    // seats end the walk in the same state. That is the whole gate: what this run reports for acts 1..N is
+    // what the unstopped run of the same seed reports for acts 1..N, field for field.
+    public int StopAfterAct { get; init; }
 }

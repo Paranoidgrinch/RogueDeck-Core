@@ -54,6 +54,12 @@ internal sealed class BotMind
     public string Reason = "the run finished";
     public string Crash = "";
     public bool Stopped;
+
+    // …and stopped because it was ASKED to, rather than because a guard tripped. The difference matters to
+    // whoever reads the run: a walk called off at the gates of act N+1 measured everything it was asked for,
+    // while every other `Stopped` means the runner could not go on. The trainer scores a run that measured
+    // nothing as nothing, and without this it would score a run that answered the question that way too.
+    public bool AskedToStop;
     public int Problems;
     public int Fights;
     public int Acts = 1;
@@ -201,6 +207,27 @@ internal sealed class BotMind
             Ledger.Read(combat, run.ActNumber, _roomContent, WhereRole);
         }
 
+        // ── ASKED TO STOP, AND ASKED BEFORE AN ANSWER (T0) ───────────────────────────────────────────────
+        // The act the runner is standing in is already past the one it was asked about, so the act below it
+        // is cleared and there is nothing further to measure. See BotOptions.StopAfterAct.
+        //
+        // ⚠ THE CHECK SITS HERE AND NOT A LINE EARLIER OR LATER. Above it the health the last room cost has
+        // just been taken into the tally, so the numbers are the unstopped run's numbers; below it the next
+        // room would be written down, and a room of an act nobody asked about would be the one difference
+        // between this report and the unstopped one. `Acts` is moved up to the act at whose gates the walk
+        // stands, because that — not rooms it never walked — is what says the act below was cleared
+        // (BotResult.ClearedActs).
+        if (_options.StopAfterAct > 0 && run.ActNumber > _options.StopAfterAct)
+        {
+            Acts = Math.Max(Acts, run.ActNumber);
+            AskedToStop = true;
+            Reason = $"act {_options.StopAfterAct} was cleared, which is all this run was asked for";
+            Stopped = true;
+            _log.Line($"[{_clock.Elapsed.TotalSeconds,6:0.0}s {Step,5}] STOP {Reason} "
+                + $"(hp={run.Health.Current}/{run.Health.Max}, {Rooms.Count} rooms)");
+            throw new BotStopException(Reason);
+        }
+
         if (run.CurrentNodeId?.Value is { } here && here != _lastRoom)
         {
             _lastRoom = here;
@@ -229,6 +256,16 @@ internal sealed class BotMind
         if (combat is null && _inFight)
         {
             _inFight = false;
+            // ⚠⚠ THE LAST EXCHANGE OF A FIGHT IS WRITTEN AFTER THE LAST DECISION, and until T0's gate asked
+            // for it nobody read it. The ledger is read on every ANSWER, and once the killing blow has
+            // landed there are no more answers in that fight — so every fight but the run's last one lost
+            // its closing steps into `unnamed`. Found by holding a run that stops after act II against the
+            // same run played out: the stopped one named 23 MORE points in act II, because `Finish` reads
+            // the fight it ended in and the continuing run had already moved on. Over the four immortal
+            // golden seeds it takes `unnamed` from 1685 of 34758 spent health down to 533 — two thirds of
+            // the hole P2 left open was this one call.
+            if (_ledgerFight is { } ended)
+                Ledger.Read(ended, _ledgerAct, _ledgerRoom, _ledgerRole);
             _log.Line($"  fight ends: hp={run.Health.Current}/{run.Health.Max} after {_turn} turns");
             _turn = 0;
             NewTurn();
@@ -724,6 +761,7 @@ internal sealed class BotMind
         DamageAtActBoss = DamageAtActBoss,
         HealthAtActBoss = HealthAtActBoss,
         Complete = complete,
+        AskedToStop = AskedToStop,
         Where = Where,
         WhereRole = WhereRole,
         WhereContent = _roomContent,
