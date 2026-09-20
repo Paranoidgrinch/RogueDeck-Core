@@ -209,7 +209,7 @@ public sealed class Champion(RunPlayback play, BotPolicy? policy)
 
             if (next.Count == 0)
                 break;
-            level = [.. next.OrderByDescending(n => n.Worth).Take(Beam).Select(n => (n.At, n.Opening))];
+            level = [.. Cut(next).Select(n => (n.At, n.Opening))];
         }
 
         if (leaves.Count == 0)
@@ -217,6 +217,58 @@ public sealed class Champion(RunPlayback play, BotPolicy? policy)
 
         var best = leaves.MaxBy(l => l.Worth);
         return new Plan(best.Opening, best.Worth, forks);
+    }
+
+    // ── WHICH LINES SURVIVE THE TURN BOUNDARY (P1) ───────────────────────────────────────────────────────
+    // ⚠⚠ THE BEAM WAS WHERE THE DEPTH DIED. This cut used to be `OrderByDescending(Worth).Take(Beam)`, and
+    // `Worth` has two strictly separated bands by design: a turn that takes nothing off them scores around
+    // -100, a turn that takes something off them around +100. So with Beam = 4 and a real hand holding a
+    // dozen ways to deal damage, a PURE BLOCK TURN WAS NEVER IN THE BEAM — it was cut before any depth was
+    // allowed to score it. The search could not find "block now, kill next turn" in a real fight, which is
+    // the one thing a second turn of sight is for. ChampionHorizonTests stayed green throughout because its
+    // toy hand has three candidates and the beam cuts nothing.
+    //
+    // The band is NOT removed: it has twice stopped this player from standing still (Core 81a382c), and it
+    // is what a leaf needs. It is only kept out of the CUT — which is not the same as ranking the cut by a
+    // band-free score. That was tried on paper first and does not work: with toKill pinned at the `forever`
+    // ceiling whenever nothing was dealt, a blocking line still ranks below every damaging one, just by 8
+    // points instead of 200. A line that is always last is cut whatever the gap is.
+    //
+    // So the beam has RESERVED SEATS: half of them (at least one, when there is more than one) go to the
+    // lines that kept the most health, the rest to the lines with the best `Worth`. The defensive line is
+    // then carried to the next turn boundary and scored by what it BUYS there — and if it buys nothing, the
+    // leaf's band throws it away exactly as before. Nothing here says blocking is good; it says blocking is
+    // allowed to be asked about.
+    private List<(InteractiveCombat At, List<PlannedPlay> Opening, double Worth)> Cut(
+        List<(InteractiveCombat At, List<PlannedPlay> Opening, double Worth)> next)
+    {
+        if (next.Count <= Beam)
+            return next;
+
+        var guarded = Beam > 1 ? Math.Max(1, Beam / 2) : 0;
+        var taken = new HashSet<int>();
+        var chosen = new List<(InteractiveCombat, List<PlannedPlay>, double)>();
+
+        // ⚠ Indices, not the tuples themselves: two lines can stand at the same table with the same worth,
+        // and dropping one of them as a duplicate would quietly narrow the beam.
+        void Seat(IEnumerable<int> order, int seats)
+        {
+            foreach (var i in order)
+            {
+                if (chosen.Count >= seats)
+                    return;
+                if (taken.Add(i))
+                    chosen.Add(next[i]);
+            }
+        }
+
+        var byHealth = Enumerable.Range(0, next.Count)
+            .OrderByDescending(i => next[i].At.HeroHealth).ThenByDescending(i => next[i].Worth);
+        var byWorth = Enumerable.Range(0, next.Count).OrderByDescending(i => next[i].Worth);
+
+        Seat(byHealth, guarded);
+        Seat(byWorth, Beam);
+        return chosen;
     }
 
     // Every whole turn playable from here, each handed back as the position the enemies have already

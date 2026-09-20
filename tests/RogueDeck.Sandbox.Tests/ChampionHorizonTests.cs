@@ -65,6 +65,56 @@ public class ChampionHorizonTests
         return new InteractiveCombat(compiled, EnemyIntentSelectors.Build(compiled));
     }
 
+    // ── THE SAME CHOICE, WITH A CROWDED HAND (P1) ────────────────────────────────────────────────────────
+    // The fight above has three candidates, so the beam cuts nothing and every line reaches a leaf. A REAL
+    // hand does not look like that: it holds a dozen ways to deal damage, the beam is four wide, and a turn
+    // that takes nothing off the enemy scores two hundred points below every turn that does. So the brace
+    // was cut at the turn boundary before any depth was allowed to score it.
+    //
+    // This is the same fight with six different jabs in hand instead of one — nothing else changes, and one
+    // energy a turn still means exactly one card. Six damaging turns against one defensive one is all it
+    // takes to fill a beam of four.
+    private static InteractiveCombat Crowded()
+    {
+        var s = new ScenarioBlueprint { CardsDrawnPerTurn = 7 };
+        s.Cards.Add(new CardBlueprint("brace")
+        {
+            Program = Effects.Program(Effects.GainBlock(Targets.Source, 25)),
+        }.Cost(Energy, 1));
+        for (var damage = 3; damage <= 8; damage++)
+            s.Cards.Add(new CardBlueprint($"jab{damage}")
+            {
+                Program = Effects.Program(Effects.DealDamage(Targets.EventTarget, damage)),
+            }.Cost(Energy, 1));
+
+        s.EnemyActions.Add(new EnemyActionBlueprint("swing", new ActionIntent("Swing", IntentKind.Attack))
+        {
+            Program = new EffectProgram<EnemyActionContext>(new DealDamageNode<EnemyActionContext>(
+                CombatantTargetSelectors.EventTarget, new ConstantExpression<EnemyActionContext>(20))),
+        });
+        s.EnemyActions.Add(new EnemyActionBlueprint("tap", new ActionIntent("Tap", IntentKind.Attack))
+        {
+            Program = new EffectProgram<EnemyActionContext>(new DealDamageNode<EnemyActionContext>(
+                CombatantTargetSelectors.EventTarget, new ConstantExpression<EnemyActionContext>(1))),
+        });
+
+        s.Hero = new HeroBlueprint("clerk") { MaxHealth = 60 };
+        // Seven cards drawn from a seven-card deck: the whole hand is known whatever the shuffle does.
+        s.Hero.Deck.Add(new DeckEntry(new CardDefinitionId("brace")));
+        for (var damage = 3; damage <= 8; damage++)
+            s.Hero.Deck.Add(new DeckEntry(new CardDefinitionId($"jab{damage}")));
+        s.Hero.Resources.Add(new ResourceSpec(Energy, 1, 1));
+        s.TurnStartResourceRefills.Add(new ResourceRefillSpec(Energy, 1));
+
+        var enemy = new EnemyBlueprint("bailiff") { MaxHealth = 60 };
+        enemy.Actions.Add(new EnemyActionDefinitionId("swing"));
+        enemy.Actions.Add(new EnemyActionDefinitionId("tap"));
+        s.Enemies.Add(enemy);
+
+        var compiled = s.Compile();
+        return new InteractiveCombat(compiled, EnemyIntentSelectors.Build(compiled));
+    }
+
     private static Champion Player(double horizon) => new(
         new RunPlayback(() => { }, new InMemoryMetaStore()),
         new BotPolicy { Name = "c", Aggression = 0.5, Horizon = horizon, Beam = 4 });
@@ -104,5 +154,23 @@ public class ChampionHorizonTests
         var old = new Champion(new RunPlayback(() => { }, new InMemoryMetaStore()), before);
         Assert.Equal(1, old.Horizon);
         Assert.Equal(FirstCard(Player(horizon: 1), Combat()), FirstCard(old, Combat()));
+    }
+
+    // ⚠⚠ THE WHOLE OF P1 IN ONE ASSERT. Before the beam kept seats for the lines that hold onto their
+    // health, this said "jab8" — the six damaging turns filled a beam of four and the brace never reached
+    // the second turn that justifies it. The toy fight above could never have shown that, because nothing
+    // was ever cut in it.
+    [Fact]
+    public void A_hand_full_of_damage_does_not_crowd_the_brace_out_of_the_beam()
+    {
+        Assert.Equal("brace", FirstCard(Player(horizon: 2), Crowded()));
+    }
+
+    // …and with room for every line in the beam, the crowded fight makes the same choice the toy one does.
+    // The seats are what was missing, not the hand.
+    [Fact]
+    public void One_turn_of_sight_still_jabs_into_the_swing_with_a_full_hand()
+    {
+        Assert.Equal("jab8", FirstCard(Player(horizon: 1), Crowded()));
     }
 }
