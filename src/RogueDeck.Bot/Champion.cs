@@ -167,7 +167,16 @@ public sealed class Champion(RunPlayback play, BotPolicy? policy)
         // ⚠ AVERAGED OVER THE WORLDS THAT COULD OFFER IT, not over all of them. An opening the search never
         // reached in one world (its budget ran out there) is not an opening that scored badly there, and
         // scoring it as though it had would punish the widest lines hardest.
-        var best = totals
+        //
+        // ⚠⚠ BUT AN AVERAGE OF ONE IS NOT AN AVERAGE, and that is the hole this whole mechanism exists to
+        // close: a line that only one world ever reached would win on that world's number alone, which is
+        // the prophet again wearing six hats. So the choice is made among the openings at least HALF the
+        // worlds could speak about, and only if no opening clears that bar is the rest of the field asked.
+        var spoken = Math.Max(1, Samples / 2);
+        var field = totals.Where(x => x.Value.Seen >= spoken).ToList();
+        if (field.Count == 0)
+            field = [.. totals];
+        var best = field
             .OrderByDescending(x => x.Value.Sum / x.Value.Seen)
             .ThenBy(x => x.Key, StringComparer.Ordinal)
             .First();
