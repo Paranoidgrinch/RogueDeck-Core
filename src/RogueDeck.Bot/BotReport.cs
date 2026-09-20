@@ -108,6 +108,84 @@ public static class BotReport
         return r.Exam.Length == 0 ? "" : $"sim-exam: seed={r.Seed} policy={r.Policy} {r.Exam}";
     }
 
+    // ── WHERE THE LIFE WENT (P2) ─────────────────────────────────────────────────────────────────────────
+    // The receipt, as two kinds of line, and its own kind for the same reason the clearance line is: the
+    // golden set diffs the fitness and result lines field for field, and a line it does not know about
+    // cannot move fifteen recordings.
+    //
+    //   sim-damage       the run's total, RECONCILED. `taken` is the run's own tally (the fitness line's
+    //                    number: health watched before every answer), `closing` is the blow that ended the
+    //                    run — which that tally cannot contain, because a dead run is asked nothing further
+    //                    — and `spent` is the two together, which is what the body actually paid. `named`
+    //                    is what the ledger could put a name to. ⚠ `unnamed` is not a rounding error to be
+    //                    read past: it is the part of the balance question this instrument cannot answer
+    //                    yet, and it is printed so that the top of the table cannot be mistaken for the
+    //                    whole of it.
+    //   sim-damage-act   one act's biggest sources, biggest first, as `<who>/<what>:<health>x<hits>`.
+    //                    `blocked` is what the guard ate — never added to the health, because a blow that
+    //                    was blocked cost no life; it is there because a source that is mostly blocked and
+    //                    a source that is never blocked are different balance problems.
+    public static IEnumerable<string> Damage(BotResult r, int top = 6)
+    {
+        ArgumentNullException.ThrowIfNull(r);
+        var ledger = r.Damage;
+        var spent = r.DamageTaken + r.ClosingDamage;
+        yield return $"sim-damage: seed={r.Seed} policy={r.Policy} maps={r.Maps} "
+            + $"spent={spent} taken={r.DamageTaken} closing={r.ClosingDamage} "
+            + $"named={ledger.Named} unnamed={spent - ledger.Named} "
+            + $"blocked={ledger.Blocked} healed={r.Healed}";
+
+        foreach (var act in ledger.Acts)
+        {
+            var rows = ledger.TopOfAct(act, top);
+            yield return $"sim-damage-act: seed={r.Seed} act={act} "
+                + $"hp={ledger.HealthOfAct(act)} blocked={ledger.BlockedOfAct(act)} "
+                + $"sources={ledger.Rows.Count(x => x.Key.Act == act)} "
+                + $"top={string.Join(",", rows.Select(x => $"{x.Source}:{x.Tally.Health}x{x.Tally.Hits}"))}";
+        }
+    }
+
+    // ── THE SAME RECEIPT, ADDED UP OVER A BATCH (P2, and what P3's sweep reads) ───────────────────────────
+    // One run's receipt is an anecdote: it names what killed THAT body on THAT map. The question the arc
+    // asks is about the content, so the rows are added across runs and reported per act, with the number
+    // that matters beside each source — not just how much it took, but out of how many runs it took it,
+    // because a source that costs 20 in one run of eight is a different problem from one that costs 5 in
+    // all of them.
+    public static IEnumerable<string> DamageAcrossRuns(IReadOnlyList<BotResult> runs, int top = 8)
+    {
+        ArgumentNullException.ThrowIfNull(runs);
+        if (runs.Count == 0)
+            yield break;
+
+        var rows = runs
+            .SelectMany(r => r.Damage.All().Select(x => (Run: r.Seed, x.Where, x.Tally)))
+            .ToList();
+        if (rows.Count == 0)
+            yield break;
+
+        var spent = runs.Sum(r => r.DamageTaken + r.ClosingDamage);
+        var named = runs.Sum(r => r.Damage.Named);
+        yield return $"sim-damage-all: runs={runs.Count} spent={spent} named={named} "
+            + $"unnamed={spent - named} blocked={runs.Sum(r => r.Damage.Blocked)} "
+            + $"healed={runs.Sum(r => r.Healed)}";
+
+        foreach (var act in rows.Select(r => r.Where.Act).Distinct().Order())
+        {
+            var here = rows.Where(r => r.Where.Act == act).ToList();
+            var worst = here
+                .GroupBy(r => r.Where.Source, StringComparer.Ordinal)
+                .Select(g => (Source: g.Key, Health: g.Sum(x => x.Tally.Health),
+                    Hits: g.Sum(x => x.Tally.Hits), Runs: g.Select(x => x.Run).Distinct().Count()))
+                .OrderByDescending(x => x.Health)
+                .ThenBy(x => x.Source, StringComparer.Ordinal)
+                .Take(top)
+                .ToList();
+            yield return $"sim-damage-all-act: act={act} hp={here.Sum(r => r.Tally.Health)} "
+                + $"runs={here.Select(r => r.Run).Distinct().Count()} "
+                + $"top={string.Join(",", worst.Select(w => $"{w.Source}:{w.Health}x{w.Hits}/{w.Runs}runs"))}";
+        }
+    }
+
     public static string Result(BotResult r)
     {
         ArgumentNullException.ThrowIfNull(r);

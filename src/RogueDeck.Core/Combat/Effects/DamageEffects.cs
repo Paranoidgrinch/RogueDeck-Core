@@ -32,7 +32,12 @@ public sealed record DealDamageEffectRequest(
     bool IsRedistributedShare = false,
     // Optional damage element (fire/ice/…). Null = untyped, unchanged. When set, a target status whose
     // PassiveModifierSpec restricts to this element scales the hit (resistance/weakness).
-    ElementId? Element = null
+    ElementId? Element = null,
+    // ⚠ DIAGNOSTIC ONLY, AND DELIBERATELY SO. Which status asked for this hit — a poison ticking, a curse
+    // biting. No rule reads it and no rule may: it exists so the damage trace can NAME the thing that took
+    // the health, because "damage over time from nobody" was the largest single entry on the first receipt
+    // this project ever printed (P2) and an entry nobody can name is not an answer.
+    StatusDefinitionId? SourceStatusId = null
 ) : IEffectRequest;
 
 public sealed class DealDamageEffectHandler : EffectRequestHandler<DealDamageEffectRequest>
@@ -151,7 +156,8 @@ public sealed class DealDamageEffectHandler : EffectRequestHandler<DealDamageEff
                 HealthBefore: healthBeforeDamage,
                 HealthAfter: newHealth,
                 HealthLost: healthDamage,
-                IgnoresBlock: dealDamage.IgnoresBlock));
+                IgnoresBlock: dealDamage.IgnoresBlock,
+                SourceStatusId: dealDamage.SourceStatusId));
 
         if (dealDamage.OutcomeSlot is { } damageSlot)
             damageSlot.Value = new DamageOutcome(

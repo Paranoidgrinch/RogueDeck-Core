@@ -124,7 +124,10 @@ public sealed record DamageResolvedTraceEvent(
     int HealthLost,
     // True when this was block-ignoring ("true") damage: the block pool was bypassed entirely, so the
     // Block* fields above stay zero/null even if the target actually held block.
-    bool IgnoresBlock = false
+    bool IgnoresBlock = false,
+    // Which status asked for the hit, when one did (a poison ticking, a curse biting). Null for a swing or
+    // a card. It is what lets a damage receipt name the thing rather than shrug at it.
+    StatusDefinitionId? SourceStatusId = null
 ) : CombatTraceEvent(Round, Turn);
 
 // Why a candidate trigger did or did not run during one event-dispatch pass. The generic

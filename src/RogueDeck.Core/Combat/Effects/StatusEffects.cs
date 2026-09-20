@@ -504,7 +504,8 @@ public sealed class DamageOverTimeTickEffectHandler
                 Amount: status.Stacks,
                 SourceCombatantId: status.SourceCombatantId,
                 SourceCardId: status.SourceCardId,
-                Kind: DamageKind.DamageOverTime));
+                Kind: DamageKind.DamageOverTime,
+                SourceStatusId: status.DefinitionId));
     }
 }
 

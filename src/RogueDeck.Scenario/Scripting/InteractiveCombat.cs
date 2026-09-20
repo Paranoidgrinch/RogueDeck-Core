@@ -22,6 +22,10 @@ public sealed class InteractiveCombat
     private readonly CombatQueueProcessor _queues = new();
     private readonly List<ScenarioStepReport> _steps = new();
 
+    // How far into the trace the steps have read. What follows it belongs to nobody yet — see the hand-back
+    // step at the end of EndTurn.
+    private int _traced;
+
     public InteractiveCombat(
         CompiledScenario compiled,
         Func<CombatState, CombatantId, int, EnemyActionDefinitionId?> enemyIntent,
@@ -316,6 +320,20 @@ public sealed class InteractiveCombat
             if (++guard > maxSteps)
                 break;
         }
+
+        // ── THE HAND-BACK IS A STEP TOO (P2) ─────────────────────────────────────────────────────────────
+        // ⚠⚠ EVERYTHING THE HERO'S OWN TURN START DID USED TO BELONG TO NO STEP AT ALL. The loop above ends
+        // with the advance that makes the hero active again, and that advance is where a turn-start
+        // automation fires: a poison ticking, a regeneration healing, a start-of-turn rule speaking. Those
+        // trace events were emitted after the last Record and before the next one's mark, so nothing carried
+        // them — not the narrative log, not the damage receipt. A curse could eat a run and leave no line.
+        //
+        // The step type for exactly this moment already existed ("advance real turns until it is the hero's
+        // turn again"); it simply was never recorded here. It is recorded only when the hand-back actually
+        // did something, so a quiet turn does not grow a line that says nothing.
+        if (_collector.Events.Count > _traced)
+            Record(new AdvanceToNextRound(), _combat.CurrentRound, _combat.CurrentTurn, _heroId,
+                new List<string>(), _traced);
     }
 
     // ── WHAT IS ABOUT TO HAPPEN (B4) ─────────────────────────────────────────────────────────────────────
@@ -380,6 +398,7 @@ public sealed class InteractiveCombat
             ? _compiled.IntentFor(new EnemyActionDefinitionId(e.ActionId))
             : null;
         _steps.Add(new ScenarioStepReport(_steps.Count, step, round, turn, actor, intent, trace, problems));
+        _traced = _collector.Events.Count;
     }
 
     private int ResourceCurrent(ResourceId id) =>

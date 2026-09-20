@@ -90,6 +90,7 @@ public static class Program
             return WalkEveryRoute(played, options, maps, generator, policy, features);
 
         var lines = new ConcurrentDictionary<int, string>();
+        var receipts = new ConcurrentBag<BotResult>();
         var failures = 0;
         using var slots = new SemaphoreSlim(options.Jobs);
         var work = Enumerable.Range(options.SeedFrom, options.Runs).Select(seed => Task.Run(async () =>
@@ -114,6 +115,7 @@ public static class Program
                 }
 
                 var (result, log, oracle) = await one.ConfigureAwait(false);
+                receipts.Add(result);
                 if (options.OutDir is { } into)
                     File.WriteAllText(Path.Combine(into, $"run-{seed:0000}.log"), log);
                 if (!result.Clean)
@@ -143,6 +145,9 @@ public static class Program
             Console.WriteLine(lines[seed]);
 
         Console.WriteLine();
+        foreach (var line in BotReport.DamageAcrossRuns([.. receipts]))
+            Console.WriteLine(line);
+
         Console.WriteLine(failures == 0
             ? $"roguedeck-bot: all {options.Runs} runs came back clean"
             : $"roguedeck-bot: {failures} of {options.Runs} runs are worth reading");
@@ -235,6 +240,8 @@ public static class Program
             text.AppendLine(line);
         text.AppendLine(BotReport.Fitness(result));
         text.AppendLine(BotReport.Clearance(result));
+        foreach (var line in BotReport.Damage(result))
+            text.AppendLine(line);
         if (BotReport.Autopsy(result) is { } autopsy)
             text.AppendLine(autopsy);
         if (BotReport.Exam(result) is { Length: > 0 } exam)

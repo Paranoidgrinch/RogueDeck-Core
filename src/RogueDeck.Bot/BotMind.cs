@@ -58,9 +58,19 @@ internal sealed class BotMind
     public int Fights;
     public int Acts = 1;
     public int DamageTaken;
+
+    // What the body lost after the last answer — the blow nobody was asked about, because the run was over.
+    // See the note in Finish.
+    public int ClosingDamage;
     public int Healed;
     public double Seconds => _clock.Elapsed.TotalSeconds;
     public readonly List<string> Rooms = [];
+
+    // ── THE RECEIPT (P2) ─────────────────────────────────────────────────────────────────────────────────
+    // `DamageTaken` says HOW MUCH the walk cost and has never said where it went. This does, out of the
+    // trace the engine writes anyway, and it is held against `DamageTaken` at the end so that what it cannot
+    // explain is printed rather than lost. See DamageLedger.
+    public readonly DamageLedger Ledger = new();
 
     // Every room entered as "<act>:<node id>", in order. Rooms says what KIND of room each one was, which is
     // what a report reads; this says WHICH ROOM, which is what the map oracle needs to find the walk again on
@@ -83,6 +93,16 @@ internal sealed class BotMind
     private string? _lastRoom;
     private int _hpBeforeRoom;
     private int _hpLastSeen;
+
+    // What the ledger files a blow under, kept as the walk goes past: the room's CONTENT (the encounter or
+    // door authored there), not the map coordinate, because a balance sweep adds up across seeds and a
+    // coordinate means nothing in the next one. `_ledgerFight` is the fight still owed a last look — the
+    // blow that kills the hero lands in a fight no seat hands over again, so Finish reads it once more.
+    private string _roomContent = "—";
+    private InteractiveCombat? _ledgerFight;
+    private int _ledgerAct = 1;
+    private string _ledgerRoom = "—";
+    private string _ledgerRole = "—";
 
     // ── The guards ───────────────────────────────────────────────────────────────────────────────────────
     // Never re-offer a play the engine refused; never repeat a play that moved nothing on the table (a card
@@ -153,10 +173,25 @@ internal sealed class BotMind
 
         var hpNow = run.Health.Current;
         if (hpNow < _hpLastSeen)
+        {
             DamageTaken += _hpLastSeen - hpNow;
+            // ⚠ ONLY WHAT NO FIGHT CAN ACCOUNT FOR. Inside a fight the ledger reads the damage pipeline's
+            // own trace, which names who swung; the run's health is the same loss seen from further away,
+            // and adding both would count every blow twice. `_inFight` is still true on the first answer
+            // after a fight ends, which is what keeps that fight's last sync out of here too.
+            if (combat is null && !_inFight)
+                Ledger.Outside(_hpLastSeen - hpNow, run.ActNumber, _roomContent, WhereRole);
+        }
         else if (hpNow > _hpLastSeen)
             Healed += hpNow - _hpLastSeen;
         _hpLastSeen = hpNow;
+
+        if (combat is not null)
+        {
+            (_ledgerFight, _ledgerAct, _ledgerRoom, _ledgerRole) =
+                (combat, run.ActNumber, _roomContent, WhereRole);
+            Ledger.Read(combat, run.ActNumber, _roomContent, WhereRole);
+        }
 
         if (run.CurrentNodeId?.Value is { } here && here != _lastRoom)
         {
@@ -165,6 +200,7 @@ internal sealed class BotMind
             var role = node is null ? "?" : MapRole.Of(node);
             Where = RunBot.Where(run);
             WhereRole = role;
+            _roomContent = RunBot.Content(run);
             Rooms.Add($"{run.ActNumber}:{role}");
             Walked.Add($"{run.ActNumber}:{here}");
             Acts = Math.Max(Acts, run.ActNumber);
@@ -639,7 +675,24 @@ internal sealed class BotMind
             + $"dealt={sat.Dealt} seconds={sat.Seconds:0.0}";
     }
 
-    public BotResult Finish(RunState? run, string? error, bool complete) => new()
+    public BotResult Finish(RunState? run, string? error, bool complete)
+    {
+        // The last look at the fight the run ended in. A hero killed by the closing blow leaves a combat
+        // nobody asks about again, and that blow is the single most interesting line in the whole receipt.
+        if (_ledgerFight is { } last)
+            Ledger.Read(last, _ledgerAct, _ledgerRoom, _ledgerRole);
+
+        // ⚠⚠ THE BLOW THAT ENDS A RUN IS IN NO TALLY. `DamageTaken` is health watched BEFORE each answer,
+        // and a run that dies answers nothing further — so for every losing run the number it reports is
+        // short by exactly the killing blow (seed 1: 56 reported against 70 actually spent). It is left
+        // that way on purpose here: `sim-fitness` is a contract the golden set diffs field for field, and
+        // moving it is a decision somebody makes, not a side effect of building a receipt. What the closing
+        // blow IS gets its own number, so that the ledger can be reconciled against the truth.
+        ClosingDamage = Math.Max(0, _hpLastSeen - (run?.Health.Current ?? _hpLastSeen));
+        return Report(run, error, complete);
+    }
+
+    private BotResult Report(RunState? run, string? error, bool complete) => new()
     {
         Seed = _options.Seed,
         Maps = _options.Maps,
@@ -657,6 +710,7 @@ internal sealed class BotMind
         Rooms = Rooms,
         Walked = Walked,
         DamageTaken = DamageTaken,
+        ClosingDamage = ClosingDamage,
         Healed = Healed,
         DamageAtActBoss = DamageAtActBoss,
         HealthAtActBoss = HealthAtActBoss,
@@ -665,6 +719,7 @@ internal sealed class BotMind
         WhereRole = WhereRole,
         Autopsy = Autopsy(run),
         Exam = Exam(),
+        Damage = Ledger,
     };
 
     // Which door a runner takes. A shop is answered as a shop — how eagerly it spends is a weight of its own,

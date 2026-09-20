@@ -179,8 +179,18 @@ public static class RunBot
     {
         ArgumentNullException.ThrowIfNull(run);
         var here = run.CurrentNodeId?.Value ?? "nowhere";
+        return $"act {run.ActNumber} {here} ({Content(run)})";
+    }
+
+    // What is AUTHORED in the room the run is standing in — the encounter, the door, the shop, by the id
+    // the content gives it. ⚠ The map coordinate (`r12c0`) is not this: it is a different room in the next
+    // seed, so a tally kept under it cannot be added up across a sweep. The content id can.
+    public static string Content(RunState run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        var here = run.CurrentNodeId?.Value ?? "nowhere";
         var node = run.Map.Nodes.FirstOrDefault(n => n.Id.Value == here);
-        var content = node?.Payload switch
+        return node?.Payload switch
         {
             EncounterRef fight => fight.Id.Value,
             EventRef door => door.Id.Value,
@@ -188,7 +198,6 @@ public static class RunBot
             { } payload => payload.GetType().Name,
             _ => "—",
         };
-        return $"act {run.ActNumber} {here} ({content})";
     }
 
     // Everything about the table a play could visibly move. The EXHAUST PILE is deliberately not in it: a card
