@@ -237,7 +237,10 @@ public sealed class InteractiveRunSession : IRunChoiceProvider, IRunEntityChoose
         // A resumed run continues past exactly the node it was saved at (RunRunner.WalkGraph's resume arm),
         // which is what Continue means — so the rebase IS the answer, and nothing is recorded.
         if (TryCheckpoint())
+        {
+            _script.Announce(new InterludeContinueEntry());
             return;
+        }
         _script.Advance(new InterludeContinueEntry());
     }
 

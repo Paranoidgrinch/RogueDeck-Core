@@ -55,12 +55,23 @@ public sealed class ReplayScript
     // The session's replay trigger; Advance records an answer and re-runs the whole script.
     internal Action? OnAdvance { get; set; }
 
+    // Every answer, once, AFTER the run has replayed to the next prompt — so a listener that looks at the run
+    // sees the state the answer led to. Unlike the entries themselves this is never cleared by a checkpoint,
+    // which is why a run recording (RunRecorder) listens here instead of reading the script.
+    public event Action<ReplayEntry>? Answered;
+
     public void Advance(ReplayEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
         _entries.Add(entry);
         OnAdvance?.Invoke();
+        Answered?.Invoke(entry);
     }
+
+    // An answer the session gave by MOVING ITS BASELINE instead of recording it (continuing past an interlude
+    // checkpoints: the snapshot already contains it). Nothing is added to the script, but the answer was still
+    // given, and a run recording must still hear it — or its replay parks at an interlude nobody continued.
+    internal void Announce(ReplayEntry entry) => Answered?.Invoke(entry);
 
     internal void Reset() => _cursor = 0;
 

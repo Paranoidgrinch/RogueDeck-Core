@@ -18,6 +18,9 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
     public PartyInteractiveCombatDriver? PartyCombatDriver { get; private set; }
     public string? Error { get; private set; }
 
+    // The interactive session's answer script — what a RunRecorder listens to and a RunReplayer feeds.
+    public ReplayScript? Script { get; private set; }
+
     public IReadOnlyDictionary<string, int> CardCosts { get; private set; } = new Dictionary<string, int>();
     public IReadOnlyDictionary<string, string> CardNames { get; private set; } = new Dictionary<string, string>();
     public IReadOnlyDictionary<string, string> EnemyNames { get; private set; } = new Dictionary<string, string>();
@@ -298,6 +301,7 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
             // is recorded there and the run re-executes deterministically to the next prompt.
             var isParty = partyOverride ?? start.StartingParty.Count > 0;
             var script = new ReplayScript();
+            Script = script;
             var resettables = new List<IReplayResettable>();
 
             ICombatDriver driver;
@@ -399,6 +403,7 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
 
     public void Dispose()
     {
+        Script = null;
         if (Session is not null)
         {
             Session.Changed -= onChanged;

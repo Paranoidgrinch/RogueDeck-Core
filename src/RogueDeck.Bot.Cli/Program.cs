@@ -24,6 +24,8 @@ public static class Program
 {
     public static int Main(string[] args)
     {
+        if (args.Contains("--replay-run"))
+            return ReplayRun.Run(args);
         var options = CliOptions.Parse(args);
         if (options is null)
         {
