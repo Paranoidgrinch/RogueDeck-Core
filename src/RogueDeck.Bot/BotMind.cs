@@ -567,7 +567,10 @@ internal sealed class BotMind
 
         if (_policy is null)
         {
-            var rolled = allowSkip && _rng.NextDouble() < 0.2 ? [] : RunBot.Pick(_rng, displays.Count, count);
+            // A removal that may be called off (the shop's) is never called off here, and asks no die about
+            // it: the golden set was recorded when no removal could be declined.
+            var rolled = allowSkip && intent != RunChoiceIntent.Remove && _rng.NextDouble() < 0.2
+                ? [] : RunBot.Pick(_rng, displays.Count, count);
             _log.Line($"  pick [{purpose}{(intent == RunChoiceIntent.Remove ? ", giving up" : "")}] -> "
                 + (rolled.Count == 0 ? "skipped" : string.Join(", ", rolled.Select(i => displays[i])))
                 + $" (of {displays.Count})");

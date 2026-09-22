@@ -190,12 +190,19 @@ public sealed class ChooseSelector<T> : IRunSelector<T>
     public IRunSelector<T> Inner { get; }
     public int Count { get; }
     public string Purpose { get; }
-    public ChooseSelector(IRunSelector<T> inner, int count, string purpose)
+    // The player may decline and pick nothing ("remove a card" in a shop, then change your mind). A decline is
+    // noted on the run, so whatever offered the choice can tell "chose none" from "had none to choose" — the
+    // shop uses it to call off the purchase unpaid. Default false stays out of the wire format.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool AllowSkip { get; }
+    public ChooseSelector(IRunSelector<T> inner, int count, string purpose, bool allowSkip = false)
     {
         ArgumentNullException.ThrowIfNull(inner);
         Inner = inner;
         Count = Math.Max(0, count);
         Purpose = purpose;
+        AllowSkip = allowSkip;
     }
     public IReadOnlyList<T> Select(RunEvalContext context)
     {
@@ -207,7 +214,10 @@ public sealed class ChooseSelector<T> : IRunSelector<T>
                 $"A player-choice selector ('{Purpose}') was evaluated without a chooser in context.");
 
         var take = Math.Min(Count, candidates.Count);
-        return context.Chooser.ChooseEntities(candidates, take, Purpose, allowSkip: false, context.Intent);
+        var chosen = context.Chooser.ChooseEntities(candidates, take, Purpose, AllowSkip, context.Intent);
+        if (AllowSkip && chosen.Count == 0)
+            context.Run.NoteDeclinedChoice();
+        return chosen;
     }
 }
 
@@ -241,8 +251,8 @@ public static class RunSelectors
         new RandomSelector<T>(source, count);
 
     public static IRunSelector<T> ChooseByPlayer<T>(
-        this IRunSelector<T> source, int count, string purpose = "select") =>
-        new ChooseSelector<T>(source, count, purpose);
+        this IRunSelector<T> source, int count, string purpose = "select", bool allowSkip = false) =>
+        new ChooseSelector<T>(source, count, purpose, allowSkip);
 
     // Keep the cards matching a data predicate (compose with CardValue + the ordinary combinators).
     public static IRunSelector<RunCardInstance> Matching(

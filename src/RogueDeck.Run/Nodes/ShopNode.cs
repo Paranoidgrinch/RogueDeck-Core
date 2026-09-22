@@ -41,8 +41,9 @@ public static class ShopEntryKinds
 public sealed record ShopReroll(RunResourceId Currency, int Price);
 
 // A shop service — a paid action that is NOT part of the item stock: e.g. "remove a card from your deck" (the
-// classic StS store service). Effects run when purchased (they may use a ChooseByPlayer selector to let the player
-// pick, so a service needs an entity chooser on the run — the runner sets one). Repeatable services can be used
+// classic StS store service). Effects run when purchased, before the price is paid (they may use a ChooseByPlayer
+// selector to let the player pick, so a service needs an entity chooser on the run — the runner sets one; a
+// declinable pick the player declines calls the purchase off unpaid). Repeatable services can be used
 // any number of times; a non-repeatable one (the default) is used-up for the rest of the visit, like an item.
 public sealed record ShopService(
     string Id,
@@ -67,7 +68,10 @@ public sealed record ShopService(
     // a whole family of relics prices card removal specifically.
     public static ShopService RemoveCard(RunResourceId currency, int price, string id = "remove-card") =>
         new(id, currency, price,
-            new IRunEffectRequest[] { new RemoveCardsRunEffect(RunSelectors.DeckCards.ChooseByPlayer(1, "remove a card")) },
+            new IRunEffectRequest[]
+            {
+                new RemoveCardsRunEffect(RunSelectors.DeckCards.ChooseByPlayer(1, "remove a card", allowSkip: true)),
+            },
             TextKey: "event.shop.remove-card",
             Tags: ["removal"]);
 }
@@ -173,13 +177,31 @@ public sealed class ShopNodeResolver : INodeResolver
                 var situation = new EventSituation("shop", "event.shop", available);
 
                 var chosen = context.Choices.Choose(situation, available, run);
+                var service = shelf.FindService(chosen.Id);
+
+                // A service does its work BEFORE it is paid for, because its work may be a choice the player can
+                // decline ("remove a card" — and then not): a declined service was never bought, costs nothing
+                // and stays on offer. Nothing about it has happened yet, so there is nothing to undo.
+                if (service is not null)
+                {
+                    var declined = run.DeclinedChoices;
+                    foreach (var effect in chosen.Effects)
+                        run.EnqueueEffect(effect);
+                    context.ResolvePendingEffects();
+                    if (run.DeclinedChoices != declined)
+                    {
+                        run.AddLog(StandardRunLogTypes.ShopPurchase, $"Node '{node.Id}': '{chosen.Id}' called off.");
+                        continue;
+                    }
+                }
 
                 // Pay the choice's costs, then run its effects, then flush — so the next round's affordability
                 // check observes the spent-down balance (and any relic reactions to the purchase have resolved).
                 foreach (var effect in chosen.PayEffects)
                     run.EnqueueEffect(effect);
-                foreach (var effect in chosen.Effects)
-                    run.EnqueueEffect(effect);
+                if (service is null)
+                    foreach (var effect in chosen.Effects)
+                        run.EnqueueEffect(effect);
 
                 if (chosen.Id == LeaveChoiceId)
                 {
@@ -198,7 +220,6 @@ public sealed class ShopNodeResolver : INodeResolver
 
                 // Otherwise it is a purchase — an item or a service. Mark it used-up (unless a repeatable
                 // service). The slot has to be read BEFORE it is sold, since selling takes it off the shelf.
-                var service = shelf.FindService(chosen.Id);
                 var slot = shelf.FindSlot(chosen.Id);
                 var paid = slot?.Price ?? (service is null ? 0 : shelf.PriceOf(service));
                 // Without payment terms the currency settles the whole price, which is what every shop did

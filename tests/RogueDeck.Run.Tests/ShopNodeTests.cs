@@ -183,6 +183,59 @@ public class ShopNodeTests
         Assert.Equal(new[] { "b" }, run.Deck.Select(c => c.DefinitionId.value));
     }
 
+    // Says no to every pick it may say no to, and takes the first candidate of any it may not.
+    private sealed class DecliningChooser : IRunEntityChooser
+    {
+        public int Declined { get; private set; }
+        public IReadOnlyList<T> ChooseEntities<T>(IReadOnlyList<T> candidates, int count, string purpose) =>
+            candidates.Take(count).ToArray();
+        public IReadOnlyList<T> ChooseEntities<T>(
+            IReadOnlyList<T> candidates, int count, string purpose, bool allowSkip)
+        {
+            if (!allowSkip)
+                return ChooseEntities(candidates, count, purpose);
+            Declined++;
+            return Array.Empty<T>();
+        }
+    }
+
+    [Fact]
+    public void Calling_off_a_card_removal_costs_nothing_and_leaves_it_on_offer()
+    {
+        var run = NewRun(100);
+        run.AddDeckCard(new CardDefinitionId("a"));
+        var shop = new ShopDefinition(
+            Array.Empty<ShopEntry>(), OfferCount: 0,
+            Services: new[] { ShopService.RemoveCard(Gold, 25) });
+        var provider = new ScriptedChoiceProvider("remove-card", "remove-card", "leave");
+        var chooser = new DecliningChooser();
+        run.SetEntityChooser(chooser);
+        var context = new NodeResolveContext(run, provider, Registry(), new RunEffectProcessor());
+
+        new ShopNodeResolver().Resolve(context, new Node(new NodeId("shop"), StandardRunIds.ShopNode, shop));
+
+        // Offered twice and declined twice: the second offer proves the first decline did not use it up.
+        Assert.Equal(2, chooser.Declined);
+        Assert.Equal(100, run.GetResource(Gold));
+        Assert.Equal(new[] { "a" }, run.Deck.Select(c => c.DefinitionId.value));
+        Assert.Empty(run.EventHistory.OfType<ShopItemPurchasedRunEvent>());
+    }
+
+    [Fact]
+    public void A_removal_that_may_be_called_off_round_trips_and_one_that_may_not_writes_what_it_always_did()
+    {
+        var options = RunJson.CreateOptions();
+        var skippable = RunJson.ToJson(ShopService.RemoveCard(Gold, 25), options);
+        Assert.Contains("\"AllowSkip\": true", skippable);
+        var back = RunJson.FromJson<ShopService>(skippable, options);
+        var removal = Assert.IsType<RemoveCardsRunEffect>(Assert.Single(back.Effects));
+        Assert.True(Assert.IsType<ChooseSelector<RunCardInstance>>(removal.Selector).AllowSkip);
+
+        var mandatory = RunJson.ToJson(
+            new RemoveCardsRunEffect(RunSelectors.DeckCards.ChooseByPlayer(1, "remove")), options);
+        Assert.DoesNotContain("AllowSkip", mandatory);
+    }
+
     [Fact]
     public void A_non_repeatable_service_is_used_up_after_one_use()
     {

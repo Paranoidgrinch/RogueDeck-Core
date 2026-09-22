@@ -202,6 +202,13 @@ public sealed class RunState
     }
 
     public void EndShopVisit() => ActiveShopShelf = null;
+
+    // How many declinable player choices were declined so far (see ChooseSelector.AllowSkip). Only ever compared
+    // before and after one effect resolution, never saved: it is a way for a resolver to hear "the player said
+    // no", not a fact about the run.
+    public int DeclinedChoices { get; private set; }
+
+    public void NoteDeclinedChoice() => DeclinedChoices++;
     // The persistent player-controlled board roster (P5c). Empty ⇒ today's single-hero run.
     public IReadOnlyList<RunUnit> Units => _units;
     public IReadOnlyList<IRunEvent> EventHistory => _history;
