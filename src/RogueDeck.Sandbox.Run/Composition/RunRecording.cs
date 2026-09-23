@@ -39,6 +39,10 @@ public sealed record RunRecording
     public string? EndedUtc { get; set; }
     // How many times this run was resumed from a save — a run played in one sitting is 0.
     public int Resumes { get; set; }
+    // COUNTS THE HOST KEPT while the run was played — enemies felled, elites, bosses, whatever it chooses to
+    // count — so a collection of recordings can be tallied without replaying every one of them. Not part of the
+    // run: a replay neither needs nor checks them, and a recording without any (an older file) is still whole.
+    public Dictionary<string, int> Tallies { get; init; } = [];
 }
 
 public sealed record RunRecordingPlayer(string Name, string Id);

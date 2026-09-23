@@ -108,6 +108,23 @@ public class RunRecordingTests
         Assert.True(outcome.Divergence is not null || outcome.Error is not null);
     }
 
+    // The host's counts ride along in the file and come back out of the TEXT; a file written before they existed
+    // still reads, with none.
+    [Fact]
+    public void Tallies_survive_the_file_and_an_older_file_has_none()
+    {
+        var recording = Begin(3);
+        recording.Tallies["enemies"] = 12;
+        recording.Tallies["bosses"] = 1;
+
+        var back = RunRecordingJson.FromJson(RunRecordingJson.ToJson(recording));
+        Assert.Equal(12, back.Tallies["enemies"]);
+        Assert.Equal(1, back.Tallies["bosses"]);
+
+        var older = RunRecordingJson.ToJson(Begin(4)).Replace("\"Tallies\"", "\"Unused\"", StringComparison.Ordinal);
+        Assert.Empty(RunRecordingJson.FromJson(older).Tallies);
+    }
+
     [Fact]
     public void Every_kind_of_answer_survives_the_codec()
     {
