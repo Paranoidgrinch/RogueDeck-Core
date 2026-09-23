@@ -44,6 +44,8 @@ public class AutoPlayCombatDriverTests
 
         Assert.Equal(CombatResult.Victory, result.Result);
         Assert.True(result.HeroHpRemaining > 0);
+        // The fight reports who fell — the goblin, by its definition id.
+        Assert.Equal(["goblin"], result.Fallen);
     }
 
     [Fact]
@@ -54,6 +56,8 @@ public class AutoPlayCombatDriverTests
 
         Assert.Equal(CombatResult.Defeat, result.Result);
         Assert.Equal(0, result.HeroHpRemaining);
+        // …and a fight lost reports nobody fallen: the list is what went down, not who was there.
+        Assert.Empty(result.Fallen!);
     }
 
     [Fact]
@@ -84,6 +88,8 @@ public class AutoPlayCombatDriverTests
         Assert.Equal(RunResult.Victory, run.Result);
         Assert.Contains(run.EventHistory.OfType<CombatResolvedRunEvent>(),
             e => e.Result == CombatResult.Victory);
+        // The run hears who fell, so a host can count it without watching the fight.
+        Assert.Equal(["goblin"], run.EventHistory.OfType<CombatResolvedRunEvent>().Single().Fallen);
     }
 
     // A fight the hero wins on turn 1 (a fragile actionless goblin) — so the hero takes NO combat damage and any HP

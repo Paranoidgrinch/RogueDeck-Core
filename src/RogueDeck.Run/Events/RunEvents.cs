@@ -42,7 +42,9 @@ public sealed record CombatResolvedRunEvent(
     IReadOnlyList<string>? Tags = null,
     // What the hero tallied inside the fight (its counters at the final state) — the bridge a relic crosses
     // when it counts in combat and pays in the run. Null ⇒ nothing tallied; an unknown counter reads 0.
-    IReadOnlyDictionary<string, int>? Counters = null
+    IReadOnlyDictionary<string, int>? Counters = null,
+    // The enemy bodies that were down when the fight ended, by definition id (CombatDriveResult.Fallen).
+    IReadOnlyList<string>? Fallen = null
 ) : IRunEvent, INodeTaggedRunEvent
 {
     IReadOnlyList<string> INodeTaggedRunEvent.NodeTags => Tags ?? [];

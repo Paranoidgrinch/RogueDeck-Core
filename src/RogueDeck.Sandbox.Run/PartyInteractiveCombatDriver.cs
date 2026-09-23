@@ -86,7 +86,8 @@ public sealed class PartyInteractiveCombatDriver : ICombatDriver, IReplayResetta
                 Changed?.Invoke();
                 return new CombatDriveResult(combat.Result, heroHp,
                     UnitDriveResults.Read(combat.State, allies),
-                    HeroCounterResults.Read(combat.State, heroId));
+                    HeroCounterResults.Read(combat.State, heroId),
+                    FallenEnemyResults.Read(combat.State, heroId));
             }
 
             if (_script.TryTake<CombatPlayEntry>(out var play))
