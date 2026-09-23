@@ -44,8 +44,10 @@ public class AutoPlayCombatDriverTests
 
         Assert.Equal(CombatResult.Victory, result.Result);
         Assert.True(result.HeroHpRemaining > 0);
-        // The fight reports who fell — the goblin, by its definition id.
+        // The fight reports who fell — the goblin, by its definition id — and what was played to do it: two
+        // smites of 6 fell a 12-health goblin.
         Assert.Equal(["goblin"], result.Fallen);
+        Assert.Equal(2, result.CardsPlayed!["smite"]);
     }
 
     [Fact]
@@ -58,6 +60,7 @@ public class AutoPlayCombatDriverTests
         Assert.Equal(0, result.HeroHpRemaining);
         // …and a fight lost reports nobody fallen: the list is what went down, not who was there.
         Assert.Empty(result.Fallen!);
+        Assert.Empty(result.CardsPlayed!); // a deck without a card in it plays nothing
     }
 
     [Fact]

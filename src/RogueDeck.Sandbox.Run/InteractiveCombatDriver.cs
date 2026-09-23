@@ -103,7 +103,8 @@ public sealed class InteractiveCombatDriver : ICombatDriver, IReplayResettable, 
                 Changed?.Invoke();
                 return new CombatDriveResult(combat.Result, heroHp, Units: null,
                     HeroCounters: HeroCounterResults.Read(combat.State, combat.HeroId),
-                    Fallen: FallenEnemyResults.Read(combat.State, combat.HeroId));
+                    Fallen: FallenEnemyResults.Read(combat.State, combat.HeroId),
+                    CardsPlayed: CardPlayResults.Read(combat.State, combat.HeroId));
             }
 
             if (_script.TryTake<CombatPlayEntry>(out var play))

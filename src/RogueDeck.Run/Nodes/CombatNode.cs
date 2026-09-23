@@ -46,7 +46,22 @@ public sealed record CombatDriveResult(
     // WHO FELL: the definition ids of the enemy-team bodies that were down when the fight ended, one entry per
     // body. A host that counts what its player has felled reads it off the resolved event rather than watching
     // the fight — the finishing blow and the end of the fight arrive in the same step. Null ⇒ not reported.
-    IReadOnlyList<string>? Fallen = null);
+    IReadOnlyList<string>? Fallen = null,
+    // WHAT THE HERO PLAYED: card definition id → times played in this fight (the combat's own play log). A host
+    // that keeps a "played N times" per card, or a pile of recordings that asks which cards carry runs, reads it
+    // here. Null ⇒ not reported.
+    IReadOnlyDictionary<string, int>? CardsPlayed = null);
+
+// Reads the hero's play log off a finished CombatState, for every driver alike (see CombatDriveResult.CardsPlayed).
+public static class CardPlayResults
+{
+    public static IReadOnlyDictionary<string, int> Read(CombatState state, CombatantId heroId)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        return state.GetCardPlayTurnStats(heroId).CardsPlayedByDefinitionThisCombat
+            .ToDictionary(pair => pair.Key.value, pair => pair.Value, StringComparer.Ordinal);
+    }
+}
 
 // Reads the fallen enemy bodies off a finished CombatState, for every driver alike (see CombatDriveResult.Fallen).
 public static class FallenEnemyResults
@@ -161,7 +176,8 @@ public sealed class ScriptedCombatDriver : ICombatDriver
         return new CombatDriveResult(
             report.Result, remaining, UnitDriveResults.Read(report.FinalState, playthrough.Blueprint.Allies),
             HeroCounterResults.Read(report.FinalState, heroId),
-            FallenEnemyResults.Read(report.FinalState, heroId));
+            FallenEnemyResults.Read(report.FinalState, heroId),
+            CardPlayResults.Read(report.FinalState, heroId));
     }
 }
 
@@ -210,7 +226,8 @@ public sealed class AutoPlayCombatDriver : ICombatDriver
         return new CombatDriveResult(
             combat.Result, remaining, UnitDriveResults.Read(combat.State, playthrough.Blueprint.Allies),
             HeroCounterResults.Read(combat.State, compiled.Hero.CombatantId),
-            FallenEnemyResults.Read(combat.State, compiled.Hero.CombatantId));
+            FallenEnemyResults.Read(combat.State, compiled.Hero.CombatantId),
+            CardPlayResults.Read(combat.State, compiled.Hero.CombatantId));
     }
 
     private static CombatantId? FirstAliveEnemy(InteractiveCombat combat, CompiledScenario compiled)
@@ -278,7 +295,8 @@ public sealed class PartyAutoPlayCombatDriver : ICombatDriver
         return new CombatDriveResult(
             party.Result, heroHp, UnitDriveResults.Read(party.State, playthrough.Blueprint.Allies),
             HeroCounterResults.Read(party.State, heroId),
-            FallenEnemyResults.Read(party.State, heroId));
+            FallenEnemyResults.Read(party.State, heroId),
+            CardPlayResults.Read(party.State, heroId));
     }
 
     private static CombatantId? FirstAliveEnemy(CombatState state, CompiledScenario compiled)
@@ -339,7 +357,7 @@ public sealed class CombatNodeResolver : INodeResolver
             $"Node '{node.Id}': {result.Result}, hero {result.HeroHpRemaining} HP (took {damageTaken}).");
         run.RaiseEvent(new CombatResolvedRunEvent(
             node.Id, result.Result, result.HeroHpRemaining, damageTaken, node.Tags, result.HeroCounters,
-            result.Fallen));
+            result.Fallen, result.CardsPlayed));
 
         // Post-combat reward: on a victory, offer the node's reward (if any). Enqueued AFTER the resolved-event so a
         // relic reacting to the win queues first; the player then picks via the run's entity chooser (headless takes

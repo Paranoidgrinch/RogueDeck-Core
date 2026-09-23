@@ -146,7 +146,8 @@ internal sealed class BotSeat(RunPlayback play, BotOptions options, IBotLog log)
                     : 0;
                 return new CombatDriveResult(combat.Result, heroHp, Units: null,
                     HeroCounters: HeroCounterResults.Read(combat.State, combat.HeroId),
-                    Fallen: FallenEnemyResults.Read(combat.State, combat.HeroId));
+                    Fallen: FallenEnemyResults.Read(combat.State, combat.HeroId),
+                    CardsPlayed: CardPlayResults.Read(combat.State, combat.HeroId));
             }
 
             Begin();

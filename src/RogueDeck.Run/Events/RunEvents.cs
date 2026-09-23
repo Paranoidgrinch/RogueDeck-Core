@@ -44,7 +44,9 @@ public sealed record CombatResolvedRunEvent(
     // when it counts in combat and pays in the run. Null ⇒ nothing tallied; an unknown counter reads 0.
     IReadOnlyDictionary<string, int>? Counters = null,
     // The enemy bodies that were down when the fight ended, by definition id (CombatDriveResult.Fallen).
-    IReadOnlyList<string>? Fallen = null
+    IReadOnlyList<string>? Fallen = null,
+    // What the hero played in the fight, definition id → times (CombatDriveResult.CardsPlayed).
+    IReadOnlyDictionary<string, int>? CardsPlayed = null
 ) : IRunEvent, INodeTaggedRunEvent
 {
     IReadOnlyList<string> INodeTaggedRunEvent.NodeTags => Tags ?? [];

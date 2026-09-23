@@ -105,6 +105,10 @@ public sealed class CombatantCardPlayTurnStats
     public int CardsPlayedThisCombatOf(CardDefinitionId definition) =>
         _cardsPlayedByDefinitionThisCombat.GetValueOrDefault(definition);
 
+    // The whole fight's play log by definition — what a finished fight reports as CardsPlayed.
+    public IReadOnlyDictionary<CardDefinitionId, int> CardsPlayedByDefinitionThisCombat =>
+        _cardsPlayedByDefinitionThisCombat;
+
     public void RecordCardPlayed(CardDefinition card)
     {
         ArgumentNullException.ThrowIfNull(card);

@@ -87,7 +87,8 @@ public sealed class PartyInteractiveCombatDriver : ICombatDriver, IReplayResetta
                 return new CombatDriveResult(combat.Result, heroHp,
                     UnitDriveResults.Read(combat.State, allies),
                     HeroCounterResults.Read(combat.State, heroId),
-                    FallenEnemyResults.Read(combat.State, heroId));
+                    FallenEnemyResults.Read(combat.State, heroId),
+                    CardPlayResults.Read(combat.State, heroId));
             }
 
             if (_script.TryTake<CombatPlayEntry>(out var play))
