@@ -117,12 +117,26 @@ public class RunRecordingTests
         recording.Tallies["enemies"] = 12;
         recording.Tallies["bosses"] = 1;
 
+        recording.CardPlays["paper_cut"] = 23;
+        recording.Picks.Add(new RunRecordingPick(2, "reward-card", ["paper_cut", "strong_binder+"], ["strong_binder+"]));
+        recording.Feedback = new RunRecordingFeedback(2, "the second elite was brutal");
+
         var back = RunRecordingJson.FromJson(RunRecordingJson.ToJson(recording));
         Assert.Equal(12, back.Tallies["enemies"]);
         Assert.Equal(1, back.Tallies["bosses"]);
+        Assert.Equal(23, back.CardPlays["paper_cut"]);
+        var pick = Assert.Single(back.Picks);
+        Assert.Equal((2, "reward-card"), (pick.Act, pick.Purpose));
+        Assert.Equal(["paper_cut", "strong_binder+"], pick.Offered);
+        Assert.Equal(["strong_binder+"], pick.Taken);
+        Assert.Equal(new RunRecordingFeedback(2, "the second elite was brutal"), back.Feedback);
 
         var older = RunRecordingJson.ToJson(Begin(4)).Replace("\"Tallies\"", "\"Unused\"", StringComparison.Ordinal);
-        Assert.Empty(RunRecordingJson.FromJson(older).Tallies);
+        var old = RunRecordingJson.FromJson(older);
+        Assert.Empty(old.Tallies);
+        Assert.Empty(old.CardPlays);
+        Assert.Empty(old.Picks);
+        Assert.Null(old.Feedback);
     }
 
     [Fact]

@@ -43,7 +43,23 @@ public sealed record RunRecording
     // count — so a collection of recordings can be tallied without replaying every one of them. Not part of the
     // run: a replay neither needs nor checks them, and a recording without any (an older file) is still whole.
     public Dictionary<string, int> Tallies { get; init; } = [];
+    // How often each card was played over the run, by the card's BASE definition id (an improved copy counts for
+    // the card it improves). Kept by the host like the tallies, and like them not part of the run.
+    public Dictionary<string, int> CardPlays { get; init; } = [];
+    // Every choice among CARDS the player was offered — a reward, a shop shelf, a pick of any purpose — with
+    // what was on offer and what was taken. Not needed to replay (the answers are), but the recording itself
+    // does not say what an index meant, and "which cards does nobody take" is asked of many recordings at once.
+    public List<RunRecordingPick> Picks { get; init; } = [];
+    // What the player said about the run when it was over, if anything.
+    public RunRecordingFeedback? Feedback { get; set; }
 }
+
+// One choice among cards: where it happened, what it was for, what was offered (card ids, an improved copy with
+// its "+"), and what was taken — empty when the player took nothing.
+public sealed record RunRecordingPick(int Act, string Purpose, string[] Offered, string[] Taken);
+
+// The player's word on a finished run: a rating of 1–5 ("was that fair?") and an optional line of text.
+public sealed record RunRecordingFeedback(int Rating, string? Comment);
 
 public sealed record RunRecordingPlayer(string Name, string Id);
 
