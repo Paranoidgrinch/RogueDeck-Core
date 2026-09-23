@@ -108,6 +108,38 @@ public class RunRecordingTests
         Assert.True(outcome.Divergence is not null || outcome.Error is not null);
     }
 
+    // WHAT AN INDEX MEANT. The answers are only indexes; the recorder writes down, for every choice among cards
+    // the run walked through, what stood on offer and which of it was taken — read off the prompt BEFORE it was
+    // answered, since the answer event arrives with the run already at the next one.
+    [Fact]
+    public void A_recorded_run_says_which_cards_it_was_offered_and_which_it_took()
+    {
+        var blueprint = Sample();
+        using var play = new RunPlayback(() => { });
+        play.Start(blueprint, 1, interactive: true);
+        var deckBefore = play.Session!.Run.Deck.Count;
+        var recorder = new RunRecorder(Begin(1));
+        recorder.Attach(play);
+        Walk(play, 1, budget: 4000);
+        recorder.Detach();
+
+        var picks = RunRecordingJson.FromJson(RunRecordingJson.ToJson(recorder.Recording)).Picks;
+        Assert.NotEmpty(picks);
+        Assert.All(picks, pick =>
+        {
+            Assert.NotEmpty(pick.Offered);
+            Assert.All(pick.Taken, card => Assert.Contains(card, pick.Offered));
+        });
+        // The taking is real: every card a gain-pick took is a card the deck grew by (nothing in the sample
+        // removes cards on this walk), so a recorder that invented takes, or lost them, would miss this.
+        var gained = picks.Where(p => !p.Purpose.StartsWith("remove|", StringComparison.Ordinal))
+            .Sum(p => p.Taken.Length);
+        Assert.True(gained > 0, "the walk took no card from any pick");
+        var removed = picks.Where(p => p.Purpose.StartsWith("remove|", StringComparison.Ordinal))
+            .Sum(p => p.Taken.Length);
+        Assert.Equal(deckBefore + gained - removed, play.Session!.Run.Deck.Count);
+    }
+
     // The host's counts ride along in the file and come back out of the TEXT; a file written before they existed
     // still reads, with none.
     [Fact]

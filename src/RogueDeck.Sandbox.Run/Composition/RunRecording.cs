@@ -168,6 +168,16 @@ public sealed class RunRecorder
     private RunPlayback? _playback;
     private string? _lastRoom;
 
+    // THE QUESTION STANDING WHEN THE NEXT ANSWER COMES. ReplayScript.Answered fires AFTER the answer has been
+    // applied, when the run already stands at the next prompt — so what a pick index MEANT has to be read off the
+    // prompt before it is answered. These hold it: a pick among cards (index → card id, null for a non-card
+    // option), and the shop the run is standing in (every card seen on its shelves this visit, and what was bought).
+    private (int Act, string Purpose, string?[] Cards)? _pendingPick;
+    private string? _shopRoom;
+    private int _shopAct;
+    private readonly Dictionary<string, string> _shopSeen = new(StringComparer.Ordinal);
+    private readonly List<string> _shopTaken = [];
+
     public RunRecording Recording { get; private set; }
 
     public RunRecorder(RunRecording recording)
@@ -219,6 +229,7 @@ public sealed class RunRecorder
         script.Answered += OnAnswered;
         // A run that begins standing in a room (or a resumed one) is noted before its first answer.
         Check();
+        Look();
     }
 
     public void Detach()
@@ -231,9 +242,73 @@ public sealed class RunRecorder
     private void OnAnswered(ReplayEntry entry)
     {
         Recording.Answers.Add(RunAnswerCodec.Encode(entry));
+        Note(entry);
         Check();
+        Look();
         if (_playback?.Session is { IsComplete: true } session && Recording.Result is null)
             Recording.Result = session.Error is null ? session.Run.Result.ToString() : $"Error: {session.Error}";
+    }
+
+    // An improved copy is written with its "+", so an offer of Paper Cut+ is not an offer of Paper Cut.
+    private static string CardId(EntityArt art) => art.UpgradeLevel > 0 ? art.Id + "+" : art.Id;
+
+    // What the answer just given MEANT, against the prompt it answered.
+    private void Note(ReplayEntry entry)
+    {
+        switch (entry)
+        {
+            case EntityPicksEntry picks when _pendingPick is { } pick:
+                Recording.Picks.Add(new RunRecordingPick(pick.Act, pick.Purpose,
+                    [.. pick.Cards.OfType<string>()],
+                    [.. picks.Indices.Where(i => i >= 0 && i < pick.Cards.Length && pick.Cards[i] is not null)
+                        .Select(i => pick.Cards[i]!)]));
+                break;
+            case EventPickEntry chosen when _shopRoom is not null && _shopSeen.TryGetValue(chosen.ChoiceId, out var card):
+                _shopTaken.Add(card);
+                break;
+        }
+    }
+
+    // The prompt the run now stands at: a pick among cards, or a shop's shelves. A pick that offers no card is
+    // not a card choice and is not written; a removal is marked by its intent ("remove|…"), so "nobody takes
+    // this" can be told apart from "everybody throws this away".
+    private void Look()
+    {
+        _pendingPick = null;
+        if (_playback?.Session is not { } session)
+            return;
+        var run = session.Run;
+        if (session.PendingEntities is { } request)
+        {
+            var cards = Enumerable.Range(0, request.Displays.Count)
+                .Select(i => request.ArtAt(i) is { Kind: EntityArt.Card } art ? CardId(art) : null)
+                .ToArray();
+            if (cards.Any(card => card is not null))
+                _pendingPick = (run.ActNumber,
+                    request.Intent == RunChoiceIntent.Remove ? $"remove|{request.Purpose}" : request.Purpose, cards);
+        }
+
+        // ONE SHOP VISIT IS ONE CHOICE: every card that stood on its shelves while the player was there (a card
+        // seen on ten redraws of one shelf is one card offered), and what they bought. Written when they leave.
+        var here = run.ActiveShopShelf is { } shelf && session.PendingSituation is not null
+            ? (Room: $"{run.ActNumber}:{run.CurrentNodeId?.Value}", Shelf: shelf)
+            : ((string Room, ShopShelf Shelf)?)null;
+        if (_shopRoom is not null && here?.Room != _shopRoom)
+        {
+            if (_shopSeen.Count > 0)
+                Recording.Picks.Add(new RunRecordingPick(_shopAct, "shop", [.. _shopSeen.Values], [.. _shopTaken]));
+            _shopRoom = null;
+            _shopSeen.Clear();
+            _shopTaken.Clear();
+        }
+        if (here is { } shop)
+        {
+            _shopRoom = shop.Room;
+            _shopAct = run.ActNumber;
+            foreach (var slot in shop.Shelf.Slots)
+                if (RunEntityLabeler.ArtForGrant(slot.Entry.Payload) is { Kind: EntityArt.Card } art)
+                    _shopSeen.TryAdd(slot.Entry.Id, CardId(art));
+        }
     }
 
     private void Check()
