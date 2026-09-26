@@ -127,4 +127,27 @@ public class CombatSaveJsonRoundTripTests
         Assert.Equal(2, restored.Combatants.Count);
         Assert.Empty(restored.GetCardZones(HeroId).Hand);
     }
+
+    // What the triggers have paid out survives the file and the rebuild, so a host that lights a relic up when
+    // its count rises does not read a checkpoint or a resume as "nothing has fired". A fight with no activity
+    // writes no field at all, which is what every save before the field existed looks like.
+    [Fact]
+    public void Trigger_activity_comes_back_through_the_file_and_is_absent_when_empty()
+    {
+        var snapshot = AFightInProgress().CreateSnapshot() with
+        {
+            TriggerActivity = [new TriggerActivitySnapshot("index_bone_trigger0", 3)],
+        };
+        var restored = CombatState.Restore(ThroughTheSaveFile(snapshot));
+        Assert.Equal(3, restored.TriggerActivity[new TriggeredEffectDefinitionId("index_bone_trigger0")]);
+
+        var quiet = AFightInProgress().CreateSnapshot();
+        Assert.True(quiet.TriggerActivity.IsDefault);
+        Assert.DoesNotContain("TriggerActivity", RunSaveJson.ToJson(new RunSaveData(
+            RunId: "r", RandomSeed: 1, RandomStep: 0, Result: RunResult.Ongoing,
+            Position: 0, CurrentNodeId: "n1", Visited: [], Flags: [],
+            Counters: new Dictionary<string, int>(), Party: [], Units: [], Programs: [], NextProgramSeq: 0)
+        { Combat = new CombatSaveData("n1", quiet) }), StringComparison.Ordinal);
+        Assert.Empty(CombatState.Restore(ThroughTheSaveFile(quiet)).TriggerActivity);
+    }
 }

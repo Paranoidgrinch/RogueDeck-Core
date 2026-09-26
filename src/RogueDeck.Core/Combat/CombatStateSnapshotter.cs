@@ -61,7 +61,13 @@ public static class CombatStateSnapshotter
             // In TurnOrder, so the capture is stable and the restore can walk it beside the combatants.
             CardPlayTurnStats: combat.TurnOrder
                 .Select(id => new CombatantCardPlayTurnStatsSnapshot(id, combat.GetCardPlayTurnStats(id).Capture()))
-                .ToImmutableArray());
+                .ToImmutableArray(),
+            TriggerActivity: combat.TriggerActivity.Count == 0
+                ? default
+                : combat.TriggerActivity
+                    .OrderBy(pair => pair.Key.value, StringComparer.Ordinal)
+                    .Select(pair => new TriggerActivitySnapshot(pair.Key.value, pair.Value))
+                    .ToImmutableArray());
     }
 
     private static CombatantSnapshot SnapshotCombatant(CombatantState c) =>

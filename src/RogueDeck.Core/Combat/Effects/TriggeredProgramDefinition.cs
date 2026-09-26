@@ -137,11 +137,15 @@ public sealed class TriggeredProgramCombatEventHandler<TEvent, TEventContext>
 
             var triggeredChain = combat.CreateTriggeredEffectChain(definition.Id);
             var buildCtx = definition.BuildContext(ctx);
+            var enqueuedBefore = combat.EffectsEnqueued;
 
             using (combat.EnterEffectChain(triggeredChain))
                 EffectProgramExecutor.Execute(
                     definition.Program, ctx, buildCtx, combat,
                     registry: registry.EffectNodeExecutors);
+
+            if (combat.EffectsEnqueued > enqueuedBefore)
+                combat.NoteTriggerActivity(definition.Id);
 
             if (instance is not null)
             {

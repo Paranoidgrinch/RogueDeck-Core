@@ -133,8 +133,19 @@ public sealed record CombatStateSnapshot(
     // resources gained and spent. Empty (the default, and every snapshot taken before this field existed) is
     // a fight with no history, which is what a restore used to produce for ALL of them: every "more than last
     // turn" and "you opened with an Attack again" rule read zero on the far side of a save.
-    ImmutableArray<CombatantCardPlayTurnStatsSnapshot> CardPlayTurnStats = default
+    ImmutableArray<CombatantCardPlayTurnStatsSnapshot> CardPlayTurnStats = default,
+
+    // How often each trigger has paid out this fight (CombatState.TriggerActivity) — a host's reading, never a
+    // rule's. Carried so that a fight rebuilt from its own snapshot (a checkpoint at a turn boundary, a resumed
+    // save) keeps counting instead of starting again, which a host comparing two drawings would read as nothing
+    // having fired. Written only when there is something to write; absent is an empty count.
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    ImmutableArray<TriggerActivitySnapshot> TriggerActivity = default
 );
+
+// One trigger's count. A named record, not a tuple — see the warning below.
+public sealed record TriggerActivitySnapshot(string TriggerId, int Times);
 
 // ⚠⚠ A VALUE TUPLE DOES NOT SURVIVE JSON. This was `(CombatantId, CardPlayTurnStatsSnapshot)`, which is
 // correct in memory and correct through every in-process snapshot test — and `System.Text.Json` writes a

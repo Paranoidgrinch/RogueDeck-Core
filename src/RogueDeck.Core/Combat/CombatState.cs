@@ -396,10 +396,26 @@ public sealed class CombatState
 
         _pendingEffects.Enqueue(request);
         _pendingEffectChains.Enqueue(effectChain);
+        _effectsEnqueued++;
         // Tag the effect with the program frame (if any) executing at enqueue time, so a
         // queue-time handler fault can be bound back to the owning frame.
         _pendingEffectOwners.Enqueue(CurrentOwningProgramExecutionId);
     }
+
+    // HOW OFTEN EACH TRIGGER HAS DONE SOMETHING in this state's lifetime: a trigger counts when its program ran
+    // AND enqueued at least one effect — so a "first card each turn" rule that fires on every card but pays only
+    // once counts once. A host reads it to show a rule ACTING (a relic's frame flashing when it fires); nothing
+    // in the rules reads it, and it is deliberately not part of a snapshot: a restored state starts counting
+    // again, and a reader compares against what it last saw.
+    private readonly Dictionary<TriggeredEffectDefinitionId, int> _triggerActivity = [];
+    private long _effectsEnqueued;
+
+    public IReadOnlyDictionary<TriggeredEffectDefinitionId, int> TriggerActivity => _triggerActivity;
+
+    internal long EffectsEnqueued => _effectsEnqueued;
+
+    internal void NoteTriggerActivity(TriggeredEffectDefinitionId id) =>
+        _triggerActivity[id] = _triggerActivity.GetValueOrDefault(id) + 1;
 
     public IEffectRequest DequeueNextEffect()
     {
@@ -827,6 +843,11 @@ public sealed class CombatState
             foreach (var entry in snapshot.CardPlayTurnStats)
                 if (combat.Combatants.Any(c => c.Id == entry.CombatantId))
                     combat.GetCardPlayTurnStats(entry.CombatantId).Restore(entry.Stats);
+
+        // ⚠ IsDefault first: `default` on an ImmutableArray is not an empty array, it throws when walked.
+        if (!snapshot.TriggerActivity.IsDefault)
+            foreach (var entry in snapshot.TriggerActivity)
+                combat._triggerActivity[new TriggeredEffectDefinitionId(entry.TriggerId)] = entry.Times;
 
         return combat;
     }
