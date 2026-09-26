@@ -72,6 +72,7 @@ public sealed class ChoiceBuilder
     private string? _nextSituationId;
     private IRunExpression<bool>? _requirement;
     private string? _textKey;
+    private string? _disabledText;
 
     internal ChoiceBuilder(string id)
     {
@@ -301,6 +302,13 @@ public sealed class ChoiceBuilder
         return this;
     }
 
+    // Keep the choice on screen, greyed, while its requirement fails — and say why (see EventChoice.DisabledText).
+    public ChoiceBuilder ShownWhenUnavailable(string reason)
+    {
+        _disabledText = reason;
+        return this;
+    }
+
     internal EventChoice Build() =>
-        new(_id, _effects, _nextSituationId, _requirement, _textKey, _costs);
+        new(_id, _effects, _nextSituationId, _requirement, _textKey, _costs, _disabledText);
 }

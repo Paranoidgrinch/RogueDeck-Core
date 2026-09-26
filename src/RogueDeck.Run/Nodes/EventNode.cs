@@ -16,12 +16,23 @@ public sealed record EventChoice(
     string? NextSituationId = null,
     IRunExpression<bool>? Requirement = null,
     string? TextKey = null,
-    IReadOnlyList<RunCost>? Costs = null)
+    IReadOnlyList<RunCost>? Costs = null,
+    // A choice whose requirement fails is normally not offered at all. With a reason here it stays VISIBLE to a
+    // host — greyed, and saying why ("There's nothing to improve.") — while the resolver still never offers it:
+    // availability is unchanged, this only tells a screen that the door exists and is shut. Null (the default)
+    // stays out of the wire format, so every document written before it reads and writes byte-identically.
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    string? DisabledText = null)
 {
     // Offered only when visible (Requirement) and affordable (every cost's CanPay holds). Folding
     // affordability into availability keeps the scripted resolver simple: unaffordable choices are not
     // offered, rather than shown-but-disabled. Requirement is a data condition so a choice serializes.
     public bool IsAvailable(RunState run) => (Requirement is null || Requirement.Evaluate(run)) && CanAfford(run);
+
+    // What a host shows for a choice the resolver did not offer: the reason, or null when it should stay hidden.
+    public string? ShownDisabledReason(RunState run) =>
+        DisabledText is not null && !IsAvailable(run) ? DisabledText : null;
 
     public bool CanAfford(RunState run) =>
         Costs is null || Costs.All(cost => cost.CanPay.Evaluate(run));

@@ -112,4 +112,28 @@ public class RunJsonStructureTests
         });
         Assert.Throws<NotSupportedException>(() => RunJson.ToJson(map, Options));
     }
+    // A choice that is shut but shown: the reason survives the file, the resolver still never offers it, and a
+    // choice without one writes no field at all (every older document stays byte-identical).
+    [Fact]
+    public void A_shown_but_unavailable_choice_keeps_its_reason_through_the_file()
+    {
+        var script = new EventScriptBuilder("fire")
+            .Situation("fire", "A campfire.", s => s
+                .Choice("amend", c => c
+                    .TextKey("Improve a card")
+                    .Require(RunExpr.GreaterThan(RunExpr.DeckSize, RunExpr.Const(0)))
+                    .ShownWhenUnavailable("There's nothing to improve."))
+                .Choice("leave", c => c.TextKey("Leave")))
+            .Build();
+        RoundTrips(script);
+        var rebuilt = RunJson.FromJson<EventScript>(RunJson.ToJson(script, Options), Options);
+        var amend = rebuilt.Situations["fire"].Choices[0];
+        var leave = rebuilt.Situations["fire"].Choices[1];
+
+        var run = new RunState(new RunId("run"), new HealthState(20, 40), new RunMap(Array.Empty<Node>()));
+        Assert.False(amend.IsAvailable(run)); // an empty deck: nothing to improve
+        Assert.Equal("There's nothing to improve.", amend.ShownDisabledReason(run));
+        Assert.Null(leave.ShownDisabledReason(run));
+        Assert.DoesNotContain("DisabledText", RunJson.ToJson(new EventChoice("x", []), Options), StringComparison.OrdinalIgnoreCase);
+    }
 }
