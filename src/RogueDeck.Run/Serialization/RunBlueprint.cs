@@ -122,6 +122,29 @@ public sealed record RunBlueprint(
 
     // The effective starting config for a run: the chosen roster character, else the first roster character (a
     // deterministic default / an unknown id falls back here), else the single Start when there is no roster.
+    // A TUTORIAL THE GAME SHIPS: a fixed walk through the same content, and the loadout it is walked with. Absent
+    // (the default) stays out of the file, so every document written before it reads and writes byte-identically.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public RunTutorial? Tutorial { get; init; }
+
+    // This blueprint, walking its tutorial instead of its acts: the same cards, enemies, relics and statuses — the
+    // tutorial is not a second game, it is a route through this one. Throws when the blueprint ships none.
+    public RunBlueprint ForTutorial()
+    {
+        var tutorial = Tutorial ?? throw new InvalidOperationException("This blueprint ships no tutorial.");
+        return this with
+        {
+            Map = tutorial.Map,
+            Acts = null,
+            MapGeneration = null,
+            StrategicMapGeneration = null,
+            Start = tutorial.Start ?? ResolveStart(),
+            Characters = [],
+            Tutorial = null,
+        };
+    }
+
     public RunStart ResolveStart(string? characterId = null)
     {
         if (Characters.Count == 0)
@@ -138,6 +161,9 @@ public sealed record RunBlueprint(
 // that flag (MetaProgression.AvailableCharacters); null ⇒ always available. Which flag unlocks it — and how it is
 // earned — is content. A plain record so it round-trips through RunJson like the rest of the blueprint.
 public sealed record RunCharacter(string Id, RunStart Start, string? UnlockFlag = null);
+
+// A tutorial: the authored map it walks and, optionally, the loadout it is walked with (null: the default start).
+public sealed record RunTutorial(RunMap Map, RunStart? Start = null);
 
 // The authored opening state of a run: the hero's display name, starting/maximum health, starting resources
 // (resource id → amount, e.g. gold), and the relics the hero begins with (ids resolved from the run's content when

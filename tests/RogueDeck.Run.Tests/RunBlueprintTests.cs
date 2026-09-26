@@ -569,4 +569,33 @@ public class RunBlueprintTests
         Assert.Equal(20, run.GetResource(Gold));
         Assert.Equal(RunResult.Victory, run.Result);
     }
+
+    // A blueprint can ship a tutorial: a fixed walk through its own content. It survives the file, a document
+    // without one writes no field, and ForTutorial() walks the tutorial's map with the tutorial's loadout while
+    // keeping every card, event and encounter the game has.
+    [Fact]
+    public void A_shipped_tutorial_survives_the_file_and_walks_its_own_map()
+    {
+        var tutorialMap = new RunMap(new Node[]
+        {
+            new(new NodeId("t-fight"), StandardRunIds.CombatNode, new EncounterRef(GoblinFight)),
+        });
+        var blueprint = Demo() with
+        {
+            Tutorial = new RunTutorial(tutorialMap, new RunStart { HeroName = "Learner", MaxHealth = 90, StartingHealth = 90 }),
+        };
+
+        Assert.DoesNotContain("Tutorial", RunJson.ToJson(Demo(), Options), StringComparison.Ordinal);
+        var back = RunJson.FromJson<RunBlueprint>(RunJson.ToJson(blueprint, Options), Options);
+        Assert.NotNull(back.Tutorial);
+
+        var tutorial = back.ForTutorial();
+        Assert.Null(tutorial.Tutorial);
+        Assert.Equal(["t-fight"], tutorial.Map.Nodes.Select(n => n.Id.Value));
+        Assert.Equal(back.Events.Keys, tutorial.Events.Keys);
+        var run = tutorial.CreateInitialRun(new RunId("t"), 3);
+        Assert.Equal(90, run.Health.Max);
+        Assert.Equal("t-fight", run.Map.Nodes.Single().Id.Value);
+        Assert.Throws<InvalidOperationException>(() => Demo().ForTutorial());
+    }
 }
