@@ -364,7 +364,7 @@ public sealed class FightSolver(int positionBudget = 60_000, int seconds = 60)
     // rather than by identity. Order is kept — a draw pile is a stack, and two piles holding the same cards
     // in a different order have different futures, so sorting them would merge positions that are not the
     // same. What is dropped is only the name of each copy.
-    private static string Shape(InteractiveCombat combat)
+    internal static string Shape(InteractiveCombat combat)
     {
         var snapshot = combat.State.CreateSnapshot();
         var sb = new System.Text.StringBuilder(512);
