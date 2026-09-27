@@ -5,12 +5,11 @@ using RogueDeck.Scenario.Scripting;
 namespace RogueDeck.Bot;
 
 // ── THE PLANNER: A WHOLE FIGHT, PLAYED BY LOOKING FIVE TURNS AHEAD ───────────────────────────────────────
-// The solver (FightSolver) answers yes/no questions about one position and runs out of budget four turns in,
-// because it tries to walk the whole tree. The planner asks the question balance actually needs — "how much
+// An exhaustive search of the fight tree runs out of budget four turns in. The planner asks the question balance actually needs — "how much
 // health does the best line through this fight cost?" — and gets there by RECEDING HORIZON:
 //
-//   1. From the current position, every way this turn can be played is laid out (the same enumeration the
-//      solver walks, positions merged by their shape), and the enemies answer each one.
+//   1. From the current position, every way this turn can be played is laid out (positions merged by their
+//      shape — see Shape), and the enemies answer each one.
 //   2. That is repeated `horizon` turns deep as a BEAM: after every turn, positions that another position beats
 //      on every count are dropped, the rest are ranked, and the best `beam` go on.
 //   3. The best position at the far end is found, and ONLY ITS FIRST TURN is played. Then the whole search
@@ -98,7 +97,7 @@ public sealed class FightPlanner(int horizon = 5, int beam = 16, int perTurn = 3
                 foreach (var (after, played) in TurnEnds(line.State))
                 {
                     var carried = line.FirstAfter is null ? new Line(after, after, played) : line with { State = after };
-                    next.TryAdd(FightSolver.Shape(after), carried);
+                    next.TryAdd(Shape(after), carried);
                 }
             }
             if (next.Count == 0)
@@ -207,7 +206,7 @@ public sealed class FightPlanner(int horizon = 5, int beam = 16, int perTurn = 3
         var stopped = node.ForkQuiet();
         _positions++;
         stopped.EndTurn();
-        if (seen.Add("end:" + FightSolver.Shape(stopped)))
+        if (seen.Add("end:" + Shape(stopped)))
             ends.Add((stopped, label));
 
         if (depth >= PlaysDeep || !node.IsHeroTurn)
@@ -229,11 +228,80 @@ public sealed class FightPlanner(int horizon = 5, int beam = 16, int perTurn = 3
                 after.PlayCard(card.Id, target);
                 if (RunBot.Refused(after, steps))
                     continue;
-                if (!seen.Add("mid:" + FightSolver.Shape(after)))
+                if (!seen.Add("mid:" + Shape(after)))
                     continue;
                 Walk(after, depth + 1,
                     [.. played, $"{card.DefinitionId.value}{(target is { } at ? $"->{at.value}" : "")}"],
                     ends, seen);
             }
+    }
+
+    // ⚠⚠ TWO COPIES OF THE SAME CARD ARE THE SAME MOVE, AND THE ENGINE'S OWN FINGERPRINT SAYS THEY ARE NOT.
+    // CombatStateHasher writes card INSTANCE ids, because it exists to prove that a restored fight is the
+    // same fight down to the identity of every object. For a search that is exactly wrong: playing the first
+    // Paper Cut and playing the second leave positions that differ in nothing but which id sits where, and
+    // the search then walks both, and both their children, and so on — the single largest source of
+    // duplicated work there is, in a deck built out of copies.
+    //
+    // So the search fingerprints the SHAPE of a position: what each pile holds, IN ORDER, by definition
+    // rather than by identity. Order is kept — a draw pile is a stack, and two piles holding the same cards
+    // in a different order have different futures, so sorting them would merge positions that are not the
+    // same. What is dropped is only the name of each copy.
+    internal static string Shape(InteractiveCombat combat)
+    {
+        var snapshot = combat.State.CreateSnapshot();
+        var sb = new System.Text.StringBuilder(512);
+        sb.Append(snapshot.RandomStep).Append('|').Append(snapshot.CurrentRound).Append('|')
+            .Append(snapshot.CurrentTurn).Append('|').Append((int)snapshot.TurnPhase).Append('|')
+            .Append((int)snapshot.Result).Append('|').Append(snapshot.ActiveCombatantId?.value).Append('\n');
+
+        foreach (var c in snapshot.Combatants)
+        {
+            sb.Append(c.Id.value).Append(' ').Append((int)c.LifecycleState)
+                .Append(' ').Append(c.HealthCurrent).Append('/').Append(c.HealthMax);
+            foreach (var (key, pool) in c.Resources)
+                sb.Append(" r:").Append(key.value).Append('=').Append(pool.Current);
+            foreach (var (key, pool) in c.DefensivePools)
+                sb.Append(" d:").Append(key.value).Append('=').Append(pool.Current);
+            foreach (var status in c.Statuses)
+                sb.Append(" s:").Append(status.DefinitionId.value).Append('=').Append(status.Stacks)
+                    .Append('/').Append(status.DurationTurns).Append('/').Append(status.Charges)
+                    .Append('/').Append(status.PendingTurns);
+            foreach (var (key, value) in c.Counters)
+                sb.Append(" c:").Append(key.value).Append('=').Append(value);
+            sb.Append('\n');
+        }
+
+        foreach (var (combatant, zones) in snapshot.CardZones)
+        {
+            sb.Append(combatant.value);
+            Pile(sb, "draw", zones.DrawPile);
+            Pile(sb, "hand", zones.Hand);
+            Pile(sb, "disc", zones.DiscardPile);
+            Pile(sb, "exh", zones.ExhaustPile);
+            Pile(sb, "ban", zones.BanishedPile);
+            if (!zones.QueuePile.IsDefaultOrEmpty)
+                Pile(sb, "queue", zones.QueuePile);
+            sb.Append('\n');
+        }
+
+        return sb.ToString();
+    }
+
+    private static void Pile(
+        System.Text.StringBuilder sb, string zone,
+        System.Collections.Immutable.ImmutableArray<CardInstanceSnapshot> cards)
+    {
+        sb.Append(' ').Append(zone).Append(':');
+        foreach (var card in cards)
+        {
+            sb.Append(card.DefinitionId.value);
+            if (!card.Marks.IsDefaultOrEmpty)
+                foreach (var mark in card.Marks)
+                    sb.Append('#').Append(mark.value);
+            if (card.QueuedTargetId is { } aimed)
+                sb.Append('@').Append(aimed.value);
+            sb.Append(',');
+        }
     }
 }

@@ -5,7 +5,6 @@ public sealed record BotResult
 {
     public required int Seed { get; init; }
     public required string Maps { get; init; }
-    public required string Policy { get; init; }
     public required string Result { get; init; }
     public required int Acts { get; init; }
     public required int Fights { get; init; }
@@ -36,11 +35,6 @@ public sealed record BotResult
     public required int DamageTaken { get; init; }
     public required int Healed { get; init; }
 
-    // ⚠ WHAT THE KILLING BLOW TOOK, which `DamageTaken` cannot contain: that tally is health watched before
-    // every answer, and a dead run is asked nothing further. Its own field rather than a correction, because
-    // `DamageTaken` is a line the golden set diffs.
-    public int ClosingDamage { get; init; }
-
     // What each act's boss cost to REACH: the damage added up, and the health left, on entering its room.
     public required IReadOnlyDictionary<int, int> DamageAtActBoss { get; init; }
     public required IReadOnlyDictionary<int, int> HealthAtActBoss { get; init; }
@@ -51,50 +45,17 @@ public sealed record BotResult
     public required string Where { get; init; }
     public required string WhereRole { get; init; }
 
-    // …and what was AUTHORED there, which is the name a sweep can add up across seeds (the node id cannot
-    // be: it is a different room in the next seed). For a run that died, this is what killed it.
-    public string WhereContent { get; init; } = "—";
-
-    // One entry per room entered: the act, what was authored in it, its role, and the health the runner
-    // walked in with. The balance map is made of these and the damage ledger and nothing else.
-    public IReadOnlyList<RoomVisit> Visits { get; init; } = [];
-
-    public readonly record struct RoomVisit(int Act, string Content, string Role, int HealthOnEntry);
-
-    // ⚠⚠ THE ONLY QUESTION V-7 ASKS: how far did a real body get? An act is CLEARED when its boss is beaten,
+    // How far did the body get? An act is CLEARED when its boss is beaten,
     // and the proof of that is standing in the next act — so a run that died in act 4 cleared three, and only
     // a victory clears the act it ended in. Note what this does NOT say: nothing about how much health it
-    // cost. That was the old question (damage taken at 9999 hp), and it is answerable by a runner that never
-    // attacks, never dies and never wins.
+    // cost.
     public int ClearedActs => string.Equals(Result, "Victory", StringComparison.Ordinal)
         ? Acts
         : Math.Max(0, Acts - 1);
 
-    // How the champion did against a proof, over the positions it actually stood in (--exam). Empty
-    // otherwise. ⚠ It grades the FIGHTING alone: no rooms, no doors, no luck of five acts.
-    public string Exam { get; init; } = "";
-
-    // WHERE THE LIFE WENT (P2): every point of health the run lost, filed under the enemy action, card or
-    // room that took it. Always kept — it is read off a trace the engine writes anyway — and printed as its
-    // own report line so that the two lines golden.sh diffs stay what they were.
-    public DamageLedger Damage { get; init; } = new();
-
-    // What the fight the run died in turned out to be, when anyone asked (--autopsy). Empty otherwise.
-    public string Autopsy { get; init; } = "";
-
     // A lost run is a NORMAL outcome. Only something the run could not answer for — an engine error, a
-    // refused play, a wall, a thrown exception — is worth a batch's attention. ⚠ A run CALLED OFF ON
-    // PURPOSE is not: it is incomplete in exactly the way a walled run is, and a bounded batch that flagged
-    // every single run as worth reading would be a batch whose exit code had stopped meaning anything.
-    public bool Clean =>
-        Crash.Length == 0 && Error == "none" && Problems == 0 && (Complete || AskedToStop);
+    // refused play, a wall, a thrown exception — is worth a batch's attention.
+    public bool Clean => Crash.Length == 0 && Error == "none" && Problems == 0 && Complete;
 
     public required bool Complete { get; init; }
-
-    // ⚠ THE RUN WAS CALLED OFF BECAUSE IT WAS ASKED TO BE (--stop-after-act), not because a guard tripped.
-    // An incomplete run is normally a fault; this one answered the only question that was put to it and then
-    // stopped paying for a tail nobody reads. It is a field rather than a phrasing of `Reason` because the
-    // trainer has to tell the two apart — a run that measured nothing scores as nothing, and a run that
-    // measured exactly what was asked must not be filed under that.
-    public bool AskedToStop { get; init; }
 }

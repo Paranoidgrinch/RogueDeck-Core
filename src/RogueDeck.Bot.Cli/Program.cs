@@ -51,28 +51,10 @@ public static class Program
             return 2;
         }
 
-        BotPolicy? policy = null;
-        if (options.PolicyPath is { } policyPath)
-        {
-            policy = BotPolicy.Load(policyPath);
-            if (policy is null)
-            {
-                Console.Error.WriteLine($"could not read the policy at {policyPath}");
-                return 2;
-            }
-        }
-        // Only a policy runner scores cards; the dice player never asks what a card does.
-        //
-        // ⚠ THE CHAMPION NEEDS THEM TOO, and leaving them out was a measured mistake: it decides what to PLAY
-        // by forking the fight, but what to TAKE — a reward, a relic, a slot in a shop — is still scored, and
-        // a champion without features scored every offer at nothing and built its deck by the tie-break.
-        // A lookahead over a random deck is a careful player holding a bad hand.
-        var features = policy is null ? null : CardFeatures.FromDocument(documentJson);
-
         // The body, applied to the blueprint ONCE for the whole batch — every run shares this record, which
         // is immutable, and builds its own content from it.
         var played = options.Health is { } hp ? WithHealth(blueprint, hp) : blueprint;
-        var generator = options.Legacy ? MapGenerators.RuleBased : MapGenerators.Strategic;
+        var generator = MapGenerators.Strategic;
         var maps = MapGenerators.Name(generator);
 
         if (options.OutDir is { } dir)
@@ -81,21 +63,13 @@ public static class Program
         Console.WriteLine($"roguedeck-bot: {options.Runs} runs "
             + $"(seeds {options.SeedFrom}..{options.SeedFrom + options.Runs - 1}, "
             + $"{(options.Health is { } h ? $"{h} hp" : "authored health")}, maps {maps}, "
-            + $"policy {policy?.Name ?? "random"}{Lookahead(policy, options)}, "
             + $"{options.Jobs} at a time, one process, "
-            + (options.StopAfterAct > 0
-                ? $"each run ends when act {options.StopAfterAct} is cleared, "
-                : "")
             + $"{(options.Replay ? "through the replay model" : "answering the engine inline")})");
 
         if (options.OracleOnly)
             return SurveyOnly(played, options, maps, generator);
 
-        if (options.Routes > 0)
-            return WalkEveryRoute(played, options, maps, generator, policy, features);
-
         var lines = new ConcurrentDictionary<int, string>();
-        var receipts = new ConcurrentBag<BotResult>();
         var failures = 0;
         using var slots = new SemaphoreSlim(options.Jobs);
         var work = Enumerable.Range(options.SeedFrom, options.Runs).Select(seed => Task.Run(async () =>
@@ -103,7 +77,7 @@ public static class Program
             await slots.WaitAsync().ConfigureAwait(false);
             try
             {
-                var one = PlayOne(played, seed, maps, generator, policy, features, options);
+                var one = PlayOne(played, seed, maps, generator, options);
                 // ⚠ THE WATCHDOG CANNOT RECLAIM A THREAD, AND SAYS SO RATHER THAN PRETENDING. A run that is
                 // still going after the timeout is reported as an absence and the batch carries on without
                 // it; the thread it left behind keeps a core until the process ends. That is the honest
@@ -120,15 +94,12 @@ public static class Program
                 }
 
                 var (result, log, oracle) = await one.ConfigureAwait(false);
-                receipts.Add(result);
                 if (options.OutDir is { } into)
                     File.WriteAllText(Path.Combine(into, $"run-{seed:0000}.log"), log);
                 if (!result.Clean)
                     Interlocked.Increment(ref failures);
                 lines[seed] = string.Join(Environment.NewLine,
-                    [Report(seed, result.Clean ? 0 : 1, BotReport.Result(result)),
-                     .. (BotReport.Exam(result) is { Length: > 0 } sat ? new[] { Indent(sat) } : []),
-                     .. oracle.Select(Indent)]);
+                    [Report(seed, result.Clean ? 0 : 1, BotReport.Result(result)), .. oracle.Select(Indent)]);
             }
             catch (Exception ex)
             {
@@ -149,12 +120,6 @@ public static class Program
         foreach (var seed in lines.Keys.OrderBy(k => k))
             Console.WriteLine(lines[seed]);
 
-        Console.WriteLine();
-        foreach (var line in BotReport.DamageAcrossRuns([.. receipts]))
-            Console.WriteLine(line);
-        foreach (var line in BotReport.Balance([.. receipts]))
-            Console.WriteLine(line);
-
         Console.WriteLine(failures == 0
             ? $"roguedeck-bot: all {options.Runs} runs came back clean"
             : $"roguedeck-bot: {failures} of {options.Runs} runs are worth reading");
@@ -174,32 +139,6 @@ public static class Program
         return roster.Count > 0 ? roster[new Random(seed).Next(roster.Count)].Id : null;
     }
 
-    // ⚠ THE HEADER HAS TO SAY HOW FAR THE CHAMPION LOOKS, because since C2 that is a property of the POLICY
-    // and not of the runner. It said "one ply of lookahead" for every champion run, which was true until the
-    // horizon became a gene and then quietly became a lie printed above every batch.
-    //
-    // ⚠⚠ AND IT SAYS WHEN THE PLAYER IS NO LONGER A FAIR ONE. Above a horizon of 1 the search plans around
-    // cards nobody has drawn, so what the batch produces is an upper bound rather than a player's result —
-    // and a reader who was not told that will read it as skill.
-    private static string Lookahead(BotPolicy? policy, CliOptions options)
-    {
-        if (!options.Champion)
-            return "";
-        var horizon = Math.Max(1, (int)Math.Round(policy?.Horizon ?? 0));
-        if (horizon <= 1)
-            return " (champion: one turn of lookahead)";
-        var beam = Math.Max(1, (int)Math.Round(policy?.Beam ?? 0));
-        var samples = Math.Max(1, (int)Math.Round(policy?.Samples ?? 0));
-        // ⚠⚠ THE HEADER SAYS WHETHER THE PLAYER IS FAIR, because that is the difference between a result and
-        // an upper bound, and a reader who was not told will read one as the other. Above one sample the
-        // unseen draw pile is shuffled per world (C4), so the depth no longer buys sight of the future.
-        return samples > 1
-            ? $" (champion: {horizon} turns of lookahead, beam {beam}, {samples} shuffled decks per "
-                + "decision — a fair player: it does not see what it has not drawn)"
-            : $" (champion: {horizon} turns of lookahead, beam {beam} — ⚠ SEES UNDRAWN CARDS, "
-                + "so this is an upper bound, not a fair player)";
-    }
-
     private static string Indent(string line) => $"           {line}";
 
     private static string Report(int seed, int exit, string line) =>
@@ -207,9 +146,7 @@ public static class Program
 
     // ONE RUN, WHOLE AND ON ITS OWN: its own playback, its own profile, its own RNG.
     private static async Task<(BotResult Result, string Log, IReadOnlyList<string> Oracle)> PlayOne(
-        RunBlueprint blueprint, int seed, string maps, string generator,
-        BotPolicy? policy, CardFeatures? features, CliOptions options,
-        IReadOnlyList<string>? route = null)
+        RunBlueprint blueprint, int seed, string maps, string generator, CliOptions options)
     {
         var text = new System.Text.StringBuilder();
         var log = new DelegateBotLog(line => text.AppendLine(line));
@@ -224,17 +161,6 @@ public static class Program
             Budget = options.Steps,
             Maps = maps,
             Character = character,
-            Policy = policy,
-            Features = features,
-            Route = route,
-            Champion = options.Champion,
-            Autopsy = options.Autopsy,
-            AutopsySeconds = options.AutopsySeconds,
-            AutopsyPositions = options.AutopsyPositions,
-            Exam = options.Exam,
-            ExamTurns = options.ExamTurns,
-            ExamSeconds = options.ExamSeconds,
-            StopAfterAct = options.StopAfterAct,
         };
 
         // ⚠⚠ TWO SEATS, ONE BRAIN (R5). By default the run is walked ONCE, with the bot answering the engine
@@ -255,133 +181,11 @@ public static class Program
             text.AppendLine(line);
         text.AppendLine(BotReport.Fitness(result));
         text.AppendLine(BotReport.Clearance(result));
-        foreach (var line in BotReport.Damage(result))
-            text.AppendLine(line);
-        if (BotReport.Autopsy(result) is { } autopsy)
-            text.AppendLine(autopsy);
-        if (BotReport.Exam(result) is { Length: > 0 } exam)
-            text.AppendLine(exam);
         text.AppendLine(BotReport.Result(result));
         var survey = Survey(blueprint, seed, maps, character, generator, result.Walked, options);
         foreach (var line in survey)
             text.AppendLine(line);
         return (result, text.ToString(), survey);
-    }
-
-    // ── EVERY ROUTE THROUGH ONE ACT (O3) ─────────────────────────────────────────────────────────────────
-    // One run per route, with the route TOLD rather than chosen. That takes navigation off the table, and
-    // what is left is the question V-7 actually asks: is there a way through this act for this player?
-    //
-    // ⚠⚠ ONLY ONE OF THE TWO ANSWERS IS A FINDING. "Cleared on 3 of 9" is constructive — three walks got
-    // through and their rooms are named. "Cleared on 0 of 9" is NOT "this act is impossible": it is this
-    // player, on this seed, finding no way. The same honesty the autopsy keeps, and for the same reason.
-    //
-    // ⚠ AN ACT PAST THE FIRST HAS TO BE REACHED BEFORE ITS ROUTE MEANS ANYTHING. The route names act N's
-    // rooms; a run that dies in act one never sees them and is reported as what it is — not reaching the
-    // act is a different outcome from failing inside it, and the line says which.
-    private static int WalkEveryRoute(
-        RunBlueprint blueprint, CliOptions options, string maps, string generator,
-        BotPolicy? policy, CardFeatures? features)
-    {
-        var act = options.Routes;
-        var unreadable = 0;
-
-        var receipts = new List<BotResult>();
-        for (var seed = options.SeedFrom; seed < options.SeedFrom + options.Runs; seed++)
-        {
-            var character = RollCharacter(blueprint, seed);
-            var routes = MapOracle.RoutesOfAct(blueprint, seed, act, character, generator);
-            if (routes.Count == 0)
-            {
-                unreadable++;
-                Console.WriteLine($"sim-clearable: seed={seed} maps={maps} act={act} NO ROUTES — "
-                    + $"this run has no act {act}");
-                continue;
-            }
-
-            var told = new string[routes.Count];
-            var cleared = new bool[routes.Count];
-            var walked = new BotResult?[routes.Count];
-            using var slots = new SemaphoreSlim(options.Jobs);
-            var work = routes.Select((route, index) => Task.Run(async () =>
-            {
-                await slots.WaitAsync().ConfigureAwait(false);
-                try
-                {
-                    var (result, log, _) =
-                        await PlayOne(blueprint, seed, maps, generator, policy, features, options, route)
-                            .ConfigureAwait(false);
-                    if (options.OutDir is { } into)
-                        File.WriteAllText(Path.Combine(into, $"route-{seed:0000}-{index:00}.log"), log);
-                    cleared[index] = result.ClearedActs >= act;
-                    walked[index] = result;
-                    told[index] = $"  sim-route: seed={seed} act={act} route={index + 1}/{routes.Count} "
-                        + $"result={result.Result} reached={result.Acts} cleared={result.ClearedActs} "
-                        + $"rooms={result.Rooms.Count} hp={result.Health}/{result.MaxHealth} "
-                        + $"stopped={result.WhereRole} at={result.Where}";
-                }
-                catch (Exception ex)
-                {
-                    told[index] = $"  sim-route: seed={seed} act={act} route={index + 1}/{routes.Count} "
-                        + $"NO RESULT — {ex.GetType().Name}: {ex.Message}";
-                }
-                finally
-                {
-                    slots.Release();
-                }
-            })).ToArray();
-            Task.WaitAll(work);
-
-            // CLEARED means the act's boss went down, which the result reports as `cleared` reaching it.
-            // REACHED only means the run arrived — the two differ by exactly the act this is asking about.
-            var through = told.Count(line => Cleared(line) >= act);
-            var arrived = told.Count(line => Reached(line) >= act);
-            // ── AND WHERE THE LOSING WALKS WERE STILL SAVABLE (O4) ───────────────────────────────────────
-            // `savable=0` is not a hole in the data: it means no losing route ever shared a room with a
-            // winner, because there was no winner. No door on this map led anywhere this player finished.
-            var fate = MapOracle.WhereItWasSealed(
-                [.. routes.Select((r, i) => new MapOracle.RouteVerdict(r, cleared[i]))]);
-            var exit = fate.LastExit is null
-                ? "lastExit=none"
-                : $"lastExit={fate.LastExit} depth={fate.LastExitDepth}/{fate.Rooms}";
-
-            receipts.AddRange(walked.OfType<BotResult>());
-            // ⚠ SAID AS IT IS LEARNT, not when the last seed is in. A champion sweep of eight seeds is
-            // hours, and a run that prints nothing for hours is indistinguishable from a run that hung —
-            // which is exactly what it looked like the first time one was left going overnight.
-            Console.WriteLine($"sim-clearable: seed={seed} maps={maps} act={act} "
-                + $"routes={routes.Count} "
-                + $"reached={arrived}/{routes.Count} cleared={through}/{routes.Count} "
-                + $"savable={fate.Savable}/{fate.Failing} {exit}"
-                + Environment.NewLine + string.Join(Environment.NewLine, told));
-        }
-
-        Console.WriteLine();
-        // ⚠⚠ THE SWEEP'S WHOLE POINT (P3). Every route of every seed is one run with a receipt; added up,
-        // they are the only statement about the CONTENT this project can make from play rather than from
-        // reading the document. A route walk without this printed the same information and threw it away.
-        foreach (var line in BotReport.Balance(receipts))
-            Console.WriteLine(line);
-
-        Console.WriteLine(unreadable == 0
-            ? $"roguedeck-bot: walked every route through act {act} of {options.Runs} seeds"
-            : $"roguedeck-bot: {unreadable} of {options.Runs} seeds have no act {act}");
-        return unreadable == 0 ? 0 : 1;
-    }
-
-    private static int Cleared(string line) => Field(line, "cleared=");
-
-    private static int Reached(string line) => Field(line, "reached=");
-
-    private static int Field(string line, string name)
-    {
-        var at = line.IndexOf(name, StringComparison.Ordinal);
-        if (at < 0)
-            return -1;
-        var rest = line[(at + name.Length)..];
-        var end = rest.IndexOf(' ', StringComparison.Ordinal);
-        return int.TryParse(end < 0 ? rest : rest[..end], NumberStyles.Integer,
-            CultureInfo.InvariantCulture, out var value) ? value : -1;
     }
 
     // ── THE SWEEP THAT PLAYS NOTHING ─────────────────────────────────────────────────────────────────────

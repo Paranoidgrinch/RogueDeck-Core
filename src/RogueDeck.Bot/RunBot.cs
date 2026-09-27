@@ -7,7 +7,7 @@ using RogueDeck.Scenario.Scripting;
 namespace RogueDeck.Bot;
 
 // ── THE RUNNER, IN THE SEAT THE UI SITS IN ───────────────────────────────────────────────────────────────
-// A player made of dice (or of a bred policy). It walks the REAL run — every answer goes through the same
+// A player made of dice. It walks the REAL run — every answer goes through the same
 // session and drivers the mouse drives — but it answers by itself: a fork, a door, a card at an enemy, a pick
 // from every offer. It does not play WELL; it plays BROADLY and fast, so a batch of runs touches content a
 // careful player would never reach in a hundred sittings.
@@ -97,9 +97,7 @@ public static class RunBot
                 else if (session.IsAwaitingEntities && session.PendingEntities is { } entities)
                     session.PickEntities(
                         [.. mind.EntityPicks(
-                            entities.Displays,
-                            [.. Enumerable.Range(0, entities.Displays.Count).Select(entities.ArtAt)],
-                            entities.Count, entities.AllowSkip, entities.Purpose, entities.Intent)]);
+                            entities.Displays, entities.Count, entities.AllowSkip, entities.Purpose, entities.Intent)]);
                 else if (session.IsAwaitingChoice && session.PendingSituation is { } situation)
                     session.Pick(mind.Choose(situation, session.PendingChoices).Id);
                 else if (session.IsAwaitingInterlude)
