@@ -368,10 +368,16 @@ public static class RuleBasedMapGenerator
             return null;
 
         Func<EncounterId, bool>? eligible = null;
-        if (spec.EncounterMinimumDepthPercent.Count > 0)
+        if (spec.EncounterMinimumDepthPercent.Count > 0 || spec.EncounterMaximumDepthPercent.Count > 0)
         {
+            // How far this row lies outside a fight's band (0 inside it). The row takes the fights at the
+            // smallest distance: its own band when the pools have one, else the nearest — never just anything.
             var depth = MapDepth.Percent(row, rows);
-            eligible = id => depth >= spec.EncounterMinimumDepthPercent.GetValueOrDefault(id.Value);
+            int Outside(EncounterId id) =>
+                Math.Max(0, spec.EncounterMinimumDepthPercent.GetValueOrDefault(id.Value) - depth)
+                + Math.Max(0, depth - spec.EncounterMaximumDepthPercent.GetValueOrDefault(id.Value, 100));
+            var nearest = selector.Candidates(kind).Select(Outside).DefaultIfEmpty(0).Min();
+            eligible = id => Outside(id) == nearest;
         }
 
         var loadout = spec.BalanceTargets.AssumedLoadout(startingLoadout, row);

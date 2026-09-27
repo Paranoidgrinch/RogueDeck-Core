@@ -22,6 +22,9 @@ public sealed class EncounterSelector
 
     public bool HasCandidates(MapNodeKind role) => _distribution.For(role).Count > 0;
 
+    // Every fight the role can draw, for a gate that has to compare them before choosing.
+    public IEnumerable<EncounterId> Candidates(MapNodeKind role) => _distribution.For(role).Select(e => e.Encounter);
+
     // `eligible` is the DEPTH gate (MapGenerationSpec.EncounterMinimumDepthPercent), asked before anything
     // else: a fight the design does not open before the far end of the act is not a candidate in the third
     // room, however well its threat fits. If it filters everything away the gate yields rather than leaving

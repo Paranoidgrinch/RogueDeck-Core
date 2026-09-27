@@ -319,6 +319,83 @@ public class MapEncounterConstraintsTests
         Assert.True(earlySeen > 0, "the shallow rows ran no elite at all, so the gate proved too much");
     }
 
+    // ── THE BAND (playtest 2026-09-27: an act's last-stage fight opened its first room) ─────────────────────
+    // A fight with a floor AND a ceiling stands only in its own rows; where no band covers a row, the row takes
+    // the nearest band rather than any fight at all.
+    [Fact]
+    public void A_fight_with_a_band_stands_only_in_its_own_rows()
+    {
+        var (spec, low, high) = Banded(("early.", 0, 33), ("middle.", 34, 66), ("late.", 67, 100));
+        AssertEveryFightAsNearAsItCanBe(spec, low, high, mustBeInside: true);
+    }
+
+    [Fact]
+    public void A_row_no_band_covers_takes_the_nearest_band_not_any_fight()
+    {
+        // Nothing covers the middle third: those rows must take early or late fights by distance, never the
+        // far one.
+        var (spec, low, high) = Banded(("early.", 0, 30), ("late.", 70, 100));
+        AssertEveryFightAsNearAsItCanBe(spec, low, high, mustBeInside: false);
+    }
+
+    private static (MapGenerationSpec Spec, Dictionary<string, int> Low, Dictionary<string, int> High) Banded(
+        params (string Prefix, int From, int To)[] bands)
+    {
+        var low = new Dictionary<string, int>();
+        var high = new Dictionary<string, int>();
+        var pool = new List<EncounterPoolEntry>();
+        foreach (var (prefix, from, to) in bands)
+            foreach (var entry in Pool(prefix, 30))
+            {
+                pool.Add(entry);
+                low[entry.Encounter.Value] = from;
+                high[entry.Encounter.Value] = to;
+            }
+        var spec = new MapGenerationSpec
+        {
+            Rows = 12,
+            MinWidth = 2,
+            MaxWidth = 4,
+            KindWeights = new Dictionary<MapNodeKind, int> { [MapNodeKind.Combat] = 1 },
+            Encounters = new EncounterDistribution
+            {
+                ByRole = new Dictionary<MapNodeKind, IReadOnlyList<EncounterPoolEntry>>
+                {
+                    [MapNodeKind.Combat] = pool,
+                    [MapNodeKind.Boss] = Pool("boss.", 5),
+                },
+            },
+            EncounterMinimumDepthPercent = low,
+            EncounterMaximumDepthPercent = high,
+        };
+        return (spec, low, high);
+    }
+
+    private static void AssertEveryFightAsNearAsItCanBe(
+        MapGenerationSpec spec, Dictionary<string, int> low, Dictionary<string, int> high, bool mustBeInside)
+    {
+        int Outside(string id, int depth) => Math.Max(0, low[id] - depth) + Math.Max(0, depth - high[id]);
+        var checkedFights = 0;
+        for (var seed = 1; seed <= 30; seed++)
+        {
+            var generated = RuleBasedMapGenerator.Generate(spec, seed, 0, EmptyBalance(), Realize);
+            var rows = generated.Map.Nodes.Max(n => Row(n.Id)) + 1;
+            foreach (var node in generated.Map.Nodes)
+            {
+                var fought = (string)node.Payload;
+                if (!low.ContainsKey(fought))
+                    continue;
+                var depth = MapDepth.Percent(Row(node.Id), rows);
+                var best = low.Keys.Min(id => Outside(id, depth));
+                Assert.Equal(best, Outside(fought, depth));
+                if (mustBeInside)
+                    Assert.Equal(0, Outside(fought, depth));
+                checkedFights++;
+            }
+        }
+        Assert.True(checkedFights > 100, "too few fights were placed for the band to prove anything");
+    }
+
     // A generated node id is "r{row}c{col}" (MapWiring.Id).
     private static int Row(NodeId id) =>
         int.Parse(id.Value[1..id.Value.IndexOf('c')], System.Globalization.CultureInfo.InvariantCulture);

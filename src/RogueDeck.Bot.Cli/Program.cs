@@ -233,6 +233,8 @@ public static class Program
     {
         var perAct = new Dictionary<int, List<(int Seed, List<Dictionary<string, int>> Paths)>>();
         var forks = new Dictionary<(int Act, int Depth), int>();
+        // Every placed fight that has a band, and how far outside it it stood (0 = inside).
+        var placed = new Dictionary<int, List<int>>();
         for (var seed = options.SeedFrom; seed < options.SeedFrom + options.Runs; seed++)
         {
             var character = RollCharacter(blueprint, seed);
@@ -250,6 +252,19 @@ public static class Program
                 (perAct.TryGetValue(i + 1, out var list) ? list : perAct[i + 1] = []).Add((seed, paths));
                 // WHERE A PLAYER CAN STILL CHANGE LANE: nodes with two or more ways on, by depth.
                 var depths = map.Depths();
+                if (i < blueprint.Acts.Count && blueprint.Acts[i].MapGeneration is { } spec)
+                {
+                    var rows = depths.Values.DefaultIfEmpty(0).Max() + 1;
+                    foreach (var node in map.Nodes)
+                        if (node.Payload is EncounterRef fight
+                            && spec.EncounterMaximumDepthPercent.TryGetValue(fight.Id.Value, out var ceiling))
+                        {
+                            var depth = MapDepth.Percent(depths.GetValueOrDefault(node.Id), rows);
+                            var floor = spec.EncounterMinimumDepthPercent.GetValueOrDefault(fight.Id.Value);
+                            (placed.TryGetValue(i + 1, out var outs) ? outs : placed[i + 1] = [])
+                                .Add(Math.Max(0, floor - depth) + Math.Max(0, depth - ceiling));
+                        }
+                }
                 foreach (var node in map.Nodes)
                     if (map.SuccessorIds(node.Id).Count >= 2)
                     {
@@ -290,6 +305,9 @@ public static class Program
                 + $"3+ elites and no rest {Share(p => Of(p, "elite") >= 3 && Of(p, "rest") == 0)}");
             Console.WriteLine($"  shops on a path: median {Median(withPaths.SelectMany(s => s.Paths.Select(p => Of(p, "shop"))))}"
                 + $" · seeds with a shopless lane: {withPaths.Count(s => s.Paths.Any(p => Of(p, "shop") == 0))}/{n}");
+            if (placed.TryGetValue(act, out var outside) && outside.Count > 0)
+                Console.WriteLine($"  staged fights placed: {outside.Count} · outside their stage: "
+                    + $"{outside.Count(d => d > 0)} (farthest {outside.Max()} % of the act)");
             Console.WriteLine("  forks per map by row (rooms with 2+ ways on): " + string.Join(" ",
                 forks.Where(f => f.Key.Act == act).OrderBy(f => f.Key.Depth)
                     .Select(f => $"{f.Key.Depth}:{(double)f.Value / n:0.0}")));

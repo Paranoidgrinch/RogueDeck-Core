@@ -146,6 +146,13 @@ public sealed record MapGenerationSpec
     public IReadOnlyDictionary<string, int> EncounterMinimumDepthPercent { get; init; } =
         new Dictionary<string, int>();
 
+    // …and how deep it may LAST stand (playtest 2026-09-27: an act's final-stage fight opened the first room).
+    // Together with the minimum it is the fight's BAND — "this stage's rows". A row whose band holds no
+    // candidate of its role takes the NEAREST band rather than any fight at all, so a gap in the pools
+    // costs a neighbouring stage, never the far end of the act. Absent ⇒ 100 (no ceiling).
+    public IReadOnlyDictionary<string, int> EncounterMaximumDepthPercent { get; init; } =
+        new Dictionary<string, int>();
+
     // The kinds a gate funnel can be, in a fixed order (used to lay gates out and to iterate deterministically).
     // Boss is the fixed top row and is never a per-path gate.
     public static readonly IReadOnlyList<MapNodeKind> GateKinds = new[]
@@ -226,6 +233,11 @@ public sealed record MapGenerationSpec
             if (percent is < 0 or > 100)
                 throw new ArgumentOutOfRangeException(nameof(EncounterMinimumDepthPercent), percent,
                     $"The earliest depth for encounter '{encounter}' must be a percentage (0-100).");
+
+        foreach (var (encounter, percent) in EncounterMaximumDepthPercent)
+            if (percent is < 0 or > 100 || percent < EncounterMinimumDepthPercent.GetValueOrDefault(encounter))
+                throw new ArgumentOutOfRangeException(nameof(EncounterMaximumDepthPercent), percent,
+                    $"The latest depth for encounter '{encounter}' must be a percentage (0-100) no lower than its earliest.");
     }
 
     private static readonly IReadOnlyDictionary<MapNodeKind, int> EmptyCounts = new Dictionary<MapNodeKind, int>();
