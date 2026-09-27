@@ -26,6 +26,8 @@ public static class Program
     {
         if (args.Contains("--replay-run"))
             return ReplayRun.Run(args);
+        if (args.Contains("--play"))
+            return PlayByHand.Run(args);
         var options = CliOptions.Parse(args);
         if (options is null)
         {
