@@ -24,13 +24,14 @@ public sealed class TriggeredProgramAdapter<TEvent, TEventContext>
         EffectProgram<TEventContext> program,
         int priority = 0,
         TriggeredEffectReentryPolicy reentryPolicy = TriggeredEffectReentryPolicy.SuppressRecursiveReentry,
-        IReadOnlyList<ITriggeredProgramFilter<TEventContext>>? filters = null)
+        IReadOnlyList<ITriggeredProgramFilter<TEventContext>>? filters = null,
+        StatusDefinitionId? gatingStatus = null)
     {
         Func<CombatState, CombatDefinitionRegistry, ICombatEvent, TEventContext?> factory =
             (combat, reg, evt) => TypedContextFactory(combat, reg, (TEvent)evt);
         return new TriggeredProgramDefinition<TEventContext>(
             id, typeof(TEvent), program, factory, BuildContextFactory,
-            priority, filters, reentryPolicy);
+            priority, filters, reentryPolicy, gatingStatus);
     }
 
     public TriggeredProgramCombatEventHandler<TEvent, TEventContext> CreateHandler()

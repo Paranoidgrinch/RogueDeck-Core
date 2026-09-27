@@ -23,6 +23,10 @@ public static class StatusDataRebuild
         // is about, as long as somebody still wears the status. Built per context because each trigger context is
         // its own record — they only agree on having a Combat.
         var anywhere = data.Scope == StatusTriggerScope.Anywhere;
+        // Every trigger below whose filters demand that somebody carries the status names it as its gate, so the
+        // dispatcher can skip it while nobody does (TriggeredProgramDefinition.GatingStatus). Not the expiry: that
+        // one fires exactly when the status is gone.
+        StatusDefinitionId? Gate = statusId;
         ITriggeredProgramFilter<TContext>[] Scoped<TContext>(
             Func<TContext, CombatState> readCombat, params ITriggeredProgramFilter<TContext>[] bearerFilters)
             where TContext : class =>
@@ -34,31 +38,31 @@ public static class StatusDataRebuild
         {
             TriggerEvent.TurnStarted => TriggeredProgramContextAdapters.TurnStarted.Define(
                 id, Program<TurnStartedTriggeredEffectContext>(data),
-                filters: Scoped<TurnStartedTriggeredEffectContext>(c => c.Combat,
+                gatingStatus: Gate, filters: Scoped<TurnStartedTriggeredEffectContext>(c => c.Combat,
                     new TurnStartedCombatantHasStatusTriggerFilter(statusId))),
             TriggerEvent.TurnEnded => TriggeredProgramContextAdapters.TurnEnded.Define(
                 id, Program<TurnEndedTriggeredEffectContext>(data),
-                filters: Scoped<TurnEndedTriggeredEffectContext>(c => c.Combat,
+                gatingStatus: Gate, filters: Scoped<TurnEndedTriggeredEffectContext>(c => c.Combat,
                     new TurnEndedCombatantHasStatusTriggerFilter(statusId))),
             TriggerEvent.DamageTaken => TriggeredProgramContextAdapters.DamageReceived.Define(
                 id, Program<DamageReceivedTriggeredEffectContext>(data),
-                filters: Scoped<DamageReceivedTriggeredEffectContext>(c => c.Combat,
+                gatingStatus: Gate, filters: Scoped<DamageReceivedTriggeredEffectContext>(c => c.Combat,
                     new DamageReceivedReceiverHasStatusTriggerFilter(statusId))),
             TriggerEvent.DamageDealt => TriggeredProgramContextAdapters.DamageDealt.Define(
                 id, Program<DamageDealtTriggeredEffectContext>(data),
-                filters: Scoped<DamageDealtTriggeredEffectContext>(c => c.Combat,
+                gatingStatus: Gate, filters: Scoped<DamageDealtTriggeredEffectContext>(c => c.Combat,
                     new DamageDealtSourceHasStatusTriggerFilter(statusId))),
             TriggerEvent.Healed => TriggeredProgramContextAdapters.Healed.Define(
                 id, Program<HealedTriggeredEffectContext>(data),
-                filters: Scoped<HealedTriggeredEffectContext>(c => c.Combat,
+                gatingStatus: Gate, filters: Scoped<HealedTriggeredEffectContext>(c => c.Combat,
                     new HealedTargetHasStatusTriggerFilter(statusId))),
             TriggerEvent.CardPlayed => TriggeredProgramContextAdapters.CardPlayed.Define(
                 id, Program<CardPlayedTriggeredEffectContext>(data),
-                filters: Scoped<CardPlayedTriggeredEffectContext>(c => c.Combat,
+                gatingStatus: Gate, filters: Scoped<CardPlayedTriggeredEffectContext>(c => c.Combat,
                     new CardPlayedSourceHasStatusTriggerFilter(statusId))),
             TriggerEvent.Downed => TriggeredProgramContextAdapters.CombatantDowned.Define(
                 id, Program<CombatantDownedTriggeredEffectContext>(data),
-                filters: Scoped<CombatantDownedTriggeredEffectContext>(c => c.Combat,
+                gatingStatus: Gate, filters: Scoped<CombatantDownedTriggeredEffectContext>(c => c.Combat,
                     new CombatantDownedHasStatusTriggerFilter(statusId))),
             // Bearer scope here means something slightly different from the other events: the question is
             // whether THIS status is the one that ran out. Anywhere is how a status watches every OTHER
@@ -69,50 +73,50 @@ public static class StatusDataRebuild
                     new StatusExpiredStatusDefinitionTriggerFilter(statusId))),
             TriggerEvent.ResourceGained => TriggeredProgramContextAdapters.ResourceGained.Define(
                 id, Program<ResourceGainedTriggeredEffectContext>(data),
-                filters: Scoped<ResourceGainedTriggeredEffectContext>(c => c.Combat,
+                gatingStatus: Gate, filters: Scoped<ResourceGainedTriggeredEffectContext>(c => c.Combat,
                     new ResourceGainedSourceHasStatusTriggerFilter(statusId))),
             TriggerEvent.CardCostPaid => TriggeredProgramContextAdapters.CardCostPaid.Define(
                 id, Program<CardCostPaidTriggeredEffectContext>(data),
-                filters: Scoped<CardCostPaidTriggeredEffectContext>(c => c.Combat,
+                gatingStatus: Gate, filters: Scoped<CardCostPaidTriggeredEffectContext>(c => c.Combat,
                     new CardCostPaidSourceHasStatusTriggerFilter(statusId))),
             TriggerEvent.StatusApplied => TriggeredProgramContextAdapters.StatusApplied.Define(
                 id, Program<StatusAppliedTriggeredEffectContext>(data),
-                filters: Scoped<StatusAppliedTriggeredEffectContext>(c => c.Combat,
+                gatingStatus: Gate, filters: Scoped<StatusAppliedTriggeredEffectContext>(c => c.Combat,
                     new StatusAppliedTargetHasStatusTriggerFilter(statusId),
                     new StatusAppliedExceptStatusDefinitionTriggerFilter(statusId))),
             TriggerEvent.StatusRemoved => TriggeredProgramContextAdapters.StatusRemoved.Define(
                 id, Program<StatusRemovedTriggeredEffectContext>(data),
-                filters: Scoped<StatusRemovedTriggeredEffectContext>(c => c.Combat,
+                gatingStatus: Gate, filters: Scoped<StatusRemovedTriggeredEffectContext>(c => c.Combat,
                     new StatusRemovedTargetHasStatusTriggerFilter(statusId))),
             TriggerEvent.StatusMerged => TriggeredProgramContextAdapters.StatusMerged.Define(
                 id, Program<StatusMergedTriggeredEffectContext>(data),
-                filters: Scoped<StatusMergedTriggeredEffectContext>(c => c.Combat,
+                gatingStatus: Gate, filters: Scoped<StatusMergedTriggeredEffectContext>(c => c.Combat,
                     new StatusMergedTargetHasStatusTriggerFilter(statusId))),
             TriggerEvent.StatusStacksChanged => TriggeredProgramContextAdapters.StatusStacksChanged.Define(
                 id, Program<StatusStacksChangedTriggeredEffectContext>(data),
-                filters: Scoped<StatusStacksChangedTriggeredEffectContext>(c => c.Combat,
+                gatingStatus: Gate, filters: Scoped<StatusStacksChangedTriggeredEffectContext>(c => c.Combat,
                     new StatusStacksChangedTargetHasStatusTriggerFilter(statusId))),
             TriggerEvent.BlockGained => TriggeredProgramContextAdapters.BlockGained.Define(
                 id, Program<BlockGainedTriggeredEffectContext>(data),
-                filters: Scoped<BlockGainedTriggeredEffectContext>(c => c.Combat,
+                gatingStatus: Gate, filters: Scoped<BlockGainedTriggeredEffectContext>(c => c.Combat,
                     new BlockGainedTargetHasStatusTriggerFilter(statusId))),
             // A bearer-scoped announcement trigger means "when I announce"; Anywhere means "when anybody
             // does", which is the interesting one — a rule that watches another body's signature.
             TriggerEvent.RuleAnnounced => TriggeredProgramContextAdapters.RuleAnnounced.Define(
                 id, Program<RuleAnnouncedTriggeredEffectContext>(data),
-                filters: Scoped<RuleAnnouncedTriggeredEffectContext>(c => c.Combat,
+                gatingStatus: Gate, filters: Scoped<RuleAnnouncedTriggeredEffectContext>(c => c.Combat,
                     new RuleAnnouncedAnnouncerHasStatusTriggerFilter(statusId))),
             TriggerEvent.CardsDrawn => TriggeredProgramContextAdapters.CardsDrawn.Define(
                 id, Program<CardsDrawnTriggeredEffectContext>(data),
-                filters: Scoped<CardsDrawnTriggeredEffectContext>(c => c.Combat,
+                gatingStatus: Gate, filters: Scoped<CardsDrawnTriggeredEffectContext>(c => c.Combat,
                     new CardsDrawnSourceHasStatusTriggerFilter(statusId))),
             TriggerEvent.CardMovedToZone => TriggeredProgramContextAdapters.CardMovedToZone.Define(
                 id, Program<CardMovedToZoneTriggeredEffectContext>(data),
-                filters: Scoped<CardMovedToZoneTriggeredEffectContext>(c => c.Combat,
+                gatingStatus: Gate, filters: Scoped<CardMovedToZoneTriggeredEffectContext>(c => c.Combat,
                     new CardMovedToZoneOwnerHasStatusTriggerFilter(statusId))),
             TriggerEvent.CardInstanceCreated => TriggeredProgramContextAdapters.CardInstanceCreated.Define(
                 id, Program<CardInstanceCreatedTriggeredEffectContext>(data),
-                filters: Scoped<CardInstanceCreatedTriggeredEffectContext>(c => c.Combat,
+                gatingStatus: Gate, filters: Scoped<CardInstanceCreatedTriggeredEffectContext>(c => c.Combat,
                     new CardInstanceCreatedOwnerHasStatusTriggerFilter(statusId))),
             TriggerEvent.RoundStarted => TriggeredProgramContextAdapters.RoundStarted.Define(
                 id, Program<RoundStartedTriggeredEffectContext>(data)),
@@ -123,17 +127,17 @@ public static class StatusDataRebuild
             // combatant, and Anywhere lets a rule watch preventions on either side of the fight.
             TriggerEvent.ActionResolved => TriggeredProgramContextAdapters.ActionResolved.Define(
                 id, Program<ActionResolvedTriggeredEffectContext>(data),
-                filters: Scoped<ActionResolvedTriggeredEffectContext>(c => c.Combat,
+                gatingStatus: Gate, filters: Scoped<ActionResolvedTriggeredEffectContext>(c => c.Combat,
                     new ActionResolvedActorHasStatusTriggerFilter(statusId))),
             TriggerEvent.StatusApplicationPrevented => TriggeredProgramContextAdapters.StatusApplicationBlocked.Define(
                 id, Program<StatusApplicationBlockedTriggeredEffectContext>(data),
-                filters: Scoped<StatusApplicationBlockedTriggeredEffectContext>(c => c.Combat,
+                gatingStatus: Gate, filters: Scoped<StatusApplicationBlockedTriggeredEffectContext>(c => c.Combat,
                     new StatusApplicationBlockedTargetHasStatusTriggerFilter(statusId))),
             // An amplification is reported on the combatant it happened TO, exactly like a prevention, so the
             // bearer scope asks that the reacting status be on that combatant and Anywhere watches both sides.
             TriggerEvent.StatusApplicationAmplified => TriggeredProgramContextAdapters.StatusApplicationAmplified.Define(
                 id, Program<StatusApplicationAmplifiedTriggeredEffectContext>(data),
-                filters: Scoped<StatusApplicationAmplifiedTriggeredEffectContext>(c => c.Combat,
+                gatingStatus: Gate, filters: Scoped<StatusApplicationAmplifiedTriggeredEffectContext>(c => c.Combat,
                     new StatusApplicationAmplifiedTargetHasStatusTriggerFilter(statusId))),
             _ => throw new InvalidOperationException($"Trigger event '{ev}' is not supported for a status trigger."),
         };

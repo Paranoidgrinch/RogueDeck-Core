@@ -48,7 +48,7 @@ public sealed class FightPlanner(int horizon = 5, int beam = 16, int perTurn = 3
         ArgumentNullException.ThrowIfNull(start);
         var clock = Stopwatch.StartNew();
         _positions = 0;
-        var now = start.Fork();
+        var now = start.ForkQuiet();
         var heroAtStart = now.HeroHealth;
         var heroMax = Math.Max(1, now.State.GetCombatant(now.HeroId).Health.Max);
         var enemyMax = Math.Max(1, now.State.Combatants
@@ -204,7 +204,7 @@ public sealed class FightPlanner(int horizon = 5, int beam = 16, int perTurn = 3
             return;
         }
 
-        var stopped = node.Fork();
+        var stopped = node.ForkQuiet();
         _positions++;
         stopped.EndTurn();
         if (seen.Add("end:" + FightSolver.Shape(stopped)))
@@ -223,7 +223,7 @@ public sealed class FightPlanner(int horizon = 5, int beam = 16, int perTurn = 3
             {
                 if (ends.Count >= perTurn)
                     return;
-                var after = node.Fork();
+                var after = node.ForkQuiet();
                 _positions++;
                 var steps = after.Steps.Count;
                 after.PlayCard(card.Id, target);

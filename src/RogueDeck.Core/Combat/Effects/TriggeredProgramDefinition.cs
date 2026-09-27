@@ -20,6 +20,12 @@ public sealed class TriggeredProgramDefinition<TEventContext> : ITriggeredEffect
     public Func<TEventContext, TriggeredEffectActionBuildContext> BuildContext { get; }
     public TriggeredEffectReentryPolicy ReentryPolicy { get; }
 
+    // The status this trigger belongs to, when it belongs to one (a status's rule, rebuilt by StatusDataRebuild).
+    // Every such trigger's filters demand that SOMEBODY carries the status, so while nobody does it cannot fire —
+    // and the dispatcher skips it before building a context or asking a filter. With a thousand status rules
+    // registered, asking each one on every event was most of what a fight cost. Null: always asked, as before.
+    public StatusDefinitionId? GatingStatus { get; }
+
     public TriggeredProgramDefinition(
         TriggeredEffectDefinitionId id,
         Type eventType,
@@ -28,9 +34,11 @@ public sealed class TriggeredProgramDefinition<TEventContext> : ITriggeredEffect
         Func<TEventContext, TriggeredEffectActionBuildContext> buildContext,
         int priority = 0,
         IReadOnlyList<ITriggeredProgramFilter<TEventContext>>? filters = null,
-        TriggeredEffectReentryPolicy reentryPolicy = TriggeredEffectReentryPolicy.SuppressRecursiveReentry)
+        TriggeredEffectReentryPolicy reentryPolicy = TriggeredEffectReentryPolicy.SuppressRecursiveReentry,
+        StatusDefinitionId? gatingStatus = null)
     {
         ArgumentNullException.ThrowIfNull(id.value);
+        GatingStatus = gatingStatus;
         ArgumentNullException.ThrowIfNull(eventType);
         ArgumentNullException.ThrowIfNull(program);
         ArgumentNullException.ThrowIfNull(contextFactory);
@@ -63,6 +71,10 @@ public sealed class TriggeredProgramCombatEventHandler<TEvent, TEventContext>
     where TEvent : class, ICombatEvent
     where TEventContext : class
 {
+    // The registered triggers of this event, sorted once per registry (a registry is immutable once built).
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<
+        CombatDefinitionRegistry, TriggeredProgramDefinition<TEventContext>[]> Ordered = new();
+
     protected override void Handle(
         CombatState combat,
         CombatDefinitionRegistry registry,
@@ -71,26 +83,33 @@ public sealed class TriggeredProgramCombatEventHandler<TEvent, TEventContext>
         // Registered (immutable) triggers carry no runtime instance; temporary triggers
         // installed on the combat carry their TemporaryTriggeredProgram so activation can
         // be recorded after they run. Both streams share one priority→id ordering.
-        var registered = registry
-            .GetTriggeredEffectDefinitions(typeof(TEvent))
-            .OfType<TriggeredProgramDefinition<TEventContext>>()
+        // The registered triggers for this event come pre-sorted from the registry (priority, then id, the same
+        // order this used to sort into on every event). Only when temporary rules are live is the merge sorted here.
+        var registered = Ordered
+            .GetValue(registry, r => [.. r.GetTriggeredEffectDefinitions(typeof(TEvent))
+                .OfType<TriggeredProgramDefinition<TEventContext>>()
+                .OrderBy(d => d.Priority)
+                .ThenBy(d => d.Id.value)])
             .Select(d => (Definition: d, Instance: (TemporaryTriggeredProgram?)null));
 
-        var temporary = combat
-            .GetTemporaryTriggeredPrograms(typeof(TEvent))
-            .Where(t => t.Definition is TriggeredProgramDefinition<TEventContext>)
-            .Select(t => (
-                Definition: (TriggeredProgramDefinition<TEventContext>)t.Definition,
-                Instance: (TemporaryTriggeredProgram?)t));
-
-        var defs = registered
-            .Concat(temporary)
-            .OrderBy(x => x.Definition.Priority)
-            .ThenBy(x => x.Definition.Id.value)
-            .ToList();
+        var temporaries = combat.GetTemporaryTriggeredPrograms(typeof(TEvent));
+        var defs = temporaries.Count == 0
+            ? registered.ToList()
+            : registered
+                .Concat(temporaries
+                    .Where(t => t.Definition is TriggeredProgramDefinition<TEventContext>)
+                    .Select(t => (
+                        Definition: (TriggeredProgramDefinition<TEventContext>)t.Definition,
+                        Instance: (TemporaryTriggeredProgram?)t)))
+                .OrderBy(x => x.Definition.Priority)
+                .ThenBy(x => x.Definition.Id.value)
+                .ToList();
 
         var anyTemporaryActivated = false;
         var tracing = combat.TraceListener is not null;
+        // Which statuses anybody carries — for the gated triggers. Rebuilt after every trigger that actually ran,
+        // because a rule that runs may hand out the status the next one is waiting for.
+        HashSet<StatusDefinitionId>? carried = null;
 
         foreach (var (definition, instance) in defs)
         {
@@ -113,6 +132,15 @@ public sealed class TriggeredProgramCombatEventHandler<TEvent, TEventContext>
                         TriggerEvaluationOutcome.SkippedDepthLimited);
 
                 chain.EnsureCanAppendTriggeredEffectDefinition(definition.Id);
+            }
+
+            // A status's rule while nobody carries the status: its filters would say no. Skipped before the context
+            // is built — unless the fight is being traced, where the diagnostic wants the filter's own verdict.
+            if (!tracing && definition.GatingStatus is { } gate)
+            {
+                carried ??= [.. combat.Combatants.SelectMany(c => c.Statuses).Select(s => s.DefinitionId)];
+                if (!carried.Contains(gate))
+                    continue;
             }
 
             // Context factory returns null when event preconditions aren't met
@@ -143,6 +171,7 @@ public sealed class TriggeredProgramCombatEventHandler<TEvent, TEventContext>
                 EffectProgramExecutor.Execute(
                     definition.Program, ctx, buildCtx, combat,
                     registry: registry.EffectNodeExecutors);
+            carried = null;
 
             if (combat.EffectsEnqueued > enqueuedBefore)
                 combat.NoteTriggerActivity(definition.Id);

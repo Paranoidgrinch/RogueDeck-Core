@@ -357,6 +357,18 @@ public sealed class InteractiveCombat
         new(_compiled, CombatState.Restore(_combat.CreateSnapshot(), _registry), _enemyIntent,
             startOpeningTurn: false);
 
+    // A fork that keeps no trace. The rules do not read the trace — every trace site in the engine is guarded by
+    // "is anyone listening" — so this fight plays out exactly as a traced one; it only stops writing down HOW
+    // each result was derived. A search that forks hundreds of thousands of positions and never reads a receipt
+    // spent most of its time writing them (measured: the planner's end-of-turn cost was 78 % of its run). Steps
+    // are still recorded, with empty traces, so a refused play is still seen as refused.
+    public InteractiveCombat ForkQuiet()
+    {
+        var fork = Fork();
+        fork._combat.TraceListener = null;
+        return fork;
+    }
+
     public int HeroHealth => _combat.TryGetCombatant(_heroId, out var hero) && hero is not null
         ? hero.Health.Current
         : 0;
