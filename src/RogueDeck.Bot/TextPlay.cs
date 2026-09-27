@@ -214,8 +214,12 @@ public static class TextPlay
         var key = Plain(wanted);
         var names = combat.Hand.Select(c => (Id: Plain(c.DefinitionId.value), Name: Plain(Name(blueprint, c.DefinitionId.value)))).ToList();
         var exact = names.FindIndex(n => n.Id == key || n.Name == key);
-        return exact >= 0 ? exact : names.FindIndex(n => n.Id.StartsWith(key, StringComparison.Ordinal)
+        if (exact >= 0)
+            return exact;
+        var prefix = names.FindIndex(n => n.Id.StartsWith(key, StringComparison.Ordinal)
             || n.Name.StartsWith(key, StringComparison.Ordinal));
+        return prefix >= 0 ? prefix : names.FindIndex(n => n.Id.Contains(key, StringComparison.Ordinal)
+            || n.Name.Contains(key, StringComparison.Ordinal));
     }
 
     private static string Asking(RunPlayback play)
@@ -292,7 +296,7 @@ public static class TextPlay
         else
             text.AppendLine("(nothing is being asked)");
 
-        text.AppendLine($"deck: {string.Join(", ", run.Deck.GroupBy(c => c.DefinitionId.value).OrderBy(g => g.Key, StringComparer.Ordinal).Select(g => g.Count() > 1 ? $"{g.Key}×{g.Count()}" : g.Key))}");
+        text.AppendLine($"deck: {string.Join(", ", run.Deck.GroupBy(c => c.DefinitionId.value + new string('+', c.UpgradeLevel)).OrderBy(g => g.Key, StringComparer.Ordinal).Select(g => g.Count() > 1 ? $"{g.Key}×{g.Count()}" : g.Key))}");
         return text.ToString();
     }
 
