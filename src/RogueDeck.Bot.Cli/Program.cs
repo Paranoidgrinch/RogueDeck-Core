@@ -232,6 +232,7 @@ public static class Program
     private static int Lanes(RunBlueprint blueprint, CliOptions options, string generator)
     {
         var perAct = new Dictionary<int, List<(int Seed, List<Dictionary<string, int>> Paths)>>();
+        var forks = new Dictionary<(int Act, int Depth), int>();
         for (var seed = options.SeedFrom; seed < options.SeedFrom + options.Runs; seed++)
         {
             var character = RollCharacter(blueprint, seed);
@@ -247,6 +248,14 @@ public static class Program
                         .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal))
                     .ToList();
                 (perAct.TryGetValue(i + 1, out var list) ? list : perAct[i + 1] = []).Add((seed, paths));
+                // WHERE A PLAYER CAN STILL CHANGE LANE: nodes with two or more ways on, by depth.
+                var depths = map.Depths();
+                foreach (var node in map.Nodes)
+                    if (map.SuccessorIds(node.Id).Count >= 2)
+                    {
+                        var key = (i + 1, depths.GetValueOrDefault(node.Id));
+                        forks[key] = forks.GetValueOrDefault(key) + 1;
+                    }
             }
         }
 
@@ -273,8 +282,17 @@ public static class Program
             Console.WriteLine($"  rests on a path:  median {Median(withPaths.SelectMany(s => s.Paths.Select(p => Of(p, "rest"))))}"
                 + $" · spread median {Median(restSpread)} (max {restSpread.Max()})");
             Console.WriteLine($"  seeds with a lane that has NO rest: {restless}/{n} · with 3+ elites and no rest: {hard}/{n}");
+            var all = withPaths.SelectMany(s => s.Paths).ToList();
+            string Share(Func<Dictionary<string, int>, bool> test) =>
+                (100.0 * all.Count(test) / Math.Max(1, all.Count)).ToString("0", CultureInfo.InvariantCulture) + "%";
+            Console.WriteLine($"  of ALL {all.Count} paths: no rest {Share(p => Of(p, "rest") == 0)} · no shop "
+                + $"{Share(p => Of(p, "shop") == 0)} · 3+ elites {Share(p => Of(p, "elite") >= 3)} · "
+                + $"3+ elites and no rest {Share(p => Of(p, "elite") >= 3 && Of(p, "rest") == 0)}");
             Console.WriteLine($"  shops on a path: median {Median(withPaths.SelectMany(s => s.Paths.Select(p => Of(p, "shop"))))}"
                 + $" · seeds with a shopless lane: {withPaths.Count(s => s.Paths.Any(p => Of(p, "shop") == 0))}/{n}");
+            Console.WriteLine("  forks per map by row (rooms with 2+ ways on): " + string.Join(" ",
+                forks.Where(f => f.Key.Act == act).OrderBy(f => f.Key.Depth)
+                    .Select(f => $"{f.Key.Depth}:{(double)f.Value / n:0.0}")));
         }
         return 0;
     }

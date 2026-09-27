@@ -109,6 +109,11 @@ public sealed class AddRelicByIdRunEffectHandler : RunEffectHandler<AddRelicById
                 $"Cannot grant relic '{request.Relic}' by id: the run has no content catalog.");
 
         var definition = run.Content.GetRelic(request.Relic);
+        if (run.FindRelic(definition.Id) is not null)
+        {
+            run.AddLog(StandardRunLogTypes.RelicAcquired, $"Relic '{definition.Id}' is already carried; not added again.");
+            return;
+        }
         run.AddRelic(new RelicInstance(definition));
         run.AddLog(StandardRunLogTypes.RelicAcquired, $"Acquired relic '{definition.Id}' (by id).");
         run.RaiseEvent(new RelicAcquiredRunEvent(definition.Id));
@@ -172,6 +177,11 @@ public sealed class AddRelicRunEffectHandler : RunEffectHandler<AddRelicRunEffec
 {
     protected override void Resolve(RunState run, RunDefinitionRegistry registry, AddRelicRunEffect request)
     {
+        if (run.FindRelic(request.Relic.Id) is not null)
+        {
+            run.AddLog(StandardRunLogTypes.RelicAcquired, $"Relic '{request.Relic.Id}' is already carried; not added again.");
+            return;
+        }
         run.AddRelic(request.Relic);
         run.AddLog(StandardRunLogTypes.RelicAcquired, $"Acquired relic '{request.Relic.Id}'.");
         run.RaiseEvent(new RelicAcquiredRunEvent(request.Relic.Id));

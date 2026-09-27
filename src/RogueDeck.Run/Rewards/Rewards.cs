@@ -55,8 +55,15 @@ public sealed class PoolRewardSource : IRewardSource
         Pool = pool;
         Count = count;
     }
-    public IReadOnlyList<RewardOffer> Generate(RunState run) =>
-        Pool.DrawMany(run, Math.Clamp(Count, 0, Pool.Entries.Count));
+    public IReadOnlyList<RewardOffer> Generate(RunState run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        // Drawn from what the run does not already carry, so the offer stays the size it was written as for as
+        // long as the pool can fill it. A pool with nothing carried in it draws exactly as it always did.
+        var open = Pool.Entries.Where(e => !RelicOwnership.GrantsOwnedRelic(run, e.Value.Grant)).ToList();
+        var pool = open.Count == Pool.Entries.Count ? Pool : new RunPool<RewardOffer>(open);
+        return open.Count == 0 ? [] : pool.DrawMany(run, Math.Clamp(Count, 0, pool.Entries.Count));
+    }
 }
 
 public sealed class DelegateRewardSource : IRewardSource
@@ -121,7 +128,9 @@ public sealed class OfferRewardRunEffectHandler : RunEffectHandler<OfferRewardRu
 
     protected override void Resolve(RunState run, RunDefinitionRegistry registry, OfferRewardRunEffect request)
     {
-        var offers = request.Source.Generate(run).ToList();
+        var offers = request.Source.Generate(run)
+            .Where(offer => !RelicOwnership.GrantsOwnedRelic(run, offer.Grant))
+            .ToList();
         // Active reward modifiers reshape the offers (add/transform) before the player sees them, and so do the
         // standing rules the player is WEARING — the declarative, permanent half of the same idea.
         run.ApplyRewardModifiers(offers);
@@ -214,6 +223,27 @@ public sealed class AddRewardModifierRunEffectHandler : RunEffectHandler<AddRewa
 }
 
 // Readable offer construction.
+// ⚠ A RELIC IS CARRIED ONCE (playtest 2026-09-27). Nothing below a reward knew what the player already wore, so
+// a treasure, an event, an elite and a shop could each hand over the same relic again. Every place that offers or
+// grants a relic asks this first; the add itself is the last line (see AddRelic*RunEffectHandler).
+public static class RelicOwnership
+{
+    public static RelicId? GrantedRelic(IRunEffectRequest effect) => effect switch
+    {
+        AddRelicByIdRunEffect byId => byId.Relic,
+        AddRelicRunEffect instance => instance.Relic.Id,
+        _ => null,
+    };
+
+    // True when the payload would hand over a relic the run already carries.
+    public static bool GrantsOwnedRelic(RunState run, IEnumerable<IRunEffectRequest> payload)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        ArgumentNullException.ThrowIfNull(payload);
+        return payload.Any(effect => GrantedRelic(effect) is { } id && run.FindRelic(id) is not null);
+    }
+}
+
 public static class Rewards
 {
     public static RewardOffer Offer(string id, params IRunEffectRequest[] grant) => new(id, grant);
