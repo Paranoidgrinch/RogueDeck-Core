@@ -97,6 +97,15 @@ public static class TextPlay
         if (play.Session is not { } session || session.IsComplete)
             return "the run is over";
         var verb = parts[0];
+        // A card may be named instead of numbered — positions move after every play, names do not.
+        if (verb == "p" && parts.Length > 1 && !int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out _)
+            && play.CombatDriver?.Current is { } named)
+        {
+            var at = FindInHand(named, blueprint, parts[1]);
+            if (at < 0)
+                return $"no card called '{parts[1]}' in hand";
+            parts[1] = at.ToString(CultureInfo.InvariantCulture);
+        }
         var numbers = parts.Skip(1)
             .SelectMany(p => p.Split(',', StringSplitOptions.RemoveEmptyEntries))
             .Select(p => int.TryParse(p, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : -1)
@@ -198,6 +207,17 @@ public static class TextPlay
         return null;
     }
 
+    // Exact id or name first, then a prefix of either; case, spaces, underscores and the upgrade's '+' ignored.
+    private static int FindInHand(InteractiveCombat combat, RunBlueprint blueprint, string wanted)
+    {
+        static string Plain(string text) => new([.. text.ToLowerInvariant().Where(char.IsLetterOrDigit)]);
+        var key = Plain(wanted);
+        var names = combat.Hand.Select(c => (Id: Plain(c.DefinitionId.value), Name: Plain(Name(blueprint, c.DefinitionId.value)))).ToList();
+        var exact = names.FindIndex(n => n.Id == key || n.Name == key);
+        return exact >= 0 ? exact : names.FindIndex(n => n.Id.StartsWith(key, StringComparison.Ordinal)
+            || n.Name.StartsWith(key, StringComparison.Ordinal));
+    }
+
     private static string Asking(RunPlayback play)
     {
         var session = play.Session!;
@@ -249,7 +269,7 @@ public static class TextPlay
                 + $": take {offers.Count}{(offers.AllowSkip ? " or skip (k)" : "")}");
             for (var i = 0; i < offers.Displays.Count; i++)
             {
-                var about = offers.ArtAt(i) is { Kind: EntityArt.Card } art ? CardText(blueprint, art.Id)
+                var about = offers.ArtAt(i) is { Kind: EntityArt.Card } art ? CardLine(play, blueprint, art.Id)
                     : i < offers.Descriptions.Count ? offers.Descriptions[i] : "";
                 text.AppendLine($"  [{i}] {offers.Displays[i]}{(about.Length > 0 ? $" — {about}" : "")}");
             }
@@ -264,7 +284,7 @@ public static class TextPlay
                 var price = (choice.Costs ?? []).SelectMany(c => c.Pay).OfType<ChangeResourceRunEffect>()
                     .Sum(p => Math.Max(0, -p.Delta));
                 var grant = RunEntityLabeler.ArtForGrant(choice.Effects) is { Kind: EntityArt.Card } card
-                    ? $" — {CardText(blueprint, card.Id)}" : "";
+                    ? $" — {CardLine(play, blueprint, card.Id)}" : "";
                 text.AppendLine($"  [{i}] {choice.TextKey ?? choice.Id}{(price > 0 ? $" ({price} gold)" : "")}{grant}");
             }
             text.AppendLine("> x <i>");
@@ -327,27 +347,46 @@ public static class TextPlay
 
     private static void Doors(RunState run, IReadOnlyList<Node> doors, StringBuilder text)
     {
-        text.AppendLine("DOORS");
+        // ⚠ A DOOR IS A LANE. The act's paths hardly ever cross after the first rows, so the door taken here
+        // decides every room to the boss — and the screen's map shows that at a glance. Each door is shown as
+        // the whole of what lies behind it: how many ways, and the fewest–most of each kind of room on them.
+        text.AppendLine("DOORS (each: the ways behind it to the act's end, fewest–most of each kind of room)");
         for (var i = 0; i < doors.Count; i++)
         {
-            var next = run.Map.SuccessorIds(doors[i].Id)
-                .Select(id => run.Map.Nodes.First(n => n.Id == id)).Select(MapRole.Of);
-            text.AppendLine($"  [{i}] {MapRole.Of(doors[i])} → then {string.Join(" / ", next)}");
+            var paths = Paths(run.Map, doors[i].Id);
+            string Span(string role)
+            {
+                var counts = paths.Select(p => p.GetValueOrDefault(role)).ToList();
+                return counts.Count == 0 ? "?" : counts.Min() == counts.Max() ? $"{counts.Min()}" : $"{counts.Min()}–{counts.Max()}";
+            }
+            text.AppendLine($"  [{i}] {MapRole.Of(doors[i])} · {paths.Count} way(s) · elite {Span("elite")} · multi {Span("multi-combat")}"
+                + $" · combat {Span("combat")} · rest {Span("rest")} · shop {Span("shop")} · treasure {Span("treasure")}"
+                + $" · event {Span("event")}");
         }
-
-        // The rest of the act as the map shows it: one row per depth, the rooms any of these doors can reach.
-        var reachable = new HashSet<NodeId>();
-        var frontier = new Queue<NodeId>(doors.Select(d => d.Id));
-        while (frontier.Count > 0)
-            if (reachable.Add(frontier.Peek()))
-                foreach (var next in run.Map.SuccessorIds(frontier.Dequeue()))
-                    frontier.Enqueue(next);
-            else
-                frontier.Dequeue();
-        var depth = run.Map.Depths();
-        foreach (var row in reachable.GroupBy(id => depth.GetValueOrDefault(id)).OrderBy(g => g.Key))
-            text.AppendLine($"  row {row.Key,2}: {string.Join(" ", row.Select(id => run.Map.Nodes.First(n => n.Id == id)).Select(MapRole.Of).OrderBy(r => r, StringComparer.Ordinal))}");
         text.AppendLine("> n <i>");
+    }
+
+    // Every path from this node to the act's end, as a tally of room kinds. Capped: the act maps hold a
+    // handful of lanes, and a map that held thousands of paths would not need this view to be read.
+    private static List<Dictionary<string, int>> Paths(RunMap map, NodeId from)
+    {
+        var byId = map.Nodes.ToDictionary(n => n.Id);
+        var found = new List<Dictionary<string, int>>();
+        void Walk(NodeId at, Dictionary<string, int> tally)
+        {
+            if (found.Count >= 5000)
+                return;
+            var here = new Dictionary<string, int>(tally, StringComparer.Ordinal);
+            var role = MapRole.Of(byId[at]);
+            here[role] = here.GetValueOrDefault(role) + 1;
+            var next = map.SuccessorIds(at);
+            if (next.Count == 0)
+                found.Add(here);
+            foreach (var n in next)
+                Walk(n, here);
+        }
+        Walk(from, new Dictionary<string, int>(StringComparer.Ordinal));
+        return found;
     }
 
     private static string CardLine(RunPlayback play, RunBlueprint blueprint, string id)

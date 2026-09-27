@@ -70,6 +70,8 @@ public static class Program
 
         if (options.OracleOnly)
             return SurveyOnly(played, options, maps, generator);
+        if (options.Lanes)
+            return Lanes(played, options, generator);
 
         var lines = new ConcurrentDictionary<int, string>();
         var failures = 0;
@@ -220,6 +222,61 @@ public static class Program
             ? $"roguedeck-bot: surveyed {options.Runs} seeds, played none"
             : $"roguedeck-bot: {broken} of {options.Runs} seeds could not lay a map out");
         return broken == 0 ? 0 : 1;
+    }
+
+    // ── WHAT A DOOR COMMITS YOU TO (playtest 2026-09-27) ─────────────────────────────────────────────────
+    // An act's paths hardly ever cross after the first rows, so choosing a door early is choosing every room
+    // to the boss. This lays the maps out (nothing is played) and reads every full path through each act as
+    // a tally of room kinds: how many ways there are, how far apart the best and the worst are, and how often
+    // a seed hands out a lane with many elites and nowhere to rest.
+    private static int Lanes(RunBlueprint blueprint, CliOptions options, string generator)
+    {
+        var perAct = new Dictionary<int, List<(int Seed, List<Dictionary<string, int>> Paths)>>();
+        for (var seed = options.SeedFrom; seed < options.SeedFrom + options.Runs; seed++)
+        {
+            var character = RollCharacter(blueprint, seed);
+            var loadout = new BalanceCalculator(blueprint.Balance, blueprint.Encounters)
+                .LoadoutStrength(blueprint.ResolveStart(character), blueprint.Deck, character);
+            var acts = blueprint.BuildActPlan(seed, loadout, generator);
+            for (var i = 0; i < acts.Count; i++)
+            {
+                var map = acts[i].Map;
+                var byId = map.Nodes.ToDictionary(n => n.Id.Value, StringComparer.Ordinal);
+                var paths = MapOracle.Routes(map, 20_000)
+                    .Select(route => route.GroupBy(id => MapRole.Of(byId[id]), StringComparer.Ordinal)
+                        .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal))
+                    .ToList();
+                (perAct.TryGetValue(i + 1, out var list) ? list : perAct[i + 1] = []).Add((seed, paths));
+            }
+        }
+
+        static int Of(Dictionary<string, int> path, string role) => path.GetValueOrDefault(role);
+        static string Median(IEnumerable<int> values)
+        {
+            var sorted = values.Order().ToList();
+            return sorted.Count == 0 ? "—" : sorted[sorted.Count / 2].ToString(CultureInfo.InvariantCulture);
+        }
+
+        foreach (var (act, seeds) in perAct.OrderBy(kv => kv.Key))
+        {
+            var withPaths = seeds.Where(s => s.Paths.Count > 0).ToList();
+            var n = withPaths.Count;
+            var eliteSpread = withPaths.Select(s => s.Paths.Max(p => Of(p, "elite")) - s.Paths.Min(p => Of(p, "elite")));
+            var restSpread = withPaths.Select(s => s.Paths.Max(p => Of(p, "rest")) - s.Paths.Min(p => Of(p, "rest")));
+            // A HARD LANE: at least as many elites as the act's most, and no rest on it at all.
+            var hard = withPaths.Count(s => s.Paths.Any(p => Of(p, "elite") >= 3 && Of(p, "rest") == 0));
+            var restless = withPaths.Count(s => s.Paths.Any(p => Of(p, "rest") == 0));
+            Console.WriteLine($"act {act}: {n} seeds · paths per map median {Median(withPaths.Select(s => s.Paths.Count))} "
+                + $"(min {withPaths.Min(s => s.Paths.Count)}, max {withPaths.Max(s => s.Paths.Count)})");
+            Console.WriteLine($"  elites on a path: median {Median(withPaths.SelectMany(s => s.Paths.Select(p => Of(p, "elite"))))}"
+                + $" · best-vs-worst lane spread median {Median(eliteSpread)} (max {eliteSpread.Max()})");
+            Console.WriteLine($"  rests on a path:  median {Median(withPaths.SelectMany(s => s.Paths.Select(p => Of(p, "rest"))))}"
+                + $" · spread median {Median(restSpread)} (max {restSpread.Max()})");
+            Console.WriteLine($"  seeds with a lane that has NO rest: {restless}/{n} · with 3+ elites and no rest: {hard}/{n}");
+            Console.WriteLine($"  shops on a path: median {Median(withPaths.SelectMany(s => s.Paths.Select(p => Of(p, "shop"))))}"
+                + $" · seeds with a shopless lane: {withPaths.Count(s => s.Paths.Any(p => Of(p, "shop") == 0))}/{n}");
+        }
+        return 0;
     }
 
     // The maps this seed lays out, and — when a run walked them — where its doors ranked. Empty unless asked.

@@ -24,6 +24,7 @@ public sealed record CliOptions
     // thousand-seed map sweep fits into seconds.
     public bool Oracle { get; init; }
     public bool OracleOnly { get; init; }
+    public bool Lanes { get; init; }
 
     public string? OutDir { get; init; }
 
@@ -47,6 +48,8 @@ public sealed record CliOptions
                              measure of it — the spread and the rank are what survive that
           --oracle-only      survey the maps and play NOTHING. Seconds for a sweep a batch of runs would
                              spend days on
+          --lanes            lay the maps out (play nothing) and say what each act's paths hold: how many
+                             ways, the best and worst lane, and how often a lane has no rest
           --out <dir>        write one full log per run into this directory
         """;
 
@@ -61,6 +64,7 @@ public sealed record CliOptions
         var timeout = 1800;
         var oracle = false;
         var oracleOnly = false;
+        var lanes = false;
         int? health = null;
         var replay = false;
         string? outDir = null;
@@ -83,6 +87,7 @@ public sealed record CliOptions
                 case "--replay": replay = true; break;
                 case "--oracle": oracle = true; break;
                 case "--oracle-only": oracleOnly = oracle = true; break;
+                case "--lanes": lanes = true; break;
                 case "--out": outDir = Next(); break;
                 default: return null;
             }
@@ -103,6 +108,7 @@ public sealed record CliOptions
             Replay = replay,
             Oracle = oracle,
             OracleOnly = oracleOnly,
+            Lanes = lanes,
             OutDir = outDir,
         };
     }
