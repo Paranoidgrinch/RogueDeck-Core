@@ -153,6 +153,13 @@ public sealed record MapGenerationSpec
     public IReadOnlyDictionary<string, int> EncounterMaximumDepthPercent { get; init; } =
         new Dictionary<string, int>();
 
+    // ROLES THAT MAY STAND IN FOR EACH OTHER when a row's own band has no fight of the node's role: a solo-fight
+    // room in a stage the design wrote only duos for takes that stage's duo, rather than borrowing a solo from
+    // the next stage (playtest 2026-09-27: "set the duo in this stage instead of forcing the shift"). A stand-in
+    // is taken only when it is in band and the role's own nearest fight is not. Empty ⇒ no role stands in.
+    public IReadOnlyDictionary<MapNodeKind, IReadOnlyList<MapNodeKind>> EncounterRoleStandIns { get; init; } =
+        new Dictionary<MapNodeKind, IReadOnlyList<MapNodeKind>>();
+
     // The kinds a gate funnel can be, in a fixed order (used to lay gates out and to iterate deterministically).
     // Boss is the fixed top row and is never a per-path gate.
     public static readonly IReadOnlyList<MapNodeKind> GateKinds = new[]

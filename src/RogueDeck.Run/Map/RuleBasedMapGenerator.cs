@@ -377,6 +377,17 @@ public static class RuleBasedMapGenerator
                 Math.Max(0, spec.EncounterMinimumDepthPercent.GetValueOrDefault(id.Value) - depth)
                 + Math.Max(0, depth - spec.EncounterMaximumDepthPercent.GetValueOrDefault(id.Value, 100));
             var nearest = selector.Candidates(kind).Select(Outside).DefaultIfEmpty(0).Min();
+
+            // The row's own stage has no fight of this role, but another role may stand in with one that does.
+            if (nearest > 0 && spec.EncounterRoleStandIns.TryGetValue(kind, out var standIns))
+                foreach (var standIn in standIns)
+                    if (selector.HasCandidates(standIn) && selector.Candidates(standIn).Any(id => Outside(id) == 0))
+                    {
+                        kind = standIn;
+                        nearest = 0;
+                        break;
+                    }
+
             eligible = id => Outside(id) == nearest;
         }
 

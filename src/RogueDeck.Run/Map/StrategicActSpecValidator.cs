@@ -228,7 +228,7 @@ public static class StrategicActSpecValidator
                 continue;
 
             var gate = spec.Rooms.EarliestDepthOf(kind);
-            var rows = depths.Count(depth => depth >= gate);
+            var rows = depths.Count(depth => spec.Rooms.Admits(kind, depth));
             if (rows == 0)
             {
                 problems.Add(Problem(budget.Min > 0, kind.ToString(),
@@ -278,7 +278,7 @@ public static class StrategicActSpecValidator
                 // A BAND NEVER OVERRIDES A DEPTH GATE (source document §14), which is the document's own example:
                 // a role earliest at 35 % cannot stand in a 0-25 % band however loudly that band asks.
                 var gate = rooms.EarliestDepthOf(kind);
-                var eligible = depths.Count(depth => band.Contains(depth) && depth >= gate);
+                var eligible = depths.Count(depth => band.Contains(depth) && rooms.Admits(kind, depth));
                 if (eligible == 0 && (budget.Min > 0 || budget.Target > 0))
                 {
                     problems.Add(Problem(budget.Min > 0, $"{kind} in {subject}",

@@ -212,6 +212,12 @@ public sealed record StrategicRoomSpec
     public IReadOnlyDictionary<MapNodeKind, int> RoleMinimumDepthPercent { get; init; } =
         new Dictionary<MapNodeKind, int>();
 
+    // …and how deep it may LAST stand. A role whose content only exists in part of the act (an act whose elites
+    // all belong to its middle stages) must not be given rooms beyond it, or the room is filled with a fight
+    // from the wrong stage. Absent ⇒ 100.
+    public IReadOnlyDictionary<MapNodeKind, int> RoleMaximumDepthPercent { get; init; } =
+        new Dictionary<MapNodeKind, int>();
+
     public StrategicRoomRules Rules { get; init; } = new();
 
     public void Validate()
@@ -220,6 +226,7 @@ public sealed record StrategicRoomSpec
         ArgumentNullException.ThrowIfNull(RoomBudgets);
         ArgumentNullException.ThrowIfNull(DepthBands);
         ArgumentNullException.ThrowIfNull(RoleMinimumDepthPercent);
+        ArgumentNullException.ThrowIfNull(RoleMaximumDepthPercent);
         ArgumentNullException.ThrowIfNull(Rules);
 
         foreach (var (kind, weight) in KindWeights)
@@ -265,6 +272,11 @@ public sealed record StrategicRoomSpec
                 throw new ArgumentOutOfRangeException(nameof(RoleMinimumDepthPercent), percent,
                     $"The earliest depth for the {kind} role must be a percentage (0-100).");
 
+        foreach (var (kind, percent) in RoleMaximumDepthPercent)
+            if (percent is < 0 or > 100 || percent < EarliestDepthOf(kind))
+                throw new ArgumentOutOfRangeException(nameof(RoleMaximumDepthPercent), percent,
+                    $"The latest depth for the {kind} role must be a percentage (0-100) no lower than its earliest.");
+
         Rules.Validate();
     }
 
@@ -273,6 +285,12 @@ public sealed record StrategicRoomSpec
     public RoomBudget? BudgetOf(MapNodeKind kind) => RoomBudgets.GetValueOrDefault(kind);
 
     public int EarliestDepthOf(MapNodeKind kind) => Math.Clamp(RoleMinimumDepthPercent.GetValueOrDefault(kind), 0, 100);
+
+    public int LatestDepthOf(MapNodeKind kind) => Math.Clamp(RoleMaximumDepthPercent.GetValueOrDefault(kind, 100), 0, 100);
+
+    // Whether a row at this depth may hold the role at all.
+    public bool Admits(MapNodeKind kind, int depthPercent) =>
+        depthPercent >= EarliestDepthOf(kind) && depthPercent <= LatestDepthOf(kind);
 
     // Which band a row of an act this long falls in, or -1 for "no band has an opinion". Bands cannot overlap
     // (see Validate), so the first match is the only match.

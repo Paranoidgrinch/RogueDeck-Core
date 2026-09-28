@@ -403,7 +403,7 @@ public static class StrategicRoomAllocator
         && weight <= 0;
 
     internal static bool DeepEnough(StrategicRoomSpec spec, MapNodeKind kind, StrategicSlot slot, int rows) =>
-        MapDepth.Percent(slot.Row, rows) >= spec.EarliestDepthOf(kind);
+        spec.Admits(kind, MapDepth.Percent(slot.Row, rows));
 
     // UNDER BOTH CEILINGS — the act's and, where the room sits in one, its band's. A band ceiling is the half of a
     // band that actually forbids something: "at most one shop this early" is a rule, while "two shops early" as a
@@ -496,7 +496,7 @@ public static class StrategicRoomAllocator
     {
         var deep = slots.Count(slot => DeepEnough(spec, kind, slot, rows));
         if (deep == 0)
-            return $"no room of {where} is as deep as {spec.EarliestDepthOf(kind)} %";
+            return $"no room of {where} lies between {spec.EarliestDepthOf(kind)} % and {spec.LatestDepthOf(kind)} %";
         var free = slots.Count(slot => !kinds.ContainsKey(slot.Id) && DeepEnough(spec, kind, slot, rows));
         if (free == 0)
             return $"all {deep} room(s) of {where} deep enough for it were already taken";

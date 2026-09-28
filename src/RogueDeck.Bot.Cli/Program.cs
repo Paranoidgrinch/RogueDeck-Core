@@ -234,7 +234,7 @@ public static class Program
         var perAct = new Dictionary<int, List<(int Seed, List<Dictionary<string, int>> Paths)>>();
         var forks = new Dictionary<(int Act, int Depth), int>();
         // Every placed fight that has a band, and how far outside it it stood (0 = inside).
-        var placed = new Dictionary<int, List<int>>();
+        var placed = new Dictionary<int, List<(bool Elite, int Outside)>>();
         for (var seed = options.SeedFrom; seed < options.SeedFrom + options.Runs; seed++)
         {
             var character = RollCharacter(blueprint, seed);
@@ -262,7 +262,8 @@ public static class Program
                             var depth = MapDepth.Percent(depths.GetValueOrDefault(node.Id), rows);
                             var floor = spec.EncounterMinimumDepthPercent.GetValueOrDefault(fight.Id.Value);
                             (placed.TryGetValue(i + 1, out var outs) ? outs : placed[i + 1] = [])
-                                .Add(Math.Max(0, floor - depth) + Math.Max(0, depth - ceiling));
+                                .Add((node.HasTag(MapNodeTags.Elite),
+                                    Math.Max(0, floor - depth) + Math.Max(0, depth - ceiling)));
                         }
                 }
                 foreach (var node in map.Nodes)
@@ -306,8 +307,15 @@ public static class Program
             Console.WriteLine($"  shops on a path: median {Median(withPaths.SelectMany(s => s.Paths.Select(p => Of(p, "shop"))))}"
                 + $" · seeds with a shopless lane: {withPaths.Count(s => s.Paths.Any(p => Of(p, "shop") == 0))}/{n}");
             if (placed.TryGetValue(act, out var outside) && outside.Count > 0)
-                Console.WriteLine($"  staged fights placed: {outside.Count} · outside their stage: "
-                    + $"{outside.Count(d => d > 0)} (farthest {outside.Max()} % of the act)");
+                foreach (var (label, elite) in new[] { ("standard", false), ("elite", true) })
+                {
+                    var these = outside.Where(p => p.Elite == elite).Select(p => p.Outside).ToList();
+                    if (these.Count > 0)
+                        Console.WriteLine($"  staged {label} fights placed: {these.Count} · outside their stage: "
+                            + $"{these.Count(d => d > 0)} (farthest {these.Max()} % of the act)");
+                }
+            Console.WriteLine($"  DECISIONS per map (rooms with 2+ ways on, the entry choice not counted): "
+                + $"{forks.Where(f => f.Key.Act == act).Sum(f => f.Value) / (double)Math.Max(1, n):0.0}");
             Console.WriteLine("  forks per map by row (rooms with 2+ ways on): " + string.Join(" ",
                 forks.Where(f => f.Key.Act == act).OrderBy(f => f.Key.Depth)
                     .Select(f => $"{f.Key.Depth}:{(double)f.Value / n:0.0}")));

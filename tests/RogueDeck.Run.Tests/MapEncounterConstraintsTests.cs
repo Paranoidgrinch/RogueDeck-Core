@@ -338,6 +338,54 @@ public class MapEncounterConstraintsTests
         AssertEveryFightAsNearAsItCanBe(spec, low, high, mustBeInside: false);
     }
 
+    [Fact]
+    public void A_solo_room_in_a_stage_of_only_duos_takes_that_stage_s_duo()
+    {
+        // Solo fights exist only for the early half; the late half is written only as duos. With the stand-in,
+        // every late solo room must hold a late duo, never an early solo.
+        var (spec, low, high) = Banded(("early.", 0, 50));
+        var duos = Pool("duo.late.", 30);
+        foreach (var entry in duos)
+        {
+            low[entry.Encounter.Value] = 51;
+            high[entry.Encounter.Value] = 100;
+        }
+        spec = spec with
+        {
+            Encounters = new EncounterDistribution
+            {
+                ByRole = new Dictionary<MapNodeKind, IReadOnlyList<EncounterPoolEntry>>
+                {
+                    [MapNodeKind.Combat] = spec.Encounters.ByRole[MapNodeKind.Combat],
+                    [MapNodeKind.MultiCombat] = duos,
+                    [MapNodeKind.Boss] = Pool("boss.", 5),
+                },
+            },
+            EncounterRoleStandIns = new Dictionary<MapNodeKind, IReadOnlyList<MapNodeKind>>
+            {
+                [MapNodeKind.Combat] = [MapNodeKind.MultiCombat],
+            },
+        };
+
+        var lateRooms = 0;
+        for (var seed = 1; seed <= 30; seed++)
+        {
+            var generated = RuleBasedMapGenerator.Generate(spec, seed, 0, EmptyBalance(), Realize);
+            var rows = generated.Map.Nodes.Max(n => Row(n.Id)) + 1;
+            foreach (var node in generated.Map.Nodes)
+            {
+                if (node.Payload is not string fought || fought.StartsWith("boss.", StringComparison.Ordinal))
+                    continue;
+                var depth = MapDepth.Percent(Row(node.Id), rows);
+                if (depth <= 50)
+                    continue;
+                lateRooms++;
+                Assert.StartsWith("duo.late.", fought);
+            }
+        }
+        Assert.True(lateRooms > 30, "too few late rooms were placed for the stand-in to prove anything");
+    }
+
     private static (MapGenerationSpec Spec, Dictionary<string, int> Low, Dictionary<string, int> High) Banded(
         params (string Prefix, int From, int To)[] bands)
     {
