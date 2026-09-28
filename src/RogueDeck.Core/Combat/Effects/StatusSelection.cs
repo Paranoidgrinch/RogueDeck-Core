@@ -37,6 +37,13 @@ public sealed record StatusSelectionSpec(
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public StatusDefinitionId? Definition { get; init; }
 
+    // …or keep one KIND out of it: "another negative Status" — Sanguine Errata applies Blood Ink and then strips a
+    // stack of some OTHER debuff, and without this it stripped the Blood Ink it had just put down whenever the
+    // target carried nothing else (2026-09-28).
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public StatusDefinitionId? Except { get; init; }
+
     // Narrow it to the instances THIS effect's source put there. Source-bound statuses — Overdue, Trespass —
     // are the whole point of a threshold each enemy owns on the shared player: the rule that fires has to
     // consume its own stacks and leave every other enemy's alone.
@@ -66,6 +73,7 @@ public static class StatusSelection
         var matches = combatant.Statuses
             .Where(s => Matches(s, spec.Polarity))
             .Where(s => spec.Definition is not { } definition || s.DefinitionId == definition)
+            .Where(s => spec.Except is not { } excluded || s.DefinitionId != excluded)
             // Asking for the acting source's own instances when there IS no acting source matches nothing,
             // rather than quietly matching everything — a rule that means "mine" must never eat another's.
             .Where(s => !spec.FromActingSource || (actingSource is { } src && s.SourceCombatantId == src))

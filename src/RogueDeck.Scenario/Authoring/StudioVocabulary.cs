@@ -168,7 +168,7 @@ public static class StudioVocabulary
         ("Unit reads", ["currentHealth", "maxHealth", "missingHealth", "healthPct", "currentResource",
             "maxResource", "missingResource", "defensivePool", "zoneCards", "statusStacks", "statusDuration",
             "statusCharges", "stacksByPolarity", "coord"]),
-        ("This turn", ["cardsPlayedThisTurn", "damageDealtThisTurn", "resourceGainedThisTurn", "resourceSpentThisTurn"]),
+        ("This turn", ["cardsPlayedThisTurn", "damageDealtThisTurn", "hitsThisTurn", "resourceGainedThisTurn", "resourceSpentThisTurn"]),
         ("Over a selection", ["countTargets", "sumOverTargets", "gridDistance", "cardCost"]),
     ];
 
@@ -212,6 +212,7 @@ public static class StudioVocabulary
         ("stacksByPolarity", "stacks by polarity", "The total stacks of all buffs (or all debuffs) on the chosen unit."),
         ("cardsPlayedThisTurn", "cards played this turn", "How many cards the chosen unit has played this turn."),
         ("damageDealtThisTurn", "damage dealt this turn", "How much damage the chosen unit has dealt this turn."),
+        ("hitsThisTurn", "hits landed this turn", "How many direct hits the chosen unit has landed this turn, blocked ones included."),
         ("resourceGainedThisTurn", "resource gained this turn", "How much of a named resource the chosen unit has gained this turn."),
         ("resourceSpentThisTurn", "resource spent this turn", "How much the chosen unit has paid for card costs this turn, after every cost modifier."),
         ("coord", "grid coord", "The chosen unit's grid coordinate on one axis (X or Y). Grid battles only."),

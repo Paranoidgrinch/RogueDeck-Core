@@ -1582,6 +1582,27 @@ public sealed class DamageDealtThisTurnExpression<TContext> : ICombatExpression<
     }
 }
 
+// Direct hits the selected combatant has landed this turn, blocked ones included (see CardPlayTurnStats).
+public sealed class HitsThisTurnExpression<TContext> : ICombatExpression<TContext, int>
+    where TContext : class
+{
+    public ICombatantTargetSelector Selector { get; }
+
+    public HitsThisTurnExpression(ICombatantTargetSelector selector)
+    {
+        ArgumentNullException.ThrowIfNull(selector);
+        Selector = ScalarTargetExpression.RequireSingleSelector(selector);
+    }
+
+    public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        var selCtx = context.GetTargetSelectionContext();
+        var targets = Selector.ResolveTargets(selCtx);
+        if (targets.Count == 0) return 0;
+        return combat.GetCardPlayTurnStats(ScalarTargetExpression.RequireSingle(targets)).HitsThisTurn;
+    }
+}
+
 public sealed class ResourceGainedThisTurnExpression<TContext> : ICombatExpression<TContext, int>
     where TContext : class
 {

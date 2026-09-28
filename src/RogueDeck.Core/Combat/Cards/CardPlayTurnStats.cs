@@ -45,6 +45,12 @@ public sealed class CombatantCardPlayTurnStats
 
     public int DamageDealtThisTurn { get; private set; }
 
+    // How many DIRECT hits the combatant has landed this turn, blocked or not. DamageDealtThisTurn counts only
+    // what got through, so a blow the target blocked entirely left no trace — and "after an enemy attacks" read
+    // off it missed every attack that was blocked (Dubious Authority with Strong Binder, 2026-09-28). Damage over
+    // time is not a hit: it is a status resolving, not the combatant acting.
+    public int HitsThisTurn { get; private set; }
+
     public int ResourceGainedThisTurn { get; private set; }
 
     // How much the combatant has SPENT paying card costs this turn — the mirror of ResourceGainedThisTurn,
@@ -142,6 +148,8 @@ public sealed class CombatantCardPlayTurnStats
 
     public void RecordCardsDrawn() => CardDrawsThisTurn++;
 
+    public void RecordHit() => HitsThisTurn++;
+
     public void RecordDamageDealt(int healthDamage)
     {
         if (healthDamage > 0)
@@ -174,6 +182,7 @@ public sealed class CombatantCardPlayTurnStats
         CardsPlayedThisTurn = 0;
         CardDrawsThisTurn = 0;
         DamageDealtThisTurn = 0;
+        HitsThisTurn = 0;
         ResourceGainedThisTurn = 0;
         ResourceSpentThisTurn = 0;
         FirstCardPlayedDefinitionId = null;
@@ -206,7 +215,8 @@ public sealed class CombatantCardPlayTurnStats
         [.. _claimedThisTurn.OrderBy(v => v, StringComparer.Ordinal)],
         [.. _cardsPlayedByDefinitionThisCombat
             .Select(e => new CountedKeySnapshot(e.Key.value, e.Value))
-            .OrderBy(e => e.Key, StringComparer.Ordinal)]);
+            .OrderBy(e => e.Key, StringComparer.Ordinal)],
+        HitsThisTurn);
 
     public void Restore(CardPlayTurnStatsSnapshot snapshot)
     {
@@ -215,6 +225,7 @@ public sealed class CombatantCardPlayTurnStats
         CardDrawsThisTurn = snapshot.CardDrawsThisTurn;
         CardsPlayedLastTurn = snapshot.CardsPlayedLastTurn;
         DamageDealtThisTurn = snapshot.DamageDealtThisTurn;
+        HitsThisTurn = snapshot.HitsThisTurn;
         ResourceGainedThisTurn = snapshot.ResourceGainedThisTurn;
         ResourceSpentThisTurn = snapshot.ResourceSpentThisTurn;
         FirstCardPlayedDefinitionId = snapshot.FirstCardPlayedDefinitionId is { } id
@@ -328,7 +339,10 @@ public sealed class TrackDamageDealtThisTurnHandler
         if (!combat.TryGetCombatant(sourceId, out _))
             return;
 
-        combat.GetCardPlayTurnStats(sourceId).RecordDamageDealt(combatEvent.HealthDamage);
+        var stats = combat.GetCardPlayTurnStats(sourceId);
+        stats.RecordDamageDealt(combatEvent.HealthDamage);
+        if (combatEvent.Kind != DamageKind.DamageOverTime && combatEvent.RequestedAmount > 0)
+            stats.RecordHit();
     }
 }
 
@@ -392,4 +406,6 @@ public sealed record CardPlayTurnStatsSnapshot(
     // ⚠ AND THE FIGHT'S OWN TALLY, which is the only thing here that outlives a turn — so it is the only
     // thing here a mid-fight save can LOSE. Defaulted like its neighbours: a snapshot written before this
     // existed reads "nothing has been played twice", which is what a fight with no such rule would have said.
-    System.Collections.Immutable.ImmutableArray<CountedKeySnapshot> ByDefinitionThisCombat = default);
+    System.Collections.Immutable.ImmutableArray<CountedKeySnapshot> ByDefinitionThisCombat = default,
+    // Hits landed this turn, blocked or not (2026-09-28). Defaulted: an older snapshot reads zero hits.
+    int HitsThisTurn = 0);

@@ -211,6 +211,34 @@ public class EffectProgramPhase3ExtensionTests
         Assert.Equal(8, Eval(expr, combat, HeroId));
     }
 
+    // A hit the target blocks entirely deals no damage — and is still a hit (2026-09-28: Dubious Authority read
+    // "after an enemy attacks" off the damage and missed every attack a Strong Binder had blocked).
+    [Fact]
+    public void HitsThisTurnExpression_counts_a_hit_that_was_blocked_entirely()
+    {
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        var registry = CombatTestFactory.CreateStandardRegistry();
+
+        combat.EnqueueEffect(new GainBlockEffectRequest(GoblinId, Amount: 10));
+        combat.EnqueueEffect(new DealDamageEffectRequest(GoblinId, 5, SourceCombatantId: HeroId));
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+
+        Assert.Equal(0, Eval(new DamageDealtThisTurnExpression<Ctx>(CombatantTargetSelectors.Source), combat, HeroId));
+        Assert.Equal(1, Eval(new HitsThisTurnExpression<Ctx>(CombatantTargetSelectors.Source), combat, HeroId));
+    }
+
+    [Fact]
+    public void HitsThisTurnExpression_does_not_count_damage_over_time()
+    {
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        var registry = CombatTestFactory.CreateStandardRegistry();
+
+        combat.EnqueueEffect(new DealDamageEffectRequest(GoblinId, 4, SourceCombatantId: HeroId, Kind: DamageKind.DamageOverTime));
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+
+        Assert.Equal(0, Eval(new HitsThisTurnExpression<Ctx>(CombatantTargetSelectors.Source), combat, HeroId));
+    }
+
     [Fact]
     public void DamageDealtThisTurnExpression_OnlyTracksSourceCombatant()
     {

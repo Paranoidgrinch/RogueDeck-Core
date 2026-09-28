@@ -146,7 +146,14 @@ public sealed class EnemyActionBlueprint
 
 // ── Combatant specifications (consumed by the ScenarioRunner in the next step) ──
 
-public sealed record ResourceSpec(ResourceId Resource, int Current, int Max);
+// `CanExceedMax`: a GAIN may take the pool above Max for the rest of the turn (a "gain 1 Energy" card played on a
+// full pool still gives the point); the turn-start refill sets it back to Max, so nothing carries over. False
+// (the default, and not written) keeps the ceiling hard — every document written before it reads the same.
+public sealed record ResourceSpec(
+    ResourceId Resource, int Current, int Max,
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    bool CanExceedMax = false);
 
 // Requests that a resource be topped up to Max at the start of every combatant's turn — the same automation
 // the standard package installs for Energy. Registered by ScenarioBlueprint.Compile().

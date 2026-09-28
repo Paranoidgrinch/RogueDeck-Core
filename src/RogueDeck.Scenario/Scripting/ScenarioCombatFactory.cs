@@ -118,7 +118,8 @@ internal static class ScenarioCombatFactory
 
         var combatant = combat.GetCombatant(blueprint.CombatantId);
         foreach (var resource in blueprint.Resources)
-            combatant.AddResource(resource.Resource, new ValuePoolState(resource.Current, max: resource.Max));
+            combatant.AddResource(resource.Resource,
+                new ValuePoolState(resource.Current, max: resource.Max, canExceedMax: resource.CanExceedMax));
 
         // Optional grid placement — null leaves the combatant unplaced (flat arena, unchanged behavior).
         if (blueprint.Position is { } position)

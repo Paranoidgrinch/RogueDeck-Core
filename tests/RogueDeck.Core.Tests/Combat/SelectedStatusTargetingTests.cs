@@ -65,6 +65,33 @@ public class SelectedStatusTargetingTests
         Assert.Equal(PoisonId, remaining.DefinitionId); // the 2nd debuff (Burn) was removed
     }
 
+    // "Another negative Status" (Sanguine Errata, 2026-09-28): the kind just put down is not a candidate.
+    [Fact]
+    public void Except_keeps_one_kind_out_of_the_pick()
+    {
+        var registry = CreateRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        ApplyStatus(combat, registry, GoblinId, PoisonId, 3); // debuff #0 — the excluded kind
+        ApplyStatus(combat, registry, GoblinId, BurnId, 1);   // debuff #1
+
+        RunRemoveSelected(combat, registry, new StatusSelectionSpec(StatusPolarityFilter.Debuff) { Except = PoisonId });
+
+        var remaining = Assert.Single(combat.GetCombatant(GoblinId).Statuses);
+        Assert.Equal(PoisonId, remaining.DefinitionId); // Burn went, Poison was never a candidate
+    }
+
+    [Fact]
+    public void Except_with_nothing_else_left_is_a_no_op()
+    {
+        var registry = CreateRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        ApplyStatus(combat, registry, GoblinId, PoisonId, 3); // the only debuff is the excluded kind
+
+        RunRemoveSelected(combat, registry, new StatusSelectionSpec(StatusPolarityFilter.Debuff) { Except = PoisonId });
+
+        Assert.Single(combat.GetCombatant(GoblinId).Statuses);
+    }
+
     [Fact]
     public void No_matching_status_is_a_no_op()
     {
