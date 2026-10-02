@@ -30,7 +30,7 @@ public static class MapNodeRealizer
                     : spec.VictoryRewards.GetValueOrDefault(kind);
                 return new NodeContent(StandardRunIds.CombatNode, reward is not null
                     ? new EncounterRef(id, reward.Source, new RewardId($"{reward.RewardIdPrefix}:{id.Value}"),
-                        reward.PickCount)
+                        reward.PickCount, reward.Granted)
                     : new EncounterRef(id), Tags(kind));
 
             case MapNodeKind.Shop:

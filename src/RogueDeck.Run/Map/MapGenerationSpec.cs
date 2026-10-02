@@ -19,7 +19,12 @@ public sealed record BalanceTargets
 
 // The spoils a generated fight of one role grants. Mirrors the three reward fields of EncounterRef; the id is
 // suffixed with the encounter so two fights of the same role stay distinguishable in the run log.
-public sealed record MapVictoryReward(IRewardSource Source, string RewardIdPrefix = "spoils", int PickCount = 1);
+// `Granted`: every offer is handed over without a question (EncounterRef.VictoryRewardGranted).
+public sealed record MapVictoryReward(
+    IRewardSource Source, string RewardIdPrefix = "spoils", int PickCount = 1,
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    bool Granted = false);
 
 // The rules a run's map is generated from (RuleBasedMapGenerator). The act is a backbone of `Rows` WIDE "branch"
 // rows (row 0 is the entry) plus a single boss row, where each branch node draws its kind independently from

@@ -12,7 +12,7 @@ namespace RogueDeck.Sandbox.Tests;
 // offer anything, so every Studio-authored game silently had reward-less fights.
 public class EncounterRefRewardTortureTests
 {
-    private static RunBlueprint DuelWithSpoils()
+    private static RunBlueprint DuelWithSpoils(bool granted = false)
     {
         CardData Card(string id, int damage) => new()
         {
@@ -60,7 +60,7 @@ public class EncounterRefRewardTortureTests
             [
                 new Node(new NodeId("duel"), StandardRunIds.CombatNode,
                     new EncounterRef(new EncounterId("duel"), VictoryReward: spoils,
-                        VictoryRewardId: new RewardId("duel-spoils"))),
+                        VictoryRewardId: new RewardId("duel-spoils"), VictoryRewardGranted: granted)),
             ]))
         {
             Start = new RunStart
@@ -106,6 +106,41 @@ public class EncounterRefRewardTortureTests
             session.PickEntities([0]);
             Assert.Null(session.Error);
             Assert.Equal(2, session.Run.Deck.Count); // jab + the picked reward card
+        }
+    }
+
+    // Playtest feedback 2, C1: GRANTED spoils are no question — the fight is won, the purse is already paid and the
+    // first thing asked is the card pick. Through a RunJson roundtrip, so the flag survives the document.
+    [Fact]
+    public void Granted_spoils_pay_the_gold_and_go_straight_to_the_card_pick()
+    {
+        var options = RunJson.CreateOptions();
+        var json = RunJson.ToJson(DuelWithSpoils(granted: true), options);
+        Assert.Contains("\"VictoryRewardGranted\": true", json);
+        Assert.DoesNotContain("VictoryRewardGranted", RunJson.ToJson(DuelWithSpoils(), options));
+        var blueprint = RunJson.BlueprintFromJson(json, options);
+
+        var play = new RunPlayback(() => { });
+        play.Start(blueprint, seed: 1, interactive: true);
+        var session = play.Session!;
+        Assert.Null(play.Error);
+        using (play)
+        {
+            while (session.IsAwaitingInterlude)
+                session.Continue();
+            var combat = play.CombatDriver!.Current!;
+            var target = combat.State.Combatants.First(c => c.Id != combat.HeroId && c.IsAlive);
+            play.CombatDriver.PlayCard(combat.Hand.First(c => c.DefinitionId.value == "jab").Id, target.Id);
+            Assert.Null(session.Error);
+            while (session.IsAwaitingInterlude)
+                session.Continue();
+
+            Assert.True(session.IsAwaitingEntities);
+            Assert.Equal(30, session.Run.GetResource(StandardRunIds.Gold));
+            Assert.Equal(2, session.PendingEntities!.Displays.Count); // the card pick, first
+            session.PickEntities([]);                                   // and it may be skipped
+            Assert.Null(session.Error);
+            Assert.Single(session.Run.Deck);
         }
     }
 }

@@ -371,6 +371,11 @@ public sealed class CombatNodeResolver : INodeResolver
                     run.EnqueueEffect(new OfferRewardRunEffect(
                         payload.VictoryRewardId, reward, payload.VictoryRewardPickCount));
                     break;
+                case EncounterRef { VictoryReward: { } reward, VictoryRewardGranted: true } reference:
+                    var id = reference.VictoryRewardId ?? new RewardId("combat");
+                    foreach (var offer in reward.Generate(run))
+                        run.EnqueueEffect(new GrantRewardRunEffect(new RewardId($"{id}:{offer.Id}"), offer.Grant));
+                    break;
                 case EncounterRef { VictoryReward: { } reward } reference:
                     run.EnqueueEffect(new OfferRewardRunEffect(
                         reference.VictoryRewardId ?? new RewardId("combat"), reward, reference.VictoryRewardPickCount));

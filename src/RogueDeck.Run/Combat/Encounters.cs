@@ -26,7 +26,13 @@ public sealed record EncounterRef(
     EncounterId Id,
     IRewardSource? VictoryReward = null,
     RewardId? VictoryRewardId = null,
-    int VictoryRewardPickCount = 1) : IRunNodePayload;
+    int VictoryRewardPickCount = 1,
+    // Every offer of the victory reward is GRANTED, not offered: "the spoils" are no question — the purse is paid
+    // and the card and relic rewards inside them ask their own (playtest feedback 2, C1: one screen fewer after
+    // every fight). Default false stays out of the wire format.
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    bool VictoryRewardGranted = false) : IRunNodePayload;
 
 // The shared, authored-once combat content: the definitions every encounter draws its cards / enemy actions /
 // statuses from. This is the one place combat behaviour (EffectPrograms) is authored; encounters reference it.
