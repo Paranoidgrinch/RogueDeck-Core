@@ -215,4 +215,24 @@ public class PendingOpeningSaveTests
     {
         Assert.DoesNotContain("PendingOpenings", RunSaveJson.ToJson(NewRun().Snapshot()));
     }
+
+    // Playtest feedback 2, G1: an opening promised for three fights opens three, one after another — and a save
+    // taken between them remembers how many are left.
+    [Fact]
+    public void An_opening_for_three_fights_opens_three_and_survives_the_save_between()
+    {
+        var run = NewRun();
+        run.AddPendingCombatModifier(new HeroOpeningRuleModifier(Opening(20), combats: 3));
+
+        Assert.Single(run.ConsumePendingCombatModifiers());
+        var json = RunSaveJson.ToJson(run.Snapshot());
+        Assert.Contains("PendingOpeningCombats", json);
+        var restored = RunState.Restore(RunSaveJson.FromJson(json), new RunMap(Array.Empty<Node>()), null);
+        Assert.Equal(2, Assert.IsType<HeroOpeningRuleModifier>(Assert.Single(restored.PendingCombatModifiers)).Combats);
+
+        Assert.Single(restored.ConsumePendingCombatModifiers());
+        Assert.Single(restored.ConsumePendingCombatModifiers());
+        Assert.Empty(restored.ConsumePendingCombatModifiers());
+        Assert.DoesNotContain("PendingOpeningCombats", RunSaveJson.ToJson(NewRun().Snapshot()));
+    }
 }

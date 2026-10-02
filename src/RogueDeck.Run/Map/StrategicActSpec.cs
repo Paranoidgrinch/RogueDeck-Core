@@ -41,6 +41,13 @@ public sealed record StrategicActSpec
 
     public RepairRules Repair { get; init; } = new();
 
+    // HOW MANY REAL DECISIONS EVERY ROUTE MUST MEET (playtest feedback 2, D3): rooms with two or more ways on whose
+    // next rooms are not all of one kind. Read off the finished rooms; an attempt short of it is retried like a
+    // thin topology (see StrategicMapGenerator). Zero (the default) promises nothing.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public int MinRealDecisionsPerRoute { get; init; }
+
     // HOW MANY WHOLE ACTS MAY BE TRIED before the generator gives up and says why (source document §25). Each
     // retry is a fresh family of seed streams derived from the same run seed, so the fourth attempt at a hard
     // spec is as reproducible as the first. An act that promises nothing is clean on the first one.

@@ -94,4 +94,39 @@ public class EventDeclineTests
         Assert.True(RunJson.FromJson<EventScript>(json, options).Situations["camp"].Choices[0].Declinable);
         Assert.DoesNotContain("Declinable", RunJson.ToJson(Camp(declinable: false), options));
     }
+
+    // Playtest feedback 2, G2: a gamble leads to one of its outcomes, by weight, from the run's RNG — the seed
+    // decides, and over many seeds the weights hold.
+    private static EventScript Wheel() => new("wheel",
+    [
+        new EventSituation("wheel", "wheel",
+        [
+            new EventChoice("spin", [], Outcomes: [new EventOutcome("win", 1), new EventOutcome("lose", 3)]),
+        ]),
+        new EventSituation("win", "win", [new EventChoice("take", [new ChangeResourceRunEffect(Gold, 100)])]),
+        new EventSituation("lose", "lose", [new EventChoice("take", [new ChangeResourceRunEffect(Gold, -10)])]),
+    ]);
+
+    [Fact]
+    public void A_gamble_falls_by_its_weights_and_the_seed_repeats_it()
+    {
+        int Spin(int seed)
+        {
+            var run = new RunState(new RunId("run"), new HealthState(30, 40), new RunMap(Array.Empty<Node>()), seed);
+            run.SetResource(Gold, 20);
+            var context = new NodeResolveContext(run, new ScriptedChoiceProvider("spin", "take"), Registry(), new RunEffectProcessor());
+            new EventNodeResolver().Resolve(context, new Node(new NodeId("e"), StandardRunIds.EventNode, Wheel()));
+            return run.GetResource(Gold);
+        }
+        var results = Enumerable.Range(1, 2000).Select(Spin).ToList();
+        var wins = results.Count(gold => gold == 120);
+        Assert.Equal(2000, wins + results.Count(gold => gold == 10));
+        Assert.InRange(wins, 430, 570);                 // 1 in 4
+        Assert.Equal(Spin(17), Spin(17));
+
+        var options = RunJson.CreateOptions();
+        var json = RunJson.ToJson(Wheel(), options);
+        Assert.Equal(2, RunJson.FromJson<EventScript>(json, options).Situations["wheel"].Choices[0].Outcomes!.Count);
+        Assert.DoesNotContain("Outcomes", RunJson.ToJson(Camp(declinable: false), options));
+    }
 }

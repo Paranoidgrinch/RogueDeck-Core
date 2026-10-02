@@ -397,6 +397,9 @@ public sealed class RunState
     {
         var taken = _pendingCombatModifiers.ToArray();
         _pendingCombatModifiers.Clear();
+        // An opening promised for several fights stays in the queue for the next one, a fight fewer.
+        foreach (var opening in taken.OfType<HeroOpeningRuleModifier>().Where(o => o.Combats > 1))
+            _pendingCombatModifiers.Add(new HeroOpeningRuleModifier(opening.Rule, opening.Combats - 1));
         return taken;
     }
 
@@ -563,6 +566,11 @@ public sealed class RunState
             PendingOpenings = _pendingCombatModifiers.Count > 0
                 ? _pendingCombatModifiers.Cast<HeroOpeningRuleModifier>().Select(m => m.Rule).ToList()
                 : null,
+            // Parallel to PendingOpenings, and written only when some opening has more than one fight left — a
+            // plain list of ints, never a tuple (System.Text.Json drops tuple fields).
+            PendingOpeningCombats = _pendingCombatModifiers.Cast<HeroOpeningRuleModifier>().Any(m => m.Combats > 1)
+                ? _pendingCombatModifiers.Cast<HeroOpeningRuleModifier>().Select(m => m.Combats).ToList()
+                : null,
             UnrestrictedSteps = UnrestrictedSteps,
             ActIndex = ActIndex,
             ActFlags = _actFlags.Count > 0 ? _actFlags.Select(flag => flag.Value).ToList() : null,
@@ -660,8 +668,10 @@ public sealed class RunState
         // the program-id counter is restored so any later mint continues the sequence collision-free.
         run._nextProgramSeq = data.NextProgramSeq;
         run.UnrestrictedSteps = data.UnrestrictedSteps;
-        foreach (var opening in data.PendingOpenings ?? [])
-            run.AddPendingCombatModifier(new HeroOpeningRuleModifier(opening));
+        var openings = data.PendingOpenings ?? [];
+        for (var index = 0; index < openings.Count; index++)
+            run.AddPendingCombatModifier(new HeroOpeningRuleModifier(
+                openings[index], data.PendingOpeningCombats?.ElementAtOrDefault(index) ?? 1));
         foreach (var removed in data.RemovedCards ?? [])
             run.RememberRemovedCard(new RemovedCardRecord(
                 new CardDefinitionId(removed.DefinitionId), removed.UpgradeLevel,

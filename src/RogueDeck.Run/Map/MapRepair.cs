@@ -183,6 +183,7 @@ public static class MapRepair
         private readonly Dictionary<NodeId, int> _bandOf;
         private readonly List<MapNodeKind> _placeable;
         private readonly int _rows;
+        private readonly int _lastRow;
 
         public Act(StrategicRoomPlan plan, PathPressureRules pressure, ForkQualityRules forks)
         {
@@ -196,6 +197,7 @@ public static class MapRepair
             _kinds = new Dictionary<NodeId, MapNodeKind>(plan.Kinds);
             _slots = _topology.Slots.Where(slot => !slot.IsBoss).ToList();
             _slotOf = _slots.ToDictionary(slot => slot.Id);
+            _lastRow = _slots.Count == 0 ? -1 : _slots.Max(slot => slot.Row);
             _placeable = StrategicRoomAllocator.Placeable(_profiles, _spec);
             _bandOf = _slots.ToDictionary(slot => slot.Id, slot => _spec.BandIndexOf(slot.Row, _rows));
             _neighbours = _slots.ToDictionary(
@@ -462,6 +464,9 @@ public static class MapRepair
         {
             if (kind is MapNodeKind.Boss or MapNodeKind.Mimic)
                 return false;
+            // The fixed last row holds its kind and nothing else, and that kind is legal there whatever else says.
+            if (_spec.PreBossKind is { } fixedKind && slot.Row == _lastRow)
+                return kind == fixedKind;
             if (!StrategicRoomAllocator.DeepEnough(_spec, kind, slot, _rows))
                 return false;
             if (StrategicRoomAllocator.Forbidden(_spec, kind, slot, _neighbours, _kinds))

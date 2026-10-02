@@ -16,10 +16,15 @@ public sealed class HeroOpeningRuleModifier : IRunCombatModifier
     // the one pending combat modifier a SAVE can capture by value (RunState.Snapshot).
     public RelicCombatRule Rule => _rule;
 
-    public HeroOpeningRuleModifier(RelicCombatRule rule)
+    // How many fights this opening still has to open, this one included (playtest feedback 2, G1: "die naechsten
+    // x kaempfe"). When a fight takes it, one with a count less goes back into the queue for the next.
+    public int Combats { get; }
+
+    public HeroOpeningRuleModifier(RelicCombatRule rule, int combats = 1)
     {
         ArgumentNullException.ThrowIfNull(rule);
         _rule = rule;
+        Combats = Math.Max(1, combats);
     }
 
     public void Apply(ScenarioBlueprint blueprint, RunState run)
@@ -39,10 +44,15 @@ public sealed class HeroOpeningRuleModifier : IRunCombatModifier
 // Install a "next combat opening" (see HeroOpeningRuleModifier): queues a pending combat modifier so the NEXT
 // fight's hero starts with the rule installed. Serializable — its RelicCombatRule round-trips via RunJson — so a
 // consumable / event / reward carries it as data. The pending queue consumes it after one combat.
-public sealed record InstallNextCombatOpeningRunEffect(RelicCombatRule Rule) : IRunEffectRequest;
+// `Combats`: how many fights in a row it opens — null (the default, out of the wire format) is the next one only.
+public sealed record InstallNextCombatOpeningRunEffect(
+    RelicCombatRule Rule,
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    int? Combats = null) : IRunEffectRequest;
 
 public sealed class InstallNextCombatOpeningRunEffectHandler : RunEffectHandler<InstallNextCombatOpeningRunEffect>
 {
     protected override void Resolve(RunState run, RunDefinitionRegistry registry, InstallNextCombatOpeningRunEffect request) =>
-        run.AddPendingCombatModifier(new HeroOpeningRuleModifier(request.Rule));
+        run.AddPendingCombatModifier(new HeroOpeningRuleModifier(request.Rule, request.Combats ?? 1));
 }

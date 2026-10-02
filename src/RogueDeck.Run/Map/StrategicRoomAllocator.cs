@@ -133,6 +133,17 @@ public static class StrategicRoomAllocator
             }
         }
 
+        // PASS ZERO — THE FIXED ROW. The last row before the boss, whole, when the act names what it is.
+        if (spec.PreBossKind is { } fixedKind && slots.Count > 0)
+        {
+            if (!placed.ContainsKey(fixedKind))
+                throw new ArgumentException(
+                    $"The act fixes its last row before the boss as {fixedKind}, a role it cannot hold.", nameof(spec));
+            var lastRow = slots.Max(slot => slot.Row);
+            foreach (var slot in slots.Where(slot => slot.Row == lastRow))
+                Fill(slot, fixedKind);
+        }
+
         // PASS ONE — THE PROMISES. A budget minimum is placed before anything is drawn by weight, because a role
         // that waits its turn competes for rooms a filler has already taken. A BAND's minimum is a promise of the
         // same kind, and a narrower one — its rooms are a subset of the act's — so the ordering below puts it
@@ -353,11 +364,12 @@ public static class StrategicRoomAllocator
         IReadOnlyDictionary<NodeId, List<NodeId>> neighbours,
         IReadOnlyDictionary<NodeId, List<NodeId>> siblings)
     {
-        if (rules.RepeatFreelyKinds.Contains(kind))
+        var free = rules.RepeatFreelyKinds.Contains(kind);
+        if (free && !rules.ForkPenaltyForRepeatFreely)
             return 100;
 
         var diversity = 100;
-        if (neighbours[slot.Id].Any(other => kinds.GetValueOrDefault(other, MapNodeKind.Boss) == kind))
+        if (!free && neighbours[slot.Id].Any(other => kinds.GetValueOrDefault(other, MapNodeKind.Boss) == kind))
             diversity = diversity * rules.SameAsNeighbourPercent / 100;
         if (siblings[slot.Id].Any(other => kinds.GetValueOrDefault(other, MapNodeKind.Boss) == kind))
             diversity = diversity * rules.SameAtForkPercent / 100;

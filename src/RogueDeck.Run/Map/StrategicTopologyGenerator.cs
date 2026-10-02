@@ -80,6 +80,9 @@ public static class StrategicTopologyGenerator
             }
         }
 
+        if (rules.MinForksPerRoute > 0 && preBossRows > 1)
+            AddCrossways(built, edges, lives, preBossRows, rules);
+
         // THE BOSS ROOMS, and the act's final convergence. Every room of the last pre-boss row leads into the
         // first boss room — which is a merge of everything left, so the strand that continues is the one a merge
         // would have kept: the oldest, leftmost on a tie. Nothing reads a boss room's strand for its ROLE (that
@@ -193,6 +196,119 @@ public static class StrategicTopologyGenerator
 
         foreach (var strand in active)
             strand.LastRow = row;
+    }
+
+    // The fewest rooms with two or more ways on that any entry-to-boss route passes, counting only the rows a
+    // fork may count in (StrategicTopologyRules.ForkFreeTailRows) — what MinForksPerRoute promises.
+    public static int FewestForksPerRoute(StrategicTopology topology, StrategicTopologyRules rules)
+    {
+        ArgumentNullException.ThrowIfNull(topology);
+        ArgumentNullException.ThrowIfNull(rules);
+        var preBoss = topology.Rows.Where(row => row.Slots.All(slot => !slot.IsBoss)).ToList();
+        if (preBoss.Count == 0)
+            return 0;
+        var forkRows = Math.Max(0, preBoss.Count - 1 - Math.Max(0, rules.ForkFreeTailRows));
+        var fewest = new Dictionary<NodeId, int>();
+        foreach (var slot in preBoss.SelectMany(row => row.Slots))
+            fewest[slot.Id] = topology.PredecessorsOf(slot.Id).Select(id => fewest[id]).DefaultIfEmpty(0).Min()
+                + (slot.Row < forkRows && topology.SuccessorsOf(slot.Id).Count >= 2 ? 1 : 0);
+        return preBoss[^1].Slots.Min(slot => fewest[slot.Id]);
+    }
+
+    // CROSSWAYS, until every route forks often enough (StrategicTopologyRules.MinForksPerRoute).
+    //
+    // A crossway gives a room with ONE way on a second one: the next room of the lane beside it. Three rules keep
+    // it inside what the walk promises. It never crosses an edge — the target lies on the side of the room's own
+    // successor where no edge from a neighbour lands beyond it. It never lands on a room that is already a meeting
+    // of two routes (one row joins at most two). And the room it leaves from is on a lane that has lived its
+    // minimum, because to the validator a room reached from two lanes is a meeting, and a meeting must not absorb a
+    // branch younger than MinBranchLifeRows.
+    //
+    // Deterministic and seed-free: the shortest route is found by a forward pass, and the crossway is added at the
+    // first room of that route that can take one — so the same walk always grows the same crossways.
+    private static void AddCrossways(
+        List<StrategicRow> built, List<MapEdge> edges, List<Strand> lives, int preBossRows, StrategicTopologyRules rules)
+    {
+        var forkRows = Math.Max(0, preBossRows - 1 - Math.Max(0, rules.ForkFreeTailRows));
+        var born = lives.ToDictionary(strand => strand.Id, strand => strand.BornRow);
+        for (var guard = 0; guard < preBossRows * 8; guard++)
+        {
+            var successors = new Dictionary<NodeId, List<NodeId>>();
+            var predecessors = new Dictionary<NodeId, List<NodeId>>();
+            foreach (var edge in edges)
+            {
+                (successors.TryGetValue(edge.From, out var on) ? on : successors[edge.From] = []).Add(edge.To);
+                (predecessors.TryGetValue(edge.To, out var arriving) ? arriving : predecessors[edge.To] = []).Add(edge.From);
+            }
+            int Fork(StrategicSlot slot) =>
+                slot.Row < forkRows && successors.GetValueOrDefault(slot.Id)?.Count >= 2 ? 1 : 0;
+
+            // Fewest forks on any route INTO each room (itself included), and OUT of it to the boss.
+            var into = new Dictionary<NodeId, int>();
+            for (var row = 0; row < preBossRows; row++)
+                foreach (var slot in built[row].Slots)
+                    into[slot.Id] = (predecessors.GetValueOrDefault(slot.Id) ?? [])
+                        .Select(from => into[from]).DefaultIfEmpty(0).Min() + Fork(slot);
+            var outOf = new Dictionary<NodeId, int>();
+            for (var row = preBossRows - 1; row >= 0; row--)
+                foreach (var slot in built[row].Slots)
+                    outOf[slot.Id] = Fork(slot) + (row == preBossRows - 1 ? 0
+                        : successors[slot.Id].Select(to => outOf[to]).Min());
+
+            var thinnest = built[preBossRows - 1].Slots.Min(slot => into[slot.Id]);
+            if (thinnest >= rules.MinForksPerRoute)
+                return;
+
+            // Every room that lies on SOME thinnest route, entry first: a crossway at any of them helps one.
+            var route = built.Take(preBossRows).SelectMany(r => r.Slots)
+                .Where(slot => into[slot.Id] + outOf[slot.Id] - Fork(slot) == thinnest)
+                .Select(slot => slot.Id)
+                .ToList();
+            var added = false;
+            foreach (var id in route)
+            {
+                var slot = built.SelectMany(r => r.Slots).First(s => s.Id == id);
+                if (slot.Row >= forkRows || successors.GetValueOrDefault(id)?.Count != 1
+                    || slot.Row - born[slot.Strand] < rules.MinBranchLifeRows)
+                    continue;
+                var next = built[slot.Row + 1];
+                var own = built.SelectMany(r => r.Slots).First(s => s.Id == successors[id][0]).Column;
+                foreach (var column in new[] { own + 1, own - 1 })
+                {
+                    if (column < 0 || column >= next.Width)
+                        continue;
+                    var target = next.Slots[column];
+                    if (predecessors.GetValueOrDefault(target.Id)?.Count != 1)
+                        continue;
+                    // Every lane arriving at the target other than its own must have lived its minimum — the
+                    // target's existing way in too, which is a different lane when the target opens a split.
+                    var arriving = predecessors[target.Id].Append(id)
+                        .Select(from => built[slot.Row].Slots.First(s => s.Id == from).Strand)
+                        .Where(strand => strand != target.Strand);
+                    if (arriving.Any(strand => target.Row - born[strand] < rules.MinBranchLifeRows))
+                        continue;
+                    // No crossing: nothing from the left of this room may land right of the target, and nothing
+                    // from its right may land left of it.
+                    var row = built[slot.Row];
+                    var crosses = row.Slots.Any(other => other.Column != slot.Column
+                        && (successors.GetValueOrDefault(other.Id) ?? []).Any(to =>
+                        {
+                            var landing = next.Slots.First(s => s.Id == to).Column;
+                            return (other.Column < slot.Column && landing > column)
+                                || (other.Column > slot.Column && landing < column);
+                        }));
+                    if (crosses)
+                        continue;
+                    edges.Add(new MapEdge(id, target.Id));
+                    added = true;
+                    break;
+                }
+                if (added)
+                    break;
+            }
+            if (!added)
+                return; // no room on any thinnest route can take one; the act is as forked as this walk allows
+        }
     }
 
     // The weighted draw over the operations that are legal here. CONTINUE always is, so there is always an

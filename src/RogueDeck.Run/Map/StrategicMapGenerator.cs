@@ -35,17 +35,54 @@ public static class StrategicMapGenerator
             throw new StrategicMapGenerationException(seed, attempts: 0, best: null, impossible);
 
         GeneratedAct? best = null;
+        var shippable = new List<(GeneratedAct Act, bool Forked)>();
         var attempts = Math.Max(1, spec.MaxGenerationAttempts);
         for (var attempt = 0; attempt < attempts; attempt++)
         {
             var act = Attempt(spec, seed, attempt);
-            if (act.Clean)
+            // A ROUTE THAT IS ASKED TOO RARELY is retried like a broken promise, but it is the softest one: the
+            // walk adds what crossways it can and the rooms fall as they fall. If no attempt keeps it, a sound act
+            // is still used rather than none.
+            var forked = (spec.Topology.MinForksPerRoute <= 0
+                    || StrategicTopologyGenerator.FewestForksPerRoute(act.Topology, spec.Topology) >= spec.Topology.MinForksPerRoute)
+                && (spec.MinRealDecisionsPerRoute <= 0 || FewestRealDecisions(act.Plan) >= spec.MinRealDecisionsPerRoute);
+            if (act.Clean && forked)
                 return act;
+            // A FORK THAT DECIDES LITTLE IS A DISAPPOINTMENT, NOT A BROKEN PROMISE (MapDefects orders it last for
+            // that reason): an act that keeps every count, every rule and every route's floor is shippable even
+            // when some of its many forks miss the soft contrast target.
+            if (act.Defects is { Shortfall: 0, Forced: 0, PressureMissing: 0 })
+                shippable.Add((act, forked));
             if (best is null || act.Defects < best.Defects)
                 best = act;
         }
+        if (shippable.Count > 0)
+            return shippable.OrderByDescending(entry => entry.Forked).ThenBy(entry => entry.Act.Defects).First().Act;
 
         throw new StrategicMapGenerationException(seed, attempts, best, []);
+    }
+
+    // The fewest REAL decisions any entry-to-boss route meets: rooms with two or more ways on into rooms of more
+    // than one kind.
+    public static int FewestRealDecisions(StrategicRoomPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        var topology = plan.Topology;
+        var fewest = new Dictionary<NodeId, int>();
+        foreach (var slot in topology.Slots.OrderBy(slot => slot.Row))
+        {
+            var next = topology.SuccessorsOf(slot.Id);
+            // Two fights are one kind of door, whatever their size — a fight can stand in for the other when it is
+            // realized — and a treasure is a treasure until it bites.
+            var real = next.Count >= 2 && next.Select(id => plan.Kinds[id] switch
+            {
+                MapNodeKind.MultiCombat => MapNodeKind.Combat,
+                MapNodeKind.Mimic => MapNodeKind.Treasure,
+                var kind => kind,
+            }).Distinct().Count() >= 2 ? 1 : 0;
+            fewest[slot.Id] = topology.PredecessorsOf(slot.Id).Select(id => fewest[id]).DefaultIfEmpty(0).Min() + real;
+        }
+        return topology.Slots.Where(slot => topology.SuccessorsOf(slot.Id).Count == 0).Min(slot => fewest[slot.Id]);
     }
 
     // One whole act from one family of streams. Public because a caller with a reason to look at an act that was

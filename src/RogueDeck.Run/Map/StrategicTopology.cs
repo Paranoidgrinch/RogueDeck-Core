@@ -76,6 +76,22 @@ public sealed record StrategicTopologyRules
     // and then a fork can collapse in the very next row — which is the "one-room detour" this number exists to
     // forbid. It also forbids a split so late in the act that the boss would absorb it early (see the generator).
     public int MinBranchLifeRows { get; init; } = 3;
+
+    // HOW MANY TIMES EVERY ROUTE MUST BE ASKED WHICH WAY (playtest feedback 2, D3: "es gibt pfade, bei denen man
+    // sich nur 2 mal entscheiden kann"). Splits alone fork a route only when its own strand splits, so a lane
+    // could run to the boss past two doors. After the walk, the generator adds CROSSWAYS — a room given a second
+    // way on, into the neighbouring lane's next room — on the routes that are short of forks, until every route
+    // from an entry to the boss passes at least this many rooms with two or more ways on. A crossway never crosses
+    // another edge and never changes a width. Zero (the default) adds nothing and shapes every act as before.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public int MinForksPerRoute { get; init; }
+
+    // How many rows before the boss rooms do not count as a decision: a fork into the act's fixed last row (a
+    // campfire everywhere) offers a choice between two of the same thing. Only read when MinForksPerRoute is set.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public int ForkFreeTailRows { get; init; }
 }
 
 // A finished topology. A class, not a record, because it carries an id index and record equality would compare

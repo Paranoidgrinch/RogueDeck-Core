@@ -140,6 +140,13 @@ public sealed record StrategicRoomRules
     // choice between two shops is not a choice, and it is invisible in any count of what the act holds.
     public int SameAtForkPercent { get; init; } = 40;
 
+    // Whether the fork penalty reaches the kinds that may otherwise repeat freely (playtest feedback 2, D3). Two
+    // fights in a row are an act's rhythm; two fights behind the two doors of a fork are no decision at all.
+    // False (the default) exempts them as before.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool ForkPenaltyForRepeatFreely { get; init; }
+
     // Kinds that may repeat freely. Combat is the act's rhythm — two fights in a row is an act, not a defect —
     // and penalizing it would push every other role upward everywhere, quietly overriding the authored weights.
     public IReadOnlySet<MapNodeKind> RepeatFreelyKinds { get; init; } = new HashSet<MapNodeKind>
@@ -219,6 +226,14 @@ public sealed record StrategicRoomSpec
         new Dictionary<MapNodeKind, int>();
 
     public StrategicRoomRules Rules { get; init; } = new();
+
+    // WHAT EVERY ROOM OF THE LAST ROW BEFORE THE BOSS IS (playtest feedback 2, D2: "vor dem boss ein campfire auf
+    // jedem pfad"). Every route passes exactly one room of that row, so filling the whole row is the one way to
+    // promise it to every route. Placed before anything else, counted towards the role's budgets, and held by the
+    // repair: a room of that row holding anything else is illegal. Null (the default) fixes nothing.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public MapNodeKind? PreBossKind { get; init; }
 
     public void Validate()
     {

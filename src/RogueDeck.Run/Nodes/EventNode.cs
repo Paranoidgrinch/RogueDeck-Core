@@ -31,7 +31,14 @@ public sealed record EventChoice(
     // out of the wire format.
     [property: System.Text.Json.Serialization.JsonIgnore(
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
-    bool Declinable = false)
+    bool Declinable = false,
+    // A GAMBLE: where the choice leads is drawn, by weight, from these situations (playtest feedback 2, G2) —
+    // after its costs and effects, from the run's RNG, so the seed reproduces the outcome. Each outcome is a
+    // situation of its own, which is where its text and its winnings or losses are written. Null (the default)
+    // follows NextSituationId as always and stays out of the wire format.
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<EventOutcome>? Outcomes = null)
 {
     // Offered only when visible (Requirement) and affordable (every cost's CanPay holds). Folding
     // affordability into availability keeps the scripted resolver simple: unaffordable choices are not
@@ -50,6 +57,9 @@ public sealed record EventChoice(
     public IEnumerable<IRunEffectRequest> PayEffects =>
         Costs is null ? Enumerable.Empty<IRunEffectRequest>() : Costs.SelectMany(cost => cost.Pay);
 }
+
+// One way a gamble can fall: the situation it leads to, and its weight among the others.
+public sealed record EventOutcome(string SituationId, int Weight);
 
 public sealed record EventSituation(
     string Id,
@@ -151,10 +161,28 @@ public sealed class EventNodeResolver : INodeResolver
             context.ResolvePendingEffects();
 
             lastChoiceId = chosen.Id;
-            currentId = chosen.NextSituationId;
+            currentId = chosen.Outcomes is { Count: > 0 } outcomes ? Draw(run, outcomes) : chosen.NextSituationId;
         }
 
         return new NodeOutcome($"event resolved (last choice '{lastChoiceId}').");
+    }
+
+    private static string Draw(RunState run, IReadOnlyList<EventOutcome> outcomes)
+    {
+        var total = outcomes.Sum(outcome => Math.Max(0, outcome.Weight));
+        if (total <= 0)
+            return outcomes[0].SituationId;
+        var roll = run.NextRandom(total);
+        foreach (var outcome in outcomes)
+        {
+            roll -= Math.Max(0, outcome.Weight);
+            if (roll < 0)
+            {
+                run.AddLog(StandardRunLogTypes.EventChoiceMade, $"The gamble falls on '{outcome.SituationId}'.");
+                return outcome.SituationId;
+            }
+        }
+        return outcomes[^1].SituationId;
     }
 
     // A node carries either an inline EventScript (escape) or a data EventRef resolved via the content registry.

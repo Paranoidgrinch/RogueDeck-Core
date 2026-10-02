@@ -233,6 +233,11 @@ public static class Program
     {
         var perAct = new Dictionary<int, List<(int Seed, List<Dictionary<string, int>> Paths)>>();
         var forks = new Dictionary<(int Act, int Depth), int>();
+        // PER ROUTE (playtest feedback 2, D2/D3): how many REAL decisions a walk through the act offers — a room
+        // with two or more ways on whose next rooms are not all of one kind — and whether its last room before
+        // the boss is a campfire.
+        var realForks = new Dictionary<int, List<int>>();
+        var restBeforeBoss = new Dictionary<int, (int Yes, int All)>();
         // Every placed fight that has a band, and how far outside it it stood (0 = inside).
         var placed = new Dictionary<int, List<(bool Elite, int Outside)>>();
         for (var seed = options.SeedFrom; seed < options.SeedFrom + options.Runs; seed++)
@@ -250,6 +255,23 @@ public static class Program
                         .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal))
                     .ToList();
                 (perAct.TryGetValue(i + 1, out var list) ? list : perAct[i + 1] = []).Add((seed, paths));
+                foreach (var route in MapOracle.Routes(map, 20_000))
+                {
+                    var real = 0;
+                    foreach (var id in route)
+                    {
+                        var next = map.SuccessorIds(new NodeId(id));
+                        // Two fights are one kind of door, whatever their size.
+                        if (next.Count >= 2 && next.Select(n => MapRole.Of(byId[n.Value]) is var role && role == MapNodeTags.MultiCombat
+                                ? MapNodeTags.Combat : role).Distinct(StringComparer.Ordinal).Count() >= 2)
+                            real++;
+                    }
+                    (realForks.TryGetValue(i + 1, out var reals) ? reals : realForks[i + 1] = []).Add(real);
+                    var last = route.Count >= 2 && MapRole.Of(byId[route[^1]]) == "boss" ? route[^2] : null;
+                    var (yes, all) = restBeforeBoss.GetValueOrDefault(i + 1);
+                    if (last is not null)
+                        restBeforeBoss[i + 1] = (yes + (MapRole.Of(byId[last]) == "rest" ? 1 : 0), all + 1);
+                }
                 // WHERE A PLAYER CAN STILL CHANGE LANE: nodes with two or more ways on, by depth.
                 var depths = map.Depths();
                 if (i < blueprint.Acts.Count && blueprint.Acts[i].MapGeneration is { } spec)
@@ -314,6 +336,11 @@ public static class Program
                         Console.WriteLine($"  staged {label} fights placed: {these.Count} · outside their stage: "
                             + $"{these.Count(d => d > 0)} (farthest {these.Max()} % of the act)");
                 }
+            if (realForks.TryGetValue(act, out var perRoute) && perRoute.Count > 0)
+                Console.WriteLine($"  REAL DECISIONS per route (2+ ways on into different kinds of room): min {perRoute.Min()}"
+                    + $" · median {Median(perRoute)} · routes under 4: {100.0 * perRoute.Count(r => r < 4) / perRoute.Count:0.0}%");
+            if (restBeforeBoss.TryGetValue(act, out var rests) && rests.All > 0)
+                Console.WriteLine($"  routes with a campfire right before the boss: {100.0 * rests.Yes / rests.All:0.0}%");
             Console.WriteLine($"  DECISIONS per map (rooms with 2+ ways on, the entry choice not counted): "
                 + $"{forks.Where(f => f.Key.Act == act).Sum(f => f.Value) / (double)Math.Max(1, n):0.0}");
             Console.WriteLine("  forks per map by row (rooms with 2+ ways on): " + string.Join(" ",
