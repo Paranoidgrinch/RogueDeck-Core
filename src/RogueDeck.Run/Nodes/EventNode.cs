@@ -23,7 +23,15 @@ public sealed record EventChoice(
     // stays out of the wire format, so every document written before it reads and writes byte-identically.
     [property: System.Text.Json.Serialization.JsonIgnore(
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
-    string? DisabledText = null)
+    string? DisabledText = null,
+    // A choice the player may still CALL OFF once inside it — "improve a card", and then not. Its effects run
+    // BEFORE its costs (they hold the declinable pick); a pick declined there means the choice was never taken:
+    // nothing is paid and the same situation is offered again — the shop service's rule, for any event. Only a
+    // choice whose effects are that pick and nothing irrevocable before it should say so. Default false stays
+    // out of the wire format.
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    bool Declinable = false)
 {
     // Offered only when visible (Requirement) and affordable (every cost's CanPay holds). Folding
     // affordability into availability keeps the scripted resolver simple: unaffordable choices are not
@@ -109,11 +117,30 @@ public sealed class EventNodeResolver : INodeResolver
                 break;
 
             var chosen = context.Choices.Choose(situation, available, run);
-            // Pay costs first, then run the choice's effects.
-            foreach (var effect in chosen.PayEffects)
-                run.EnqueueEffect(effect);
-            foreach (var effect in chosen.Effects)
-                run.EnqueueEffect(effect);
+            if (chosen.Declinable)
+            {
+                // The pick first: a decline calls the whole choice off, unpaid, and asks again.
+                var declined = run.DeclinedChoices;
+                foreach (var effect in chosen.Effects)
+                    run.EnqueueEffect(effect);
+                context.ResolvePendingEffects();
+                if (run.DeclinedChoices != declined)
+                {
+                    run.AddLog(StandardRunLogTypes.EventChoiceMade,
+                        $"Node '{node.Id}': situation '{situation.Id}' -> choice '{chosen.Id}' called off.");
+                    continue;
+                }
+                foreach (var effect in chosen.PayEffects)
+                    run.EnqueueEffect(effect);
+            }
+            else
+            {
+                // Pay costs first, then run the choice's effects.
+                foreach (var effect in chosen.PayEffects)
+                    run.EnqueueEffect(effect);
+                foreach (var effect in chosen.Effects)
+                    run.EnqueueEffect(effect);
+            }
 
             run.AddLog(StandardRunLogTypes.EventChoiceMade,
                 $"Node '{node.Id}': situation '{situation.Id}' -> choice '{chosen.Id}'.");
