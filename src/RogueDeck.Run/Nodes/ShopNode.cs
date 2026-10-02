@@ -57,8 +57,23 @@ public sealed record ShopService(
     string? Kind = null,
     [property: System.Text.Json.Serialization.JsonIgnore(
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
-    IReadOnlyList<string>? Tags = null)
+    IReadOnlyList<string>? Tags = null,
+    // What each use costs on top of the last, for the rest of the RUN: a service with a step of 25 costs 25 more
+    // in every later shop each time it has been bought — anywhere, since the uses are counted on the run under
+    // the service's id (UsesCounter). Default 0 stays out of the wire format and prices as it always did.
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    int PriceStep = 0)
 {
+    public static RunCounterId UsesCounter(string serviceId) => new($"shop.{serviceId}.uses");
+
+    // The price before any worn rule bends it: the base, plus a step for every earlier use in this run.
+    public int BasePriceIn(RunState run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        return PriceStep == 0 ? Price : Price + PriceStep * run.GetCounter(UsesCounter(Id));
+    }
+
     // A service is a "service" unless it says otherwise, so a price rule can name the sort without every
     // authored service having to repeat it.
     [System.Text.Json.Serialization.JsonIgnore]
@@ -66,14 +81,16 @@ public sealed record ShopService(
 
     // The classic card-removal service: pay to remove one deck card the player chooses. Tagged "removal" because
     // a whole family of relics prices card removal specifically.
-    public static ShopService RemoveCard(RunResourceId currency, int price, string id = "remove-card") =>
+    public static ShopService RemoveCard(
+        RunResourceId currency, int price, string id = "remove-card", int priceStep = 0) =>
         new(id, currency, price,
             new IRunEffectRequest[]
             {
                 new RemoveCardsRunEffect(RunSelectors.DeckCards.ChooseByPlayer(1, "remove a card", allowSkip: true)),
             },
             TextKey: "event.shop.remove-card",
-            Tags: ["removal"]);
+            Tags: ["removal"],
+            PriceStep: priceStep);
 }
 
 // One named shelf inside a shop: its own pool, its own count, and optional tags stamped on everything drawn from
@@ -237,6 +254,10 @@ public sealed class ShopNodeResolver : INodeResolver
                     slot?.Entry.Kind ?? service?.EffectiveKind,
                     slot?.Entry.Tags ?? service?.Tags,
                     paid, currencyPaid));
+                // Counted after it is priced and paid: the step applies from the NEXT use on.
+                if (service is { PriceStep: not 0 })
+                    run.SetCounter(ShopService.UsesCounter(service.Id),
+                        run.GetCounter(ShopService.UsesCounter(service.Id)) + 1);
                 context.ResolvePendingEffects();
             }
         }

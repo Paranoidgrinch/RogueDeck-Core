@@ -159,13 +159,21 @@ public sealed class EnableRelicRunEffectHandler : RunEffectHandler<EnableRelicRu
     }
 }
 
-public sealed record AddCardToDeckRunEffect(CardDefinitionId Card) : IRunEffectRequest;
+// `UpgradeLevel`: the card arrives already improved — a reward that rolled an upgraded copy. Default 0 stays out
+// of the wire format.
+public sealed record AddCardToDeckRunEffect(
+    CardDefinitionId Card,
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    int UpgradeLevel = 0) : IRunEffectRequest;
 
 public sealed class AddCardToDeckRunEffectHandler : RunEffectHandler<AddCardToDeckRunEffect>
 {
     protected override void Resolve(RunState run, RunDefinitionRegistry registry, AddCardToDeckRunEffect request)
     {
         var card = run.AddDeckCard(request.Card);
+        if (request.UpgradeLevel > 0)
+            card.Upgrade(request.UpgradeLevel);
         run.AddLog(StandardRunLogTypes.CardAdded, $"Added card '{request.Card}' ({card.Id}).");
         run.RaiseEvent(new CardAddedToDeckRunEvent(card.Id, card.DefinitionId));
     }

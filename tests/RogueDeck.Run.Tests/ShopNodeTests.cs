@@ -285,4 +285,42 @@ public class ShopNodeTests
         Assert.Equal(30, run.GetResource(Gold));                         // 100 − 30 − 10 reroll − 30
         Assert.Equal(new[] { "sword", "sword" }, run.Deck.Select(c => c.DefinitionId.value));
     }
+
+    // Playtest feedback 2, C3: a service with a price step costs more each time it has been used — in this shop and
+    // in every later one, because the uses are counted on the run. Two shops in a row: 25, then 50.
+    [Fact]
+    public void A_stepped_service_costs_more_in_the_next_shop()
+    {
+        var run = NewRun(200);
+        run.AddDeckCard(new CardDefinitionId("a"));
+        run.AddDeckCard(new CardDefinitionId("b"));
+        run.AddDeckCard(new CardDefinitionId("c"));
+        var shop = new ShopDefinition(
+            Array.Empty<ShopEntry>(), OfferCount: 0,
+            Services: new[] { ShopService.RemoveCard(Gold, 25, priceStep: 25) });
+
+        Resolve(run, shop, "remove-card", "leave");
+        Assert.Equal(175, run.GetResource(Gold));
+        Resolve(run, shop, "remove-card", "leave");
+        Assert.Equal(125, run.GetResource(Gold));                        // 50 the second time
+        Assert.Equal(75, ShopService.RemoveCard(Gold, 25, priceStep: 25).BasePriceIn(run));
+        Assert.Single(run.Deck);
+    }
+
+    // …and a removal called off was never bought, so it does not raise the price.
+    [Fact]
+    public void A_called_off_stepped_service_keeps_its_price()
+    {
+        var run = NewRun(100);
+        run.AddDeckCard(new CardDefinitionId("a"));
+        var shop = new ShopDefinition(
+            Array.Empty<ShopEntry>(), OfferCount: 0,
+            Services: new[] { ShopService.RemoveCard(Gold, 25, priceStep: 25) });
+        run.SetEntityChooser(new DecliningChooser());
+        var context = new NodeResolveContext(
+            run, new ScriptedChoiceProvider("remove-card", "leave"), Registry(), new RunEffectProcessor());
+        new ShopNodeResolver().Resolve(context, new Node(new NodeId("shop"), StandardRunIds.ShopNode, shop));
+
+        Assert.Equal(25, ShopService.RemoveCard(Gold, 25, priceStep: 25).BasePriceIn(run));
+    }
 }

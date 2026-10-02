@@ -90,7 +90,7 @@ public sealed class RunEntityLabeler
 
     private static EntityArt? ArtOfGrant(IRunEffectRequest effect) => effect switch
     {
-        AddCardToDeckRunEffect card => new EntityArt(EntityArt.Card, card.Card.value),
+        AddCardToDeckRunEffect card => new EntityArt(EntityArt.Card, card.Card.value, card.UpgradeLevel),
         AddRelicByIdRunEffect relic => new EntityArt(EntityArt.Relic, relic.Relic.Value),
         AddRelicRunEffect relic => new EntityArt(EntityArt.Relic, relic.Relic.Id.Value),
         _ => null,
@@ -98,6 +98,8 @@ public sealed class RunEntityLabeler
 
     private string DescribeGrant(IRunEffectRequest effect) => effect switch
     {
+        AddCardToDeckRunEffect { UpgradeLevel: > 0 } card when _cardDescriptions.ContainsKey(card.Card.value + "+") =>
+            CardDescription(card.Card.value + "+"),
         AddCardToDeckRunEffect card => CardDescription(card.Card.value),
         AddRelicByIdRunEffect relic => _relicDescriptions.GetValueOrDefault(relic.Relic.Value, string.Empty),
         AddRelicRunEffect relic => _relicDescriptions.GetValueOrDefault(relic.Relic.Id.Value, string.Empty),
@@ -126,7 +128,7 @@ public sealed class RunEntityLabeler
 
     private string Describe(IRunEffectRequest effect) => effect switch
     {
-        AddCardToDeckRunEffect card => Card(card.Card),
+        AddCardToDeckRunEffect card => Card(card.Card, card.UpgradeLevel),
         AddRelicByIdRunEffect relic => Relic(relic.Relic),
         AddRelicRunEffect relic => relic.Relic.Definition.DisplayName,
         ChangeResourceRunEffect resource => $"{resource.Delta} {Resource(resource.Resource)}",

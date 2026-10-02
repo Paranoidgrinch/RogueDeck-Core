@@ -81,7 +81,7 @@ public sealed class ShopShelf
     // Price a service the same way an item is priced — the card-removal family of relics prices exactly this.
     public int PriceOf(ShopService service) =>
         ShopPricing.Adjust(
-            service.Price, service.Id, service.EffectiveKind, service.Tags, _rules, _run, _spentRules);
+            service.BasePriceIn(_run), service.Id, service.EffectiveKind, service.Tags, _rules, _run, _spentRules);
 
     public void MarkSold(string entryId)
     {

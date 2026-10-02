@@ -49,6 +49,14 @@ public sealed class PoolRewardSource : IRewardSource
 {
     public RunPool<RewardOffer> Pool { get; }
     public int Count { get; }
+
+    // The chance, in percent, that each drawn offer's card comes already improved (its AddCardToDeckRunEffect at
+    // upgrade level 1, the offer id suffixed "+"): "in Act II one card in five is found upgraded". Rolled per offer
+    // from the run's RNG after the draw. 0 (the default) rolls nothing and stays out of the wire format.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public int UpgradeChancePercent { get; init; }
+
     public PoolRewardSource(RunPool<RewardOffer> pool, int count)
     {
         ArgumentNullException.ThrowIfNull(pool);
@@ -62,7 +70,18 @@ public sealed class PoolRewardSource : IRewardSource
         // long as the pool can fill it. A pool with nothing carried in it draws exactly as it always did.
         var open = Pool.Entries.Where(e => !RelicOwnership.GrantsOwnedRelic(run, e.Value.Grant)).ToList();
         var pool = open.Count == Pool.Entries.Count ? Pool : new RunPool<RewardOffer>(open);
-        return open.Count == 0 ? [] : pool.DrawMany(run, Math.Clamp(Count, 0, pool.Entries.Count));
+        var drawn = open.Count == 0 ? [] : pool.DrawMany(run, Math.Clamp(Count, 0, pool.Entries.Count));
+        if (UpgradeChancePercent <= 0)
+            return drawn;
+        return drawn.Select(offer =>
+            offer.Grant.Any(g => g is AddCardToDeckRunEffect { UpgradeLevel: 0 }) && run.NextRandom(100) < UpgradeChancePercent
+                ? offer with
+                {
+                    Id = offer.Id + "+",
+                    Grant = [.. offer.Grant.Select(g => g is AddCardToDeckRunEffect { UpgradeLevel: 0 } add
+                        ? add with { UpgradeLevel = 1 } : g)],
+                }
+                : offer).ToList();
     }
 }
 
