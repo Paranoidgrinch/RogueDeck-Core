@@ -468,6 +468,9 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
             .SetEncounters(new EncounterCatalog(
                 library, blueprint.Encounters, RebuildEncounterTriggers(blueprint.Encounters)));
         RegisterRelics(builder, blueprint.Relics);
+        // The roster, and which content is whose (CharacterContent).
+        foreach (var character in blueprint.Characters)
+            builder.RegisterCharacter(character.Id, character.Exclusive);
         foreach (var consumable in blueprint.Consumables)
             builder.RegisterConsumable(consumable.ToDefinition());
         foreach (var (id, script) in blueprint.Events)

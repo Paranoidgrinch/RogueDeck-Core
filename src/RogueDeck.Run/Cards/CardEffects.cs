@@ -132,7 +132,11 @@ public sealed class TransformCardsRunEffectHandler : RunEffectHandler<TransformC
         {
             if (!run.RemoveDeckCard(card.Id))
                 continue;
-            var newKind = request.Pool.Draw(run);
+            // Only what this character may be offered; a pool with nothing left for it draws as written.
+            var open = request.Pool.Entries.Where(e => CharacterContent.Allows(run, e.Value.value)).ToList();
+            var newKind = open.Count == request.Pool.Entries.Count || open.Count == 0
+                ? request.Pool.Draw(run)
+                : new RunPool<CardDefinitionId>(open).Draw(run);
             var created = run.AddDeckCard(newKind);
             run.AddLog(StandardRunLogTypes.CardTransformed,
                 $"Transformed card '{card.DefinitionId}' ({card.Id}) -> '{newKind}' ({created.Id}).");

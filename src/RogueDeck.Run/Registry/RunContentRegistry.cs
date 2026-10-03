@@ -25,6 +25,13 @@ public sealed class RunContentRegistry
     public IReadOnlyList<RecipeData> Recipes { get; }
     public ShredRules ShredRules { get; }
 
+    // WHOSE CONTENT IS WHOSE (character roster): content id → the characters it may be offered to; absent ⇒ open to
+    // all. DefaultCharacter answers for a run that never recorded one (every save made before the roster mattered),
+    // which is the roster's first character. See CharacterContent.
+    public IReadOnlyDictionary<string, IReadOnlySet<string>> CharacterExclusive { get; internal set; } =
+        new Dictionary<string, IReadOnlySet<string>>();
+    public string? DefaultCharacter { get; internal set; }
+
     internal RunContentRegistry(
         IReadOnlyDictionary<EventId, EventScript> events,
         EncounterCatalog? encounters,
@@ -248,7 +255,29 @@ public sealed class RunContentRegistryBuilder
         return this;
     }
 
+    private readonly Dictionary<string, HashSet<string>> _exclusive = new(StringComparer.Ordinal);
+    private string? _defaultCharacter;
+
+    // The roster's exclusive content: each character's cards and relics, offered to it alone. The first character
+    // registered is the default a run with no recorded character is taken to be.
+    public RunContentRegistryBuilder RegisterCharacter(string characterId, IEnumerable<string>? exclusive)
+    {
+        ArgumentNullException.ThrowIfNull(characterId);
+        _defaultCharacter ??= characterId;
+        foreach (var id in exclusive ?? [])
+        {
+            if (!_exclusive.TryGetValue(id, out var owners))
+                _exclusive[id] = owners = new HashSet<string>(StringComparer.Ordinal);
+            owners.Add(characterId);
+        }
+        return this;
+    }
+
     public RunContentRegistry Build() =>
         new(_events, _encounters, _relics, _rewardTables, _consumables, _shops, _programDefinitions,
-            _shreds, _recipes, _shredRules, _workbenches);
+            _shreds, _recipes, _shredRules, _workbenches)
+        {
+            CharacterExclusive = _exclusive.ToDictionary(p => p.Key, p => (IReadOnlySet<string>)p.Value, StringComparer.Ordinal),
+            DefaultCharacter = _defaultCharacter,
+        };
 }

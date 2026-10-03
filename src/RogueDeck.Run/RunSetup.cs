@@ -35,6 +35,11 @@ public static class RunSetup
         if (mapGenerator is not null)
             run.SetGeneratedMapGenerator(mapGenerator);
 
+        // THE CHARACTER PLAYED, by the same fallback ResolveStart uses: the pick when it is on the roster, the
+        // roster's first otherwise, none when there is no roster at all.
+        run.SetCharacter(blueprint.Characters.FirstOrDefault(c => c.Id == characterId)?.Id
+            ?? blueprint.Characters.FirstOrDefault()?.Id);
+
         // The chosen character's own deck, or the blueprint's shared deck when the character declares none.
         var deck = start.Deck.Count > 0 ? start.Deck : blueprint.Deck;
         foreach (var card in deck)

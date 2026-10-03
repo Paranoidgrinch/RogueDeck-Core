@@ -105,6 +105,12 @@ public sealed class RunState
     public string? GeneratedMapGenerator { get; private set; }
     public void SetGeneratedMapGenerator(string? generator) => GeneratedMapGenerator = generator;
 
+    // WHICH CHARACTER IS PLAYING (character roster). Decides what the run may be offered (CharacterContent) and is
+    // persisted for the same reason the generator is. Null ⇒ a run from before the roster mattered, read as the
+    // roster's first character.
+    public string? CharacterId { get; private set; }
+    public void SetCharacter(string? characterId) => CharacterId = characterId;
+
     // Branching-map traversal (B1). CurrentNodeId is the node being/just walked; the visited set records every node
     // already walked so a graph walk never re-enters one. Both are unused by a linear map (which tracks Position).
     public NodeId? CurrentNodeId { get; private set; }
@@ -557,6 +563,7 @@ public sealed class RunState
         {
             MapGenerationLoadout = GeneratedMapLoadout,
             MapGenerator = GeneratedMapGenerator,
+            CharacterId = CharacterId,
             RemovedCards = _removedCards.Count > 0
                 ? _removedCards.Select(r => new RunCardSaveData(
                     r.Definition.value, r.UpgradeLevel, r.Tags.Select(t => t.Value).ToArray(),
@@ -630,6 +637,7 @@ public sealed class RunState
         if (data.MapGenerationLoadout is { } loadout)
             run.SetGeneratedMapLoadout(loadout); // so a resumed run re-saves with the same map identity
         run.SetGeneratedMapGenerator(data.MapGenerator);
+        run.SetCharacter(data.CharacterId);
         run.Result = data.Result;
         run.Position = data.Position;
         if (data.CurrentNodeId is { } current)

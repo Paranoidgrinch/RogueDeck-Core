@@ -68,7 +68,8 @@ public sealed class PoolRewardSource : IRewardSource
         ArgumentNullException.ThrowIfNull(run);
         // Drawn from what the run does not already carry, so the offer stays the size it was written as for as
         // long as the pool can fill it. A pool with nothing carried in it draws exactly as it always did.
-        var open = Pool.Entries.Where(e => !RelicOwnership.GrantsOwnedRelic(run, e.Value.Grant)).ToList();
+        var open = Pool.Entries.Where(e => !RelicOwnership.GrantsOwnedRelic(run, e.Value.Grant)
+            && CharacterContent.Allows(run, e.Value.Grant)).ToList();
         var pool = open.Count == Pool.Entries.Count ? Pool : new RunPool<RewardOffer>(open);
         var drawn = open.Count == 0 ? [] : pool.DrawMany(run, Math.Clamp(Count, 0, pool.Entries.Count));
         if (UpgradeChancePercent <= 0)
@@ -260,6 +261,41 @@ public static class RelicOwnership
         ArgumentNullException.ThrowIfNull(run);
         ArgumentNullException.ThrowIfNull(payload);
         return payload.Any(effect => GrantedRelic(effect) is { } id && run.FindRelic(id) is not null);
+    }
+}
+
+// WHAT A CHARACTER MAY BE OFFERED (character roster). A character's exclusive cards and relics
+// (RunCharacter.Exclusive) are drawn for that character alone: every place a run is OFFERED something by chance —
+// a reward pool, a shop shelf, a random bundle, a transform — asks here first. It never takes away what a run is
+// handed by name.
+public static class CharacterContent
+{
+    // The character a run counts as: the one it recorded, or the roster's first for a run from before.
+    public static string? Of(RunState run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        return run.CharacterId ?? run.Content?.DefaultCharacter;
+    }
+
+    public static bool Allows(RunState run, string contentId)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        if (run.Content is not { } content
+            || !content.CharacterExclusive.TryGetValue(contentId, out var owners))
+            return true;
+        return Of(run) is { } character && owners.Contains(character);
+    }
+
+    // Every card and relic the payload would hand over is this character's to have.
+    public static bool Allows(RunState run, IEnumerable<IRunEffectRequest> payload)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        ArgumentNullException.ThrowIfNull(payload);
+        return payload.All(effect => effect switch
+        {
+            AddCardToDeckRunEffect card => Allows(run, card.Card.value),
+            _ => RelicOwnership.GrantedRelic(effect) is not { } relic || Allows(run, relic.Value),
+        });
     }
 }
 

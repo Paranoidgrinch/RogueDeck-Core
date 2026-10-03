@@ -184,7 +184,8 @@ public sealed class ShopShelf
             .Where(entry => !_sold.Contains(entry.Id)
                 && barred?.Contains(entry.Id) != true
                 && !_slots.Any(slot => string.Equals(slot.Entry.Id, entry.Id, StringComparison.Ordinal))
-                && !RelicOwnership.GrantsOwnedRelic(_run, entry.Payload))
+                && !RelicOwnership.GrantsOwnedRelic(_run, entry.Payload)
+                && CharacterContent.Allows(_run, entry.Payload))
             .ToArray();
 
         if (candidates.Length == 0)

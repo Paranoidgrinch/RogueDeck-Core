@@ -160,7 +160,15 @@ public sealed record RunBlueprint(
 // its full RunStart, and an optional UnlockFlag. When set, the character is only offered once the meta profile has
 // that flag (MetaProgression.AvailableCharacters); null ⇒ always available. Which flag unlocks it — and how it is
 // earned — is content. A plain record so it round-trips through RunJson like the rest of the blueprint.
-public sealed record RunCharacter(string Id, RunStart Start, string? UnlockFlag = null);
+//
+// Exclusive: the card definitions and relics only this character may be OFFERED — as a reward, on a shop shelf, in a
+// transform or a random bundle (CharacterContent). Everything not named by any character is open to all. It filters
+// what a run can be handed, never what it already holds: a card or relic granted by name still arrives.
+public sealed record RunCharacter(
+    string Id, RunStart Start, string? UnlockFlag = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<string>? Exclusive = null);
 
 // A tutorial: the authored map it walks and, optionally, the loadout it is walked with (null: the default start).
 public sealed record RunTutorial(RunMap Map, RunStart? Start = null);

@@ -82,6 +82,12 @@ public sealed record RunSaveData(
     // null ⇒ MapGenerators.RuleBased, no migration anywhere.
     public string? MapGenerator { get; init; }
 
+    // The character the run is played as (character roster). Absent in every save made before the roster
+    // mattered; those read as the roster's first character.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? CharacterId { get; init; }
+
     // The next-combat openings still waiting for a fight — what an event promised about "your next combat"
     // before the player walked out of the room. Null (the default) when nothing is pending, so a save taken
     // without one round-trips byte-identically.

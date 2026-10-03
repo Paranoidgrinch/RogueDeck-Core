@@ -131,8 +131,17 @@ public sealed class DrawEffectsRunEffectHandler : RunEffectHandler<DrawEffectsRu
 {
     protected override void Resolve(RunState run, RunDefinitionRegistry registry, DrawEffectsRunEffect request)
     {
-        foreach (var effect in request.Pool.Draw(run))
+        foreach (var effect in Offerable(run, request.Pool).Draw(run))
             run.EnqueueEffect(effect);
+    }
+
+    // The bundles this run's character may be handed (CharacterContent); the pool as written when that leaves
+    // nothing, so a draw never comes up empty-handed.
+    internal static RunPool<IReadOnlyList<IRunEffectRequest>> Offerable(
+        RunState run, RunPool<IReadOnlyList<IRunEffectRequest>> pool)
+    {
+        var open = pool.Entries.Where(e => CharacterContent.Allows(run, e.Value)).ToList();
+        return open.Count == pool.Entries.Count || open.Count == 0 ? pool : new(open);
     }
 }
 
@@ -145,7 +154,8 @@ public sealed class DrawManyEffectsRunEffectHandler : RunEffectHandler<DrawManyE
 {
     protected override void Resolve(RunState run, RunDefinitionRegistry registry, DrawManyEffectsRunEffect request)
     {
-        foreach (var bundle in request.Pool.DrawMany(run, request.Count))
+        var pool = DrawEffectsRunEffectHandler.Offerable(run, request.Pool);
+        foreach (var bundle in pool.DrawMany(run, Math.Min(request.Count, pool.Entries.Count)))
             foreach (var effect in bundle)
                 run.EnqueueEffect(effect);
     }
