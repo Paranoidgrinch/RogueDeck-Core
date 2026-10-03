@@ -88,4 +88,20 @@ public class CharacterContentTests
             Assert.All(run.Deck, card => Assert.Equal(Shield, card.DefinitionId));
         }
     }
+
+    // A pool may hold each character's own entries side by side ("for:<id>"): each character draws only its own,
+    // so a second character's entries change nothing about the first one's draws.
+    [Fact]
+    public void An_offer_written_for_one_character_is_drawn_by_that_character_alone()
+    {
+        RewardOffer For(string character, CardDefinitionId card) =>
+            new($"{character}-{card.value}", [new AddCardToDeckRunEffect(card)], RewardKinds.Card, ["for:" + character]);
+        var pool = new PoolRewardSource(
+            RunPool.Uniform(For("knight", Strike), For("mage", Strike), For("mage", Zap), Card(Shield)), 2);
+        for (var seed = 1; seed <= 40; seed++)
+        {
+            Assert.All(pool.Generate(Run(Roster(), "knight", seed)), o => Assert.DoesNotContain("mage", o.Id));
+            Assert.All(pool.Generate(Run(Roster(), "mage", seed)), o => Assert.DoesNotContain("knight", o.Id));
+        }
+    }
 }

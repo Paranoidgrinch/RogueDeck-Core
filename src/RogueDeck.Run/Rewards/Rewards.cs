@@ -69,7 +69,8 @@ public sealed class PoolRewardSource : IRewardSource
         // Drawn from what the run does not already carry, so the offer stays the size it was written as for as
         // long as the pool can fill it. A pool with nothing carried in it draws exactly as it always did.
         var open = Pool.Entries.Where(e => !RelicOwnership.GrantsOwnedRelic(run, e.Value.Grant)
-            && CharacterContent.Allows(run, e.Value.Grant)).ToList();
+            && CharacterContent.Allows(run, e.Value.Grant)
+            && CharacterContent.AllowsOffer(run, e.Value.Tags)).ToList();
         var pool = open.Count == Pool.Entries.Count ? Pool : new RunPool<RewardOffer>(open);
         var drawn = open.Count == 0 ? [] : pool.DrawMany(run, Math.Clamp(Count, 0, pool.Entries.Count));
         if (UpgradeChancePercent <= 0)
@@ -284,6 +285,20 @@ public static class CharacterContent
             || !content.CharacterExclusive.TryGetValue(contentId, out var owners))
             return true;
         return Of(run) is { } character && owners.Contains(character);
+    }
+
+    // AN OFFER MAY BE WRITTEN FOR ONE CHARACTER ("for:<id>" among its tags): a pool can then hold each character's
+    // own entries side by side, each weighted for that character alone, and every character draws only its own —
+    // so adding a second character changes nothing about the first one's odds. An offer that names nobody is
+    // everybody's.
+    public const string ForPrefix = "for:";
+
+    public static bool AllowsOffer(RunState run, IReadOnlyList<string>? tags)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        if (tags is null || !tags.Any(t => t.StartsWith(ForPrefix, StringComparison.Ordinal)))
+            return true;
+        return Of(run) is { } character && tags.Contains(ForPrefix + character);
     }
 
     // Every card and relic the payload would hand over is this character's to have.
