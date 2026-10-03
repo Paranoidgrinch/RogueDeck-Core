@@ -93,10 +93,18 @@ public static class QueueResolution
                 combat,
                 onComplete: null,
                 registry: registry.EffectNodeExecutors,
-                onTerminal: (_, c) =>
+                onTerminal: (state, c) =>
                 {
                     c.EndActionScope();
                     c.EndQueuedCardResolution(cardId);
+                    // ⚠⚠ ONLY A CARD THAT FINISHED LETS THE NEXT ONE GO. A program also ends FAULTED — and a
+                    // question that parks the replay ends it exactly so, by throwing — and this continuation
+                    // runs inside that unwinding. Going on from there started the next queued card, which asked
+                    // its own question: two stood open at once, and an answer to the newer one was later met
+                    // by the replay at the older ("Replay script mismatch", the whole-run walk, 2026-10-03).
+                    // The exception is on its way out regardless; nothing after it is this window's to run.
+                    if (state == EffectProgramExecutionState.Faulted)
+                        return;
                     Finish(c, ownerId, cardId, card);
                     ResolveFrom(c, registry, ownerId, waiting, next);
                 });

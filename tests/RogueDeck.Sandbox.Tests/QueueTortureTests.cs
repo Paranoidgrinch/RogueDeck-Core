@@ -404,4 +404,51 @@ public class QueueTortureTests
             Assert.Equal(dummyHealth, play.CombatDriver.Current!.State.GetCombatant(dummyId).Health.Current);
         }
     }
+
+    // ⚠⚠ A QUEUED CARD THAT ASKED A QUESTION LET THE NEXT ONE RUN ANYWAY. A question parks the replay by
+    // throwing, and a program that throws is ended as FAULTED — and the queue's terminal continuation ran on
+    // every ending alike, so it went straight on to the next queued card, which asked its own question. Two
+    // questions stood open at once; whoever answered the newer one recorded an answer the replay then met at the
+    // older one ("Replay script mismatch at ChooseOptions: next recorded entry is CardPicksEntry"). Found by the
+    // whole-run walk, 2026-10-03: Clerical Discretion and a Priority Docket queued behind it.
+    [Fact]
+    public void A_queued_card_that_asks_holds_the_rest_of_the_queue_until_it_is_answered()
+    {
+        CombatNodeModel Gain(int amount) => new("gainBlock", "source", CombatAmountSpec.FromConst(amount));
+        var duel = Duel(["asks", "asks_too", "counter", "counter", "counter"]);
+        var blueprint = duel with
+        {
+            Cards =
+            [
+                .. duel.Cards,
+                // "Queue: choose one — gain 1 Block, or gain 2."
+                Card("asks", CombatNodeModel.ChooseOptions(1, ["one", "two"], [Gain(1), Gain(2)]), queued: true),
+                // "Queue: choose one — gain 10 Block, or gain 20."
+                Card("asks_too", CombatNodeModel.ChooseOptions(1, ["ten", "twenty"], [Gain(10), Gain(20)]),
+                    queued: true),
+            ],
+        };
+        var fight = Start(blueprint);
+        using (fight.Play)
+        {
+            fight.Play_("asks");
+            fight.Play_("asks_too");
+            fight.Play.CombatDriver!.EndTurn();
+            Assert.Null(fight.Play.Session!.Error);
+
+            // The OLDER card's question — not the newer one's, run past the open one and overwriting it.
+            var driver = fight.Play.CombatDriver!;
+            Assert.Equal(["one", "two"], driver.PendingOptionChoice);
+            driver.SupplyOptionChoice([1]);
+            Assert.Null(fight.Play.Session!.Error);
+
+            Assert.Equal(["ten", "twenty"], driver.PendingOptionChoice);
+            driver.SupplyOptionChoice([0]);
+            Assert.Null(fight.Play.Session!.Error);
+
+            Assert.Null(driver.PendingOptionChoice);
+            Assert.Empty(fight.Queue);
+            Assert.Equal(12, fight.Hero.DefensivePools[StandardCombatIds.BlockDefensivePool].Current);
+        }
+    }
 }
