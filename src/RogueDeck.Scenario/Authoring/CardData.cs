@@ -34,6 +34,16 @@ public sealed record CardData
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
     public bool QueueOnPlay { get; init; }
 
+    // A character ACTION rather than a card (CardDefinition.IsAction), and when it may be played/used. Both kept
+    // out of the wire format when unset, so every document written before them round-trips byte-identically.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsAction { get; init; }
+
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public ICombatExpression<CardPlayContext, bool>? PlayCondition { get; init; }
+
     public static CardData From(CardBlueprint card)
     {
         ArgumentNullException.ThrowIfNull(card);
@@ -51,6 +61,8 @@ public sealed record CardData
             TurnEndHandDestinationZone = card.TurnEndHandDestinationZone,
             PlayedCardDestinationZone = card.PlayedCardDestinationZone,
             QueueOnPlay = card.QueueOnPlay,
+            IsAction = card.IsAction,
+            PlayCondition = card.PlayCondition,
         };
     }
 
@@ -67,6 +79,8 @@ public sealed record CardData
             TurnEndHandDestinationZone = TurnEndHandDestinationZone,
             PlayedCardDestinationZone = PlayedCardDestinationZone,
             QueueOnPlay = QueueOnPlay,
+            IsAction = IsAction,
+            PlayCondition = PlayCondition,
         };
         card.Costs.AddRange(Costs);
         card.Tags.AddRange(Tags);

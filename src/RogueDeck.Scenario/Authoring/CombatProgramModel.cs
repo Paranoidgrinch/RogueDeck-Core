@@ -125,7 +125,12 @@ public sealed record CombatCardSpec(
     string Kind = "inZone",              // inZone | chosen | random | iterated
     CardZone Zone = CardZone.Hand,
     int Index = 0,                       // inZone only
-    string Purpose = "choose a card")    // chosen only
+    string Purpose = "choose a card",    // chosen only
+                                         // chosen only: cards whose definition carries this tag are not offered ("a fight's own cards cannot go in the
+                                         // pot"). Null offers the whole zone; kept out of the wire format when unset.
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    string? ExcludeTag = null)
 {
     // iterated reads the loop's current card and has no zone of its own; the others select from a zone.
     public bool UsesZone => Kind is "inZone" or "chosen" or "random";
@@ -1202,7 +1207,8 @@ public static class CombatProgramModel
     private static ICardInstanceExpression<TContext> BuildCard<TContext>(CombatCardSpec spec)
         where TContext : class => spec.Kind switch
         {
-            "chosen" => new ChosenCardInZoneExpression<TContext>(spec.Zone, spec.Purpose),
+            "chosen" => new ChosenCardInZoneExpression<TContext>(spec.Zone, spec.Purpose,
+                spec.ExcludeTag is { Length: > 0 } excluded ? new TagId(excluded) : null),
             "random" => new RandomCardInZoneExpression<TContext>(spec.Zone),
             "iterated" => new IteratedCardExpression<TContext>(),
             _ => new CardInZoneExpression<TContext>(spec.Zone, spec.Index), // "inZone"
@@ -1496,7 +1502,8 @@ public static class CombatProgramModel
         where TContext : class => expr switch
         {
             CardInZoneExpression<TContext> e => new CombatCardSpec("inZone", e.Zone, e.Index),
-            ChosenCardInZoneExpression<TContext> e => new CombatCardSpec("chosen", e.Zone, Purpose: e.Purpose),
+            ChosenCardInZoneExpression<TContext> e => new CombatCardSpec("chosen", e.Zone, Purpose: e.Purpose,
+                ExcludeTag: e.ExcludeTag?.value),
             RandomCardInZoneExpression<TContext> e => new CombatCardSpec("random", e.Zone),
             IteratedCardExpression<TContext> => new CombatCardSpec("iterated"),
             _ => null,

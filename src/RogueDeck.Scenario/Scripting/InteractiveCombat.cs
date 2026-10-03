@@ -174,6 +174,63 @@ public sealed class InteractiveCombat
     // a RULE that forbids the play (a decree capping the turn's cards, a rule about what may follow what,
     // a stun, a curse) is not, and a card that is refused only when it is clicked is a rule the player was
     // never shown.
+    // The hero's own actions in this fight (HeroBlueprint.Actions), in the order the character lists them.
+    public IReadOnlyList<CardDefinitionId> Actions => _compiled.Hero.Actions;
+
+    // Whether an action could be used right now: it is the hero's, a rule allows it, its cost can be paid.
+    public bool CanUse(CardDefinitionId actionId, CombatantId? target = null)
+    {
+        if (!IsHeroTurn || !Actions.Contains(actionId)
+            || !_registry.CardDefinitions.TryGetValue(actionId, out var action) || !action.IsAction)
+            return false;
+        var hero = _combat.GetCombatant(_heroId);
+        if (!CombatCardPlayProcessor.IsCardPlayAllowed(_combat, _registry, action, hero, target, cardInstanceId: null))
+            return false;
+        return ActionCost(actionId, target)
+            .All(cost => hero.Resources.TryGetValue(cost.ResourceId, out var pool) && pool.Current >= cost.Amount);
+    }
+
+    // What an action costs right now, every modifier applied ("the first ingredient each turn is free").
+    public IReadOnlyList<CalculatedResourceCost> ActionCost(CardDefinitionId actionId, CombatantId? target = null) =>
+        _registry.CardDefinitions.TryGetValue(actionId, out var action)
+            ? CombatCardPlayProcessor.PreviewCosts(_combat, _registry, action, _combat.GetCombatant(_heroId), target)
+            : [];
+
+    // Use one of the hero's actions — the action counterpart of PlayCard, recorded as its own step.
+    public void UseAction(CardDefinitionId actionId, CombatantId? target)
+    {
+        if (!IsHeroTurn)
+            return;
+
+        var before = _collector.Events.Count;
+        var round = _combat.CurrentRound;
+        var turn = _combat.CurrentTurn;
+        var problems = new List<string>();
+        if (!Actions.Contains(actionId))
+        {
+            problems.Add($"'{actionId}' is not one of the hero's actions.");
+            Record(new HeroUsesAction(actionId.value, target?.value), round, turn, _heroId, problems, before);
+            return;
+        }
+
+        var slot = new UseActionOutcomeSlot();
+        try
+        {
+            _combat.EnqueueEffect(new UseActionEffectRequest(_heroId, actionId, target, slot));
+            _queues.ResolvePendingQueues(_combat, _registry);
+            if (slot.Value is { WasUsed: false })
+                problems.Add($"Action '{actionId}' was not used (unaffordable or not allowed now).");
+        }
+        catch (Exception ex)
+        {
+            // As PlayCard: a step problem, not a torn-down session — and a prompt the action raised parks the
+            // replay from the driver's loop afterwards, exactly as a card's does.
+            problems.Add($"Step threw resolving '{actionId}': {ex.GetType().Name}: {ex.Message}");
+        }
+
+        Record(new HeroUsesAction(actionId.value, target?.value), round, turn, _heroId, problems, before);
+    }
+
     public bool CanPlay(CardInstanceId cardInstanceId)
     {
         var zones = _combat.GetCardZones(_heroId);

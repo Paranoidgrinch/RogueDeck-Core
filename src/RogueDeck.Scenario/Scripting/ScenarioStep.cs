@@ -7,6 +7,9 @@ public abstract record ScenarioStep;
 // The hero plays a card, resolved from its hand by card id, at an optional target.
 public sealed record HeroPlaysCard(string CardId, string? TargetId = null) : ScenarioStep;
 
+// The hero uses one of its own ACTIONS (CardDefinition.IsAction) — not a card play.
+public sealed record HeroUsesAction(string ActionId, string? TargetId = null) : ScenarioStep;
+
 // The hero declares its turn over; the engine ends it and starts the next combatant's turn.
 public sealed record HeroEndsTurn : ScenarioStep;
 

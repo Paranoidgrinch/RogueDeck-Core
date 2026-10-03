@@ -125,18 +125,29 @@ public sealed class CombatCardPlayProcessor
         EnsureCostsCanBePaid(source, card, costsToPay);
         PayCosts(source, costsToPay);
 
-        AddCardCostPaidLogAndEvent(combat, source.Id, card.Id, cardInstanceId, costsToPay);
+        // An ACTION is used, not played: what it costs is paid all the same, but nothing that watches card
+        // plays or card costs hears of it (CardDefinition.IsAction).
+        if (card.IsAction)
+        {
+            combat.AddLogEntry(
+                StandardCombatLogTypes.ActionUsed,
+                $"Combatant '{source.Id}' used action '{card.Id}'.");
+        }
+        else
+        {
+            AddCardCostPaidLogAndEvent(combat, source.Id, card.Id, cardInstanceId, costsToPay);
 
-        combat.AddLogEntry(
-            StandardCombatLogTypes.CardPlayed,
-            $"Combatant '{source.Id}' played card '{card.Id}'.");
+            combat.AddLogEntry(
+                StandardCombatLogTypes.CardPlayed,
+                $"Combatant '{source.Id}' played card '{card.Id}'.");
 
-        combat.EnqueueEvent(
-            new CardPlayedCombatEvent(
-                CardDefinitionId: card.Id,
-                SourceCombatantId: source.Id,
-                TargetCombatantId: targetCombatantId,
-                CardInstanceId: cardInstanceId));
+            combat.EnqueueEvent(
+                new CardPlayedCombatEvent(
+                    CardDefinitionId: card.Id,
+                    SourceCombatantId: source.Id,
+                    TargetCombatantId: targetCombatantId,
+                    CardInstanceId: cardInstanceId));
+        }
 
         // Redacted substrate: if the played instance carries a next-play output-scale mark, read + consume it
         // ONCE here (a one-shot fraction), then apply it to BOTH card execution paths — the legacy
@@ -299,6 +310,13 @@ public sealed class CombatCardPlayProcessor
         if (combat.TryGetCombatant(actor, out _))
             combat.EnqueueEvent(new ActionResolvedCombatEvent(actor, dealtDamage));
     }
+
+    // What playing a card — or using an action — would cost right now, every modifier applied, nothing paid and
+    // nothing traced. For a host that shows a price before the player commits (an action's 0 or 1).
+    public static IReadOnlyList<CalculatedResourceCost> PreviewCosts(
+        CombatState combat, CombatDefinitionRegistry registry, CardDefinition card, CombatantState source,
+        CombatantId? targetId = null, CardInstanceId? cardInstanceId = null) =>
+        CalculateCosts(combat, registry, card, source, targetId, cardInstanceId, trace: false);
 
     internal static IReadOnlyList<CalculatedResourceCost> CalculateCostsInternal(
         CombatState combat,

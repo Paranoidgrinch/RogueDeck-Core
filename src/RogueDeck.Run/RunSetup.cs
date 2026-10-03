@@ -49,6 +49,7 @@ public static class RunSetup
             run.SetResource(new RunResourceId(resource), amount);
 
         run.SetStartingRelics(start.StartingRelics);
+        run.SetCombatActions(start.CombatActions);
         run.SetStartingConsumables(start.StartingConsumables);
 
         // Seed the persistent board roster (P5c). Absent ⇒ a single-hero run, exactly as before.

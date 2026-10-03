@@ -109,6 +109,8 @@ public sealed class InteractiveCombatDriver : ICombatDriver, IReplayResettable, 
 
             if (_script.TryTake<CombatPlayEntry>(out var play))
                 combat.PlayCard(play.Card, play.Target);
+            else if (_script.TryTake<CombatActionEntry>(out var action))
+                combat.UseAction(action.Action, action.Target);
             else if (_script.TryTake<CombatEndTurnEntry>(out _))
                 combat.EndTurn();
             else if (_script.TryTake<CombatConsumableEntry>(out var use))
@@ -140,6 +142,14 @@ public sealed class InteractiveCombatDriver : ICombatDriver, IReplayResettable, 
         if (Current is null || _cardChooser.IsAwaitingChoice || _optionChooser.IsAwaitingChoice)
             return;
         _script.Advance(new CombatPlayEntry(null, cardId, target));
+    }
+
+    // Use one of the hero's own actions (BREW, "put a card in the pot") — recorded and replayed like a play.
+    public void UseAction(CardDefinitionId actionId, CombatantId? target)
+    {
+        if (Current is null || _cardChooser.IsAwaitingChoice || _optionChooser.IsAwaitingChoice)
+            return;
+        _script.Advance(new CombatActionEntry(null, actionId, target));
     }
 
 

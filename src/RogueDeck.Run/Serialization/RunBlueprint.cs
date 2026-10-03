@@ -194,6 +194,13 @@ public sealed record RunStart
     // relic listed here should be defined in the blueprint's Relics (or be a built-in sample).
     public IReadOnlyList<string> StartingRelics { get; init; } = [];
 
+    // The character's own ACTIONS (card definitions with IsAction): moves it can use in every fight without
+    // drawing them — a cauldron's BREW, "put a card in the pot". Empty for a character that has none.
+    // Null (absent) for a character that has none, so every document written before actions round-trips as it was.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<CardDefinitionId>? CombatActions { get; init; }
+
     // Consumable definition ids the hero starts with (one instance each). Granted at run start from the content
     // catalog (unknown ids skipped); each id should be defined in the blueprint's Consumables.
     public IReadOnlyList<string> StartingConsumables { get; init; } = [];

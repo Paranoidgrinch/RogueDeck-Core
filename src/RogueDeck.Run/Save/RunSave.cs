@@ -88,6 +88,11 @@ public sealed record RunSaveData(
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public string? CharacterId { get; init; }
 
+    // The hero's own actions (RunStart.CombatActions). Absent for a run without any.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? CombatActions { get; init; }
+
     // The next-combat openings still waiting for a fight — what an event promised about "your next combat"
     // before the player walked out of the room. Null (the default) when nothing is pending, so a save taken
     // without one round-trips byte-identically.

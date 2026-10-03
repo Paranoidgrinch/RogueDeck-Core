@@ -111,6 +111,11 @@ public sealed class RunState
     public string? CharacterId { get; private set; }
     public void SetCharacter(string? characterId) => CharacterId = characterId;
 
+    // The actions the hero can use in every fight (RunStart.CombatActions) — persisted with the run, so a resumed
+    // run fights with the same moves it started with.
+    public IReadOnlyList<CardDefinitionId> CombatActions { get; private set; } = [];
+    public void SetCombatActions(IReadOnlyList<CardDefinitionId>? actions) => CombatActions = actions ?? [];
+
     // Branching-map traversal (B1). CurrentNodeId is the node being/just walked; the visited set records every node
     // already walked so a graph walk never re-enters one. Both are unused by a linear map (which tracks Position).
     public NodeId? CurrentNodeId { get; private set; }
@@ -564,6 +569,7 @@ public sealed class RunState
             MapGenerationLoadout = GeneratedMapLoadout,
             MapGenerator = GeneratedMapGenerator,
             CharacterId = CharacterId,
+            CombatActions = CombatActions.Count == 0 ? null : [.. CombatActions.Select(a => a.value)],
             RemovedCards = _removedCards.Count > 0
                 ? _removedCards.Select(r => new RunCardSaveData(
                     r.Definition.value, r.UpgradeLevel, r.Tags.Select(t => t.Value).ToArray(),
@@ -638,6 +644,7 @@ public sealed class RunState
             run.SetGeneratedMapLoadout(loadout); // so a resumed run re-saves with the same map identity
         run.SetGeneratedMapGenerator(data.MapGenerator);
         run.SetCharacter(data.CharacterId);
+        run.SetCombatActions([.. (data.CombatActions ?? []).Select(a => new CardDefinitionId(a))]);
         run.Result = data.Result;
         run.Position = data.Position;
         if (data.CurrentNodeId is { } current)

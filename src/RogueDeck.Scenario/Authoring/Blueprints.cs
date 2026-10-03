@@ -83,6 +83,8 @@ public sealed class CardBlueprint
 
     // "Queue: …" — the card is played now and resolves at the next resolution window.
     public bool QueueOnPlay { get; set; }
+    public bool IsAction { get; set; }
+    public ICombatExpression<CardPlayContext, bool>? PlayCondition { get; set; }
 
     public CardBlueprint(string id)
     {
@@ -110,6 +112,8 @@ public sealed class CardBlueprint
             TurnEndHandDestinationZone = TurnEndHandDestinationZone,
             PlayedCardDestinationZone = PlayedCardDestinationZone,
             QueueOnPlay = QueueOnPlay,
+            IsAction = IsAction,
+            PlayCondition = PlayCondition,
         };
         builder.Costs.AddRange(Costs);
         builder.Tags.AddRange(Tags);
@@ -213,6 +217,9 @@ public sealed class HeroBlueprint : CombatantBlueprint
     // Temporary rules installed when the combat opens (e.g. a consumable's "next combat starts with 20 block").
     // Applied by the run→combat bridge as pending combat modifiers; installed by ScenarioCombatFactory at build.
     public List<TemporaryRuleInstallSpec> OpeningTemporaryRules { get; } = new();
+
+    // The hero's own ACTIONS in this fight (card definitions with IsAction), usable without being drawn.
+    public List<CardDefinitionId> Actions { get; } = new();
 
     public HeroBlueprint(string id) : base(id, "hero") { }
 }

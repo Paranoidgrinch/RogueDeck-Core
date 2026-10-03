@@ -94,3 +94,55 @@ public sealed class PlayCardEffectHandler : EffectRequestHandler<PlayCardEffectR
         }
     }
 }
+
+// USE A CHARACTER ACTION (CardDefinition.IsAction) — the action counterpart of PlayCardEffectRequest. An action
+// is used by definition, from no zone: validators (its PlayCondition among them) and costs work exactly as a
+// card's, but it is not a card play. WasUsed=false (no-op, no exception) when the actor is gone, the definition is
+// not an action, a rule refuses it, or its cost cannot be paid.
+public sealed record UseActionEffectRequest(
+    CombatantId PlayerId,
+    CardDefinitionId ActionId,
+    CombatantId? TargetCombatantId = null,
+    UseActionOutcomeSlot? OutcomeSlot = null
+) : IEffectRequest;
+
+public sealed record UseActionOutcome(CardDefinitionId ActionId, bool WasUsed);
+
+public sealed class UseActionOutcomeSlot : OutcomeSlot<UseActionOutcome>;
+
+public sealed class UseActionEffectHandler : EffectRequestHandler<UseActionEffectRequest>
+{
+    protected override void Resolve(
+        CombatState combat,
+        CombatDefinitionRegistry registry,
+        UseActionEffectRequest request)
+    {
+        if (!combat.TryGetCombatant(request.PlayerId, out var player) || !player!.IsAlive
+            || !registry.CardDefinitions.TryGetValue(request.ActionId, out var action) || !action.IsAction
+            || !CombatCardPlayProcessor.IsCardPlayAllowed(
+                combat, registry, action, player, request.TargetCombatantId, null))
+        {
+            Report(request, used: false);
+            return;
+        }
+
+        var costs = CombatCardPlayProcessor.CalculateCostsInternal(
+            combat, registry, action, player, request.TargetCombatantId, null);
+        if (costs.Any(cost => !player.Resources.TryGetValue(cost.ResourceId, out var resource)
+                              || resource.Current < cost.Amount))
+        {
+            Report(request, used: false);
+            return;
+        }
+
+        CombatCardPlayProcessor.EnqueueCardPlayEffects(
+            combat, registry, action, player, request.TargetCombatantId, null);
+        Report(request, used: true);
+    }
+
+    private static void Report(UseActionEffectRequest request, bool used)
+    {
+        if (request.OutcomeSlot is { } slot)
+            slot.Value = new UseActionOutcome(request.ActionId, used);
+    }
+}

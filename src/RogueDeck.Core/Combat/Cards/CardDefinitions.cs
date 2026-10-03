@@ -36,6 +36,16 @@ public sealed class CardDefinition
     // resolution window comes round. False for every ordinary card.
     public bool QueueOnPlay { get; }
 
+    // AN ACTION, NOT A CARD: a character's own move that is used rather than played (a cauldron's BREW, "put a
+    // card in the pot"). It never sits in a zone — it is used by definition — and using it is not playing a card:
+    // no CardPlayed, no CardCostPaid, nothing that counts cards played. Cost, target and program work exactly as
+    // a card's. False for every card.
+    public bool IsAction { get; init; }
+
+    // WHEN IT MAY BE PLAYED OR USED at all ("only while the pot is full"). Evaluated against the play's own
+    // context before anything is paid; null ⇒ always.
+    public ICombatExpression<CardPlayContext, bool>? PlayCondition { get; init; }
+
     internal CardDefinition(
         CardDefinitionId id,
         PackageId packageId,
@@ -98,6 +108,10 @@ public sealed class CardDefinitionBuilder
     // "Queue: …" — the card is played now and resolves at the next resolution window.
     public bool QueueOnPlay { get; set; } = false;
 
+    // A character action rather than a card (see CardDefinition.IsAction), and when it may be played/used.
+    public bool IsAction { get; set; }
+    public ICombatExpression<CardPlayContext, bool>? PlayCondition { get; set; }
+
     public CardDefinitionBuilder(
         CardDefinitionId id,
         PackageId packageId,
@@ -144,7 +158,11 @@ public sealed class CardDefinitionBuilder
             LifecyclePrograms.Count == 0
                 ? null
                 : LifecyclePrograms.ToImmutableDictionary(),
-            QueueOnPlay);
+            QueueOnPlay)
+        {
+            IsAction = IsAction,
+            PlayCondition = PlayCondition,
+        };
 
         return _built;
     }

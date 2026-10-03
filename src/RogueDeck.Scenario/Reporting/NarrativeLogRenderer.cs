@@ -65,6 +65,7 @@ public sealed class NarrativeLogRenderer
     private string DescribeStep(ScenarioStep step) => step switch
     {
         HeroPlaysCard play => $"plays '{Name(play.CardId)}'{Target(play.TargetId)}",
+        HeroUsesAction use => $"uses '{Name(use.ActionId)}'{Target(use.TargetId)}",
         HeroEndsTurn => "ends turn",
         EnemyActs enemy => $"uses '{Name(enemy.ActionId)}'{Target(enemy.TargetId)}",
         AdvanceToNextRound => "advances to the next round",

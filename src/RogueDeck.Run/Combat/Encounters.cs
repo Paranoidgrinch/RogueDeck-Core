@@ -196,6 +196,7 @@ public sealed class EncounterCatalog
             CurrentHealth = run.Health.Current,
         };
         foreach (var resource in encounter.HeroResources) blueprint.Hero.Resources.Add(resource);
+        blueprint.Hero.Actions.AddRange(run.CombatActions);
         foreach (var status in encounter.HeroStartingStatuses) blueprint.Hero.StartingStatuses.Add(status);
 
         // Run-global combat resources: add each to the hero unless the encounter already defines that id, and

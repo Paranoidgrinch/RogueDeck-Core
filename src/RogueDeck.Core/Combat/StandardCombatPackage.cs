@@ -57,6 +57,7 @@ public sealed class StandardCombatPackage : ICombatPackage
 
         registry.RegisterCardPlayValidator(new UnplayableCardPlayValidator());
         registry.RegisterCardPlayValidator(new StunCardPlayValidator());
+        registry.RegisterCardPlayValidator(new PlayConditionCardPlayValidator());
         registry.RegisterCardPlayValidator(new OneAttackPerTurnCardPlayValidator());
         registry.RegisterCardPlayValidator(new DecreeCardPlayValidator());
 
@@ -112,6 +113,7 @@ public sealed class StandardCombatPackage : ICombatPackage
         registry.RegisterEffectRequestHandler(new ChangeCombatantTeamEffectHandler());
         registry.RegisterEffectRequestHandler(new SetCombatResultEffectHandler());
         registry.RegisterEffectRequestHandler(new PlayCardEffectHandler());
+        registry.RegisterEffectRequestHandler(new UseActionEffectHandler());
         registry.RegisterEffectRequestHandler(new ExecuteEnemyActionEffectHandler());
         registry.RegisterEffectRequestHandler(new InstallTemporaryRuleEffectHandler());
         registry.RegisterEffectRequestHandler(new RemoveTemporaryRuleEffectHandler());

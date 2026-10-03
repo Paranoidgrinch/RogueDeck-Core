@@ -26,6 +26,9 @@ public sealed record CombatPlayEntry(CombatantId? Member, CardInstanceId Card, C
 
 public sealed record CombatEndTurnEntry(CombatantId? Member) : ReplayEntry;
 
+// The hero used one of its own actions (CardDefinition.IsAction), at an optional target.
+public sealed record CombatActionEntry(CombatantId? Member, CardDefinitionId Action, CombatantId? Target) : ReplayEntry;
+
 public sealed record CombatConsumableEntry(ConsumableInstanceId Instance) : ReplayEntry;
 
 public sealed record CardPicksEntry(IReadOnlyList<CardInstanceId> Picks) : ReplayEntry;
