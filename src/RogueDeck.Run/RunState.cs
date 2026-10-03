@@ -116,6 +116,10 @@ public sealed class RunState
     public IReadOnlyList<CardDefinitionId> CombatActions { get; private set; } = [];
     public void SetCombatActions(IReadOnlyList<CardDefinitionId>? actions) => CombatActions = actions ?? [];
 
+    // The statuses the hero brings into every fight (RunStart.CombatStatuses), persisted for the same reason.
+    public IReadOnlyList<Scenario.Authoring.StartingStatusSpec> CombatStatuses { get; private set; } = [];
+    public void SetCombatStatuses(IReadOnlyList<Scenario.Authoring.StartingStatusSpec>? statuses) => CombatStatuses = statuses ?? [];
+
     // Branching-map traversal (B1). CurrentNodeId is the node being/just walked; the visited set records every node
     // already walked so a graph walk never re-enters one. Both are unused by a linear map (which tracks Position).
     public NodeId? CurrentNodeId { get; private set; }
@@ -570,6 +574,7 @@ public sealed class RunState
             MapGenerator = GeneratedMapGenerator,
             CharacterId = CharacterId,
             CombatActions = CombatActions.Count == 0 ? null : [.. CombatActions.Select(a => a.value)],
+            CombatStatuses = CombatStatuses.Count == 0 ? null : CombatStatuses,
             RemovedCards = _removedCards.Count > 0
                 ? _removedCards.Select(r => new RunCardSaveData(
                     r.Definition.value, r.UpgradeLevel, r.Tags.Select(t => t.Value).ToArray(),
@@ -645,6 +650,7 @@ public sealed class RunState
         run.SetGeneratedMapGenerator(data.MapGenerator);
         run.SetCharacter(data.CharacterId);
         run.SetCombatActions([.. (data.CombatActions ?? []).Select(a => new CardDefinitionId(a))]);
+        run.SetCombatStatuses(data.CombatStatuses);
         run.Result = data.Result;
         run.Position = data.Position;
         if (data.CurrentNodeId is { } current)

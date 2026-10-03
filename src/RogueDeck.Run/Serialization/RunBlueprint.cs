@@ -201,6 +201,12 @@ public sealed record RunStart
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<CardDefinitionId>? CombatActions { get; init; }
 
+    // Statuses the character brings into EVERY fight (its own standing rules — a witch's cauldron), beside the
+    // ones the encounter gives the hero. Null (absent) for a character that has none.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<StartingStatusSpec>? CombatStatuses { get; init; }
+
     // Consumable definition ids the hero starts with (one instance each). Granted at run start from the content
     // catalog (unknown ids skipped); each id should be defined in the blueprint's Consumables.
     public IReadOnlyList<string> StartingConsumables { get; init; } = [];

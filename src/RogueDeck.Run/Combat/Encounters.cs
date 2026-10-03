@@ -198,6 +198,8 @@ public sealed class EncounterCatalog
         foreach (var resource in encounter.HeroResources) blueprint.Hero.Resources.Add(resource);
         blueprint.Hero.Actions.AddRange(run.CombatActions);
         foreach (var status in encounter.HeroStartingStatuses) blueprint.Hero.StartingStatuses.Add(status);
+        // …and the character's own, which it brings into every fight.
+        foreach (var status in run.CombatStatuses) blueprint.Hero.StartingStatuses.Add(status);
 
         // Run-global combat resources: add each to the hero unless the encounter already defines that id, and
         // install its per-turn refill (energy-like). This is how a designer's custom combat resource reaches every fight.

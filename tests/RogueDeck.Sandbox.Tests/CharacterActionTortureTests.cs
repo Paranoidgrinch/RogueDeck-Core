@@ -82,7 +82,9 @@ public class CharacterActionTortureTests
                 MaxHealth = 50,
                 StartingHealth = 50,
                 CombatActions = [new CardDefinitionId("stash"), new CardDefinitionId("brew")],
+                CombatStatuses = [new StartingStatusSpec(new StatusDefinitionId("pot_keeper"), 1)],
             },
+            Statuses = [new StatusData { Id = "pot_keeper", NameKey = "Pot Keeper", UsesStacks = true }],
         };
     }
 
@@ -155,6 +157,11 @@ public class CharacterActionTortureTests
         var back = resumed.CombatDriver!.Current!;
         Assert.Equal(aside, back.State.GetCardZones(back.HeroId).SetAside.Select(c => c.Id.value));
         Assert.Equal(["stash", "brew"], back.Actions.Select(a => a.value));
+        // The character's own standing status, brought into the fight and back out of the save with it.
+        Assert.Contains(back.State.GetCombatant(back.HeroId).Statuses, s => s.DefinitionId.value == "pot_keeper");
+        // …and the RUN still knows them, so the next fight is given them too, not only the one in the save.
+        Assert.Equal(["pot_keeper"], resumed.Session!.Run.CombatStatuses.Select(s => s.Status.value));
+        Assert.Equal(["stash", "brew"], resumed.Session.Run.CombatActions.Select(a => a.value));
         var enemy = back.State.Combatants.First(c => c.Id != back.HeroId).Id;
         Assert.True(back.CanUse(new CardDefinitionId("brew"), enemy));
     }
