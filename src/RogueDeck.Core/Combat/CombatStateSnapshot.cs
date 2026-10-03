@@ -69,7 +69,10 @@ public sealed record CombatantCardZonesSnapshot(
     // and nothing said so. That is every save taken mid-fight, and it was every turn boundary of the replay
     // model as well. Defaulted so a save written before this reads as an empty queue, which is what those
     // saves effectively had.
-    ImmutableArray<CardInstanceSnapshot> QueuePile = default
+    ImmutableArray<CardInstanceSnapshot> QueuePile = default,
+    // The cards set aside (CardZone.SetAsidePile) — captured from the day the zone exists, so a fight saved with
+    // ingredients waiting comes back with them (the Queue's lesson). Defaulted for every older save: empty.
+    ImmutableArray<CardInstanceSnapshot> SetAsidePile = default
 );
 
 // Immutable capture of a single combatant at a point in time.

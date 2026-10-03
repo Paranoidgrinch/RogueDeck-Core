@@ -129,6 +129,9 @@ public static class CombatStateHasher
         // with nothing waiting hashes exactly as it did before the queue was captured at all.
         if (!zones.QueuePile.IsDefaultOrEmpty)
             AppendCards(sb, "queue", zones.QueuePile);
+        // Same rule for the set-aside cards: absent when empty, so no existing hash moves.
+        if (!zones.SetAsidePile.IsDefaultOrEmpty)
+            AppendCards(sb, "aside", zones.SetAsidePile);
     }
 
     private static void AppendCards(

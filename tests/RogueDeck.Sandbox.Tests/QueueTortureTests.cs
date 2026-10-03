@@ -451,4 +451,41 @@ public class QueueTortureTests
             Assert.Equal(12, fight.Hero.DefensivePools[StandardCombatIds.BlockDefensivePool].Current);
         }
     }
+
+    // THE SET-ASIDE PILE SURVIVES A SAVE (Hedge Witch plan C2), in its order — the Queue's 2026-09-18 lesson
+    // written down before anything depends on it. Two cards set aside, the fight saved and resumed: both wait
+    // there still, oldest first, and nothing else moved.
+    [Fact]
+    public void Cards_set_aside_come_back_from_a_save_in_the_order_they_were_set_down()
+    {
+        var duel = Duel(["stash", "stash", "counter", "deferred", "guard"]);
+        var blueprint = duel with
+        {
+            Cards =
+            [
+                .. duel.Cards,
+                // "Set aside the first card in your hand."
+                Card("stash", new CombatNodeModel("moveCardToZone", "source",
+                    Card: new CombatCardSpec("inZone", CardZone.Hand, Index: 0), ToZone: CardZone.SetAsidePile)),
+            ],
+        };
+        var fight = Start(blueprint);
+        string save;
+        string[] aside;
+        using (fight.Play)
+        {
+            fight.Play_("stash");
+            fight.Play_("stash");
+            aside = [.. fight.Combat.State.GetCardZones(fight.Combat.HeroId).SetAside.Select(c => c.Id.value)];
+            Assert.Equal(2, aside.Length);
+            save = fight.Play.SaveJson()!;
+        }
+
+        using var resumed = new RunPlayback(() => { });
+        resumed.Resume(blueprint, RunSaveJson.FromJson(save), interactive: true);
+        Assert.Null(resumed.Error);
+        var back = resumed.CombatDriver!.Current!;
+        Assert.Equal(aside, back.State.GetCardZones(back.HeroId).SetAside.Select(c => c.Id.value));
+        Assert.All(back.State.GetCardZones(back.HeroId).SetAside, c => Assert.Equal(CardZone.SetAsidePile, c.Zone));
+    }
 }

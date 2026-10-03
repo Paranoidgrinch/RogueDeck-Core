@@ -12,7 +12,13 @@ public enum CardZone
     // card pays its cost and locks its target now; the card waits here, oldest first, until a resolution
     // window comes round (the owner's next turn, before the draw) or an effect resolves it early. Appended
     // last so every zone name already on the wire keeps its meaning.
-    QueuePile
+    QueuePile,
+
+    // Cards the player has SET ASIDE from the hand for later use, without playing them — a character's pot of
+    // ingredients, a hoard. Not played, not discarded, not exhausted: the cards simply wait here, in the order
+    // they were set down, until an effect moves them on. What setting a card aside costs, how many may wait, and
+    // what is done with them is content (a set-aside action, a character action). Appended last, like the Queue.
+    SetAsidePile
 }
 
 // Where a card lands in its destination zone. Draw takes from the front (index 0 = the "top"), so Top places a card
@@ -150,6 +156,7 @@ public sealed class CombatantCardZones
     private readonly List<CardInstance> _exhaustPile = new();
     private readonly List<CardInstance> _banishedPile = new();
     private readonly List<CardInstance> _queue = new();
+    private readonly List<CardInstance> _setAside = new();
 
     public IReadOnlyList<CardInstance> DrawPile => _drawPile;
     public IReadOnlyList<CardInstance> Hand => _hand;
@@ -160,12 +167,16 @@ public sealed class CombatantCardZones
     // Oldest first: the Queue resolves FIFO, so index 0 is the card that has waited longest.
     public IReadOnlyList<CardInstance> Queue => _queue;
 
+    // In the order they were set down: index 0 waited longest.
+    public IReadOnlyList<CardInstance> SetAside => _setAside;
+
     public IReadOnlyCollection<CardInstance> AllCards => _drawPile
         .Concat(_hand)
         .Concat(_discardPile)
         .Concat(_exhaustPile)
         .Concat(_banishedPile)
         .Concat(_queue)
+        .Concat(_setAside)
         .ToArray();
 
     public void AddCard(CardInstance card)
@@ -336,6 +347,7 @@ public sealed class CombatantCardZones
             CardZone.ExhaustPile => _exhaustPile,
             CardZone.BanishedPile => _banishedPile,
             CardZone.QueuePile => _queue,
+            CardZone.SetAsidePile => _setAside,
             _ => throw new InvalidOperationException($"Unsupported card zone '{zone}'.")
         };
     }

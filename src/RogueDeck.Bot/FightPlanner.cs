@@ -282,6 +282,8 @@ public sealed class FightPlanner(int horizon = 5, int beam = 16, int perTurn = 3
             Pile(sb, "ban", zones.BanishedPile);
             if (!zones.QueuePile.IsDefaultOrEmpty)
                 Pile(sb, "queue", zones.QueuePile);
+            if (!zones.SetAsidePile.IsDefaultOrEmpty)
+                Pile(sb, "aside", zones.SetAsidePile);
             sb.Append('\n');
         }
 

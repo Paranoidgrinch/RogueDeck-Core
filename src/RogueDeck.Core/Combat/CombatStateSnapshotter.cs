@@ -126,7 +126,8 @@ public static class CombatStateSnapshotter
             DiscardPile: zones.DiscardPile.Select(SnapshotCard).ToImmutableArray(),
             ExhaustPile: zones.ExhaustPile.Select(SnapshotCard).ToImmutableArray(),
             BanishedPile: zones.BanishedPile.Select(SnapshotCard).ToImmutableArray(),
-            QueuePile: zones.Queue.Select(SnapshotCard).ToImmutableArray());
+            QueuePile: zones.Queue.Select(SnapshotCard).ToImmutableArray(),
+            SetAsidePile: zones.SetAside.Select(SnapshotCard).ToImmutableArray());
 
     private static CardInstanceSnapshot SnapshotCard(CardInstance c) =>
         new(

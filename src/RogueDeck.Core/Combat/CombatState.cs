@@ -831,6 +831,8 @@ public sealed class CombatState
             // was captured carries no array at all.
             if (!zones.QueuePile.IsDefault)
                 RestorePile(target, combatantId, zones.QueuePile, CardZone.QueuePile);
+            if (!zones.SetAsidePile.IsDefault)
+                RestorePile(target, combatantId, zones.SetAsidePile, CardZone.SetAsidePile);
         }
 
         // What each turn remembers. Default (an older snapshot) leaves the fresh, empty stats in place, which
