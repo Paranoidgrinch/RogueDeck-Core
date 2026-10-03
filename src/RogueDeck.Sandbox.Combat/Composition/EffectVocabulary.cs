@@ -67,4 +67,5 @@ public enum TriggerEvent
     // name with `announcedRuleIs`. Opt-in by construction — see RuleAnnouncedCombatEvent for why an
     // automatic "a program fired" event would be both a flood and the wrong question.
     RuleAnnounced,
+    ActionStarting, // when the bearer is about to take an enemy action (before anything it does)
 }

@@ -24,6 +24,10 @@ public static class StandardCombatIds
     public static readonly StatusDefinitionId ThornsStatus = new("standard.thorns");
 
     public static readonly StatusDefinitionId StunStatus = new("standard.stun");
+
+    // "This action fails": put on an enemy by a rule that heard it announce its action (ActionStartingCombatEvent);
+    // the action then does nothing and is still spent, and the mark is taken off again.
+    public static readonly StatusDefinitionId ActionFailsStatus = new("standard.action_fails");
     public static readonly StatusDefinitionId OneAttackPerTurnStatus = new("standard.one_attack_per_turn");
     public static readonly StatusDefinitionId FreeNextCardStatus = new("standard.free_next_card");
     public static readonly StatusDefinitionId FirstAttackEachTurnFreeStatus = new("standard.first_attack_each_turn_free");

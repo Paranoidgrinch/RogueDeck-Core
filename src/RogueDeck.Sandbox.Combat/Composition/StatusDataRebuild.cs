@@ -129,6 +129,10 @@ public static class StatusDataRebuild
                 id, Program<ActionResolvedTriggeredEffectContext>(data),
                 gatingStatus: Gate, filters: Scoped<ActionResolvedTriggeredEffectContext>(c => c.Combat,
                     new ActionResolvedActorHasStatusTriggerFilter(statusId))),
+            TriggerEvent.ActionStarting => TriggeredProgramContextAdapters.ActionStarting.Define(
+                id, Program<ActionStartingTriggeredEffectContext>(data),
+                gatingStatus: Gate, filters: Scoped<ActionStartingTriggeredEffectContext>(c => c.Combat,
+                    new ActionStartingActorHasStatusTriggerFilter(statusId))),
             TriggerEvent.StatusApplicationPrevented => TriggeredProgramContextAdapters.StatusApplicationBlocked.Define(
                 id, Program<StatusApplicationBlockedTriggeredEffectContext>(data),
                 gatingStatus: Gate, filters: Scoped<StatusApplicationBlockedTriggeredEffectContext>(c => c.Combat,

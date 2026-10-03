@@ -866,6 +866,8 @@ public static class CombatProgramModel
             "event" => new EventAmountExpression<TContext>(),
             "counter" => new CombatantCounterExpression<TContext>(SelectorFor(spec.SelectorKey), new CounterId(spec.CounterId)),
             "round" => new RoundNumberExpression<TContext>(),
+            // A roll in [0, Const) from the fight's own random stream (RandomBelowExpression).
+            "randomBelow" => new RandomBelowExpression<TContext>(spec.Const),
             "turn" => new TurnNumberExpression<TContext>(),
             "add" => new AddExpression<TContext>(BuildAmount<TContext>(spec.LeftOrDefault), BuildAmount<TContext>(spec.RightOrDefault)),
             "sub" => new SubtractExpression<TContext>(BuildAmount<TContext>(spec.LeftOrDefault), BuildAmount<TContext>(spec.RightOrDefault)),
@@ -947,6 +949,7 @@ public static class CombatProgramModel
         amount switch
         {
             ConstantExpression<TContext> c => CombatAmountSpec.FromConst(c.Value),
+            RandomBelowExpression<TContext> r => new CombatAmountSpec("randomBelow", r.Bound),
             EventAmountExpression<TContext> => CombatAmountSpec.Event,
             CombatantCounterExpression<TContext> ce when KeyFor(ce.Selector) is { } key =>
                 CombatAmountSpec.Counter(key, ce.CounterId.value),

@@ -34,6 +34,7 @@ public sealed class StandardCombatPackage : ICombatPackage
         registry.RegisterStatus(CreateDexterity());
         registry.RegisterStatus(CreateThorns());
         registry.RegisterStatus(CreateStun());
+        registry.RegisterStatus(CreateActionFails());
         registry.RegisterStatus(CreateOneAttackPerTurn());
         registry.RegisterStatus(CreateFreeNextCard());
         registry.RegisterStatus(CreateFirstAttackEachTurnFree());
@@ -160,6 +161,7 @@ public sealed class StandardCombatPackage : ICombatPackage
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.StatusApplicationBlocked.CreateHandler());
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.StatusApplicationAmplified.CreateHandler());
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.ActionResolved.CreateHandler());
+        registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.ActionStarting.CreateHandler());
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.StatusesRemovedByPolarity.CreateHandler());
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.StatusRemoved.CreateHandler());
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.StatusChargesReduced.CreateHandler());
@@ -487,6 +489,17 @@ public sealed class StandardCombatPackage : ICombatPackage
 
         return definition;
     }
+    // The mark a rule leaves on an enemy that announced its action, to make that action fail. Neutral and
+    // unshown: it lives only between the announcement and the action, and is taken off when the action is spent.
+    private StatusDefinition CreateActionFails() =>
+        new(
+            StandardCombatIds.ActionFailsStatus,
+            Id,
+            displayNameKey: "status.standard.action_fails.name",
+            descriptionKey: "status.standard.action_fails.description",
+            polarity: StatusPolarity.Neutral,
+            stackingBehavior: StatusStackingBehavior.MergeWithExistingInstance);
+
     private StatusDefinition CreateSkillComboDraw()
     {
         var definition = new StatusDefinition(

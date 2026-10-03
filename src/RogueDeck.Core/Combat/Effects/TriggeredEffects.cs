@@ -17,6 +17,9 @@ public interface ITriggeredEffectDefinition
 
     Type EventType { get; }
 
+    // The status this rule belongs to, when it belongs to one (see TriggeredProgramDefinition.GatingStatus).
+    StatusDefinitionId? GatingStatus => null;
+
     TriggeredEffectReentryPolicy ReentryPolicy =>
         TriggeredEffectReentryPolicy.SuppressRecursiveReentry;
 

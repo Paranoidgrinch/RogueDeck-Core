@@ -16,6 +16,7 @@ public static class StandardCombatLogTypes
     public const string CardCostPaid = "CardCostPaid";
     public const string CardPlayed = "CardPlayed";
     public const string ActionUsed = "ActionUsed";
+    public const string EnemyActionFailed = "EnemyActionFailed";
     public const string CardsDrawn = "CardsDrawn";
     public const string DiscardPileShuffledIntoDrawPile = "DiscardPileShuffledIntoDrawPile";
     public const string HandDiscarded = "HandDiscarded";

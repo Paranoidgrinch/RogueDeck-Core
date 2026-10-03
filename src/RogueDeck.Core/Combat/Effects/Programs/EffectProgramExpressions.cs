@@ -1911,6 +1911,26 @@ public sealed class ChosenCardInZoneExpression<TContext>
 // Picks a card UNIFORMLY AT RANDOM from a zone of the acting combatant, via the combat RNG (deterministic by seed
 // so a replay reproduces the pick). Also a resolution-time selector: it advances the combat's random step, so it
 // reads AND cursors the RNG rather than being a pure read. Empty zone ⇒ null.
+// A ROLL: a whole number in [0, Bound), drawn from the fight's own random stream and advancing it — so a replay
+// rolls the same, and the fight's later draws are what they were. "Roll once: 35 % that the action fails" is
+// RandomBelow(100) < 35. Like every random read it is a resolution-time read: evaluate it once per decision.
+public sealed class RandomBelowExpression<TContext> : ICombatExpression<TContext, int>
+    where TContext : class
+{
+    public int Bound { get; }
+
+    public RandomBelowExpression(int bound) => Bound = bound;
+
+    public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        if (Bound <= 1)
+            return 0;
+        var roll = CombatRandom.CreateShuffledIndexes(Bound, combat.RandomSeed, combat.RandomStep)[0];
+        combat.AdvanceRandomStep();
+        return roll;
+    }
+}
+
 public sealed class RandomCardInZoneExpression<TContext>
     : ICardInstanceExpression<TContext>
     where TContext : class

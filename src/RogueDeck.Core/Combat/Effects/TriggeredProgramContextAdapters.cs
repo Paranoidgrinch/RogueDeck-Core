@@ -125,6 +125,15 @@ public static class TriggeredProgramContextAdapters
             },
             StatusAppliedTriggeredEffectTargetResolver.CreateActionBuildContext);
 
+    public static readonly TriggeredProgramAdapter<ActionStartingCombatEvent, ActionStartingTriggeredEffectContext>
+        ActionStarting = new(
+            (combat, registry, e) =>
+            {
+                if (!combat.TryGetCombatant(e.ActorCombatantId, out var actor)) return null;
+                return new ActionStartingTriggeredEffectContext(combat, registry, e, actor!);
+            },
+            ActionStartingTriggeredEffectTargetResolver.CreateActionBuildContext);
+
     public static readonly TriggeredProgramAdapter<ActionResolvedCombatEvent, ActionResolvedTriggeredEffectContext>
         ActionResolved = new(
             (combat, registry, e) =>
