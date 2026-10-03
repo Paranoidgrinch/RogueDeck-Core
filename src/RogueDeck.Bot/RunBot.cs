@@ -49,6 +49,8 @@ public static class RunBot
 
         try
         {
+            (int Round, int Turn) actionsTurn = (-1, -1);
+            var actionsUsed = 0;
             for (var step = 0; step < options.Budget && session is not null && !session.IsComplete; step++)
             {
                 mind.Step = step;
@@ -81,6 +83,14 @@ public static class RunBot
                         {
                             driver.PlayCard(chosen.Card.Id, chosen.Target);
                             mind.AfterPlay(session.Run, driver.Current, chosen);
+                        }
+                        // THE HERO'S OWN ACTIONS (a cauldron's put-in and BREW), before the turn is given up: any
+                        // that can be used is, a bounded number of times a turn — the bot's job is to walk the
+                        // game, and an action it never takes is a screen nobody ever reaches.
+                        else if (UsableAction(combat, ref actionsTurn, ref actionsUsed) is { } action)
+                        {
+                            actionsUsed++;
+                            driver.UseAction(action, FirstEnemy(combat));
                         }
                         else
                         {
@@ -234,6 +244,31 @@ public static class RunBot
     // parks, the card simply resolves, and it stays offered. That single disagreement was enough to make the
     // two seats play different games from the same seed: a card that comes back to hand was played again by
     // one of them and not by the other. A park is the engine working; only what the RULES refuse counts here.
+    private const int ActionsInATurn = 6;
+
+    private static CombatantId? FirstEnemy(InteractiveCombat combat) =>
+        combat.State.Combatants
+            .FirstOrDefault(c => c.Id != combat.HeroId && c.IsAlive && c.TeamId == StandardCombatIds.EnemyTeam)?.Id;
+
+    // The first of the hero's actions that can be used now, while this turn's budget of actions lasts.
+    private static CardDefinitionId? UsableAction(
+        InteractiveCombat combat, ref (int Round, int Turn) turn, ref int used)
+    {
+        var now = (combat.State.CurrentRound, combat.State.CurrentTurn);
+        if (turn != now)
+        {
+            turn = now;
+            used = 0;
+        }
+        if (used >= ActionsInATurn)
+            return null;
+        var enemy = FirstEnemy(combat);
+        foreach (var action in combat.Actions)
+            if (combat.CanUse(action, enemy))
+                return action;
+        return null;
+    }
+
     public static bool Refused(InteractiveCombat? combat, int stepsBefore)
     {
         if (combat is null)

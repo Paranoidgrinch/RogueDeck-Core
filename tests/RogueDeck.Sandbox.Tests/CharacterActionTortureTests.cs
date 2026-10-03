@@ -158,4 +158,19 @@ public class CharacterActionTortureTests
         var enemy = back.State.Combatants.First(c => c.Id != back.HeroId).Id;
         Assert.True(back.CanUse(new CardDefinitionId("brew"), enemy));
     }
+
+    // THE PLANNER KNOWS THE ACTIONS (plan C7): with three Energy, three jabs are 6 damage; setting two cards
+    // aside for free and brewing them is 20, plus two jabs. A search that only played cards would never find it.
+    [Fact]
+    public void The_planner_finds_the_brew_when_it_is_the_better_turn()
+    {
+        using var play = Start(Witchy());
+        var fight = new RogueDeck.Bot.FightPlanner(horizon: 1, beam: 8, perTurn: 400, turnCap: 1)
+            .Play(play.CombatDriver!.Current!);
+        var first = Assert.Single(fight.Lines);
+        // Two set aside, then the brew (setting more aside afterwards is free here, and the search may well do it).
+        var brew = first.IndexOf("!brew", StringComparison.Ordinal);
+        Assert.True(brew > 0, first);
+        Assert.Equal(2, first[..brew].Split("!stash").Length - 1);
+    }
 }

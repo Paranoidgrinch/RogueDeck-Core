@@ -234,6 +234,57 @@ public sealed class FightPlanner(int horizon = 5, int beam = 16, int perTurn = 3
                     [.. played, $"{card.DefinitionId.value}{(target is { } at ? $"->{at.value}" : "")}"],
                     ends, seen);
             }
+        // THE HERO'S OWN ACTIONS (a cauldron's "put a card in" and BREW): tried like cards, at every target. An
+        // action that asks which card is answered once per distinct card it offers — which card goes into the
+        // pot is the whole decision — by a chooser pinned on the fork (a fork has nobody sitting at it).
+        foreach (var action in node.Actions)
+            foreach (var target in living.Count == 0 ? [null] : living)
+            {
+                if (!node.CanUse(action, target))
+                    continue;
+                var probe = node.ForkQuiet();
+                var offered = new PinnedCardChooser(null);
+                probe.State.SetCardChooser(offered);
+                probe.UseAction(action, target);
+                var answers = offered.Offered.Count == 0
+                    ? [(CardInstanceId?)null]
+                    : offered.Offered.GroupBy(c => c.DefinitionId).Select(g => (CardInstanceId?)g.First().Id).ToList();
+                foreach (var answer in answers)
+                {
+                    if (ends.Count >= perTurn)
+                        return;
+                    var after = node.ForkQuiet();
+                    _positions++;
+                    after.State.SetCardChooser(new PinnedCardChooser(answer));
+                    var steps = after.Steps.Count;
+                    after.UseAction(action, target);
+                    after.State.SetCardChooser(null);
+                    if (RunBot.Refused(after, steps))
+                        continue;
+                    if (!seen.Add("mid:" + Shape(after)))
+                        continue;
+                    var picked = answer is { } id ? $"[{after.State.GetCardZones(after.HeroId).AllCards.FirstOrDefault(c => c.Id == id)?.DefinitionId.value}]" : "";
+                    Walk(after, depth + 1,
+                        [.. played, $"!{action.value}{picked}{(target is { } at ? $"->{at.value}" : "")}"],
+                        ends, seen);
+                }
+            }
+    }
+
+    // A card chooser for a fork: answers with the pinned card when it is offered (the first offered otherwise),
+    // and remembers what it was offered — so the search can ask "which cards could go here?" and then try each.
+    private sealed class PinnedCardChooser(CardInstanceId? pinned) : ICombatCardChooser
+    {
+        public List<CardInstance> Offered { get; } = [];
+
+        public IReadOnlyList<CardInstanceId> ChooseCards(IReadOnlyList<CardInstance> candidates, int count, string purpose)
+        {
+            Offered.AddRange(candidates);
+            if (candidates.Count == 0)
+                return [];
+            var first = pinned is { } id && candidates.Any(c => c.Id == id) ? id : candidates[0].Id;
+            return [first, .. candidates.Where(c => c.Id != first).Take(Math.Max(0, count - 1)).Select(c => c.Id)];
+        }
     }
 
     // ⚠⚠ TWO COPIES OF THE SAME CARD ARE THE SAME MOVE, AND THE ENGINE'S OWN FINGERPRINT SAYS THEY ARE NOT.
