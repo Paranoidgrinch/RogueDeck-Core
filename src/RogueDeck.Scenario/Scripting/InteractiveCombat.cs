@@ -221,6 +221,11 @@ public sealed class InteractiveCombat
             if (slot.Value is { WasUsed: false })
                 problems.Add($"Action '{actionId}' was not used (unaffordable or not allowed now).");
         }
+        catch (CombatPromptParkedException)
+        {
+            // The action asked a question ("which card goes into the pot?"): the replay parks here, and a question
+            // is not a problem. Recorded as one, it reached the player as an error toast on every such press.
+        }
         catch (Exception ex)
         {
             // As PlayCard: a step problem, not a torn-down session — and a prompt the action raised parks the
@@ -281,6 +286,10 @@ public sealed class InteractiveCombat
 
             if (slot.Value is { WasPlayed: false })
                 problems.Add($"Card '{cardId}' was not played (unaffordable or rejected by a validator).");
+        }
+        catch (CombatPromptParkedException)
+        {
+            // The card asked a question and the replay parks here — see UseAction.
         }
         catch (Exception ex)
         {

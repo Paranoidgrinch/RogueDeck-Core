@@ -37,7 +37,7 @@ public sealed record OptionPicksEntry(IReadOnlyList<int> Indices) : ReplayEntry;
 
 // Thrown at an unanswered prompt to unwind the replay; the prompt's owner has already published its pending
 // state for the UI. The partially-advanced RunState/combat IS the state at the prompt — exactly what to render.
-public sealed class ReplayParkedException : Exception;
+public sealed class ReplayParkedException : RogueDeck.Scenario.Scripting.CombatPromptParkedException;
 
 // A participant holding per-attempt state (the combat drivers and their card chooser) that must clear before a
 // fresh replay attempt.

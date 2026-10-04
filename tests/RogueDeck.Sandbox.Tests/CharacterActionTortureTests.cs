@@ -136,6 +136,19 @@ public class CharacterActionTortureTests
         Assert.Equal(0, combat.State.GetCardPlayTurnStats(combat.HeroId).CardsPlayedThisTurn);
     }
 
+    // An action that ASKS (which card to set aside) parks the replay, and a question is not a problem: it used to
+    // be recorded as "Step threw … ReplayParkedException", which the game showed as an error toast on every press
+    // of the Witch's pot.
+    [Fact]
+    public void An_action_that_asks_a_question_records_no_problem()
+    {
+        using var play = Start(Witchy());
+        play.CombatDriver!.UseAction(new CardDefinitionId("stash"), null);
+        // Parked at the question — where the game reads the steps for problems to show.
+        Assert.NotNull(play.CombatDriver.PendingCardChoice);
+        Assert.DoesNotContain(play.CombatDriver.Current!.Steps, step => step.HasProblems);
+    }
+
     // An action is not a card played, so a rule about CARDS does not price it: "every card you play costs 1 more"
     // (Burdened) leaves the pot alone, while a discount aimed at the action by its tag ("the first ingredient each
     // turn is free") still reaches it. Player report 2026-10-04: under Burdened the free ingredient cost 1 and the
