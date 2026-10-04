@@ -104,4 +104,20 @@ public class CharacterContentTests
             Assert.All(pool.Generate(Run(Roster(), "mage", seed)), o => Assert.DoesNotContain("knight", o.Id));
         }
     }
+
+    // "Only for her": a requirement that reads who is playing — a run from before the roster counts as the first.
+    [Fact]
+    public void A_requirement_can_ask_who_is_playing_and_survives_the_document()
+    {
+        var mage = RunExpr.CharacterIs("mage");
+        Assert.True(mage.Evaluate(new RunEvalContext(Run(Roster(), "mage"))));
+        Assert.False(mage.Evaluate(new RunEvalContext(Run(Roster(), "knight"))));
+        Assert.True(RunExpr.CharacterIs("knight").Evaluate(new RunEvalContext(Run(Roster(), null))));
+
+        var choice = new EventChoice("stall", [], Requirement: mage);
+        var options = RunJson.CreateOptions(indented: false);
+        var back = System.Text.Json.JsonSerializer.Deserialize<EventChoice>(
+            System.Text.Json.JsonSerializer.Serialize(choice, options), options)!;
+        Assert.Equal("mage", Assert.IsType<CharacterIsExpression>(back.Requirement).CharacterId);
+    }
 }

@@ -121,6 +121,20 @@ public sealed class FlagSetExpression : IRunExpression<bool>
     public bool Evaluate(RunEvalContext context) => context.Run.HasFlag(Flag);
 }
 
+// Whether the run is played as this character (CharacterContent.Of: the one it recorded, or the roster's first for
+// a run from before) — what lets one authored stall, door or line say "only for her".
+public sealed class CharacterIsExpression : IRunExpression<bool>
+{
+    public string CharacterId { get; }
+    public CharacterIsExpression(string characterId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(characterId);
+        CharacterId = characterId;
+    }
+    public bool Evaluate(RunEvalContext context) =>
+        string.Equals(CharacterContent.Of(context.Run), CharacterId, StringComparison.Ordinal);
+}
+
 // Reads an int field off the triggering event. Only meaningful while an event of the expected type is in
 // context (relic dispatch); evaluating it outside that scope is an author error and throws.
 public sealed class EventFieldExpression<TEvent> : IRunExpression<int>
@@ -619,6 +633,7 @@ public static class RunExpr
 
     // True while the run holds the flag. `Counter` above reads a counter's value for numeric conditions.
     public static IRunExpression<bool> Flag(RunFlagId flag) => new FlagSetExpression(flag);
+    public static IRunExpression<bool> CharacterIs(string characterId) => new CharacterIsExpression(characterId);
 
     public static IRunExpression<bool> Equal(IRunExpression<int> l, IRunExpression<int> r) =>
         new RunComparisonExpression(l, RunComparisonOperator.Equal, r);

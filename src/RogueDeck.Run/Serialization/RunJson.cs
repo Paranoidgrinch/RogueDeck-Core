@@ -190,6 +190,7 @@ public static class RunJson
          .Register("or", typeof(OrExpression))
          .Register("not", typeof(NotExpression))
          .Register("flag", typeof(FlagSetExpression))
+         .Register("characterIs", typeof(CharacterIsExpression))
          .Register("card.hasTag", typeof(CardHasTagExpression))
          .Register("card.isKind", typeof(CardIsKindExpression))
          .Register("event.bool", typeof(EventBoolValueExpression))
