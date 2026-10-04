@@ -130,7 +130,8 @@ internal static class DeclarativePassiveModifierEngine
         int amount,
         StatusDefinitionId? appliesToStatusId = null,
         ElementId? damageElement = null,
-        CardDefinitionId? damageSourceCardId = null)
+        CardDefinitionId? damageSourceCardId = null,
+        bool onlyCardTagged = false)
     {
         // Legacy bespoke modifiers all no-op at non-positive amounts; preserve that.
         if (amount <= 0)
@@ -165,6 +166,8 @@ internal static class DeclarativePassiveModifierEngine
                 // what "from attacks" means; in the cost pipeline it is what "the first Deed you play each
                 // turn costs 1 less" means.
                 if (spec.RestrictSourceCardTag is { } specTag && !SourceCardHasTag(registry, damageSourceCardId, specTag))
+                    continue;
+                if (onlyCardTagged && spec.RestrictSourceCardTag is null)
                     continue;
                 applicable.Add((spec.Priority, group.Key.value, i, spec, totalStacks));
             }
@@ -270,6 +273,10 @@ public sealed class DeclarativePassiveCostModifier : ICardCostModifier
     public string ModifierId => "standard.declarative_card_cost";
     public int Priority => 1000;
 
+    // …but for an action only the specs restricted to a card tag apply: "the first ingredient each turn costs
+    // nothing" names the action's tag; "every card you play costs 1 more" names no tag and means cards.
+    public bool PricesActions => true;
+
     public int ModifyCostAmount(CardCostModificationContext context, int currentAmount)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -277,6 +284,7 @@ public sealed class DeclarativePassiveCostModifier : ICardCostModifier
         // cards of that kind — "the first Deed you play each turn costs 1 less".
         return DeclarativePassiveModifierEngine.Apply(
             context.Combat, context.Registry, context.Source, PassiveModifierPipeline.CardCost,
-            damageKind: null, currentAmount, damageSourceCardId: context.Card.Id);
+            damageKind: null, currentAmount, damageSourceCardId: context.Card.Id,
+            onlyCardTagged: context.Card.IsAction);
     }
 }

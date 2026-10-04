@@ -136,6 +136,51 @@ public class CharacterActionTortureTests
         Assert.Equal(0, combat.State.GetCardPlayTurnStats(combat.HeroId).CardsPlayedThisTurn);
     }
 
+    // An action is not a card played, so a rule about CARDS does not price it: "every card you play costs 1 more"
+    // (Burdened) leaves the pot alone, while a discount aimed at the action by its tag ("the first ingredient each
+    // turn is free") still reaches it. Player report 2026-10-04: under Burdened the free ingredient cost 1 and the
+    // pot greyed out with no Energy left.
+    [Fact]
+    public void A_tax_on_cards_does_not_reach_an_action_but_a_discount_aimed_at_it_does()
+    {
+        var blueprint = Witchy();
+        var tagged = blueprint.Cards.Select(c => c.Id == "brew" ? c with { Tags = [new TagId("brew_action")] } : c).ToList();
+        CombatStatuses(blueprint, tagged, out var taxed);
+        using var play = Start(taxed);
+        var combat = play.CombatDriver!.Current!;
+        var enemy = combat.State.Combatants.First(c => c.Id != combat.HeroId).Id;
+
+        // Brew is printed at 1: the tax (+1, any card) is not its business, the discount (−1, brew_action) is.
+        Assert.Equal(0, combat.ActionCost(new CardDefinitionId("brew"), enemy).Sum(c => c.Amount));
+        // A card still pays the tax: jab is printed at 1 and costs 2.
+        play.CombatDriver!.PlayCard(combat.Hand[0].Id, enemy);
+        Assert.Equal(1, play.CombatDriver!.Current!.HeroEnergy);
+    }
+
+    private static void CombatStatuses(RunBlueprint blueprint, IReadOnlyList<CardData> cards, out RunBlueprint taxed) =>
+        taxed = blueprint with
+        {
+            Cards = cards,
+            Start = blueprint.Start with
+            {
+                CombatStatuses = [.. blueprint.Start.CombatStatuses,
+                    new StartingStatusSpec(new StatusDefinitionId("tax"), 1),
+                    new StartingStatusSpec(new StatusDefinitionId("discount"), 1)],
+            },
+            Statuses = [.. blueprint.Statuses,
+                new StatusData
+                {
+                    Id = "tax", NameKey = "Tax", UsesStacks = true,
+                    PassiveModifiers = [new PassiveModifierData(PassiveModifierPipeline.CardCost, PassiveModifierOperation.AddFlat, 1, RestrictDamageKind: null)],
+                },
+                new StatusData
+                {
+                    Id = "discount", NameKey = "Discount", UsesStacks = true,
+                    PassiveModifiers = [new PassiveModifierData(PassiveModifierPipeline.CardCost, PassiveModifierOperation.AddFlat, -1,
+                        RestrictDamageKind: null, RestrictSourceCardTag: "brew_action")],
+                }],
+        };
+
     [Fact]
     public void A_fight_with_cards_set_aside_by_an_action_comes_back_from_a_save_the_same()
     {

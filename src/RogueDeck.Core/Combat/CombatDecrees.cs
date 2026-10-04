@@ -139,6 +139,11 @@ public sealed class DecreeCardPlayValidator : ICardPlayValidator
     {
         ArgumentNullException.ThrowIfNull(context);
 
+        // A hero's action is not a card played (the Witch's pot is "neither a card played", canon §2.3), so a decree
+        // about how many works a turn may hold, or what may follow what, does not refuse it.
+        if (context.Card.IsAction)
+            return;
+
         var registry = context.Registry;
         var source = context.Source;
 

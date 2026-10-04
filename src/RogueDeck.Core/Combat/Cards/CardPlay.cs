@@ -468,6 +468,8 @@ public sealed class CombatCardPlayProcessor
 
             foreach (var modifier in registry.GetCardCostModifiers())
             {
+                if (card.IsAction && !modifier.PricesActions)
+                    continue;
                 var before = modifiedAmount;
                 var after = Math.Max(0, modifier.ModifyCostAmount(context, before));
                 if (tracing && after != before)
@@ -495,7 +497,8 @@ public sealed class CombatCardPlayProcessor
         // raise — the floor has to be able to invent the entry. It is also therefore the LAST word: if a
         // decree made this card free and another forbids free cards, the fight is under both and the card
         // costs the floor. Enlil's Director exists to keep that pair from being spoken together.
-        foreach (var spec in CombatDecrees.InForce(registry, source, CombatRule.MinimumCardCost))
+        // A decree about WORKS does not reach a hero's action: it is not a card played (ICardCostModifier.PricesActions).
+        foreach (var spec in card.IsAction ? [] : CombatDecrees.InForce(registry, source, CombatRule.MinimumCardCost))
         {
             var resource = spec.ResourceOrEnergy;
             var paid = totalCosts.TryGetValue(resource, out var already) ? already : 0;
