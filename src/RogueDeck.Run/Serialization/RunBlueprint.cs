@@ -133,16 +133,26 @@ public sealed record RunBlueprint(
     public RunBlueprint ForTutorial()
     {
         var tutorial = Tutorial ?? throw new InvalidOperationException("This blueprint ships no tutorial.");
-        return this with
+        return (this with
         {
             Map = tutorial.Map,
             Acts = null,
             MapGeneration = null,
             StrategicMapGeneration = null,
-            Start = tutorial.Start ?? ResolveStart(),
-            Characters = [],
             Tutorial = null,
-        };
+        }).AsLoneFighter(tutorial.Start ?? ResolveStart());
+    }
+
+    // ONE STATED FIGHTER — a tutorial, a probe, a ring: the run starts from exactly this loadout. The roster would
+    // override it (RunSetup reads the pick's own start), so the roster becomes that one character carrying this
+    // start: the named one, or the roster's first. It is not dropped, because WHO is playing is what a reward, a
+    // shelf or a stall written for one character asks (CharacterContent) — a run that names nobody is offered
+    // nothing written for anybody. A blueprint without a roster just takes the start.
+    public RunBlueprint AsLoneFighter(RunStart start, string? characterId = null)
+    {
+        ArgumentNullException.ThrowIfNull(start);
+        var fighter = Characters.FirstOrDefault(c => c.Id == characterId) ?? Characters.FirstOrDefault();
+        return this with { Start = start, Characters = fighter is null ? [] : [fighter with { Start = start }] };
     }
 
     public RunStart ResolveStart(string? characterId = null)

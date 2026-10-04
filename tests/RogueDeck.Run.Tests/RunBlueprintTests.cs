@@ -597,5 +597,20 @@ public class RunBlueprintTests
         Assert.Equal(90, run.Health.Max);
         Assert.Equal("t-fight", run.Map.Nodes.Single().Id.Value);
         Assert.Throws<InvalidOperationException>(() => Demo().ForTutorial());
+
+        // With a roster, the tutorial is played by its first character carrying the tutorial's loadout — it does
+        // not lose WHO is playing, which is what an offer written for one character asks.
+        var rostered = (blueprint with
+        {
+            Characters =
+            [
+                new RunCharacter("knight", new RunStart { MaxHealth = 50, StartingHealth = 50 }, Exclusive: ["shield"]),
+                new RunCharacter("mage", new RunStart { MaxHealth = 40, StartingHealth = 40 }),
+            ],
+        }).ForTutorial();
+        var learner = rostered.CreateInitialRun(new RunId("t"), 3);
+        Assert.Equal("knight", learner.CharacterId);
+        Assert.Equal(90, learner.Health.Max);
+        Assert.Equal(["shield"], rostered.Characters.Single().Exclusive);
     }
 }
