@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using RogueDeck.Core.Combat;
 using RogueDeck.Run;
 using RogueDeck.Sandbox.Run;
@@ -529,12 +530,20 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
 
     // Rebuild every status' serialized triggers into live triggered-effect definitions (data→engine, via
     // StatusDataRebuild), ready to register into a combat. The per-status index keeps definition ids unique.
+    //
+    // ⚠ CACHED PER STATUS, because this is the hot path of every fight start, every resume and every restore: a
+    // game of ~1200 statuses carries ~1500 trigger programs, deserialized from JSON each time, and that was most
+    // of what starting a fight cost. A StatusData is an immutable record — an edit makes a new one — so a status
+    // keyed by its own instance can never be handed another version's triggers, and the rebuilt definitions are
+    // data the engine only reads (a run already shares them across every fight it holds).
+    private static readonly ConditionalWeakTable<StatusData, IReadOnlyList<ITriggeredEffectDefinition>> RebuiltTriggers = new();
+
     private static IReadOnlyList<ITriggeredEffectDefinition> RebuildStatusTriggers(IReadOnlyList<StatusData> statuses)
     {
         var programs = new List<ITriggeredEffectDefinition>();
         foreach (var status in statuses)
-            for (var i = 0; i < status.Triggers.Count; i++)
-                programs.Add(StatusDataRebuild.RebuildTrigger(status.Id, i, status.Triggers[i]));
+            programs.AddRange(RebuiltTriggers.GetValue(status, static status =>
+                [.. status.Triggers.Select((trigger, i) => StatusDataRebuild.RebuildTrigger(status.Id, i, trigger))]));
         return programs;
     }
 

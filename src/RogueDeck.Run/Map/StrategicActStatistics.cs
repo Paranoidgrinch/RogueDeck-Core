@@ -139,7 +139,9 @@ public static class StrategicActStatistics
     // Generate `seeds` consecutive acts from one spec and report what they came out like. Deliberately a plain
     // loop and not a parallel one: the generator is deterministic per seed, so the only thing threads would buy
     // is a report whose extremes depend on which thread won a race.
-    public static ActStatistics Measure(StrategicActSpec spec, int firstSeed = 1, int seeds = 1000)
+    // `parallelism` caps the threads the generation may use (-1: the machine). A test passes 1 — inside a test
+    // suite the other tests are the parallelism, and a test that takes the whole machine slows all of them.
+    public static ActStatistics Measure(StrategicActSpec spec, int firstSeed = 1, int seeds = 1000, int parallelism = -1)
     {
         ArgumentNullException.ThrowIfNull(spec);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(seeds);
@@ -175,16 +177,29 @@ public static class StrategicActStatistics
                 .Append(MapNodeKind.Boss));
         var byKind = kinds.ToDictionary(kind => kind, kind => new ActMeasure(kind.ToString()));
 
-        for (var index = 0; index < seeds; index++)
+        // THE ACTS ARE GENERATED IN PARALLEL AND MEASURED IN ORDER. Generation is a pure function of (spec, seed),
+        // so the thousand of them can share the machine; the measures are then folded in seed order, so the report
+        // — every "least on seed N" — is the one a single thread would have written. (A thousand acts of act IV
+        // took five minutes on one core, the longest strand left in the content suite.)
+        var generated = new (GeneratedAct? Act, StrategicMapGenerationException? Refusal)[seeds];
+        Parallel.For(0, seeds, new ParallelOptions { MaxDegreeOfParallelism = parallelism }, index =>
         {
-            var seed = firstSeed + index;
-            GeneratedAct act;
             try
             {
-                act = StrategicMapGenerator.Generate(spec, seed);
+                generated[index] = (StrategicMapGenerator.Generate(spec, firstSeed + index), null);
             }
             catch (StrategicMapGenerationException refusal)
             {
+                generated[index] = (null, refusal);
+            }
+        });
+
+        for (var index = 0; index < seeds; index++)
+        {
+            var seed = firstSeed + index;
+            if (generated[index] is not { Act: { } act })
+            {
+                var refusal = generated[index].Refusal!;
                 refused.Add(new RefusedAct(
                     seed, refusal.Attempts, refusal.Best?.Defects,
                     refusal.Impossible.Count > 0
