@@ -60,14 +60,49 @@ public sealed class CombatPolymorphicConverter<TBase> : JsonConverter<TBase>
         _contextType = contextType;
     }
 
+    // Reads the envelope straight off the reader. It used to parse the node into a JsonDocument, copy its value
+    // out as a string and deserialize that string — once per nesting level, so a deep program was re-parsed as
+    // many times as it was deep, and loading a run's ~1500 status triggers spent most of a second doing it.
+    // A converter is always handed its whole value buffered, so a COPY of the reader can look ahead for the
+    // kind first: the envelope stays order-free, as it was with the document.
     public override TBase Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        using var document = JsonDocument.ParseValue(ref reader);
-        var root = document.RootElement;
-        var kind = root.GetProperty("kind").GetString()
-            ?? throw new JsonException("Combat json node is missing its 'kind'.");
-        var type = _registry.Resolve(kind, _contextType);
-        return (TBase)JsonSerializer.Deserialize(root.GetProperty("value").GetRawText(), type, options)!;
+        if (reader.TokenType != JsonTokenType.StartObject)
+            throw new JsonException("Combat json node must be an object.");
+        var type = _registry.Resolve(ReadKind(reader), _contextType);
+
+        TBase? value = null;
+        var sawValue = false;
+        while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
+        {
+            var isValue = reader.ValueTextEquals("value");
+            reader.Read();
+            if (isValue)
+            {
+                value = (TBase?)JsonSerializer.Deserialize(ref reader, type, options);
+                sawValue = true;
+            }
+            else
+            {
+                reader.Skip();
+            }
+        }
+        return sawValue
+            ? value!
+            : throw new JsonException("Combat json node is missing its 'value'.");
+    }
+
+    private static string ReadKind(Utf8JsonReader probe)
+    {
+        while (probe.Read() && probe.TokenType != JsonTokenType.EndObject)
+        {
+            var isKind = probe.ValueTextEquals("kind");
+            probe.Read();
+            if (isKind)
+                return probe.GetString() ?? throw new JsonException("Combat json node is missing its 'kind'.");
+            probe.Skip();
+        }
+        throw new JsonException("Combat json node is missing its 'kind'.");
     }
 
     public override void Write(Utf8JsonWriter writer, TBase value, JsonSerializerOptions options)
@@ -93,10 +128,33 @@ public static class CombatJson
     }
 
     // Options for authoring/serializing effect trees of a specific context (e.g. CardPlayContext for cards).
+    //
+    // ⚠ WITHOUT A REGISTRY THIS HANDS OUT ONE SHARED, READ-ONLY INSTANCE PER CONTEXT. System.Text.Json keeps
+    // its type metadata on the options instance, so a fresh one per call re-reflects every node type it meets.
+    // Building a run's content deserializes ~1500 status trigger programs, each through new options, and that
+    // warm-up was 1.6 of the 1.7 seconds every fight start cost. The converters only read their registry, so
+    // the instance is safe to share across threads; it is frozen so a caller that tries to add to it fails
+    // loudly instead of changing everyone else's options.
     public static JsonSerializerOptions CreateOptions<TContext>(CombatJsonRegistry? registry = null)
+        where TContext : class =>
+        registry is null ? SharedOptions<TContext>.Instance : BuildOptions<TContext>(registry);
+
+    private static class SharedOptions<TContext>
         where TContext : class
     {
-        registry ??= DefaultRegistry();
+        public static readonly JsonSerializerOptions Instance = Frozen();
+
+        private static JsonSerializerOptions Frozen()
+        {
+            var options = BuildOptions<TContext>(DefaultRegistry());
+            options.MakeReadOnly();
+            return options;
+        }
+    }
+
+    private static JsonSerializerOptions BuildOptions<TContext>(CombatJsonRegistry registry)
+        where TContext : class
+    {
         var options = new JsonSerializerOptions { WriteIndented = true };
         options.Converters.Add(new JsonStringEnumConverter());
         WriteChildrenOnlyWhereTheyAreRead(options);

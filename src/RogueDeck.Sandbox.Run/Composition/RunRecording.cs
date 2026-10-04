@@ -106,6 +106,7 @@ public static class RunRecordingJson
 //   i                     continue past an interlude
 //   z <consumable>        use a consumable between rooms
 //   c <card> [target] [member]   play a card in a fight
+//   a <action> [target] [member] use one of the hero's own actions in a fight (the Witch's pot, BREW)
 //   t [member]            end the turn
 //   u <consumable>        use a consumable in a fight
 //   k <card> <card> …     in-combat card picks
@@ -121,6 +122,7 @@ public static class RunAnswerCodec
         InterludeContinueEntry => ["i"],
         ParkConsumableEntry z => ["z", z.Instance.Value],
         CombatPlayEntry c => Trim(["c", c.Card.value, c.Target?.value ?? "", c.Member?.value ?? ""]),
+        CombatActionEntry a => Trim(["a", a.Action.value, a.Target?.value ?? "", a.Member?.value ?? ""]),
         CombatEndTurnEntry t => Trim(["t", t.Member?.value ?? ""]),
         CombatConsumableEntry u => ["u", u.Instance.Value],
         CardPicksEntry k => ["k", .. k.Picks.Select(id => id.value)],
@@ -143,6 +145,7 @@ public static class RunAnswerCodec
             "i" => new InterludeContinueEntry(),
             "z" => new ParkConsumableEntry(new ConsumableInstanceId(Arg(1))),
             "c" => new CombatPlayEntry(Combatant(3), new CardInstanceId(Arg(1)), Combatant(2)),
+            "a" => new CombatActionEntry(Combatant(3), new CardDefinitionId(Arg(1)), Combatant(2)),
             "t" => new CombatEndTurnEntry(Combatant(1)),
             "u" => new CombatConsumableEntry(new ConsumableInstanceId(Arg(1))),
             "k" => new CardPicksEntry([.. answer.Skip(1).Select(id => new CardInstanceId(id))]),

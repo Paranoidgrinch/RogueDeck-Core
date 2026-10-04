@@ -187,6 +187,8 @@ public class RunRecordingTests
             new CombatPlayEntry(null, new RogueDeck.Core.Combat.CardInstanceId("card-6"), null),
             new CombatEndTurnEntry(null),
             new CombatEndTurnEntry(new RogueDeck.Core.Combat.CombatantId("m2")),
+            new CombatActionEntry(null, new RogueDeck.Core.Combat.CardDefinitionId("cauldron_add"), new RogueDeck.Core.Combat.CombatantId("enemy-1")),
+            new CombatActionEntry(new RogueDeck.Core.Combat.CombatantId("m2"), new RogueDeck.Core.Combat.CardDefinitionId("cauldron_brew"), null),
             new CombatConsumableEntry(new ConsumableInstanceId("potion-2")),
             new CardPicksEntry([new RogueDeck.Core.Combat.CardInstanceId("card-1"), new RogueDeck.Core.Combat.CardInstanceId("card-2")]),
             new OptionPicksEntry([1]),
@@ -198,6 +200,15 @@ public class RunRecordingTests
             Assert.Equal(Describe(entry), Describe(back));
         }
         Assert.Equal(["t"], RunAnswerCodec.Encode(new CombatEndTurnEntry(null)));
+
+        // EVERY kind there is, not every kind someone remembered: the Witch's actions (CombatActionEntry) were
+        // added to the script and not to the codec, and every press of "Into the pot" threw inside the recorder —
+        // after the action had happened, so the fight went on, but the save after it was skipped and the
+        // recording lost the answer. A kind with no entry in the list above fails here.
+        var kinds = typeof(ReplayEntry).Assembly.GetTypes()
+            .Where(t => t.IsSubclassOf(typeof(ReplayEntry)) && !t.IsAbstract)
+            .Select(t => t.Name).Order().ToList();
+        Assert.Equal(kinds, entries.Select(e => e.GetType().Name).Distinct().Order().ToList());
     }
 
     // Records compare their list fields by reference; compare what they say instead.

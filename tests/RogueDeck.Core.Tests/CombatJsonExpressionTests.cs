@@ -142,4 +142,36 @@ public class CombatJsonExpressionTests
             new ContextValueExpression<CardPlayContext>(_ => 0);
         Assert.Throws<NotSupportedException>(() => CombatJson.ToJson(escape, Options));
     }
+
+    // The envelope is read straight off the reader now (it used to go through a JsonDocument), and it must stay
+    // order-free: a hand-written document that names the value before the kind still loads, and stray fields
+    // are skipped rather than taken for the payload.
+    [Fact]
+    public void An_envelope_loads_whichever_field_comes_first()
+    {
+        const string json = """
+            {"value":{"Left":{"value":{"Value":2},"kind":"const"},
+                      "Right":{"note":"ignored","kind":"const","value":{"Value":3}}},
+             "kind":"add"}
+            """;
+
+        var add = Assert.IsType<AddExpression<CardPlayContext>>(
+            CombatJson.FromJson<ICombatExpression<CardPlayContext, int>>(json, Options));
+        Assert.Equal(2, Assert.IsType<ConstantExpression<CardPlayContext>>(add.Left).Value);
+        Assert.Equal(3, Assert.IsType<ConstantExpression<CardPlayContext>>(add.Right).Value);
+        Assert.Throws<JsonException>(() =>
+            CombatJson.FromJson<ICombatExpression<CardPlayContext, int>>("""{"kind":"const"}""", Options));
+    }
+
+    // The default options are ONE shared instance per context (a fresh one per call re-reflected every node
+    // type and was most of a fight start's cost). Shared means frozen: adding to it must fail, not quietly change
+    // the options every other caller holds.
+    [Fact]
+    public void The_default_options_are_shared_and_cannot_be_changed()
+    {
+        Assert.Same(Options, CombatJson.CreateOptions<CardPlayContext>());
+        Assert.Throws<InvalidOperationException>(() => Options.Converters.Add(
+            new System.Text.Json.Serialization.JsonStringEnumConverter()));
+        Assert.NotSame(Options, CombatJson.CreateOptions<CardPlayContext>(CombatJson.DefaultRegistry()));
+    }
 }
