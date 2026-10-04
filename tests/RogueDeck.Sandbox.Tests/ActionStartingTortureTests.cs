@@ -42,7 +42,34 @@ public class ActionStartingTortureTests
         };
     }
 
-    private static RunBlueprint Duel(int illLuck)
+    // "Bracing: before its next action, the one it is aimed at gains 7 Block" — taken in TWO steps (the brace is
+    // spent first, then the Block given), the shape every rule with an after-the-roll answer has (the Witch's
+    // Crossed Fingers). The action must wait for the whole rule, not only for its first step.
+    private static StatusData Bracing()
+    {
+        var self = CombatantTargetSelectors.Source;
+        var program = new EffectProgram<ActionStartingTriggeredEffectContext>(
+            new CausalSequenceEffectNode<ActionStartingTriggeredEffectContext>(
+            [
+                new RemoveStatusNode<ActionStartingTriggeredEffectContext>(self, new StatusDefinitionId("bracing")),
+                new ForEachTargetEffectNode<ActionStartingTriggeredEffectContext>(
+                    CombatantTargetSelectors.AllEnemiesOfSource,
+                    new GainBlockNode<ActionStartingTriggeredEffectContext>(
+                        CombatantTargetSelectors.IterationTarget,
+                        new ConstantExpression<ActionStartingTriggeredEffectContext>(7))),
+            ]));
+        return new StatusData
+        {
+            Id = "bracing",
+            NameKey = "Bracing",
+            UsesStacks = true,
+            Polarity = StatusPolarity.Debuff,
+            Triggers = [new StatusTriggerData(TriggerEvent.ActionStarting.ToString(),
+                JsonSerializer.SerializeToElement(program, CombatJson.CreateOptions<ActionStartingTriggeredEffectContext>()))],
+        };
+    }
+
+    private static RunBlueprint Duel(int illLuck, bool bracing = false)
     {
         var bite = new EnemyActionData
         {
@@ -54,7 +81,11 @@ public class ActionStartingTortureTests
         };
         var duel = new EncounterDefinition(new EncounterId("duel"),
             [new EncounterEnemy("dog", 100, [new EnemyActionDefinitionId("bite")], DisplayName: "Dog",
-                StartingStatuses: illLuck > 0 ? [new StartingStatusSpec(new StatusDefinitionId("ill_luck"), illLuck)] : null)],
+                StartingStatuses:
+                [
+                    .. illLuck > 0 ? [new StartingStatusSpec(new StatusDefinitionId("ill_luck"), illLuck)] : Array.Empty<StartingStatusSpec>(),
+                    .. bracing ? [new StartingStatusSpec(new StatusDefinitionId("bracing"), 1)] : Array.Empty<StartingStatusSpec>(),
+                ])],
             [new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3)]);
         var strike = new CardData
         {
@@ -68,16 +99,16 @@ public class ActionStartingTortureTests
             new Dictionary<string, EventScript>(), [duel], [strike], [bite],
             new RunMap([new Node(new NodeId("duel"), StandardRunIds.CombatNode, new EncounterRef(new EncounterId("duel")))]))
         {
-            Statuses = [IllLuck()],
+            Statuses = [IllLuck(), Bracing()],
             Start = new RunStart { HeroName = "Witch", MaxHealth = 50, StartingHealth = 50 },
         };
     }
 
     // One enemy turn: did the bite land, and is the ill luck gone afterwards?
-    private static (int HeroLost, bool IllLuckLeft) OneEnemyTurn(int illLuck, int seed)
+    private static (int HeroLost, bool IllLuckLeft) OneEnemyTurn(int illLuck, int seed, bool bracing = false)
     {
         using var play = new RunPlayback(() => { });
-        play.Start(Duel(illLuck), seed, interactive: true);
+        play.Start(Duel(illLuck, bracing), seed, interactive: true);
         while (play.Session!.IsAwaitingInterlude)
             play.Session.Continue();
         var before = play.CombatDriver!.Current!.HeroHealth;
@@ -102,5 +133,13 @@ public class ActionStartingTortureTests
         Assert.InRange(failed, 70, 130);
         // …and it is a roll of the fight's own stream, not of the clock: the same seed, the same answer.
         Assert.Equal(OneEnemyTurn(illLuck: 10, seed: 42), OneEnemyTurn(illLuck: 10, seed: 42));
+    }
+
+    // The announcement's rules run TO THE END before the action is taken: a two-step rule's Block is up before the
+    // bite. (Until 2026-10-04 the action ran after a rule's first step, and the Block came after the bite.)
+    [Fact]
+    public void A_rule_that_takes_several_steps_finishes_before_the_action()
+    {
+        Assert.Equal((0, false), OneEnemyTurn(illLuck: 0, seed: 1, bracing: true));
     }
 }

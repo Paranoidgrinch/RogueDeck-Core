@@ -25,11 +25,24 @@ public sealed class ExecuteEnemyActionEffectHandler
         // ANNOUNCED FIRST, when something on the actor listens (ActionStartingCombatEvent): the rules that heard
         // it run to the end, and only then is the action taken — or, if one of them marked it to fail, spent for
         // nothing. An actor nobody listens to acts at once, exactly as before.
+        //
+        // "To the end" means every program the announcement started, not only its first step: a rule written as
+        // a causal sequence hands each later step to the queue as it goes, and an action waiting only for the
+        // queue to empty once would be taken between two steps of it. So the action waits until no program that
+        // was not already running when it was announced is still running.
         if (Listens(combat, registry, actor))
         {
+            var alreadyRunning = combat.ActiveProgramExecutionIds();
             combat.EnqueueEvent(new ActionStartingCombatEvent(actor.Id, action.Id, request.TargetCombatantId));
-            combat.EnqueueContinuation(c =>
+            combat.EnqueueContinuation(WhenSettled);
+
+            void WhenSettled(CombatState c)
             {
+                if (c.ActiveProgramExecutionIds().Any(id => !alreadyRunning.Contains(id)))
+                {
+                    c.EnqueueContinuation(WhenSettled);
+                    return;
+                }
                 if (!c.TryGetCombatant(request.ActorId, out var still) || !still!.IsAlive)
                     return;
                 if (still.Statuses.Any(s => s.DefinitionId == StandardCombatIds.ActionFailsStatus))
@@ -44,7 +57,7 @@ public sealed class ExecuteEnemyActionEffectHandler
                     return;
                 }
                 Act(c, registry, request, still, action);
-            });
+            }
             return;
         }
 

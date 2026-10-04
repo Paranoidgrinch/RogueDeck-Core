@@ -375,6 +375,10 @@ public sealed class CombatState
     internal void UnregisterActiveProgramFrame(IEffectProgramExecutionFrame frame) =>
         _activeProgramFrames.Remove(frame);
 
+    // The programs running right now — what something that must wait for "everything this started" compares against.
+    internal HashSet<EffectProgramExecutionId> ActiveProgramExecutionIds() =>
+        [.. _activeProgramFrames.Select(f => f.ExecutionId)];
+
     public void EnqueueEffect(IEffectRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
