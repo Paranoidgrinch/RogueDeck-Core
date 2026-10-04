@@ -613,4 +613,38 @@ public class RunBlueprintTests
         Assert.Equal(90, learner.Health.Max);
         Assert.Equal(["shield"], rostered.Characters.Single().Exclusive);
     }
+
+    // A character may bring its OWN tutorial (the Hedge Witch's cauldron is not the Bureaucrat's paperwork). Named,
+    // it walks that one, as that character, with that loadout; a character without one — or none named — walks the
+    // blueprint's, exactly as before. It survives the file, and a character without one writes no field.
+    [Fact]
+    public void A_character_can_bring_its_own_tutorial_and_is_the_one_who_walks_it()
+    {
+        var shared = new RunMap(new Node[] { new(new NodeId("t-fight"), StandardRunIds.CombatNode, new EncounterRef(GoblinFight)) });
+        var own = new RunMap(new Node[] { new(new NodeId("m-fight"), StandardRunIds.CombatNode, new EncounterRef(GoblinFight)) });
+        var blueprint = Demo() with
+        {
+            Tutorial = new RunTutorial(shared, new RunStart { MaxHealth = 90, StartingHealth = 90 }),
+            Characters =
+            [
+                new RunCharacter("knight", new RunStart { MaxHealth = 50, StartingHealth = 50 }),
+                new RunCharacter("mage", new RunStart { MaxHealth = 40, StartingHealth = 40 },
+                    Tutorial: new RunTutorial(own, new RunStart { MaxHealth = 77, StartingHealth = 77 })),
+            ],
+        };
+        var json = RunJson.ToJson(blueprint, Options);
+        var back = RunJson.FromJson<RunBlueprint>(json, Options);
+        Assert.Single(back.Characters, c => c.Tutorial is not null);
+
+        var mage = back.ForTutorial("mage").CreateInitialRun(new RunId("t"), 3);
+        Assert.Equal("mage", mage.CharacterId);
+        Assert.Equal(77, mage.Health.Max);
+        Assert.Equal("m-fight", mage.Map.Nodes.Single().Id.Value);
+
+        var knight = back.ForTutorial("knight").CreateInitialRun(new RunId("t"), 3);
+        Assert.Equal("knight", knight.CharacterId);
+        Assert.Equal("t-fight", knight.Map.Nodes.Single().Id.Value);
+        Assert.Equal("t-fight", back.ForTutorial().CreateInitialRun(new RunId("t"), 3).Map.Nodes.Single().Id.Value);
+        Assert.True(back.HasTutorialFor("mage") && back.HasTutorialFor("knight"));
+    }
 }

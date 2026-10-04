@@ -130,9 +130,14 @@ public sealed record RunBlueprint(
 
     // This blueprint, walking its tutorial instead of its acts: the same cards, enemies, relics and statuses — the
     // tutorial is not a second game, it is a route through this one. Throws when the blueprint ships none.
-    public RunBlueprint ForTutorial()
+    //
+    // A CHARACTER MAY BRING ITS OWN (RunCharacter.Tutorial): the Hedge Witch's cauldron is not the Bureaucrat's
+    // paperwork, and a lesson walked by the wrong hero teaches the wrong game. `characterId` names who is learning;
+    // a character without a tutorial of its own — or none named — walks the blueprint's, as the roster's first did.
+    public RunBlueprint ForTutorial(string? characterId = null)
     {
-        var tutorial = Tutorial ?? throw new InvalidOperationException("This blueprint ships no tutorial.");
+        var own = Characters.FirstOrDefault(c => c.Id == characterId) is { Tutorial: { } mine } ? mine : null;
+        var tutorial = own ?? Tutorial ?? throw new InvalidOperationException("This blueprint ships no tutorial.");
         return (this with
         {
             Map = tutorial.Map,
@@ -140,8 +145,12 @@ public sealed record RunBlueprint(
             MapGeneration = null,
             StrategicMapGeneration = null,
             Tutorial = null,
-        }).AsLoneFighter(tutorial.Start ?? ResolveStart());
+        }).AsLoneFighter(tutorial.Start ?? ResolveStart(own is null ? null : characterId), own is null ? null : characterId);
     }
+
+    // Whether this character learns from a tutorial of its own (RunCharacter.Tutorial) or the blueprint's.
+    public bool HasTutorialFor(string? characterId) =>
+        Characters.Any(c => c.Id == characterId && c.Tutorial is not null) || Tutorial is not null;
 
     // ONE STATED FIGHTER — a tutorial, a probe, a ring: the run starts from exactly this loadout. The roster would
     // override it (RunSetup reads the pick's own start), so the roster becomes that one character carrying this
@@ -174,11 +183,17 @@ public sealed record RunBlueprint(
 // Exclusive: the card definitions and relics only this character may be OFFERED — as a reward, on a shop shelf, in a
 // transform or a random bundle (CharacterContent). Everything not named by any character is open to all. It filters
 // what a run can be handed, never what it already holds: a card or relic granted by name still arrives.
+//
+// Tutorial: the lesson THIS character is taught with (RunBlueprint.ForTutorial), when it plays differently enough to
+// need its own; null ⇒ the blueprint's tutorial. Kept out of the file when absent.
 public sealed record RunCharacter(
     string Id, RunStart Start, string? UnlockFlag = null,
     [property: System.Text.Json.Serialization.JsonIgnore(
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
-    IReadOnlyList<string>? Exclusive = null);
+    IReadOnlyList<string>? Exclusive = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    RunTutorial? Tutorial = null);
 
 // A tutorial: the authored map it walks and, optionally, the loadout it is walked with (null: the default start).
 public sealed record RunTutorial(RunMap Map, RunStart? Start = null);
