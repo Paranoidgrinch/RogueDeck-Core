@@ -34,7 +34,27 @@ public static class PlayByHand
         {
             var seed = int.Parse(Value("--seed") ?? "1", CultureInfo.InvariantCulture);
             var roster = MetaProgression.AvailableCharacters(blueprint, new InMemoryMetaStore().Load());
-            save = new Save(seed, roster.Count > 0 ? roster[new Random(seed).Next(roster.Count)].Id : null, []);
+            save = new Save(seed, Value("--character")
+                ?? (roster.Count > 0 ? roster[new Random(seed).Next(roster.Count)].Id : null), []);
+        }
+
+        if (args.Contains("--report"))
+        {
+            Console.Write(TextPlay.Report(blueprint, save.Seed, save.Character, MapGenerators.Strategic, save.Answers));
+            return 0;
+        }
+
+        if (args.Contains("--snapshots"))
+        {
+            Console.Write(JsonSerializer.Serialize(TextPlay.Snapshots(blueprint, save.Seed, save.Character,
+                MapGenerators.Strategic, save.Answers, Path.GetFileNameWithoutExtension(savePath))));
+            return 0;
+        }
+
+        if (args.Contains("--decisions"))
+        {
+            Console.Write(TextPlay.Decisions(blueprint, save.Seed, save.Character, MapGenerators.Strategic, save.Answers));
+            return 0;
         }
 
         var fresh = (Value("--do") ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);

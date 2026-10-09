@@ -78,6 +78,20 @@ public sealed class FightPlanner(int horizon = 5, int beam = 16, int perTurn = 3
             clock.Elapsed.TotalSeconds, lines);
     }
 
+    // ONE TURN, for a driver that plays the real fight itself (TextPlay's `f`): what the planner would lay down
+    // this turn, in order — "card->enemy", "!action[card]->enemy" — or nothing when it would just end the turn.
+    public IReadOnlyList<string> PlanTurn(InteractiveCombat now)
+    {
+        ArgumentNullException.ThrowIfNull(now);
+        var heroMax = Math.Max(1, now.State.GetCombatant(now.HeroId).Health.Max);
+        var enemyMax = Math.Max(1, now.State.Combatants
+            .Where(c => c.Id != now.HeroId && c.TeamId == StandardCombatIds.EnemyTeam)
+            .Sum(c => c.Health.Max));
+        if (Plan(now.ForkQuiet(), heroMax, enemyMax) is not { } chosen || chosen.Played == "(nothing)")
+            return [];
+        return chosen.Played.Split(" + ");
+    }
+
     private sealed record Line(InteractiveCombat State, InteractiveCombat? FirstAfter, string? FirstPlayed);
 
     private (InteractiveCombat After, string Played)? Plan(InteractiveCombat from, int heroMax, int enemyMax)
@@ -186,15 +200,15 @@ public sealed class FightPlanner(int horizon = 5, int beam = 16, int perTurn = 3
     {
         var ends = new List<(InteractiveCombat, string)>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        Walk(from, 0, [], ends, seen);
+        Walk(from, 0, [], ends, seen, perTurn);
         return ends;
     }
 
     private void Walk(
         InteractiveCombat node, int depth, IReadOnlyList<string> played,
-        List<(InteractiveCombat, string)> ends, HashSet<string> seen)
+        List<(InteractiveCombat, string)> ends, HashSet<string> seen, int cap)
     {
-        if (ends.Count >= perTurn)
+        if (ends.Count >= cap)
             return;
         var label = played.Count == 0 ? "(nothing)" : string.Join(" + ", played);
         if (node.IsOver)
@@ -216,11 +230,19 @@ public sealed class FightPlanner(int horizon = 5, int beam = 16, int perTurn = 3
             .Where(c => c.Id != node.HeroId && c.IsAlive && c.TeamId == StandardCombatIds.EnemyTeam)
             .Select(c => (CombatantId?)c.Id)
             .ToList();
+        // THE BUDGET IS SHARED OUT AT THE ROOT. Walked depth-first against one budget, the first card's lines used
+        // all of it, and moves enumerated last — the hero's actions (the witch's cauldron) — were never tried at
+        // all. At the root each first move gets an equal share; below it, a line keeps what its first move got.
+        var firstMoves = depth == 0
+            ? Math.Max(1, node.Hand.Select(c => c.DefinitionId).Distinct().Count() * Math.Max(1, living.Count) + node.Actions.Count * Math.Max(1, living.Count))
+            : 0;
+        int Share(int used, int limit) => depth == 0 ? Math.Min(limit, used + Math.Max(1, perTurn / firstMoves)) : limit;
+
         // Two copies of a card are the same move: try each definition once per position.
         foreach (var card in node.Hand.GroupBy(c => c.DefinitionId).Select(g => g.First()).ToList())
             foreach (var target in living.Count == 0 ? [null] : living)
             {
-                if (ends.Count >= perTurn)
+                if (ends.Count >= cap)
                     return;
                 var after = node.ForkQuiet();
                 _positions++;
@@ -232,7 +254,7 @@ public sealed class FightPlanner(int horizon = 5, int beam = 16, int perTurn = 3
                     continue;
                 Walk(after, depth + 1,
                     [.. played, $"{card.DefinitionId.value}{(target is { } at ? $"->{at.value}" : "")}"],
-                    ends, seen);
+                    ends, seen, Share(ends.Count, cap));
             }
         // THE HERO'S OWN ACTIONS (a cauldron's "put a card in" and BREW): tried like cards, at every target. An
         // action that asks which card is answered once per distinct card it offers — which card goes into the
@@ -251,7 +273,7 @@ public sealed class FightPlanner(int horizon = 5, int beam = 16, int perTurn = 3
                     : offered.Offered.GroupBy(c => c.DefinitionId).Select(g => (CardInstanceId?)g.First().Id).ToList();
                 foreach (var answer in answers)
                 {
-                    if (ends.Count >= perTurn)
+                    if (ends.Count >= cap)
                         return;
                     var after = node.ForkQuiet();
                     _positions++;
@@ -266,7 +288,7 @@ public sealed class FightPlanner(int horizon = 5, int beam = 16, int perTurn = 3
                     var picked = answer is { } id ? $"[{after.State.GetCardZones(after.HeroId).AllCards.FirstOrDefault(c => c.Id == id)?.DefinitionId.value}]" : "";
                     Walk(after, depth + 1,
                         [.. played, $"!{action.value}{picked}{(target is { } at ? $"->{at.value}" : "")}"],
-                        ends, seen);
+                        ends, seen, Share(ends.Count, cap));
                 }
             }
     }
