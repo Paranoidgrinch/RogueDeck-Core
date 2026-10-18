@@ -4,9 +4,8 @@
 
 ### Build the mechanic. Keep the core clean.
 
-A deterministic, modular C# combat engine for roguelike deckbuilders.
-**Combat Engine v1 is complete and ready to embed** — strange mechanics compose *into* it instead of turning
-the core into a giant switch statement.
+A deterministic, modular C# engine for roguelike deckbuilders — combat, whole runs, and a no-code Studio.
+Strange mechanics compose *into* it instead of turning the core into a giant switch statement.
 
 <br>
 
@@ -16,8 +15,8 @@ the core into a giant switch statement.
 <a href="https://github.com/Paranoidgrinch/RogueDeck-Core/tree/main/src/RogueDeck.Core/Combat">
   <img src="https://img.shields.io/badge/EXPLORE_THE_ENGINE-512BD4?style=for-the-badge&logo=dotnet&logoColor=white" alt="Explore the engine">
 </a>
-<a href="https://moonvineforge.com/card-forge.html">
-  <img src="https://img.shields.io/badge/CHALLENGE_THE_ENGINE-6B7D58?style=for-the-badge" alt="Challenge the engine">
+<a href="https://studio.moonvineforge.com">
+  <img src="https://img.shields.io/badge/OPEN_ROGUEDECK_STUDIO-6B7D58?style=for-the-badge" alt="Open RogueDeck Studio">
 </a>
 
 <br><br>
@@ -26,8 +25,9 @@ the core into a giant switch statement.
 ![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?style=flat-square\&logo=dotnet\&logoColor=white)
 ![Language](https://img.shields.io/badge/language-C%23-512BD4?style=flat-square\&logo=dotnet\&logoColor=white)
 ![Status](https://img.shields.io/badge/combat_engine-v1_complete-3FB950?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-1%2C300%2B_green-3FB950?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-2%2C700%2B-3FB950?style=flat-square)
 ![Architecture](https://img.shields.io/badge/core-UI_independent-394B59?style=flat-square)
+[![License](https://img.shields.io/badge/license-PolyForm_Noncommercial-394B59?style=flat-square)](LICENSE)
 
 </div>
 
@@ -42,9 +42,10 @@ RogueDeck Core takes the opposite bet. Mechanics are **composed** from a small s
 deterministic queue, so the hundredth mechanic is no harder to add than the first — and the same final state
 is reproducible from the same seed, every time.
 
-It is a finished, tested **engine you can use today**: drive it from your own game, script fights in code, or
-design them live in the browser sandbox. It is not a game itself — it carries no rendering, input or themes,
-only the reusable combat language beneath a deckbuilder.
+It is a tested **engine you can use today**: drive it from your own game, script fights in code, or design a
+whole game in [RogueDeck Studio](https://studio.moonvineforge.com) without writing a line of C#. It is not a
+game itself — it carries no rendering, input or themes, only the reusable rules beneath a deckbuilder:
+combat, the run around it, and the tools to author, play-test and replay both.
 
 ---
 
@@ -124,21 +125,26 @@ infinite loops — and a snapshot can be hashed at any point, so identical input
 git clone https://github.com/Paranoidgrinch/RogueDeck-Core.git
 cd RogueDeck-Core
 dotnet restore
-dotnet test          # ~1,300 tests across the solution
+dotnet test          # ~2,700 tests across the solution
 ```
 
 CI runs the same suite on Windows + Linux, verifies formatting with `dotnet format`, and builds the
 benchmarks on every push and pull request to `main`.
 
-### Try it live in the browser
+### Build a game without code — RogueDeck Studio
+
+**[studio.moonvineforge.com](https://studio.moonvineforge.com)** runs the Studio entirely in your browser
+(Blazor WebAssembly, deployed from `src/RogueDeck.Studio.Web` on every push). To run it locally instead:
 
 ```bash
-dotnet run --project src/RogueDeck.Sandbox
+dotnet run --project src/RogueDeck.Studio
 ```
 
-Open the printed `http://localhost:<port>` URL to define a hero, enemies and cards, then play the fight and
-read the live log. The sandbox exposes the **whole** engine surface — every operation, value read, control
-node, trigger, selector and interceptor — so you can author almost any mechanic without writing C#.
+The Studio is one project document edited through focused tabs — hero, characters, cards, statuses, enemies
+and encounters, relics, events, shops, consumables, workbenches and recipes, map rules, meta progression and
+balance — plus a **Playtest** tab that plays the result on the real engine. Effect programs are edited
+visually, every operation, trigger, selector and interceptor of the engine is reachable, drafts autosave, and
+the finished game exports as a versioned `game.roguedeck.json` blueprint that any RogueDeck host can run.
 
 ### Author a fight in code
 
@@ -197,11 +203,25 @@ Need lower-level control for your own game loop? Drop down to `RogueDeck.Core` d
 `CombatReplayRunner` (`PlayCardCommand` / `EndTurnCommand`). `src/RogueDeck.ConsoleSandbox/Program.cs` is a
 complete, runnable end-to-end example of exactly that.
 
+### Let a bot play it
+
+`roguedeck-bot` plays whole runs of any exported game headlessly — many seeds in parallel, with a fight
+planner, map analysis and full logs — and replays recorded player runs step for step:
+
+```bash
+dotnet run --project src/RogueDeck.Bot.Cli -c Release -- --game game.roguedeck.json --runs 20
+dotnet run --project src/RogueDeck.Bot.Cli -c Release -- --game game.roguedeck.json --replay-run run.json
+```
+
+A replay prints `REPRODUCED` or the first room where it diverges — the engine's determinism, checked against
+real play.
+
 ### Embed it in your project
 
-The engine is a plain .NET 10 library with no game dependencies. Reference `src/RogueDeck.Core` from your
-solution, or `dotnet pack src/RogueDeck.Core` to produce a NuGet package you can consume locally. Everything
-you author is pure C#, deterministic, and unit-testable without a UI.
+The engine is a set of plain .NET 10 libraries with no game dependencies. Reference `src/RogueDeck.Core`
+(combat) and `src/RogueDeck.Run` (runs) from your solution, or `dotnet pack` them into NuGet packages you
+can consume locally. `docs/godot-export-contract.md` describes how a frontend hosts a run. Everything you
+author is pure C#, deterministic, and unit-testable without a UI.
 
 ---
 
@@ -226,13 +246,26 @@ for-each) over native operations, value expressions and selectors — validated 
 executed on the deterministic queue. Cards, enemy actions, triggered programs and runtime temporary rules all
 run through the same runtime.
 
+### The run around the fight
+
+`RogueDeck.Run` turns single fights into a complete roguelike run, built on the same composition rules:
+
+* characters and parties, starting decks, inventories and run-level resources
+* relics with both a run face and combat rules, consumables, shops, workbenches and recipes
+* narrative events with choices and effects; encounter pools for normal, elite and boss fights
+* multi-act runs on generated branching maps (layered, rule-based and strategic generators, all seeded)
+* rewards, card upgrades and removal, meta progression across runs, tutorials
+* saves, run recording and deterministic replay
+
 ### The toolchain around the core
 
 | Project | What it gives you |
 | --- | --- |
+| **`RogueDeck.Studio`** / **`RogueDeck.Studio.Web`** | The no-code authoring Studio — server-hosted for local work, WebAssembly for the browser. |
+| **`RogueDeck.Sandbox.Combat`** / **`RogueDeck.Sandbox.Run`** | The Studio's editors and interactive combat and run sessions, as Razor component libraries. |
 | **`RogueDeck.Scenario`** | A fluent DSL to author a fight as blueprints + scripted turns, run it through the *real* engine, and render a readable play-by-play. |
-| **`RogueDeck.Sandbox`** | A Blazor browser editor with complete practical engine coverage — author and play any mechanic, with JSON save/load and a live log. |
-| **`RogueDeck.Sandbox/Fuzzing`** | A bot that generates random scenarios and plays them to surface crashes and determinism violations; a 20,000-seed sweep is clean. |
+| **`RogueDeck.Bot`** / **`RogueDeck.Bot.Cli`** | A bot that plays and replays whole runs headlessly — breadth testing, balance sweeps and run-recording verification. |
+| **`RogueDeck.ConsoleSandbox`** | A runnable end-to-end example of driving combat directly; CI runs it as a smoke test. |
 
 ---
 
@@ -241,21 +274,29 @@ run through the same runtime.
 ```text
 RogueDeck-Core
 ├── src
-│   ├── RogueDeck.Core            # the engine library (Combat: Cards, Effects, Resources, …)
+│   ├── RogueDeck.Core            # the combat engine (Cards, Effects, Resources, …)
+│   ├── RogueDeck.Run             # the run engine (map, relics, events, shops, meta, saves, replay)
 │   ├── RogueDeck.Scenario        # scripting harness: blueprints, fluent DSL, runner, narrative log
-│   ├── RogueDeck.Sandbox         # Blazor browser editor + random-scenario fuzzer (Fuzzing/)
+│   ├── RogueDeck.Sandbox.Combat  # Studio editors + interactive combat (Razor library)
+│   ├── RogueDeck.Sandbox.Run     # Studio editors + interactive runs (Razor library)
+│   ├── RogueDeck.Studio          # the Studio, server-hosted
+│   ├── RogueDeck.Studio.Web      # the Studio, WebAssembly (studio.moonvineforge.com)
+│   ├── RogueDeck.Bot             # the run-playing bot
+│   ├── RogueDeck.Bot.Cli         # roguedeck-bot: batch runs and run replay
 │   └── RogueDeck.ConsoleSandbox  # runnable end-to-end smoke demo
 ├── tests
 │   ├── RogueDeck.Core.Tests      # the main engine suite (the executable specification)
+│   ├── RogueDeck.Run.Tests       # run engine, map generators (incl. fuzz tests)
 │   ├── RogueDeck.Scenario.Tests
-│   ├── RogueDeck.Sandbox.Tests   # includes the fuzzer regression test
+│   ├── RogueDeck.Sandbox.Tests
 │   └── RogueDeck.Core.Benchmarks # BenchmarkDotNet
-└── .github/workflows/ci.yml
+├── docs                          # design notes: run engine, maps, party, relics, Godot export contract
+└── .github/workflows             # ci.yml (build, format, test) · deploy-studio.yml (Studio to Pages)
 ```
 
 This README is the front door; the engine documents itself through code and tests. Start in
-**`src/RogueDeck.Core/Combat`** for the engine and **`tests/RogueDeck.Core.Tests`** for a focused test of
-every behaviour it guarantees (including the architecture-guard tests that enforce the rules above).
+**`src/RogueDeck.Core/Combat`** for combat, **`src/RogueDeck.Run`** for runs, and **`tests/`** for a focused
+test of every behaviour they guarantee (including the architecture-guard tests that enforce the rules above).
 
 ---
 
@@ -264,7 +305,10 @@ every behaviour it guarantees (including the architecture-guard tests that enfor
 **Combat Engine v1: complete (strict) and green.** The full closure series shipped end to end — typed and
 cardinality preflight, the complete generic trigger-parity matrix, temporary rules and delayed programs,
 deterministic trace identities, snapshots + hashing + replay, and the modifier / interceptor pipeline.
-~1,300 tests pass across the solution, formatting is clean, and a 20,000-seed fuzz sweep is clean.
+Formatting is clean and the suite runs on Windows and Linux on every push.
+
+**Run engine and Studio: in active development.** They carry a complete five-act game —
+[Bureaucrats & Broomsticks](#built-with-roguedeck) — and the Studio can author, play-test and export one.
 
 Two behaviours are documented, stable v1 decisions rather than gaps: `CombatResultChanged` is
 observable-but-non-triggerable (the queue stops at a terminal result), and only the `Combatant` target domain
@@ -273,22 +317,25 @@ system / card generation) is intentionally **deferred** as a separate future pro
 
 ---
 
-## Where it came from
+## Built with RogueDeck
 
-RogueDeck Core grew out of the first playable systems beta of:
+### 🧙 Bureaucrats and Broomsticks
 
-### 🧙 [Bureaucrats and Broomsticks](https://github.com/Paranoidgrinch/bureaucrats-and-broomsticks-v2)
+A satirical fantasy roguelike deckbuilder about magic, paperwork and deeply questionable career choices —
+five acts from the City Offices to the Divine Ledger, running entirely on this engine:
 
-A satirical fantasy roguelike deckbuilder about magic, paperwork and deeply questionable career choices.
-Building a complete game revealed the cost of tightly coupled effects and event-specific action classes.
+| Repository | Role |
+| --- | --- |
+| **RogueDeck-Core** (this one) | the rules: combat and run engine, bot, replay |
+| [**bnb-content**](https://github.com/Paranoidgrinch/bnb-content) | the game as data — builds and validates `game.roguedeck.json` |
+| [**bnb-godot**](https://github.com/Paranoidgrinch/bnb-godot) | the Godot 4 (.NET) frontend |
+| [**bnb-runs**](https://github.com/Paranoidgrinch/bnb-runs) | recorded playtest runs, replayable with `roguedeck-bot` |
 
-RogueDeck Core is the answer:
+The game began as a [hardcoded Python terminal prototype](https://github.com/Paranoidgrinch/bureaucrats-and-broomsticks-v2).
+Building it revealed the cost of tightly coupled effects and event-specific action classes. RogueDeck Core is
+the answer:
 
 > Build the next mechanic without making the previous hundred harder to understand.
-
-<a href="https://github.com/Paranoidgrinch/bureaucrats-and-broomsticks-v2/releases/latest">
-  <img src="https://img.shields.io/badge/PLAY_THE_ORIGIN_GAME-Windows_beta-70566D?style=for-the-badge&logo=windows&logoColor=white" alt="Play Bureaucrats and Broomsticks">
-</a>
 
 ---
 
@@ -336,3 +383,14 @@ calculated, and what effect it produces.**
 <em>Small studio. Careful craft. Unusual worlds.</em>
 
 </div>
+
+---
+
+## License
+
+RogueDeck Core is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE): you may use, change and
+share it for any noncommercial purpose, as long as you credit the original
+(`Required Notice: Copyright (c) 2026 Paranoidgrinch`). Commercial use needs a separate license — open an
+issue or get in touch through [Moonvine Forge Studios](https://moonvineforge.com).
+
+Versions published before October 2026 were released under the MIT License and remain available under it.

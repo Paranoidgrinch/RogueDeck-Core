@@ -20,7 +20,7 @@
     <Authors>Paranoidgrinch</Authors>
     <Description>Modular, deterministic, UI-independent combat engine for roguelike deckbuilding games.</Description>
     <PackageTags>roguelike;deckbuilder;combat;engine;gamedev</PackageTags>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageLicenseExpression>PolyForm-Noncommercial-1.0.0</PackageLicenseExpression>
     <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 
