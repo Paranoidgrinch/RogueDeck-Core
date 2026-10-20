@@ -29,6 +29,16 @@ public sealed class PartyInteractiveCombatDriver : ICombatDriver, IReplayResetta
     public string PendingCardChoicePurpose => _cardChooser.PendingPurpose;
 
     public IReadOnlyList<string>? PendingOptionChoice => _optionChooser.PendingOptions;
+
+    // WHOSE QUESTION IT IS (multiplayer): the member the offered cards belong to, or — for a choice among options,
+    // which carries no cards — the member whose move raised it. Null when nothing is asked, or when the fight
+    // asked it of nobody in particular (the opening hands being dealt).
+    public CombatantId? PendingChooser =>
+        PendingCardChoice is { Count: > 0 } cards ? cards[0].OwnerId
+        : PendingOptionChoice is not null ? _actor
+        : null;
+
+    private CombatantId? _actor;
     public int PendingOptionChoiceCount => _optionChooser.PendingCount;
     public string PendingOptionChoicePurpose => _optionChooser.PendingPurpose;
 
@@ -49,6 +59,7 @@ public sealed class PartyInteractiveCombatDriver : ICombatDriver, IReplayResetta
     public void ResetForReplay()
     {
         Current = null;
+        _actor = null;
         _cardChooser.ResetForReplay();
         _optionChooser.ResetForReplay();
         _script.Reset(); // idempotent with the session's own reset; keeps driver-only rigs (tests) correct
@@ -100,17 +111,34 @@ public sealed class PartyInteractiveCombatDriver : ICombatDriver, IReplayResetta
             }
 
             if (_script.TryTake<CombatPlayEntry>(out var play))
-                combat.PlayCard(RequireMember(play.Member), play.Card, play.Target);
+                combat.PlayCard((_actor = RequireMember(play.Member)).Value, play.Card, play.Target);
             else if (_script.TryTake<CombatActionEntry>(out var action))
-                combat.UseAction(RequireMember(action.Member), action.Action, action.Target);
+                combat.UseAction((_actor = RequireMember(action.Member)).Value, action.Action, action.Target);
+            else if (_script.TryTake<CombatConsumableEntry>(out var use))
+                ApplyConsumable(combat, use.Instance);
             else if (_script.TryTake<CombatEndTurnEntry>(out var end))
-                combat.EndTurn(RequireMember(end.Member));
+                combat.EndTurn((_actor = RequireMember(end.Member)).Value);
             else
             {
                 _script.ThrowIfMismatched(nameof(Drive));
                 throw new ReplayParkedException(); // Current stays set — the UI renders the parked fight
             }
         }
+    }
+
+    // A consumable used in the fight: whoever in the party carries it drinks it — spent from their bag and run on
+    // their own hero — and only while they are still in the phase.
+    private void ApplyConsumable(PartyCombat combat, RogueDeck.Run.ConsumableInstanceId instance)
+    {
+        if (_script.Run is not { } run
+            || run.Party.FirstOrDefault(m => m.FindConsumable(instance) is not null) is not { } owner
+            || owner.FindConsumable(instance)?.CombatUse?.Program is not EffectProgram<TurnStartedTriggeredEffectContext> program)
+            return;
+        var drinker = ReferenceEquals(owner, run.Primary) ? combat.Compiled.Hero.CombatantId : new CombatantId(owner.Id.Value);
+        if (!combat.ActiveMembers().Contains(drinker))
+            return;
+        owner.RemoveConsumable(instance);
+        combat.UseMemberCombatProgram(drinker, program);
     }
 
     private static CombatState Restored(CombatSaveData resume, CompiledScenario compiled)

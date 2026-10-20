@@ -309,8 +309,15 @@ public class PartyCombatResumeTests
             Assert.All(sight.Blows, blow => Assert.Equal(seat.Member, aims[blow.Enemy]));
         }
 
+        // Every move is a step of the table's, with whose move it was.
+        var card = second.Hand[0];
+        seats[1].PlayCard(card.Id, fight.State.Combatants.First(c => c.TeamId == StandardCombatIds.EnemyTeam && c.IsAlive).Id);
+        var played = Assert.IsType<HeroPlaysCard>(seats[1].Current!.Steps[^1].Step);
+        Assert.Equal(card.DefinitionId.value, played.CardId);
+        Assert.Equal(members[1], seats[1].Current!.Steps[^1].Actor);
+
         seats[1].EndTurn();
-        Assert.Equal([new CombatEndTurnEntry(members[1])], entries);
+        Assert.Equal(new CombatEndTurnEntry(members[1]), entries[^1]);
         Assert.False(seats[1].Current!.IsHeroTurn);
         Assert.True(seats[0].Current!.IsHeroTurn);
     }

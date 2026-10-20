@@ -472,9 +472,10 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
     // combat use.
     public void UseConsumableInCombat(ConsumableInstanceId instance)
     {
-        if (CombatDriver?.Current is null || Session is not { } session)
+        if ((CombatDriver?.Current is null && PartyCombatDriver?.Current is null) || Session is not { } session)
             return;
-        var consumable = session.Run.FindConsumable(instance);
+        // In a party fight the consumable is whoever carries it; the party driver spends it from them.
+        var consumable = session.Run.Party.Select(m => m.FindConsumable(instance)).FirstOrDefault(c => c is not null);
         if (consumable?.CombatUse?.Program is not EffectProgram<TurnStartedTriggeredEffectContext>)
             return;
 

@@ -1,5 +1,6 @@
 using RogueDeck.Core.Combat;
 using RogueDeck.Scenario.Authoring;
+using RogueDeck.Scenario.Reporting;
 
 namespace RogueDeck.Scenario.Scripting;
 
@@ -33,6 +34,48 @@ public sealed class PartyCombat
     private readonly Func<CombatState, CombatantId, int, EnemyActionDefinitionId?> _enemyIntent;
     private readonly PartyEnemyTargeting _targeting;
     private readonly SimultaneousTurnProcessor _phases = new();
+
+    // WHAT HAPPENED, MOVE BY MOVE (multiplayer M5): every play, action, end of turn and enemy blow is recorded as a
+    // step with its trace — what a screen animates and a log tells, exactly as InteractiveCombat does for one hero.
+    private readonly CollectingTraceListener _collector = new();
+    private readonly List<ScenarioStepReport> _steps = new();
+    public IReadOnlyList<ScenarioStepReport> Steps => _steps;
+
+    private void Record(ScenarioStep step, CombatantId? actor, List<string> problems, int before)
+    {
+        var trace = _collector.Events.Skip(before).ToList();
+        var intent = step is EnemyActs e ? _compiled.IntentFor(new EnemyActionDefinitionId(e.ActionId)) : null;
+        _steps.Add(new ScenarioStepReport(
+            _steps.Count, step, _combat.CurrentRound, _combat.CurrentTurn, actor, intent, trace, problems));
+        _traced = _collector.Events.Count;
+    }
+
+    // How far into the trace the steps have read; what follows belongs to nobody yet.
+    private int _traced;
+
+    // Resolve one move and record it. A question the move asks parks the replay (rethrown, after the step is
+    // written); anything else that throws is the step's problem, not the end of the session.
+    private void Step(ScenarioStep step, CombatantId actor, Action resolve, Func<string?>? verdict = null)
+    {
+        var before = _collector.Events.Count;
+        var problems = new List<string>();
+        try
+        {
+            resolve();
+        }
+        catch (CombatPromptParkedException)
+        {
+            Record(step, actor, problems, before);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            problems.Add($"Step threw: {ex.GetType().Name}: {ex.Message}");
+        }
+        if (verdict?.Invoke() is { } problem)
+            problems.Add(problem);
+        Record(step, actor, problems, before);
+    }
     private readonly CombatQueueProcessor _queues = new();
 
     public PartyCombat(
@@ -54,6 +97,7 @@ public sealed class PartyCombat
         _enemyIntent = enemyIntent;
         _targeting = targeting ?? compiled.PartyTargeting; // unnamed: the scenario's
         _combat = ScenarioCombatFactory.Build(compiled, combatId, randomSeed);
+        _combat.TraceListener = _collector;
         InstallTelegraph(compiled);
 
         // Open the first player phase: every player-team member starts its turn and draws its own opening hand.
@@ -82,6 +126,7 @@ public sealed class PartyCombat
         _enemyIntent = enemyIntent;
         _targeting = targeting ?? compiled.PartyTargeting; // unnamed: the scenario's
         _combat = restoredState;
+        _combat.TraceListener = _collector;
         InstallTelegraph(compiled);
     }
 
@@ -159,8 +204,34 @@ public sealed class PartyCombat
         if (IsOver || !ActiveMembers().Contains(memberId) || !ActionsOf(memberId).Contains(actionId))
             return;
 
-        _combat.EnqueueEffect(new UseActionEffectRequest(memberId, actionId, target, new UseActionOutcomeSlot()));
-        _queues.ResolvePendingQueues(_combat, _registry);
+        var slot = new UseActionOutcomeSlot();
+        Step(new HeroUsesAction(actionId.value, target?.value), memberId, () =>
+        {
+            _combat.EnqueueEffect(new UseActionEffectRequest(memberId, actionId, target, slot));
+            _queues.ResolvePendingQueues(_combat, _registry);
+        }, () => slot.Value is { WasUsed: false }
+            ? $"Action '{actionId}' was not used (unaffordable or not allowed now)."
+            : null);
+    }
+
+    // A consumable's combat use, drunk by one member in the phase: its program runs as if that member's turn had
+    // just started, exactly as InteractiveCombat.UseHeroCombatProgram does for a hero alone.
+    public bool UseMemberCombatProgram(CombatantId memberId, EffectProgram<TurnStartedTriggeredEffectContext> program)
+    {
+        ArgumentNullException.ThrowIfNull(program);
+        if (IsOver || !ActiveMembers().Contains(memberId))
+            return false;
+        var member = _combat.GetCombatant(memberId);
+        Step(new HeroUsesConsumable(), memberId, () =>
+        {
+            var context = new TurnStartedTriggeredEffectContext(
+                _combat, _registry, new TurnStartedCombatEvent(memberId, _combat.CurrentRound, _combat.CurrentTurn), member);
+            var execution = new EffectExecutionContext<TurnStartedTriggeredEffectContext>(
+                context, TurnStartedTriggeredEffectTargetResolver.CreateActionBuildContext(context));
+            EffectProgramExecutor.Execute(program, execution, _combat);
+            _queues.ResolvePendingQueues(_combat, _registry);
+        });
+        return true;
     }
 
     // Play a card from one member's hand. No-op unless that member is currently an active player (in the player
@@ -172,8 +243,15 @@ public sealed class PartyCombat
         if (!_combat.GetCardZones(memberId).ContainsCard(cardInstanceId))
             return;
 
-        _combat.EnqueueEffect(new PlayCardEffectRequest(memberId, cardInstanceId, target));
-        _queues.ResolvePendingQueues(_combat, _registry);
+        var cardId = _combat.GetCardZones(memberId).GetCard(cardInstanceId).DefinitionId.value;
+        var slot = new PlayCardOutcomeSlot();
+        Step(new HeroPlaysCard(cardId, target?.value), memberId, () =>
+        {
+            _combat.EnqueueEffect(new PlayCardEffectRequest(memberId, cardInstanceId, target, slot));
+            _queues.ResolvePendingQueues(_combat, _registry);
+        }, () => slot.Value is { WasPlayed: false }
+            ? $"Card '{cardId}' was not played (unaffordable or rejected by a validator)."
+            : null);
     }
 
     // End one member's turn. When the last living player member ends, the enemy phase runs and a fresh player phase
@@ -183,10 +261,16 @@ public sealed class PartyCombat
         if (IsOver || !ActiveMembers().Contains(memberId))
             return;
 
-        _phases.EndMemberTurn(_combat, _registry, memberId);
+        Step(new HeroEndsTurn(), memberId, () => _phases.EndMemberTurn(_combat, _registry, memberId));
 
         if (!IsOver && _phases.IsPhaseComplete(_combat))
+        {
             RunEnemyPhaseThenNextPlayerPhase();
+            // What the hand-back did on its own — the phases turning over, a poison ticking at a turn's start,
+            // the hands dealt — is a step too, as it is in a fight with one hero.
+            if (_collector.Events.Count > _traced)
+                Record(new AdvanceToNextRound(), memberId, [], _traced);
+        }
     }
 
     // The enemy's telegraph for the round in hand (or `ahead` rounds past it): its authored intent. Null for a
@@ -254,8 +338,11 @@ public sealed class PartyCombat
             if (actionId is { } id && _registry.TryGetEnemyAction(id, out _) && IntendedTarget(enemy.Id) is { } targetId)
             {
                 var before = Standing(targetId);
-                _combat.EnqueueEffect(new ExecuteEnemyActionEffectRequest(enemy.Id, id, targetId));
-                _queues.ResolvePendingQueues(_combat, _registry);
+                Step(new EnemyActs(enemy.Id.value, id.value, targetId.value), enemy.Id, () =>
+                {
+                    _combat.EnqueueEffect(new ExecuteEnemyActionEffectRequest(enemy.Id, id, targetId));
+                    _queues.ResolvePendingQueues(_combat, _registry);
+                });
                 if (_watch is { } watch)
                 {
                     var after = Standing(targetId);

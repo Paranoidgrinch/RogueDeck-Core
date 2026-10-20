@@ -3,6 +3,7 @@ using RogueDeck.Run;
 using RogueDeck.Sandbox.Composition;
 using RogueDeck.Sandbox.Run;
 using RogueDeck.Scenario.Authoring;
+using RogueDeck.Scenario.Scripting;
 
 namespace RogueDeck.Sandbox.Tests;
 
@@ -987,6 +988,44 @@ public class TortureRunAuditTests
             $"{m.Id.Value} gold={m.GetResource(TortureRun.Gold)} deck={m.Deck.Count} relics={m.Relics.Count}"));
         Assert.Equal(Purse(first.Session.Run), Purse(second.Session.Run));
         Assert.All(first.Session.Run.Party, m => Assert.True(m.GetResource(TortureRun.Gold) < 500));
+    }
+
+    // A PARTY MEMBER DRINKS FROM THEIR OWN BAG IN A FIGHT (multiplayer). The Frostweberin carries an Ember Flask
+    // of her own: used in the fight, it is spent from her, and its embers are hers — the hero's flask stays put.
+    [Fact]
+    public void A_party_member_uses_their_own_consumable_in_a_fight()
+    {
+        var blueprint = TortureRun.Build();
+        blueprint = blueprint with
+        {
+            Map = new RunMap(new[] { blueprint.Map.Nodes.First(n => n.Id.Value == "vanguard") }),
+            Start = blueprint.Start with
+            {
+                StartingParty = [.. blueprint.Start.StartingParty.Select((m, i) =>
+                    i == 0 ? m with { StartingConsumables = ["ember-flask"] } : m)],
+            },
+        };
+        using var play = new RunPlayback(() => { });
+        play.Start(blueprint, 1, interactive: true);
+        var run = play.Session!.Run;
+        var frost = run.Party[1];
+        var flask = frost.Consumables.Single(c => c.DefinitionId.Value == "ember-flask").Id;
+        var fight = play.PartyCombatDriver!.Current!;
+        var her = new CombatantId(frost.Id.Value);
+        int Embers(PartyCombat combat, CombatantId who) =>
+            combat.State.GetCombatant(who).Resources.TryGetValue(new ResourceId(TortureRun.Embers), out var pool) ? pool.Current : 0;
+        var before = Embers(fight, her);
+        var heroBefore = Embers(fight, fight.Compiled.Hero.CombatantId);
+
+        play.UseConsumableInCombat(flask);
+
+        fight = play.PartyCombatDriver!.Current!;
+        run = play.Session!.Run;
+        Assert.Null(play.Session.Error);
+        Assert.Equal(before + 4, Embers(fight, her));
+        Assert.Equal(heroBefore, Embers(fight, fight.Compiled.Hero.CombatantId));
+        Assert.DoesNotContain(run.Party[1].Consumables, c => c.DefinitionId.Value == "ember-flask");
+        Assert.Contains(run.Primary.Consumables, c => c.DefinitionId.Value == "ember-flask");
     }
 
     [Fact]

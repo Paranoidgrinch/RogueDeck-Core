@@ -24,8 +24,8 @@ public sealed class PartyCombatSeatView(PartyCombat combat, CombatantId member) 
     // "My turn" in a party fight: the phase is the players' and this member has not ended it.
     public bool IsHeroTurn => !IsOver && Combat.ActiveMembers().Contains(HeroId);
 
-    // A party fight keeps no step reports; a screen reading them for what just happened sees nothing new.
-    public IReadOnlyList<ScenarioStepReport> Steps => [];
+    // Every hero's moves and every enemy's, in the order they happened — the whole table's, not only this seat's.
+    public IReadOnlyList<ScenarioStepReport> Steps => Combat.Steps;
 
     public IReadOnlyList<CardInstance> Hand => Combat.HandOf(HeroId);
     public int HeroEnergy => Combat.EnergyOf(HeroId);
