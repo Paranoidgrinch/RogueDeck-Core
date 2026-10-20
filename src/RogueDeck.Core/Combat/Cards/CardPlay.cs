@@ -227,7 +227,7 @@ public sealed class CombatCardPlayProcessor
             {
                 var capturedPlayerId = source.Id;
                 var capturedCardId = cardInstanceId.Value;
-                var capturedDestZone = PlayedCardDestination(registry, source, card);
+                var capturedDestZone = PlayedCardDestination(registry, source, card, combat, cardInstanceId);
 
                 // Card placement runs when the on-play program reaches a terminal state, with
                 // behaviour defined per outcome so a played card never gets stuck in hand:
@@ -286,7 +286,7 @@ public sealed class CombatCardPlayProcessor
                 combat.EnqueueEffect(new MoveCardToZoneEffectRequest(
                     source.Id,
                     cardInstanceId.Value,
-                    PlayedCardDestination(registry, source, card)));
+                    PlayedCardDestination(registry, source, card, combat, cardInstanceId)));
 
             // A card with no program is still an action: close it behind whatever its effect list enqueued.
             combat.EnqueueContinuation(c => CloseAction(c, actor));
@@ -296,8 +296,12 @@ public sealed class CombatCardPlayProcessor
     // Where a played card goes. Normally what its definition says; under a decree that no work shall return,
     // the exhaust pile instead — read from the combatant playing it, so the rule binds whoever wears it.
     internal static CardZone PlayedCardDestination(
-        CombatDefinitionRegistry registry, CombatantState source, CardDefinition card) =>
+        CombatDefinitionRegistry registry, CombatantState source, CardDefinition card,
+        CombatState? combat = null, CardInstanceId? instance = null) =>
         CombatDecrees.Any(registry, source, CombatRule.PlayedCardsExhaust)
+        // A Temporary copy is made for one play.
+        || (combat is not null && instance is { } id && combat.GetCardZones(source.Id).ContainsCard(id)
+            && combat.GetCardZones(source.Id).GetCard(id).HasMark(StandardCombatIds.TemporaryCopyMark))
             ? CardZone.ExhaustPile
             : card.PlayedCardDestinationZone;
 

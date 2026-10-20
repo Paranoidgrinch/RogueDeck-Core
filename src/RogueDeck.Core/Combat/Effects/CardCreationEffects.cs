@@ -5,7 +5,9 @@ public sealed record CreateCardInstanceEffectRequest(
     CardDefinitionId CardDefinitionId,
     CardZone ToZone,
     int Count = 1,
-    CreateCardInstanceOutcomeSlot? OutcomeSlot = null
+    CreateCardInstanceOutcomeSlot? OutcomeSlot = null,
+    // Per-instance marks every created copy starts with (a Temporary copy's).
+    IReadOnlyList<TagId>? Marks = null
 ) : IEffectRequest;
 
 public sealed class CreateCardInstanceEffectHandler : EffectRequestHandler<CreateCardInstanceEffectRequest>
@@ -36,7 +38,8 @@ public sealed class CreateCardInstanceEffectHandler : EffectRequestHandler<Creat
                 combat.CreateNextCardInstanceId(),
                 request.CardDefinitionId,
                 request.CombatantId,
-                request.ToZone);
+                request.ToZone,
+                initialMarks: request.Marks);
 
             zones.AddCard(card);
             createdCardIds.Add(card.Id);

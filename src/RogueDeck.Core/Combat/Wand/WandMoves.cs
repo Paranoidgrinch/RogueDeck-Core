@@ -90,6 +90,8 @@ public static class WandMoves
 
     public static bool IsTemporary(CombatState combat, CombatantId bearer, CardInstanceId card)
     {
+        if (combat.GetCardZones(bearer) is { } own && own.ContainsCard(card) && own.GetCard(card).HasMark(StandardCombatIds.TemporaryCopyMark))
+            return true;
         if (combat.DefinitionRegistry?.Wand?.TemporaryTag is not { } tag)
             return false;
         var zones = combat.GetCardZones(bearer);

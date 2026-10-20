@@ -252,7 +252,9 @@ public sealed record CombatNodeModel(
     string WandMove = "",
     bool Free = false,
     // forEachCardInZone: only the cards carrying this per-instance MARK ("" = any). "" canonically for other kinds.
-    string MarkFilter = "")
+    string MarkFilter = "",
+    // createCardCopy: the copy is a Temporary one (it Exhausts when played). false canonically for other kinds.
+    bool Temporary = false)
 {
     public CombatAmountSpec AmountOrDefault => Amount ?? CombatAmountSpec.FromConst(3);
     // The primary / secondary target selectors assembled from their key + parameterization.
@@ -1193,7 +1195,8 @@ public static class CombatProgramModel
             "moveCardToZone" => new MoveCardToZoneNode<TContext>(selector, BuildCard<TContext>(model.CardOrDefault), model.ToZone, placement: model.Placement),
             "transformCard" => new TransformCardNode<TContext>(selector, BuildCard<TContext>(model.CardOrDefault), new CardDefinitionId(model.ToDefinition)),
             "createCardInstance" => new CreateCardInstanceNode<TContext>(selector, new CardDefinitionId(model.ToDefinition), model.ToZone, amount),
-            "createCardCopy" => new CreateCardCopyNode<TContext>(selector, BuildCard<TContext>(model.CardOrDefault), model.ToZone, amount),
+            "createCardCopy" => new CreateCardCopyNode<TContext>(selector, BuildCard<TContext>(model.CardOrDefault), model.ToZone, amount,
+                temporary: model.Temporary),
             "playCard" => new PlayCardNode<TContext>(selector, BuildCard<TContext>(model.CardOrDefault),
                 model.HasCardTarget ? SelectorFor(model.SecondarySelector) : null),
             "replayCardProgram" => new ReplayCardProgramNode<TContext>(BuildCard<TContext>(model.CardOrDefault), selector),
@@ -1379,7 +1382,8 @@ public static class CombatProgramModel
                 var cccCount = ClassifyAmount(n.Count);
                 return cccCount.IsAdvanced
                     ? null
-                    : WithSelector(n.TargetSelector, new CombatNodeModel("createCardCopy", "source", cccCount, Card: cccCard, ToZone: n.ToZone));
+                    : WithSelector(n.TargetSelector, new CombatNodeModel("createCardCopy", "source", cccCount, Card: cccCard, ToZone: n.ToZone,
+                        Temporary: n.Temporary));
             case PlayCardNode<TContext> { ResultKey: null } n:
                 if (ClassifyCard(n.CardExpression) is not { } pcCard)
                     return null;

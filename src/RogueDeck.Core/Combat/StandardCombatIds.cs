@@ -72,6 +72,10 @@ public static class StandardCombatIds
     // with a downside; adding one to a deck uses the existing add-card machinery.
     public static readonly TagId UnplayableTag = new("unplayable");
 
+    // A per-instance MARK, not a definition tag: this copy of the card was made for this fight only (a Temporary
+    // copy). Played, it goes to the Exhaust pile whatever its definition says.
+    public static readonly TagId TemporaryCopyMark = new("temporary_copy");
+
     // An INNATE card starts in the opening hand: combat setup moves it to the top of the draw pile (before the
     // shuffle-free opening draw), so the first turn's draw always includes it. Purely a setup ordering, so it needs
     // no runtime hook. Authored like any tag (CardData.Tags).

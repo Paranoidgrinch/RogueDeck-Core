@@ -1528,7 +1528,8 @@ internal sealed class CreateCardCopyNodeExecutor : IEffectNodeExecutor
                 CardDefinitionId: sourceDefinitionId!.Value,
                 ToZone: typed.ToZone,
                 Count: count,
-                OutcomeSlot: slots?[i]));
+                OutcomeSlot: slots?[i],
+                Marks: typed.Temporary ? [StandardCombatIds.TemporaryCopyMark] : null));
 
         if (typed.ResultKey is { } key)
         {

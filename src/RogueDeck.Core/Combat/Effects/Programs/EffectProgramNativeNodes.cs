@@ -934,6 +934,11 @@ public sealed class CreateCardCopyNode<TContext> : ICreateCardCopyNodeCore, IEff
     public ICombatExpression<TContext, int> Count { get; }
     public EffectResultKey<OrderedTargetOutcomes<CreateCardInstanceOutcome>>? ResultKey { get; }
 
+    // A Temporary copy: made for this fight only, it Exhausts when played. Kept out of the wire format when false.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Temporary { get; }
+
     public IReadOnlyList<IEffectNode<TContext>> Children => [];
 
     public CreateCardCopyNode(
@@ -941,8 +946,10 @@ public sealed class CreateCardCopyNode<TContext> : ICreateCardCopyNodeCore, IEff
         ICardInstanceExpression<TContext> sourceCard,
         CardZone toZone,
         ICombatExpression<TContext, int>? count = null,
-        EffectResultKey<OrderedTargetOutcomes<CreateCardInstanceOutcome>>? resultKey = null)
+        EffectResultKey<OrderedTargetOutcomes<CreateCardInstanceOutcome>>? resultKey = null,
+        bool temporary = false)
     {
+        Temporary = temporary;
         ArgumentNullException.ThrowIfNull(targetSelector);
         ArgumentNullException.ThrowIfNull(sourceCard);
 

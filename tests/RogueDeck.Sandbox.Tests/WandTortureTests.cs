@@ -701,4 +701,34 @@ public class WandTortureTests
         Assert.Equal(3, offered.Count);
         Assert.Equal(driver.Current!.State.GetCardZones(Hero(play)).DrawPile.Take(3).Select(c => c.Id), offered.Select(c => c.Id));
     }
+
+    // A Temporary copy is made for one play: played, it goes to the Exhaust pile; withdrawn from a wand, too.
+    [Fact]
+    public void A_temporary_copy_exhausts_when_played_or_withdrawn()
+    {
+        var rubbing = Plain("rubbing", new CombatNodeModel("createCardCopy", "source", CombatAmountSpec.FromConst(1),
+            Card: new CombatCardSpec("chosen", CardZone.DiscardPile, Purpose: "copy"), ToZone: CardZone.Hand, Temporary: true), cost: 0);
+        using var play = Start(Apprentice(["rubbing", "rubbing", "candle_stub", "spark", "spark"], [rubbing]));
+        Play(play, "candle_stub");                                // into the discard pile
+        var driver = play.CombatDriver!;
+        driver.PlayCard(driver.Current!.Hand.First(c => c.DefinitionId.value == "rubbing").Id, Dummy(play));
+        if (driver.PendingCardChoice is { } discard)
+            driver.SupplyCardChoice([discard.First(c => c.DefinitionId.value == "candle_stub").Id]);
+        var copy = driver.Current!.Hand.Single(c => c.DefinitionId.value == "candle_stub");
+        Assert.Contains(StandardCombatIds.TemporaryCopyMark, copy.Marks);
+        Play(play, "candle_stub");
+        var zones = driver.Current!.State.GetCardZones(Hero(play));
+        Assert.Equal(CardZone.ExhaustPile, zones.GetCard(copy.Id).Zone);
+
+        // Again, and this time into the wand and out of it.
+        driver.PlayCard(driver.Current!.Hand.First(c => c.DefinitionId.value == "rubbing").Id, Dummy(play));
+        if (driver.PendingCardChoice is { } again)
+            driver.SupplyCardChoice([again.First(c => c.DefinitionId.value == "candle_stub").Id]);
+        var second = driver.Current!.Hand.Single(c => c.DefinitionId.value == "candle_stub");
+        Inscribe(play, "candle_stub", 0);
+        driver.UseAction(new CardDefinitionId("withdraw"), null);
+        if (driver.PendingCardChoice is { } installed)
+            driver.SupplyCardChoice([installed.Single().Id]);
+        Assert.Equal(CardZone.ExhaustPile, driver.Current!.State.GetCardZones(Hero(play)).GetCard(second.Id).Zone);
+    }
 }

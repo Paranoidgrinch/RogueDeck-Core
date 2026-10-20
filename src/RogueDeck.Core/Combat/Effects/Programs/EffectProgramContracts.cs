@@ -464,6 +464,8 @@ public interface ICreateCardCopyNodeCore : INativeEffectOperationNode
     int EvaluateCount(IEffectExecutionContextCore ctx, CombatState combat);
     CardDefinitionId? EvaluateSourceDefinitionId(IEffectExecutionContextCore ctx, CombatState combat);
     EffectResultKey<OrderedTargetOutcomes<CreateCardInstanceOutcome>>? ResultKey { get; }
+    // The copy is a Temporary one (StandardCombatIds.TemporaryCopyMark): it Exhausts when played.
+    bool Temporary => false;
     Type INativeEffectOperationNode.ProducedEffectRequestType => typeof(CreateCardInstanceEffectRequest);
 }
 
