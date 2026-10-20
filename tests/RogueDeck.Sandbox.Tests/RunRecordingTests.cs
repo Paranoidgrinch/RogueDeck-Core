@@ -140,6 +140,43 @@ public class RunRecordingTests
         Assert.Equal(deckBefore + gained - removed, play.Session!.Run.Deck.Count);
     }
 
+    // A SHOP VISIT IS WRITTEN DOWN. The shop asks from inside the visit and the park ends it, so the run's own
+    // shelf is gone by the time an answer arrives; a recorder reading it there wrote no shop at all (every tester
+    // recording until 2026-10-19 says nobody ever saw a shelf).
+    [Fact]
+    public void A_recorded_run_says_what_stood_in_each_shop_it_visited()
+    {
+        var blueprint = Sample();
+        var total = 0;
+        for (var seed = 1; seed <= 8; seed++)
+        {
+            using var play = new RunPlayback(() => { });
+            play.Start(blueprint, seed, interactive: true);
+            var recorder = new RunRecorder(Begin(seed));
+            recorder.Attach(play);
+            var visited = new HashSet<string>(StringComparer.Ordinal);
+            play.Script!.Answered += _ =>
+            {
+                if (play.Session is { PendingShopShelf: { } shelf, PendingSituation: not null } session
+                    && shelf.Slots.Any(slot => RunEntityLabeler.ArtForGrant(slot.Entry.Payload) is { Kind: EntityArt.Card }))
+                    visited.Add($"{session.Run.ActNumber}:{session.Run.CurrentNodeId?.Value}");
+            };
+            Walk(play, seed, budget: 4000);
+            recorder.Detach();
+
+            var shops = RunRecordingJson.FromJson(RunRecordingJson.ToJson(recorder.Recording)).Picks
+                .Where(p => p.Purpose == "shop").ToList();
+            Assert.Equal(visited.Count, shops.Count);
+            Assert.All(shops, shop =>
+            {
+                Assert.NotEmpty(shop.Offered);
+                Assert.All(shop.Taken, card => Assert.Contains(card, shop.Offered));
+            });
+            total += shops.Count;
+        }
+        Assert.True(total > 0, "no walk entered a shop with a card on its shelves");
+    }
+
     // The host's counts ride along in the file and come back out of the TEXT; a file written before they existed
     // still reads, with none.
     [Fact]

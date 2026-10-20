@@ -293,7 +293,9 @@ public sealed class RunRecorder
 
         // ONE SHOP VISIT IS ONE CHOICE: every card that stood on its shelves while the player was there (a card
         // seen on ten redraws of one shelf is one card offered), and what they bought. Written when they leave.
-        var here = run.ActiveShopShelf is { } shelf && session.PendingSituation is not null
+        // The shelf is read off the session, not the run: the park unwinds the resolver and ends the visit, so by
+        // the time an answer arrives run.ActiveShopShelf is always null again.
+        var here = session.PendingShopShelf is { } shelf && session.PendingSituation is not null
             ? (Room: $"{run.ActNumber}:{run.CurrentNodeId?.Value}", Shelf: shelf)
             : ((string Room, ShopShelf Shelf)?)null;
         if (_shopRoom is not null && here?.Room != _shopRoom)
