@@ -144,7 +144,17 @@ public sealed record CombatStateSnapshot(
     // having fired. Written only when there is something to write; absent is an empty count.
     [property: System.Text.Json.Serialization.JsonIgnore(
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
-    ImmutableArray<TriggerActivitySnapshot> TriggerActivity = default
+    ImmutableArray<TriggerActivitySnapshot> TriggerActivity = default,
+
+    // THE SIMULTANEOUS TEAM PHASE (party fights): whose phase it is and which of its members have already
+    // ended. A solo fight never opens one, so both stay absent and the snapshot reads as it always did; a
+    // party fight restored without them came back with nobody able to act.
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    TeamId? PhaseTeam = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    ImmutableArray<CombatantId> EndedThisPhase = default
 );
 
 // One trigger's count. A named record, not a tuple — see the warning below.

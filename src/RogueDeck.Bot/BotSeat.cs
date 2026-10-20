@@ -49,7 +49,7 @@ internal sealed class BotSeat(RunPlayback play, BotOptions options, IBotLog log)
         var run = _run ?? throw new InvalidOperationException("The seat was asked before the run was handed over.");
         _mind.CheckBudget(run);
         _mind.Narrate(run);
-        _mind.Observe(run, _current);
+        _mind.Observe(run, _current is not null);
     }
 
     // …and everything after it: the answer is spent, and a guard that tripped while giving it ends the walk.

@@ -48,6 +48,10 @@ public sealed class ScenarioBlueprint
     // false ⇒ round-robin, unchanged.
     public bool SimultaneousTeamTurns { get; set; }
 
+    // Which hero an enemy hits in a simultaneous-phase fight (multiplayer M3). FirstAlive by default, which is
+    // what every party fight did before this could be chosen.
+    public Scripting.PartyEnemyTargeting PartyTargeting { get; set; }
+
     // Opt-in: shuffle each player-team combatant's draw pile at combat start (deterministically, seeded by the
     // combat's random seed) so the opening hand is randomized like a real deckbuilder — not the deck's authored
     // order. Default false keeps scenario tests deterministic; the RUN layer turns it on for every real fight.
@@ -126,7 +130,10 @@ public sealed class ScenarioBlueprint
         ValidateReferences(registry, intents);
 
         return new CompiledScenario(
-            registry, intents, Hero, Enemies, Allies, CellExclusive, SimultaneousTeamTurns, ShuffleDrawPileOnStart);
+            registry, intents, Hero, Enemies, Allies, CellExclusive, SimultaneousTeamTurns, ShuffleDrawPileOnStart)
+        {
+            PartyTargeting = PartyTargeting,
+        };
     }
 
     // The known actions are the COMPILED ones (library + this blueprint's own), not this blueprint's list:
@@ -170,6 +177,9 @@ public sealed class CompiledScenario
 
     // Whether each team's members take their turn simultaneously (opt-in; default off ⇒ round-robin).
     public bool SimultaneousTeamTurns { get; }
+
+    // Which hero an enemy hits in a simultaneous-phase fight (ScenarioBlueprint.PartyTargeting).
+    public Scripting.PartyEnemyTargeting PartyTargeting { get; init; }
 
     // Whether to shuffle each player draw pile at combat start (opt-in; default off ⇒ authored deck order).
     public bool ShuffleDrawPileOnStart { get; }

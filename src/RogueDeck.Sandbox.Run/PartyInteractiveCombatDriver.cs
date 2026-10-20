@@ -54,7 +54,9 @@ public sealed class PartyInteractiveCombatDriver : ICombatDriver, IReplayResetta
         _script.Reset(); // idempotent with the session's own reset; keeps driver-only rigs (tests) correct
     }
 
-    public CombatDriveResult Drive(Playthrough playthrough)
+    public CombatDriveResult Drive(Playthrough playthrough) => Drive(playthrough, null);
+
+    public CombatDriveResult Drive(Playthrough playthrough, CombatSaveData? resume)
     {
         ArgumentNullException.ThrowIfNull(playthrough);
         var compiled = playthrough.Blueprint.Compile();
@@ -65,13 +67,19 @@ public sealed class PartyInteractiveCombatDriver : ICombatDriver, IReplayResetta
 
         // Deferred for the same reason as the solo driver: the opening hands are a moment rules speak at,
         // and a prompt raised there needs its chooser installed and the fight published first.
-        var combat = new PartyCombat(
-            compiled, EnemyIntentSelectors.Build(compiled), playthrough.CombatId, playthrough.RandomSeed,
-            startOpeningPhase: false);
+        // A RESUMED fight (the replay baseline moved to a phase boundary, or a save taken there) is rebuilt
+        // around its captured state, already standing in its player phase with the hands dealt — without this
+        // every checkpoint restarted the fight from the first bell.
+        var combat = resume is null
+            ? new PartyCombat(
+                compiled, EnemyIntentSelectors.Build(compiled), playthrough.CombatId, playthrough.RandomSeed,
+                startOpeningPhase: false)
+            : new PartyCombat(compiled, Restored(resume, compiled), EnemyIntentSelectors.Build(compiled));
         combat.State.SetCardChooser(_cardChooser);
         combat.State.SetOptionChooser(_optionChooser);
         Current = combat;
-        combat.StartOpeningPhase();
+        if (resume is null)
+            combat.StartOpeningPhase();
         var allies = playthrough.Blueprint.Allies;
         var heroId = compiled.Hero.CombatantId;
 
@@ -93,6 +101,8 @@ public sealed class PartyInteractiveCombatDriver : ICombatDriver, IReplayResetta
 
             if (_script.TryTake<CombatPlayEntry>(out var play))
                 combat.PlayCard(RequireMember(play.Member), play.Card, play.Target);
+            else if (_script.TryTake<CombatActionEntry>(out var action))
+                combat.UseAction(RequireMember(action.Member), action.Action, action.Target);
             else if (_script.TryTake<CombatEndTurnEntry>(out var end))
                 combat.EndTurn(RequireMember(end.Member));
             else
@@ -101,6 +111,14 @@ public sealed class PartyInteractiveCombatDriver : ICombatDriver, IReplayResetta
                 throw new ReplayParkedException(); // Current stays set — the UI renders the parked fight
             }
         }
+    }
+
+    private static CombatState Restored(CombatSaveData resume, CompiledScenario compiled)
+    {
+        var state = CombatState.Restore(resume.State, compiled.Registry);
+        if (resume.Log is { Count: > 0 } log)
+            state.RestoreCombatLog(log);
+        return state;
     }
 
     private static CombatantId RequireMember(CombatantId? member) =>
@@ -115,11 +133,21 @@ public sealed class PartyInteractiveCombatDriver : ICombatDriver, IReplayResetta
         _script.Advance(new CombatPlayEntry(member, cardId, target));
     }
 
+    // Use one of a member's own actions (a witch's BREW) — recorded and replayed like a play.
+    public void UseActionFor(CombatantId member, CardDefinitionId actionId, CombatantId? target)
+    {
+        if (Current is null || _cardChooser.IsAwaitingChoice || _optionChooser.IsAwaitingChoice)
+            return;
+        _script.Advance(new CombatActionEntry(member, actionId, target));
+    }
+
     // Ending the last living member runs the enemy phase + opens the next player phase, inside PartyCombat.EndTurn.
 
     // THE TURN WAS JUST HANDED OVER — read and cleared by whoever moves the replay baseline (RunPlayback).
     // A turn boundary is the only quiescent point inside a fight: no prompt is open and the enemies have
     // answered, so it is the only place the fight can be captured and started again from.
+    // ⚠ In a party fight that is the LAST living member ending, not any member: one member ending leaves the
+    // others mid-phase, and a capture there is a moment the fight cannot be dealt back into.
     private bool _handedOver;
 
     public bool TakeTurnHandedOver()
@@ -133,7 +161,7 @@ public sealed class PartyInteractiveCombatDriver : ICombatDriver, IReplayResetta
     {
         if (Current is null || _cardChooser.IsAwaitingChoice || _optionChooser.IsAwaitingChoice)
             return;
-        _handedOver = true;
+        _handedOver |= Current.ActiveMembers() is [var last] && last == member;
         _script.Advance(new CombatEndTurnEntry(member));
     }
 

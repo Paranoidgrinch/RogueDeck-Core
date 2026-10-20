@@ -820,9 +820,23 @@ public class TortureRunAuditTests
         Assert.Equal(hpBefore - 8, rig.Session.Run.Health.Current);
 
         rig.Session.Pick("crown");
+        // Every member stands at the altar for themselves (multiplayer M2): the next seat is asked now, and the
+        // hero's crown and wound are the hero's alone.
+        Assert.Equal("member#1", rig.Session.PendingSeat);
+        Assert.Equal("start", rig.Session.PendingSituation!.Id);
+        FinishForTheOthers(rig, "pray");
         Assert.True(rig.Session.IsComplete);
         Assert.Null(rig.Session.Error);
-        Assert.NotNull(rig.Session.Run.FindRelic(new RelicId("ashen-crown")));
+        var run = rig.Session.Run;
+        Assert.NotNull(run.Primary.FindRelic(new RelicId("ashen-crown")));
+        Assert.All(run.Party.Skip(1), member => Assert.Null(member.FindRelic(new RelicId("ashen-crown"))));
+    }
+
+    // Answer every other seat's question in a party room the same way, until the room lets the party go.
+    private static void FinishForTheOthers(PartyRig rig, string choiceId)
+    {
+        for (var guard = 0; guard < 20 && rig.Session.PendingSeat is { } seat && seat != "member#0"; guard++)
+            rig.Session.PickFor(seat, choiceId);
     }
 
     [Fact]
@@ -845,9 +859,12 @@ public class TortureRunAuditTests
         Assert.True(rig.Session.PendingEntities.Displays.Count > 0);
 
         rig.Session.PickEntities(new[] { 0 });
+        var othersBefore = rig.Session.Run.Party.Skip(1).Select(m => m.Deck.Count).ToList();
+        FinishForTheOthers(rig, "pray");
         Assert.True(rig.Session.IsComplete);
         Assert.Null(rig.Session.Error);
-        Assert.Equal(deckBefore - 1, rig.Session.Run.Deck.Count);
+        Assert.Equal(deckBefore - 1, rig.Session.Run.Primary.Deck.Count);
+        Assert.Equal(othersBefore, rig.Session.Run.Party.Skip(1).Select(m => m.Deck.Count));
     }
 
     [Fact]
@@ -897,8 +914,79 @@ public class TortureRunAuditTests
         Assert.Equal(deckBefore - 1, rig.Session.Run.Deck.Count);
 
         rig.Session.Pick("leave");
+        // Each member shops on their own purse: the others still stand at their own shelves, untouched.
+        Assert.Equal("member#1", rig.Session.PendingSeat);
+        FinishForTheOthers(rig, "leave");
         Assert.True(rig.Session.IsComplete);
         Assert.Null(rig.Session.Error);
+    }
+
+    // FOUR PLAYERS IN ONE SHOP (multiplayer M2). Walking in, every member is asked at once — four questions
+    // standing, not one — and each stands at a shelf of its own. One member buying does not move another's
+    // shelf, and the order the members answer in does not change the run: the same answers per member, given
+    // in two different orders, leave the party in the same state.
+    [Fact]
+    public void Every_member_shops_at_once_and_the_order_they_answer_in_does_not_matter()
+    {
+        var blueprint = TortureRun.Build();
+        var shopOnly = blueprint with
+        {
+            Map = new RunMap(new[] { blueprint.Map.Nodes.First(n => n.Id.Value == "market") }),
+            // Every member brings its own purse, and every purse is full enough to buy.
+            Start = blueprint.Start with
+            {
+                Resources = new Dictionary<string, int> { [TortureRun.Gold.Value] = 500 },
+                StartingParty = [.. blueprint.Start.StartingParty.Select(m => m with
+                {
+                    Resources = new Dictionary<string, int> { [TortureRun.Gold.Value] = 500 },
+                })],
+            },
+        };
+
+        PartyRig Open()
+        {
+            var rig = PartySession(shopOnly);
+            rig.Session.Start();
+            return rig;
+        }
+
+        var first = Open();
+        var seats = first.Session.PendingSeats.Select(p => p.Seat).ToList();
+        Assert.Equal(["member#0", "member#1", "member#2", "member#3"], seats);
+        Assert.All(first.Session.PendingSeats, p => Assert.NotNull(p.ShopShelf));
+
+        // Each member's purchase: the first stocked item on its own shelf.
+        string Buy(PartyRig rig, string seat) => rig.Session.PendingFor(seat)!.Choices
+            .First(c => c.Id != "leave" && !c.Id.Contains("reroll") && !c.Id.Contains("remove")).Id;
+
+        var shelfOfOne = first.Session.PendingFor("member#1")!.Choices.Select(c => c.Id).ToList();
+        var buyThree = Buy(first, "member#3");
+        first.Session.PickFor("member#3", buyThree);
+        Assert.Equal(shelfOfOne, first.Session.PendingFor("member#1")!.Choices.Select(c => c.Id));
+        Assert.Equal(4, first.Session.PendingSeats.Count);
+
+        // Everyone else buys their first item, then all leave — member 3 first, member 0 last.
+        var purchases = seats.ToDictionary(seat => seat, seat => seat == "member#3" ? buyThree : Buy(first, seat));
+        foreach (var seat in new[] { "member#2", "member#1", "member#0" })
+            first.Session.PickFor(seat, purchases[seat]);
+        foreach (var seat in new[] { "member#3", "member#1", "member#2", "member#0" })
+            first.Session.PickFor(seat, "leave");
+        Assert.True(first.Session.IsComplete, $"still waiting on {first.Session.PendingSeat}");
+        Assert.Null(first.Session.Error);
+
+        // The same answers per member, in seat order, one member at a time.
+        var second = Open();
+        foreach (var seat in seats)
+        {
+            second.Session.PickFor(seat, purchases[seat]);
+            second.Session.PickFor(seat, "leave");
+        }
+        Assert.True(second.Session.IsComplete);
+
+        string Purse(RunState run) => string.Join(" | ", run.Party.Select(m =>
+            $"{m.Id.Value} gold={m.GetResource(TortureRun.Gold)} deck={m.Deck.Count} relics={m.Relics.Count}"));
+        Assert.Equal(Purse(first.Session.Run), Purse(second.Session.Run));
+        Assert.All(first.Session.Run.Party, m => Assert.True(m.GetResource(TortureRun.Gold) < 500));
     }
 
     [Fact]

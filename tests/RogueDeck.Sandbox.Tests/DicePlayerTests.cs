@@ -15,7 +15,7 @@ public class DicePlayerTests
         const int seed = 4;
         var play = new RunPlayback(() => { }, new InMemoryMetaStore());
         var mind = new BotMind(play, new BotOptions { Seed = seed }, NullBotLog.Instance);
-        mind.Observe(SampleProject.Build().CreateInitialRun(new RunId("picks"), randomSeed: 7), null);
+        mind.Observe(SampleProject.Build().CreateInitialRun(new RunId("picks"), randomSeed: 7), fighting: false);
 
         var expected = new Random(seed);
         var skipped = expected.NextDouble() < 0.2;

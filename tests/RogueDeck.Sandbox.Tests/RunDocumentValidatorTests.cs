@@ -370,6 +370,24 @@ public class RunDocumentValidatorTests
             p => p.StartsWith("Balance:", StringComparison.Ordinal) && p.Contains("card 'ghost'"));
     }
 
+    [Fact]
+    public void Flags_a_party_scaling_that_cannot_be_meant()
+    {
+        var bp = Valid() with
+        {
+            Balance = new BalanceManifest { PartyEnemyHealthPerExtraMember = -0.5, PartyEnemyTargeting = "Weakest" },
+        };
+        var problems = RunDocumentValidator.Validate(bp);
+        Assert.Contains(problems, p => p.StartsWith("Balance:", StringComparison.Ordinal) && p.Contains("cannot be negative"));
+        Assert.Contains(problems, p => p.StartsWith("Balance:", StringComparison.Ordinal) && p.Contains("'Weakest'"));
+        Assert.DoesNotContain(
+            RunDocumentValidator.Validate(Valid() with
+            {
+                Balance = new BalanceManifest { PartyEnemyHealthPerExtraMember = 0.75, PartyEnemyTargeting = "random" },
+            }),
+            p => p.StartsWith("Balance:", StringComparison.Ordinal));
+    }
+
     // A blueprint whose map is generated: an empty authored map plus a feasible spec drawing the "fight" encounter.
     private static RunBlueprint Generated() => Valid() with
     {

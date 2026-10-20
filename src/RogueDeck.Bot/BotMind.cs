@@ -132,7 +132,7 @@ internal sealed class BotMind
             _log.Line($"    | {narration[_loggedNarration].Message}");
     }
 
-    public void Observe(RunState run, InteractiveCombat? combat)
+    public void Observe(RunState run, bool fighting)
     {
         ArgumentNullException.ThrowIfNull(run);
 
@@ -166,7 +166,7 @@ internal sealed class BotMind
                 + $"deck={run.Deck.Count} relics={run.Relics.Count}");
         }
 
-        if (combat is null && _inFight)
+        if (!fighting && _inFight)
         {
             _inFight = false;
             _log.Line($"  fight ends: hp={run.Health.Current}/{run.Health.Max} after {_turn} turns");
@@ -308,6 +308,82 @@ internal sealed class BotMind
     {
         Reason = $"the fight at {RunBot.Where(run)} parked on the enemy's turn";
         Stopped = true;
+    }
+
+    // ── A PARTY FIGHT ────────────────────────────────────────────────────────────────────────────────────
+    // The same dice for every member of a simultaneous phase: the replay seat walks the members in roster
+    // order, each plays what it draws until it draws nothing, then ends. A party fight has no step trace, so a
+    // play that moved nothing on that member's table counts as barren — that covers the refusals too.
+    private CombatantId? _lastPlayedBy;
+
+    public void PartyFightStarts(RunState run, PartyCombat combat)
+    {
+        ArgumentNullException.ThrowIfNull(combat);
+        if (_inFight)
+            return;
+        _inFight = true;
+        Fights++;
+        var enemies = combat.State.Combatants
+            .Where(c => c.TeamId == StandardCombatIds.EnemyTeam)
+            .Select(c => $"{c.Id.value}({c.Health.Current})");
+        _log.Line($"  FIGHT {RunBot.Where(run)} party of {combat.ActiveMembers().Count} "
+            + $"vs {string.Join(" ", enemies)}");
+    }
+
+    public CardPlay? ChoosePartyPlay(PartyCombat combat, CombatantId member)
+    {
+        ArgumentNullException.ThrowIfNull(combat);
+
+        if (_lastPlayed is { } finished && _lastPlayedBy is { } by)
+        {
+            if (RunBot.TableState(combat, by) == _tableBeforeThePlay)
+                _barren.Add($"{by.value}/{finished}");
+            _lastPlayed = null;
+            _lastPlayedBy = null;
+        }
+
+        var payer = combat.State.GetCombatant(member);
+        var hand = combat.HandOf(member);
+        var playable = hand
+            .Where(c => !_barren.Contains($"{member.value}/{c.DefinitionId.value}")
+                && RunBot.CanPay(_play, payer, c.DefinitionId.value))
+            .ToList();
+        var living = combat.State.Combatants
+            .Where(c => c.IsAlive && c.TeamId == StandardCombatIds.EnemyTeam)
+            .ToList();
+        var card = playable.Count > 0 && _rng.NextDouble() > 0.12
+            ? playable[_rng.Next(playable.Count)]
+            : null;
+        if (card is null)
+            return null;
+
+        var target = living.Count == 0 ? (CombatantId?)null : living[_rng.Next(living.Count)].Id;
+        _tableBeforeThePlay = RunBot.TableState(combat, member);
+        _lastPlayed = card.DefinitionId.value;
+        _lastPlayedBy = member;
+        _log.Line($"    {member.value} play {card.DefinitionId.value} -> {target?.value ?? "—"} "
+            + $"(hp {payer.Health.Current}, hand {hand.Count})");
+        return new CardPlay(card, target, 0);
+    }
+
+    // The phase's ceiling is the solo turn's, once per member: four heroes may play four turns' worth.
+    public void AfterPartyPlay(RunState run, PartyCombat combat, CardPlay play)
+    {
+        ArgumentNullException.ThrowIfNull(play);
+        var members = Math.Max(1, combat.State.GetLivingCombatantsOnTeam(StandardCombatIds.PlayerTeam).Count);
+        if (++_playsThisTurn >= RunBot.PlaysInATurnNobodyMakes * members)
+        {
+            Reason = $"a party phase at {RunBot.Where(run)} played {_playsThisTurn} cards without ending — "
+                + $"last '{play.Card.DefinitionId.value}'";
+            Stopped = true;
+        }
+    }
+
+    public void EndingMemberTurn(PartyCombat combat, CombatantId member)
+    {
+        ArgumentNullException.ThrowIfNull(combat);
+        var payer = combat.State.GetCombatant(member);
+        _log.Line($"    {member.value} ends turn {_turn + 1} (hp {payer.Health.Current}, hand {combat.HandOf(member).Count})");
     }
 
     public Node Fork(IReadOnlyList<Node> forks)

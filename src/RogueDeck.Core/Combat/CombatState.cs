@@ -855,6 +855,14 @@ public sealed class CombatState
             foreach (var entry in snapshot.TriggerActivity)
                 combat._triggerActivity[new TriggeredEffectDefinitionId(entry.TriggerId)] = entry.Times;
 
+        if (snapshot.PhaseTeam is { } phaseTeam)
+        {
+            combat.CurrentPhaseTeam = phaseTeam;
+            if (!snapshot.EndedThisPhase.IsDefault)
+                foreach (var ended in snapshot.EndedThisPhase)
+                    combat._endedThisPhase.Add(ended);
+        }
+
         return combat;
     }
 

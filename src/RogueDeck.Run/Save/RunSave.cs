@@ -36,6 +36,20 @@ public sealed record RunMemberSaveData(
 {
     // The member's shred inventory (Shred Engine): kind id → count. Defaulted so pre-shred saves load.
     public IReadOnlyDictionary<string, int> Shreds { get; init; } = new Dictionary<string, int>();
+
+    // Which character this member is, and what it brings into every fight (PartyMember.SetCharacter). Absent for
+    // member 0, whose own are on the run, and in every save made before parties came from the roster.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? CharacterId { get; init; }
+
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? CombatActions { get; init; }
+
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<Scenario.Authoring.StartingStatusSpec>? CombatStatuses { get; init; }
 }
 
 // One persistent board unit (P5c) with its LIVE state (current HP, position, statuses) — RunUnitData is authoring

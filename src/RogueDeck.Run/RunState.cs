@@ -120,6 +120,27 @@ public sealed class RunState
     public IReadOnlyList<Scenario.Authoring.StartingStatusSpec> CombatStatuses { get; private set; } = [];
     public void SetCombatStatuses(IReadOnlyList<Scenario.Authoring.StartingStatusSpec>? statuses) => CombatStatuses = statuses ?? [];
 
+    // THE SAME THREE, ASKED OF ONE MEMBER. Member 0 is the run's own character; every other member carries its
+    // own, and a member authored without a character (a blueprint party from before the roster built parties)
+    // counts as the run's character with no moves or rules of its own — which is what it always was.
+    public string? CharacterOf(PartyMember member)
+    {
+        ArgumentNullException.ThrowIfNull(member);
+        return ReferenceEquals(member, Primary) ? CharacterId : member.CharacterId ?? CharacterId;
+    }
+
+    public IReadOnlyList<CardDefinitionId> CombatActionsOf(PartyMember member)
+    {
+        ArgumentNullException.ThrowIfNull(member);
+        return ReferenceEquals(member, Primary) ? CombatActions : member.CombatActions;
+    }
+
+    public IReadOnlyList<Scenario.Authoring.StartingStatusSpec> CombatStatusesOf(PartyMember member)
+    {
+        ArgumentNullException.ThrowIfNull(member);
+        return ReferenceEquals(member, Primary) ? CombatStatuses : member.CombatStatuses;
+    }
+
     // Branching-map traversal (B1). CurrentNodeId is the node being/just walked; the visited set records every node
     // already walked so a graph walk never re-enters one. Both are unused by a linear map (which tracks Position).
     public NodeId? CurrentNodeId { get; private set; }
@@ -628,7 +649,12 @@ public sealed class RunState
         { Composition = c.Composition }).ToArray(),
         Relics: member.Relics.Select(r => new RunRelicSaveData(r.Id.Value, r.Enabled)).ToArray(),
         Consumables: member.Consumables.Select(c => c.DefinitionId.Value).ToArray())
-    { Shreds = member.Shreds.ToDictionary(kv => kv.Key, kv => kv.Value) };
+    {
+        Shreds = member.Shreds.ToDictionary(kv => kv.Key, kv => kv.Value),
+        CharacterId = member.CharacterId,
+        CombatActions = member.CombatActions.Count == 0 ? null : [.. member.CombatActions.Select(a => a.value)],
+        CombatStatuses = member.CombatStatuses.Count == 0 ? null : member.CombatStatuses,
+    };
 
     // Rebuild a run from a save. The map is authored content (supplied by the caller, as in the constructor); the
     // content catalog rehydrates relics/consumables by id. Requires at least the primary member.
@@ -670,6 +696,10 @@ public sealed class RunState
             var member = run.AddPartyMember(
                 new HealthState(saved.CurrentHealth, saved.MaxHealth),
                 saved.DisplayNameKey, new CombatantDefinitionId(saved.DefinitionId));
+            member.SetCharacter(
+                saved.CharacterId,
+                [.. (saved.CombatActions ?? []).Select(a => new CardDefinitionId(a))],
+                saved.CombatStatuses);
             RestoreMember(run, member, saved, content);
         }
 
@@ -856,8 +886,58 @@ public sealed class RunState
         if (maxExclusive <= 0)
             throw new ArgumentOutOfRangeException(nameof(maxExclusive));
 
+        if (_stream is { } stream)
+        {
+            _stream = stream with { Step = stream.Step + 1 };
+            return CombatRandom.CreateShuffledIndexes(maxExclusive, stream.Seed, stream.Step)[0];
+        }
         var indexes = CombatRandom.CreateShuffledIndexes(maxExclusive, RandomSeed, _randomStep++);
         return indexes[0];
+    }
+
+    // ── ONE MEMBER'S OWN DICE (party rooms, multiplayer M2) ──────────────────────────────────────────────
+    // A room every member resolves for itself must not let one member's draws move another's: four players in
+    // one shop see their own shelves whoever buys first. So while a room resolves for a member, the run draws
+    // from a stream of that member's own — seeded from the run's seed, where the run stood when the room was
+    // entered, and the member's seat — and when the room is done the run's own stream moves on by one draw.
+    // Never open across a save: the room loop opens and closes it inside a single node.
+    private (int Seed, int Step)? _stream;
+    private int _streamBase = -1;
+
+    public void BeginMemberStreams()
+    {
+        if (_streamBase >= 0)
+            throw new InvalidOperationException("Member streams are already open.");
+        _streamBase = _randomStep;
+    }
+
+    public void UseMemberStream(int seat)
+    {
+        if (_streamBase < 0)
+            throw new InvalidOperationException("No member streams are open.");
+        unchecked
+        {
+            var seed = (RandomSeed * 486187739) ^ (_streamBase * 16777619) ^ ((seat + 1) * -1640531535);
+            _stream = (seed, 0);
+        }
+    }
+
+    public void EndMemberStreams()
+    {
+        if (_streamBase < 0)
+            return;
+        _stream = null;
+        _randomStep = _streamBase + 1;
+        _streamBase = -1;
+    }
+
+    // Drop whatever a member's room left queued when it parked mid-way. The member's room is unfinished in this
+    // pass and will be resolved again, effects and all, by the replay that carries its answer; what it queued
+    // must not be resolved in the NEXT member's scope and land on them.
+    public void DiscardPendingWork()
+    {
+        _effects.Clear();
+        _undispatched.Clear();
     }
 
     // ── Effect queue + event bus ───────────────────────────────────────────────────

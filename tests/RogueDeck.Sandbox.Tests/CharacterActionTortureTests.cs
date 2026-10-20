@@ -136,6 +136,57 @@ public class CharacterActionTortureTests
         Assert.Equal(0, combat.State.GetCardPlayTurnStats(combat.HeroId).CardsPlayedThisTurn);
     }
 
+    // THE WITCH IN SOMEONE ELSE'S PARTY (multiplayer M1): a seat taken by the witch brings her moves and her
+    // standing rule into the fight as hers — the clerk beside her has neither — and she works the pot from her
+    // own hand and her own energy, question and all, through the replay.
+    [Fact]
+    public void A_witch_seated_beside_a_clerk_brings_her_own_actions_and_rules_into_the_party_fight()
+    {
+        var witchy = Witchy();
+        var blueprint = witchy with
+        {
+            Characters =
+            [
+                new RunCharacter("clerk", new RunStart { HeroName = "Clerk", MaxHealth = 50, StartingHealth = 50 }),
+                new RunCharacter("witch", witchy.Start),
+            ],
+        };
+        using var play = new RunPlayback(() => { });
+        play.Start(blueprint, seed: 1, interactive: true, party: ["clerk", "witch"]);
+        Assert.Null(play.Error);
+        while (play.Session!.IsAwaitingInterlude)
+            play.Session.Continue();
+        var driver = play.PartyCombatDriver!;
+        var combat = driver.Current!;
+        var clerk = combat.ActiveMembers()[0];
+        var witch = combat.ActiveMembers()[1];
+        var enemy = combat.State.Combatants.First(c => c.TeamId == StandardCombatIds.EnemyTeam).Id;
+
+        Assert.Empty(combat.ActionsOf(clerk));
+        Assert.Equal(["stash", "brew"], combat.ActionsOf(witch).Select(a => a.value));
+        Assert.Contains(combat.State.GetCombatant(witch).Statuses, s => s.DefinitionId.value == "pot_keeper");
+        Assert.DoesNotContain(combat.State.GetCombatant(clerk).Statuses, s => s.DefinitionId.value == "pot_keeper");
+        Assert.False(combat.CanUse(clerk, new CardDefinitionId("stash")));
+
+        for (var i = 0; i < 2; i++)
+        {
+            driver.UseActionFor(witch, new CardDefinitionId("stash"), null);
+            var hand = Assert.IsAssignableFrom<IReadOnlyList<CardInstance>>(driver.PendingCardChoice);
+            driver.SupplyCardChoice([hand[0].Id]);
+            Assert.Null(play.Session.Error);
+        }
+        combat = driver.Current!;
+        Assert.Equal(2, combat.State.GetCardZones(witch).SetAside.Count);
+        Assert.True(combat.CanUse(witch, new CardDefinitionId("brew"), enemy));
+
+        var health = combat.State.GetCombatant(enemy).Health.Current;
+        driver.UseActionFor(witch, new CardDefinitionId("brew"), enemy);
+        combat = driver.Current!;
+        Assert.Equal(health - 20, combat.State.GetCombatant(enemy).Health.Current);
+        Assert.Equal(2, combat.EnergyOf(witch));
+        Assert.Equal(3, combat.EnergyOf(clerk));
+    }
+
     // An action that ASKS (which card to set aside) parks the replay, and a question is not a problem: it used to
     // be recorded as "Step threw … ReplayParkedException", which the game showed as an error toast on every press
     // of the Witch's pot.

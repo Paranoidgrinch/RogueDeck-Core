@@ -164,6 +164,38 @@ public sealed record RunBlueprint(
         return this with { Start = start, Characters = fighter is null ? [] : [fighter with { Start = start }] };
     }
 
+    // A PARTY OF ROSTER CHARACTERS, one per seat (multiplayer): the first seat's start, with every further seat
+    // joined as a member carrying its own character's deck, health, gold, relics, consumables, moves and rules.
+    // The same character may sit in two seats. One seat, or none, is that character's own start unchanged.
+    public RunStart PartyStart(IReadOnlyList<string> characterIds)
+    {
+        ArgumentNullException.ThrowIfNull(characterIds);
+        var lead = ResolveStart(characterIds.Count > 0 ? characterIds[0] : null);
+        if (characterIds.Count <= 1)
+            return lead;
+        return lead with
+        {
+            StartingParty = [.. characterIds.Skip(1).Select(id =>
+            {
+                var start = ResolveStart(id);
+                return new RunMemberData
+                {
+                    DefinitionId = id,
+                    DisplayNameKey = start.HeroName,
+                    MaxHealth = start.MaxHealth,
+                    StartingHealth = start.StartingHealth == start.MaxHealth ? null : start.StartingHealth,
+                    Deck = [.. (start.Deck.Count > 0 ? start.Deck : Deck).Select(card => card.value)],
+                    Resources = start.Resources,
+                    StartingRelics = start.StartingRelics,
+                    StartingConsumables = start.StartingConsumables,
+                    CharacterId = Characters.Any(c => c.Id == id) ? id : null,
+                    CombatActions = start.CombatActions,
+                    CombatStatuses = start.CombatStatuses,
+                };
+            })],
+        };
+    }
+
     public RunStart ResolveStart(string? characterId = null)
     {
         if (Characters.Count == 0)
@@ -261,4 +293,23 @@ public sealed record RunMemberData
     // the runner once content is attached (unknown ids skipped), exactly like the hero's RunStart.Starting* lists.
     public IReadOnlyList<string> StartingRelics { get; init; } = [];
     public IReadOnlyList<string> StartingConsumables { get; init; } = [];
+
+    // A member who IS a roster character (RunBlueprint.PartyStart): its id, and the moves and standing rules it
+    // brings into every fight. All absent for a member authored by hand, so those documents read as they were.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? CharacterId { get; init; }
+
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<CardDefinitionId>? CombatActions { get; init; }
+
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<StartingStatusSpec>? CombatStatuses { get; init; }
+
+    // Health the member starts on, when it is not its maximum. Null ⇒ full, as a hand-authored member always was.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public int? StartingHealth { get; init; }
 }

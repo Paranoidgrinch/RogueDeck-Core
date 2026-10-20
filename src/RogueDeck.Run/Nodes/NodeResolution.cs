@@ -109,3 +109,79 @@ public sealed class ScriptedChoiceProvider : IRunChoiceProvider, IRunEntityChoos
         return candidates[0].Id;
     }
 }
+
+// THE SEAT A PARTY ROOM ANSWERS FROM (multiplayer M2). A choice provider that can park — the interactive
+// session — implements this to let a room resolve for one member at a time and to keep one open question per
+// member, instead of one for the whole party. A provider that answers inline (a bot, a scripted test) does not
+// need it: the members simply answer in turn.
+public interface IRunMemberSeat
+{
+    // Every prompt from here on is this member's, and takes only this member's answers.
+    void BeginMember(PartyMember member);
+
+    // The member's room stopped at a question it has no answer for yet; keep that question as the member's.
+    void MemberParked(PartyMember member);
+
+    void EndMember();
+
+    // At least one member is waiting: stop the run here, with every member's question standing. Throws.
+    void ParkMembers();
+}
+
+// A ROOM IS EVERY MEMBER'S OWN. In a party run an event, a shop, a workbench, a combat's reward resolves once per
+// member, in seat order, with that member as the run's active member and on that member's own dice — so each
+// pays, gains and chooses for themselves. A member whose room stops at a question does not hold the others up:
+// the room carries on for the next member and parks for all of them together at the end. A solo run resolves
+// the room once, as it always did, with nothing opened around it.
+public static class PartyRooms
+{
+    public static void ForEachMember(NodeResolveContext context, Action<PartyMember> resolve)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(resolve);
+        var run = context.Run;
+        if (run.Party.Count <= 1)
+        {
+            resolve(run.ActiveMember);
+            return;
+        }
+
+        var seat = context.Choices as IRunMemberSeat;
+        var parked = false;
+        // Whatever is still queued belongs to the room as a whole (a relic answering the door), not to member 0.
+        context.ResolvePendingEffects();
+        run.BeginMemberStreams();
+        try
+        {
+            for (var index = 0; index < run.Party.Count; index++)
+            {
+                var member = run.Party[index];
+                using var scope = run.PushActiveMember(member);
+                run.UseMemberStream(index);
+                seat?.BeginMember(member);
+                try
+                {
+                    resolve(member);
+                    context.ResolvePendingEffects();
+                }
+                catch (Scenario.Scripting.CombatPromptParkedException) when (seat is not null)
+                {
+                    seat.MemberParked(member);
+                    run.DiscardPendingWork();
+                    parked = true;
+                }
+                finally
+                {
+                    seat?.EndMember();
+                }
+            }
+        }
+        finally
+        {
+            run.EndMemberStreams();
+        }
+
+        if (parked)
+            seat!.ParkMembers();
+    }
+}

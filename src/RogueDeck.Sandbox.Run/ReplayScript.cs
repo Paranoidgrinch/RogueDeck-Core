@@ -10,7 +10,16 @@ namespace RogueDeck.Sandbox.Run;
 // lets the same interactive machinery run on single-threaded WebAssembly (the old design blocked a background
 // thread per prompt, which the browser runtime forbids). Determinism is the engine's own contract: same seed +
 // same answers ⇒ the same states, so each replay reproduces the previous park exactly and advances one answer.
-public abstract record ReplayEntry;
+//
+// WHOSE ANSWER (party runs, multiplayer M2): in a room every member answers for themselves, and `Seat` names the
+// member (RunMemberId) an answer belongs to. A room resolves member by member, and each member takes only its own
+// answers — so the order in which the members' answers ARRIVE does not change the run, which is what lets four
+// players stand in the same shop at once. Null for every answer that is the whole party's (the map, an interlude,
+// a fight) and for every answer in a solo run, which is therefore recorded exactly as before.
+public abstract record ReplayEntry
+{
+    public string? Seat { get; init; }
+}
 
 public sealed record EventPickEntry(string ChoiceId) : ReplayEntry;
 
@@ -49,7 +58,12 @@ public interface IReplayResettable
 public sealed class ReplayScript
 {
     private readonly List<ReplayEntry> _entries = new();
+    private readonly List<bool> _taken = new();
     private int _cursor;
+
+    // The member a room is resolving for, while it is; null between rooms and in every solo run. Set by the
+    // session (its member seat), read by TryTake.
+    internal string? Seat { get; set; }
 
     // The replay attempt's live run, set by the session before each attempt so combat-scoped entries (in-combat
     // consumables) can resolve against the run's inventory.
@@ -67,6 +81,7 @@ public sealed class ReplayScript
     {
         ArgumentNullException.ThrowIfNull(entry);
         _entries.Add(entry);
+        _taken.Add(false);
         OnAdvance?.Invoke();
         Answered?.Invoke(entry);
     }
@@ -76,7 +91,13 @@ public sealed class ReplayScript
     // given, and a run recording must still hear it — or its replay parks at an interlude nobody continued.
     internal void Announce(ReplayEntry entry) => Answered?.Invoke(entry);
 
-    internal void Reset() => _cursor = 0;
+    internal void Reset()
+    {
+        _cursor = 0;
+        Seat = null;
+        for (var i = 0; i < _taken.Count; i++)
+            _taken[i] = false;
+    }
 
     // Forget everything recorded so far. Only a caller that has moved the replay BASELINE forward may do this
     // (see InteractiveRunSession's checkpoint): the entries dropped here are the answers the new baseline
@@ -85,18 +106,36 @@ public sealed class ReplayScript
     internal void Clear()
     {
         _entries.Clear();
+        _taken.Clear();
         _cursor = 0;
+        Seat = null;
     }
 
-    internal bool AtEnd => _cursor >= _entries.Count;
+    // ⚠ Two readings of "the next answer". Outside a member's room it is the first one nobody has taken yet,
+    // strictly in order — every solo run, and every answer that is the party's. Inside one it is that member's
+    // own next answer, wherever it stands in the list: the others' answers in between belong to the others.
+    private int Next()
+    {
+        while (_cursor < _entries.Count && _taken[_cursor])
+            _cursor++;
+        if (Seat is not { } seat)
+            return _cursor;
+        for (var i = _cursor; i < _entries.Count; i++)
+            if (!_taken[i] && _entries[i].Seat == seat)
+                return i;
+        return _entries.Count;
+    }
+
+    internal bool AtEnd => Next() >= _entries.Count;
 
     // Consume the next entry only when it is of the expected kind — prompts are answered strictly in order, so a
     // kind mismatch means the script no longer matches the run (a bug, surfaced via ThrowIfMismatched).
     internal bool TryTake<T>(out T entry) where T : ReplayEntry
     {
-        if (_cursor < _entries.Count && _entries[_cursor] is T match)
+        var at = Next();
+        if (at < _entries.Count && _entries[at] is T match && match.Seat == Seat)
         {
-            _cursor++;
+            _taken[at] = true;
             entry = match;
             return true;
         }
@@ -106,10 +145,13 @@ public sealed class ReplayScript
 
     internal void ThrowIfMismatched(string site)
     {
-        if (!AtEnd)
+        var at = Next();
+        if (at < _entries.Count)
         {
+            var entry = _entries[at];
+            var whose = entry.Seat is { } seat ? $" for {seat}" : "";
             throw new InvalidOperationException(
-                $"Replay script mismatch at {site}: next recorded entry is {_entries[_cursor].GetType().Name}.");
+                $"Replay script mismatch at {site}: next recorded entry is {entry.GetType().Name}{whose}.");
         }
     }
 }

@@ -194,6 +194,14 @@ public static class RunDocumentValidator
         CheckBalanceIds(problems, "relic", balance.Relics.Keys, relicIds);
         CheckBalanceIds(problems, "consumable", balance.Consumables.Keys, consumableIds);
         CheckBalanceIds(problems, "character", balance.Characters.Keys, seenCharacterIds);
+        // How a party's fights scale and aim (multiplayer M3): a negative share would make a party's enemies weaker
+        // than a lone hero's, and a misspelt strategy would quietly fall back to the first hero.
+        if (balance.PartyEnemyHealthPerExtraMember < 0)
+            problems.Add($"{BalanceTab}: the enemy health per extra party member is {balance.PartyEnemyHealthPerExtraMember} — it cannot be negative.");
+        if (balance.PartyEnemyTargeting is { } aim
+            && !Enum.TryParse<RogueDeck.Scenario.Scripting.PartyEnemyTargeting>(aim, ignoreCase: true, out _))
+            problems.Add($"{BalanceTab}: party enemy targeting '{aim}' is not one of "
+                + $"{string.Join(", ", Enum.GetNames<RogueDeck.Scenario.Scripting.PartyEnemyTargeting>())}.");
 
         // Map generation rules: feasible row budget + every role that can appear has resolvable content.
         if (blueprint.MapGeneration is { } spec)

@@ -243,5 +243,8 @@ public sealed class EnemyBlueprint : CombatantBlueprint
 // bridge projects each roster unit into an AllyBlueprint (id + carried HP via CurrentHealth + position + statuses).
 public sealed class AllyBlueprint : CombatantBlueprint
 {
+    // A party member's own ACTIONS (its character's, like HeroBlueprint.Actions); empty for a board unit.
+    public List<CardDefinitionId> Actions { get; } = new();
+
     public AllyBlueprint(string id) : base(id, "ally") { }
 }

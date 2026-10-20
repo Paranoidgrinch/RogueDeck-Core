@@ -55,8 +55,11 @@ public sealed record RunRecording
 }
 
 // One choice among cards: where it happened, what it was for, what was offered (card ids, an improved copy with
-// its "+"), and what was taken — empty when the player took nothing.
-public sealed record RunRecordingPick(int Act, string Purpose, string[] Offered, string[] Taken);
+// its "+"), and what was taken — empty when the player took nothing. In a party run `Member` names whose choice it
+// was; a solo run leaves it out, so its recordings read as they always did.
+public sealed record RunRecordingPick(
+    int Act, string Purpose, string[] Offered, string[] Taken,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Member = null);
 
 // The player's word on a finished run: a rating of 1–5 ("was that fair?") and an optional line of text.
 public sealed record RunRecordingFeedback(int Rating, string? Comment);
@@ -79,6 +82,9 @@ public sealed record RunRecordingStart
     public string? Character { get; init; }
     public string? MapGenerator { get; init; }
     public MetaStateData? Meta { get; init; }
+    // A party run's heroes in seat order, the first being `Character`; null for a solo run.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string[]? Party { get; init; }
 }
 
 // "After answer number `After` (1-based: the count of answers given), the run stood like this." Written each
@@ -114,7 +120,16 @@ public static class RunRecordingJson
 // An empty string stands for "none" in an optional middle argument.
 public static class RunAnswerCodec
 {
-    public static string[] Encode(ReplayEntry entry) => entry switch
+    // A party member's own answer (ReplayEntry.Seat) is written behind its seat, "@member#1": a solo run's
+    // answers carry none and read exactly as they always did.
+    public static string[] Encode(ReplayEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        var parts = EncodeAnswer(entry);
+        return entry.Seat is { } seat ? ["@" + seat, .. parts] : parts;
+    }
+
+    private static string[] EncodeAnswer(ReplayEntry entry) => entry switch
     {
         EventPickEntry e => ["e", e.ChoiceId],
         NodePickEntry n => ["n", n.NodeId],
@@ -131,6 +146,14 @@ public static class RunAnswerCodec
     };
 
     public static ReplayEntry Decode(IReadOnlyList<string> answer)
+    {
+        ArgumentNullException.ThrowIfNull(answer);
+        if (answer.Count > 1 && answer[0].StartsWith('@'))
+            return DecodeAnswer([.. answer.Skip(1)]) with { Seat = answer[0][1..] };
+        return DecodeAnswer(answer);
+    }
+
+    private static ReplayEntry DecodeAnswer(IReadOnlyList<string> answer)
     {
         if (answer.Count == 0)
             throw new InvalidDataException("An empty answer.");
@@ -175,11 +198,27 @@ public sealed class RunRecorder
     // applied, when the run already stands at the next prompt — so what a pick index MEANT has to be read off the
     // prompt before it is answered. These hold it: a pick among cards (index → card id, null for a non-card
     // option), and the shop the run is standing in (every card seen on its shelves this visit, and what was bought).
-    private (int Act, string Purpose, string?[] Cards)? _pendingPick;
-    private string? _shopRoom;
-    private int _shopAct;
-    private readonly Dictionary<string, string> _shopSeen = new(StringComparer.Ordinal);
-    private readonly List<string> _shopTaken = [];
+    // ONE OF EACH PER SEAT: in a party room every member is asked at once, and an answer is read against its own
+    // member's question. A solo run has the one seat, "", and nothing else.
+    private sealed class SeatLook
+    {
+        public (int Act, string Purpose, string?[] Cards, string? Member)? PendingPick;
+        public string? ShopRoom;
+        public int ShopAct;
+        public string? ShopMember;
+        public readonly Dictionary<string, string> ShopSeen = new(StringComparer.Ordinal);
+        public readonly List<string> ShopTaken = [];
+    }
+
+    private readonly Dictionary<string, SeatLook> _seats = new(StringComparer.Ordinal);
+
+    private SeatLook SeatOf(string? seat)
+    {
+        var key = seat ?? "";
+        if (!_seats.TryGetValue(key, out var look))
+            _seats[key] = look = new SeatLook();
+        return look;
+    }
 
     public RunRecording Recording { get; private set; }
 
@@ -193,7 +232,8 @@ public sealed class RunRecorder
     // A new recording for a run about to start: the host fills in who and what it is.
     public static RunRecording Begin(
         int seed, string? character, string? mapGenerator, MetaState? meta,
-        RunRecordingPlayer? player, string? contentHash, string? host, DateTime startedUtc) =>
+        RunRecordingPlayer? player, string? contentHash, string? host, DateTime startedUtc,
+        IReadOnlyList<string>? party = null) =>
         new()
         {
             Player = player,
@@ -204,6 +244,7 @@ public sealed class RunRecorder
                 Character = character,
                 MapGenerator = mapGenerator,
                 Meta = meta?.Snapshot(),
+                Party = party is { Count: > 1 } seats ? [.. seats] : null,
             },
             StartedUtc = startedUtc.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
         };
@@ -258,16 +299,18 @@ public sealed class RunRecorder
     // What the answer just given MEANT, against the prompt it answered.
     private void Note(ReplayEntry entry)
     {
+        var look = SeatOf(entry.Seat);
         switch (entry)
         {
-            case EntityPicksEntry picks when _pendingPick is { } pick:
+            case EntityPicksEntry picks when look.PendingPick is { } pick:
                 Recording.Picks.Add(new RunRecordingPick(pick.Act, pick.Purpose,
                     [.. pick.Cards.OfType<string>()],
                     [.. picks.Indices.Where(i => i >= 0 && i < pick.Cards.Length && pick.Cards[i] is not null)
-                        .Select(i => pick.Cards[i]!)]));
+                        .Select(i => pick.Cards[i]!)],
+                    pick.Member));
                 break;
-            case EventPickEntry chosen when _shopRoom is not null && _shopSeen.TryGetValue(chosen.ChoiceId, out var card):
-                _shopTaken.Add(card);
+            case EventPickEntry chosen when look.ShopRoom is not null && look.ShopSeen.TryGetValue(chosen.ChoiceId, out var card):
+                look.ShopTaken.Add(card);
                 break;
         }
     }
@@ -277,42 +320,64 @@ public sealed class RunRecorder
     // this" can be told apart from "everybody throws this away".
     private void Look()
     {
-        _pendingPick = null;
         if (_playback?.Session is not { } session)
             return;
         var run = session.Run;
-        if (session.PendingEntities is { } request)
+        // Every seat with a question standing — one per waiting member in a party room, the session's own
+        // otherwise — and every seat that had one, so a shop it has walked out of is written down.
+        var standing = session.PendingSeats.Count > 0
+            ? session.PendingSeats.Select(p => (Key: p.Seat, p.Situation, p.ShopShelf, p.Entities)).ToList()
+            : [(Key: "", session.PendingSituation, session.PendingShopShelf, session.PendingEntities)];
+        foreach (var key in _seats.Keys.Except(standing.Select(s => s.Key)).ToList())
+            LookAt(SeatOf(key), run, null, null, null, null);
+        // A seat's key IS its member; the session's own question is whoever the run is pointed at.
+        foreach (var (key, situation, shelf, entities) in standing)
+            LookAt(SeatOf(key), run, situation, shelf, entities, key.Length > 0 ? key : MemberOf(run));
+    }
+
+    // One seat's prompt: a pick among cards, or a shop's shelves. A pick that offers no card is not a card choice
+    // and is not written; a removal is marked by its intent ("remove|…"), so "nobody takes this" can be told apart
+    // from "everybody throws this away".
+    private void LookAt(
+        SeatLook look, RunState run, EventSituation? situation, ShopShelf? pendingShelf,
+        EntitySelectionRequest? request, string? member)
+    {
+        look.PendingPick = null;
+        if (request is not null)
         {
             var cards = Enumerable.Range(0, request.Displays.Count)
                 .Select(i => request.ArtAt(i) is { Kind: EntityArt.Card } art ? CardId(art) : null)
                 .ToArray();
             if (cards.Any(card => card is not null))
-                _pendingPick = (run.ActNumber,
-                    request.Intent == RunChoiceIntent.Remove ? $"remove|{request.Purpose}" : request.Purpose, cards);
+                look.PendingPick = (run.ActNumber,
+                    request.Intent == RunChoiceIntent.Remove ? $"remove|{request.Purpose}" : request.Purpose, cards,
+                    member);
         }
 
         // ONE SHOP VISIT IS ONE CHOICE: every card that stood on its shelves while the player was there (a card
         // seen on ten redraws of one shelf is one card offered), and what they bought. Written when they leave.
         // The shelf is read off the session, not the run: the park unwinds the resolver and ends the visit, so by
         // the time an answer arrives run.ActiveShopShelf is always null again.
-        var here = session.PendingShopShelf is { } shelf && session.PendingSituation is not null
+        var here = pendingShelf is { } shelf && situation is not null
             ? (Room: $"{run.ActNumber}:{run.CurrentNodeId?.Value}", Shelf: shelf)
             : ((string Room, ShopShelf Shelf)?)null;
-        if (_shopRoom is not null && here?.Room != _shopRoom)
+        if (look.ShopRoom is not null && here?.Room != look.ShopRoom)
         {
-            if (_shopSeen.Count > 0)
-                Recording.Picks.Add(new RunRecordingPick(_shopAct, "shop", [.. _shopSeen.Values], [.. _shopTaken]));
-            _shopRoom = null;
-            _shopSeen.Clear();
-            _shopTaken.Clear();
+            if (look.ShopSeen.Count > 0)
+                Recording.Picks.Add(new RunRecordingPick(
+                    look.ShopAct, "shop", [.. look.ShopSeen.Values], [.. look.ShopTaken], look.ShopMember));
+            look.ShopRoom = null;
+            look.ShopSeen.Clear();
+            look.ShopTaken.Clear();
         }
         if (here is { } shop)
         {
-            _shopRoom = shop.Room;
-            _shopAct = run.ActNumber;
+            look.ShopRoom = shop.Room;
+            look.ShopAct = run.ActNumber;
+            look.ShopMember = member;
             foreach (var slot in shop.Shelf.Slots)
                 if (RunEntityLabeler.ArtForGrant(slot.Entry.Payload) is { Kind: EntityArt.Card } art)
-                    _shopSeen.TryAdd(slot.Entry.Id, CardId(art));
+                    look.ShopSeen.TryAdd(slot.Entry.Id, CardId(art));
         }
     }
 
@@ -331,15 +396,30 @@ public sealed class RunRecorder
         Recording.Rooms.Add(new RunRoomCheck(Recording.Answers.Count, state));
     }
 
+    // Whose prompt this is, in a party run; null for a solo run.
+    private static string? MemberOf(RunState run) => run.Party.Count > 1 ? run.ActiveMember.Id.Value : null;
+
     // How the run stands, in one line: where it is, and the numbers a divergence would show in first.
+    // ⚠ The hero is read off Primary, not the run's active member: a party prompt points the run at whoever is
+    // answering, and the same moment must print the same line whoever that is. For a solo run the two are one.
+    // Every further member of a party follows in seat order; a solo line has none and reads as it always did.
     public static string Fingerprint(RunState run)
     {
-        var resources = string.Join(",", run.Resources
+        var hero = run.Primary;
+        var line = $"{run.ActNumber}.{run.VisitedNodes.Count} {run.CurrentNodeId?.Value ?? "-"}"
+            + $" | {Member(hero)} | {run.Result}";
+        foreach (var member in run.Party.Skip(1))
+            line += $" | {member.Id.Value} {Member(member)}";
+        return line;
+    }
+
+    private static string Member(PartyMember member)
+    {
+        var resources = string.Join(",", member.Resources
             .OrderBy(r => r.Key.Value, StringComparer.Ordinal)
             .Select(r => $"{r.Key.Value}={r.Value}"));
-        return $"{run.ActNumber}.{run.VisitedNodes.Count} {run.CurrentNodeId?.Value ?? "-"}"
-            + $" | hp {run.Health.Current}/{run.Health.Max} | deck {run.Deck.Count} | relics {run.Relics.Count}"
-            + $" | {resources} | {run.Result}";
+        return $"hp {member.Health.Current}/{member.Health.Max} | deck {member.Deck.Count}"
+            + $" | relics {member.Relics.Count} | {resources}";
     }
 
     private static string RoomOf(string state) => state.Split(" | ", 2)[0];
@@ -364,7 +444,7 @@ public static class RunReplayer
             meta.Save(MetaState.FromSnapshot(data));
         using var playback = new RunPlayback(() => { }, meta);
         playback.Start(blueprint, recording.Start.Seed, interactive: true,
-            recording.Start.Character, recording.Start.MapGenerator);
+            recording.Start.Character, recording.Start.MapGenerator, recording.Start.Party);
         if (playback.Error is { } startError || playback.Script is not { } script)
             return new Outcome(false, 0, null, null, playback.Error ?? "the run did not start");
 

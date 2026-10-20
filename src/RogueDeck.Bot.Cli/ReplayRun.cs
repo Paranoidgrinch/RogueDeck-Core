@@ -109,7 +109,7 @@ public static class ReplayRun
             meta.Save(MetaState.FromSnapshot(data));
         var play = new RunPlayback(() => { }, meta);
         play.Start(blueprint, recording.Start.Seed, interactive: true, recording.Start.Character,
-            recording.Start.MapGenerator);
+            recording.Start.MapGenerator, recording.Start.Party);
         var checks = recording.Rooms.ToLookup(c => c.After);
         var interludes = 0;
         try

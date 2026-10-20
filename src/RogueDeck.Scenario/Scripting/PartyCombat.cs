@@ -12,7 +12,7 @@ public enum PartyEnemyTargeting
     FirstAlive,    // the first living player in roster order — the historical default
     LowestHealth,  // the most wounded living player (focus-fire the weak)
     HighestHealth, // the healthiest living player (a crude "biggest threat")
-    Random,        // a uniformly random living player, drawn from the combat RNG
+    Random,        // a uniformly random living player, drawn per round and enemy from the combat's seed
     Nearest,       // the living player at least Manhattan distance from the acting enemy (positional)
 }
 
@@ -28,10 +28,10 @@ public sealed class PartyCombat
     private static readonly TeamId EnemyTeam = StandardCombatIds.EnemyTeam;
 
     private readonly CombatState _combat;
+    private readonly CompiledScenario _compiled;
     private readonly CombatDefinitionRegistry _registry;
     private readonly Func<CombatState, CombatantId, int, EnemyActionDefinitionId?> _enemyIntent;
     private readonly PartyEnemyTargeting _targeting;
-    private int _targetStep;
     private readonly SimultaneousTurnProcessor _phases = new();
     private readonly CombatQueueProcessor _queues = new();
 
@@ -40,7 +40,7 @@ public sealed class PartyCombat
         Func<CombatState, CombatantId, int, EnemyActionDefinitionId?> enemyIntent,
         string combatId = "party",
         int randomSeed = 1,
-        PartyEnemyTargeting targeting = PartyEnemyTargeting.FirstAlive,
+        PartyEnemyTargeting? targeting = null,
         bool startOpeningPhase = true)
     {
         ArgumentNullException.ThrowIfNull(compiled);
@@ -49,24 +49,51 @@ public sealed class PartyCombat
             throw new InvalidOperationException(
                 "PartyCombat requires a scenario with SimultaneousTeamTurns; use InteractiveCombat otherwise.");
 
+        _compiled = compiled;
         _registry = compiled.Registry;
         _enemyIntent = enemyIntent;
-        _targeting = targeting;
+        _targeting = targeting ?? compiled.PartyTargeting; // unnamed: the scenario's
         _combat = ScenarioCombatFactory.Build(compiled, combatId, randomSeed);
-
-        // Let combat programs read the telegraph: a card that asks "does the target intend to Attack" gets
-        // the same projection the UI renders. Player-team members do not telegraph.
-        _combat.SetUpcomingIntentKind((state, combatant) =>
-            state.TryGetCombatant(combatant, out var c) && c is not null && c.TeamId == PlayerTeam
-                ? null
-                : enemyIntent(state, combatant, state.CurrentRound) is { } actionId
-                    ? compiled.IntentFor(actionId)?.Kind.ToString()
-                    : null);
+        InstallTelegraph(compiled);
 
         // Open the first player phase: every player-team member starts its turn and draws its own opening hand.
         if (startOpeningPhase)
             StartOpeningPhase();
     }
+
+    // Resume a party fight from a RESTORED CombatState (a checkpoint or save taken at a phase boundary). The
+    // state is rebuilt by the caller with CombatState.Restore against the SAME content as `compiled`, and it
+    // already stands in its player phase with the hands dealt, so nothing is opened here.
+    public PartyCombat(
+        CompiledScenario compiled,
+        CombatState restoredState,
+        Func<CombatState, CombatantId, int, EnemyActionDefinitionId?> enemyIntent,
+        PartyEnemyTargeting? targeting = null)
+    {
+        ArgumentNullException.ThrowIfNull(compiled);
+        ArgumentNullException.ThrowIfNull(restoredState);
+        ArgumentNullException.ThrowIfNull(enemyIntent);
+        if (!compiled.SimultaneousTeamTurns)
+            throw new InvalidOperationException(
+                "PartyCombat requires a scenario with SimultaneousTeamTurns; use InteractiveCombat otherwise.");
+
+        _compiled = compiled;
+        _registry = compiled.Registry;
+        _enemyIntent = enemyIntent;
+        _targeting = targeting ?? compiled.PartyTargeting; // unnamed: the scenario's
+        _combat = restoredState;
+        InstallTelegraph(compiled);
+    }
+
+    // Let combat programs read the telegraph: a card that asks "does the target intend to Attack" gets the same
+    // projection the UI renders. Player-team members do not telegraph.
+    private void InstallTelegraph(CompiledScenario compiled) =>
+        _combat.SetUpcomingIntentKind((state, combatant) =>
+            state.TryGetCombatant(combatant, out var c) && c is not null && c.TeamId == PlayerTeam
+                ? null
+                : _enemyIntent(state, combatant, state.CurrentRound) is { } actionId
+                    ? compiled.IntentFor(actionId)?.Kind.ToString()
+                    : null);
 
     // Open the first player phase — see InteractiveCombat.StartOpeningTurn for why this is separable: a rule
     // that raises a prompt as the opening hands are dealt needs its chooser installed before they are.
@@ -94,7 +121,46 @@ public sealed class PartyCombat
         _combat.GetCombatant(memberId).Resources.TryGetValue(StandardCombatIds.EnergyResource, out var pool)
             ? pool.Current : 0;
 
+    // One member's own actions in this fight (its character's: HeroBlueprint.Actions for the hero, the projected
+    // AllyBlueprint.Actions for everyone else), in the order the character lists them.
+    public IReadOnlyList<CardDefinitionId> ActionsOf(CombatantId memberId) =>
+        memberId == _compiled.Hero.CombatantId
+            ? _compiled.Hero.Actions
+            : _compiled.Allies.FirstOrDefault(a => a.CombatantId == memberId)?.Actions ?? [];
+
+    // Whether a member could use one of its actions right now: it is that member's, it is in the phase, a rule
+    // allows it, and the member can pay for it.
+    public bool CanUse(CombatantId memberId, CardDefinitionId actionId, CombatantId? target = null)
+    {
+        if (IsOver || !ActiveMembers().Contains(memberId) || !ActionsOf(memberId).Contains(actionId)
+            || !_registry.CardDefinitions.TryGetValue(actionId, out var action) || !action.IsAction)
+            return false;
+        var member = _combat.GetCombatant(memberId);
+        if (!CombatCardPlayProcessor.IsCardPlayAllowed(_combat, _registry, action, member, target, cardInstanceId: null))
+            return false;
+        return ActionCost(memberId, actionId, target)
+            .All(cost => member.Resources.TryGetValue(cost.ResourceId, out var pool) && pool.Current >= cost.Amount);
+    }
+
+    // What one member's action costs right now, every modifier applied.
+    public IReadOnlyList<CalculatedResourceCost> ActionCost(
+        CombatantId memberId, CardDefinitionId actionId, CombatantId? target = null) =>
+        _registry.CardDefinitions.TryGetValue(actionId, out var action)
+            ? CombatCardPlayProcessor.PreviewCosts(_combat, _registry, action, _combat.GetCombatant(memberId), target)
+            : [];
+
     // ── Actions ──────────────────────────────────────────────────────────────────
+
+    // Use one of a member's own actions — the action counterpart of PlayCard. No-op unless the member is in the
+    // phase and the action is its own; a prompt the action raises parks the replay from the caller's loop.
+    public void UseAction(CombatantId memberId, CardDefinitionId actionId, CombatantId? target)
+    {
+        if (IsOver || !ActiveMembers().Contains(memberId) || !ActionsOf(memberId).Contains(actionId))
+            return;
+
+        _combat.EnqueueEffect(new UseActionEffectRequest(memberId, actionId, target, new UseActionOutcomeSlot()));
+        _queues.ResolvePendingQueues(_combat, _registry);
+    }
 
     // Play a card from one member's hand. No-op unless that member is currently an active player (in the player
     // phase, alive, not yet ended) and holds the card.
@@ -138,7 +204,7 @@ public sealed class PartyCombat
                 continue;
 
             var actionId = _enemyIntent(_combat, enemy.Id, _combat.CurrentRound);
-            if (actionId is { } id && _registry.TryGetEnemyAction(id, out _) && EnemyTarget(enemy.Id) is { } targetId)
+            if (actionId is { } id && _registry.TryGetEnemyAction(id, out _) && IntendedTarget(enemy.Id) is { } targetId)
             {
                 _combat.EnqueueEffect(new ExecuteEnemyActionEffectRequest(enemy.Id, id, targetId));
                 _queues.ResolvePendingQueues(_combat, _registry);
@@ -153,9 +219,12 @@ public sealed class PartyCombat
             _phases.AdvanceToNextTeamPhase(_combat, _registry);
     }
 
-    // Which player the acting enemy hits, per the configured targeting strategy (party deckbuilding B2d). Only
-    // living players are candidates; ties break by roster order so the pick stays deterministic.
-    private CombatantId? EnemyTarget(CombatantId enemyId)
+    // WHOM THIS ENEMY MEANS TO HIT this round, per the configured targeting strategy (party deckbuilding B2d) —
+    // asked by the enemy phase as it acts, and by a frontend that shows it on the enemy's intent beforehand
+    // (multiplayer M3). Only living players are candidates; ties break by roster order. A pure function of the
+    // fight as it stands: the random strategy draws from the combat's seed by round and enemy, never from a
+    // counter of its own, so a fight rebuilt from its snapshot aims exactly where the live one did.
+    public CombatantId? IntendedTarget(CombatantId enemyId)
     {
         var players = _combat.GetLivingCombatantsOnTeam(PlayerTeam).ToArray();
         if (players.Length == 0)
@@ -166,11 +235,15 @@ public sealed class PartyCombat
             PartyEnemyTargeting.LowestHealth => Extreme(players, lowest: true).Id,
             PartyEnemyTargeting.HighestHealth => Extreme(players, lowest: false).Id,
             PartyEnemyTargeting.Random => players[
-                CombatRandom.CreateShuffledIndexes(players.Length, _combat.RandomSeed, _targetStep++)[0]].Id,
+                CombatRandom.CreateShuffledIndexes(players.Length, _combat.RandomSeed, TargetDraw(enemyId))[0]].Id,
             PartyEnemyTargeting.Nearest => Nearest(players, enemyId).Id,
             _ => players[0].Id, // FirstAlive
         };
     }
+
+    // One draw per round and enemy, far from the steps the fight's own dice use.
+    private int TargetDraw(CombatantId enemyId) =>
+        1_000_000 + _combat.CurrentRound * 64 + _combat.TurnOrder.ToList().IndexOf(enemyId);
 
     // The living player with the min (or max) current HP, first in roster order on a tie.
     private static CombatantState Extreme(IReadOnlyList<CombatantState> players, bool lowest)

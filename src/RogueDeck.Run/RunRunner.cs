@@ -210,7 +210,13 @@ public sealed class RunRunner
         // must land in THIS node's combat, not the next one.
         _processor.ResolvePending(run, _registry);
 
-        _registry.GetResolver(node.Type).Resolve(context, node);
+        // A party walks into a room together and each member takes it for themselves (PartyRooms) — except a
+        // fight, which is the party's, and which hands out its rewards member by member itself.
+        var resolver = _registry.GetResolver(node.Type);
+        if (run.Party.Count > 1 && node.Type != StandardRunIds.CombatNode)
+            PartyRooms.ForEachMember(context, _ => resolver.Resolve(context, node));
+        else
+            resolver.Resolve(context, node);
         _processor.ResolvePending(run, _registry);
 
         if (run.IsPartyDefeated())

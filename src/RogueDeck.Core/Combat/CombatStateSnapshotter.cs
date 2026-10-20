@@ -67,7 +67,12 @@ public static class CombatStateSnapshotter
                 : combat.TriggerActivity
                     .OrderBy(pair => pair.Key.value, StringComparer.Ordinal)
                     .Select(pair => new TriggerActivitySnapshot(pair.Key.value, pair.Value))
-                    .ToImmutableArray());
+                    .ToImmutableArray(),
+            PhaseTeam: combat.CurrentPhaseTeam,
+            // In TurnOrder, not set order, so two captures of the same moment are the same capture.
+            EndedThisPhase: combat.EndedThisPhase.Count == 0
+                ? default
+                : combat.TurnOrder.Where(combat.HasMemberEnded).ToImmutableArray());
     }
 
     private static CombatantSnapshot SnapshotCombatant(CombatantState c) =>

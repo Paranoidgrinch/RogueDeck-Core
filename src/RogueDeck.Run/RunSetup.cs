@@ -8,12 +8,17 @@ public static class RunSetup
     // characterId selects a starting character from the blueprint's roster (character selection); null / an unknown
     // id / no roster falls back to the first roster character or the single Start, so existing single-character
     // callers are unchanged. The caller resolves the pick (a UI presents blueprint.Characters and passes the id).
+    //
+    // party: the characters in seat order (multiplayer). More than one builds the party from the roster
+    // (RunBlueprint.PartyStart) and the first seat is the run's character; null or one seat is a solo run.
     public static RunState CreateInitialRun(
         this RunBlueprint blueprint, RunId id, int randomSeed = 1, string? characterId = null,
-        string? mapGenerator = null)
+        string? mapGenerator = null, IReadOnlyList<string>? party = null)
     {
         ArgumentNullException.ThrowIfNull(blueprint);
-        var start = blueprint.ResolveStart(characterId);
+        if (party is { Count: > 0 })
+            characterId = party[0];
+        var start = party is { Count: > 1 } ? blueprint.PartyStart(party) : blueprint.ResolveStart(characterId);
 
         // When the blueprint declares generation rules, build a fresh map per run from those rules + the seed +
         // the starting loadout strength (so difficulty tracks the deck); otherwise use the authored map. The loadout
@@ -62,8 +67,9 @@ public static class RunSetup
         foreach (var data in start.StartingParty)
         {
             var member = run.AddPartyMember(
-                new Core.Combat.HealthState(data.MaxHealth, data.MaxHealth),
+                new Core.Combat.HealthState(data.StartingHealth ?? data.MaxHealth, data.MaxHealth),
                 data.DisplayNameKey, new Core.Combat.CombatantDefinitionId(data.DefinitionId));
+            member.SetCharacter(data.CharacterId, data.CombatActions, data.CombatStatuses);
             foreach (var card in data.Deck)
                 run.AddDeckCardTo(member, new Core.Combat.CardDefinitionId(card));
             foreach (var (resource, amount) in data.Resources)

@@ -64,7 +64,8 @@ public static class RunBot
                 if (step % 20 == 19 && breathe is not null)
                     await breathe().ConfigureAwait(true);
 
-                mind.Observe(session.Run, play.CombatDriver?.Current);
+                mind.Observe(session.Run,
+                    play.CombatDriver?.Current is not null || play.PartyCombatDriver?.Current is not null);
 
                 if (play.CombatDriver is { Current: not null } driver)
                 {
@@ -102,6 +103,8 @@ public static class RunBot
                     else
                         mind.EnemyTurnWall(session.Run);
                 }
+                else if (play.PartyCombatDriver is { Current: not null } party)
+                    PartyAnswer(play, party, mind, ref actionsTurn, ref actionsUsed);
                 else if (session.IsAwaitingNodeChoice)
                     session.PickNode(mind.Fork(session.PendingNodeChoices).Id.Value);
                 else if (session.IsAwaitingEntities && session.PendingEntities is { } entities)
@@ -184,6 +187,49 @@ public static class RunBot
         return seat.Finish(error, complete);
     }
 
+    // ONE ANSWER IN A PARTY FIGHT. A pending question first, whoever raised it; otherwise the first member of
+    // the phase still owed a turn plays or ends. The round moving on is the phase handing over.
+    private static void PartyAnswer(
+        RunPlayback play, PartyInteractiveCombatDriver driver, BotMind mind,
+        ref (int Round, int Turn) actionsTurn, ref int actionsUsed)
+    {
+        var run = play.Session!.Run;
+        var combat = driver.Current!;
+        mind.PartyFightStarts(run, combat);
+
+        if (driver.PendingOptionChoice is { } offered)
+            driver.SupplyOptionChoice([.. mind.OptionPicks(offered, driver.PendingOptionChoiceCount)]);
+        else if (driver.PendingCardChoice is { } cards)
+            driver.SupplyCardChoice(
+                [.. mind.CardChoicePicks(cards, driver.PendingCardChoiceCount).Select(i => cards[i].Id)]);
+        else if (combat.ActiveMembers() is [var member, ..])
+        {
+            if (mind.ChoosePartyPlay(combat, member) is { } chosen)
+            {
+                driver.PlayCardFor(member, chosen.Card.Id, chosen.Target);
+                if (driver.Current is { } after)
+                    mind.AfterPartyPlay(run, after, chosen);
+            }
+            // The member's own actions before it gives up its turn, as the solo seat does — on one budget for the
+            // whole phase, since a party phase is one round.
+            else if (UsableAction(combat, member, ref actionsTurn, ref actionsUsed) is { } action)
+            {
+                actionsUsed++;
+                driver.UseActionFor(member, action, FirstEnemy(combat));
+            }
+            else
+            {
+                var round = combat.Round;
+                mind.EndingMemberTurn(combat, member);
+                driver.EndTurnFor(member);
+                if (driver.Current is not { } next || next.IsOver || next.Round != round)
+                    mind.AfterEndTurn(run);
+            }
+        }
+        else
+            mind.EnemyTurnWall(run);
+    }
+
     // Where the run stands, in the two names that identify a room: its map id and what is being fought there.
     public static string Where(InteractiveRunSession session)
     {
@@ -235,6 +281,24 @@ public static class RunBot
             + $"{enemies.Sum(e => Stacks(e.Statuses))}";
     }
 
+    // The same reading for one member of a party fight: its own energy, health, statuses and piles.
+    public static string TableState(PartyCombat combat, CombatantId member)
+    {
+        ArgumentNullException.ThrowIfNull(combat);
+        var payer = combat.State.GetCombatant(member);
+        var energy = combat.EnergyOf(member);
+        var enemies = combat.State.Combatants.Where(c => c.TeamId == StandardCombatIds.EnemyTeam).ToList();
+        var party = combat.State.Combatants.Where(c => c.TeamId == StandardCombatIds.PlayerTeam).ToList();
+        var zones = combat.State.GetCardZones(member);
+        int Count(CardZone zone) => zones.GetCardsInZone(zone).Count;
+        static int Stacks(IEnumerable<StatusInstance> statuses) => statuses.Sum(status => status.Stacks);
+        return $"{energy}/{payer.Health.Current}/{party.Sum(p => p.Statuses.Count)}/"
+            + $"{party.Sum(p => Stacks(p.Statuses))}/{party.Sum(p => p.Health.Current)}/"
+            + $"{Count(CardZone.Hand)}/{Count(CardZone.DiscardPile)}/{Count(CardZone.DrawPile)}/"
+            + $"{enemies.Sum(e => e.Health.Current)}/{enemies.Sum(e => e.Statuses.Count)}/"
+            + $"{enemies.Sum(e => Stacks(e.Statuses))}";
+    }
+
     // Did the play go through? The fight records every attempt as a step, and a refused one carries the
     // reason; nothing new at all means the driver dropped it.
     //
@@ -265,6 +329,28 @@ public static class RunBot
         var enemy = FirstEnemy(combat);
         foreach (var action in combat.Actions)
             if (combat.CanUse(action, enemy))
+                return action;
+        return null;
+    }
+
+    private static CombatantId? FirstEnemy(PartyCombat combat) =>
+        combat.State.Combatants
+            .FirstOrDefault(c => c.IsAlive && c.TeamId == StandardCombatIds.EnemyTeam)?.Id;
+
+    private static CardDefinitionId? UsableAction(
+        PartyCombat combat, CombatantId member, ref (int Round, int Turn) turn, ref int used)
+    {
+        var now = (combat.State.CurrentRound, -1);
+        if (turn != now)
+        {
+            turn = now;
+            used = 0;
+        }
+        if (used >= ActionsInATurn * Math.Max(1, combat.ActiveMembers().Count))
+            return null;
+        var enemy = FirstEnemy(combat);
+        foreach (var action in combat.ActionsOf(member))
+            if (combat.CanUse(member, action, enemy))
                 return action;
         return null;
     }

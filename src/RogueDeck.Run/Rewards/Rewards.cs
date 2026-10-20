@@ -271,11 +271,13 @@ public static class RelicOwnership
 // handed by name.
 public static class CharacterContent
 {
-    // The character a run counts as: the one it recorded, or the roster's first for a run from before.
+    // The character a run counts as: the one it recorded, or the roster's first for a run from before. In a party
+    // it is whoever is being offered something right now — the member the run is pointed at — so a witch at the
+    // bureaucrat's table is still offered the witch's cards.
     public static string? Of(RunState run)
     {
         ArgumentNullException.ThrowIfNull(run);
-        return run.CharacterId ?? run.Content?.DefaultCharacter;
+        return run.CharacterOf(run.ActiveMember) ?? run.Content?.DefaultCharacter;
     }
 
     public static bool Allows(RunState run, string contentId)

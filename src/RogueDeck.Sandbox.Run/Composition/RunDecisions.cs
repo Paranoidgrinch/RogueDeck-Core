@@ -37,6 +37,13 @@ public static class RunDecisions
     {
         var session = play.Session!;
         var run = session.Run;
+        // A party member's own answer reads against that member's question, not whichever one the session shows.
+        var seat = answer.Length > 1 && answer[0].StartsWith('@') ? session.PendingFor(answer[0][1..]) : null;
+        if (answer.Length > 1 && answer[0].StartsWith('@'))
+            answer = answer[1..];
+        var situation = seat is null ? session.PendingSituation : seat.Situation;
+        var choices = seat is null ? session.PendingChoices : seat.Choices;
+        var entities = seat is null ? session.PendingEntities : seat.Entities;
         var combat = play.CombatDriver?.Current;
         string CardName(string instance)
         {
@@ -60,11 +67,10 @@ public static class RunDecisions
                     [.. session.PendingNodeChoices.Select(n => $"{n.Id.Value} ({string.Join(",", n.Tags)})")],
                     answer[1]);
             case "e":
-                return Row("choice", session.PendingSituation?.Id,
-                    [.. session.PendingChoices.Select(c => c.Id)], answer[1]);
+                return Row("choice", situation?.Id, [.. choices.Select(c => c.Id)], answer[1]);
             case "p":
                 {
-                    var request = session.PendingEntities;
+                    var request = entities;
                     var offered = request?.Displays ?? [];
                     var chosen = answer.Length == 1 ? "(none)" : string.Join(", ", answer.Skip(1).Select(a => Nth(offered, a)));
                     return Row("pick", request is null ? null : $"{request.Purpose} [{request.Intent}]", offered, chosen);

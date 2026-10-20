@@ -33,6 +33,15 @@ public static class CombatStateHasher
         sb.Append("turn=").Append(s.CurrentTurn).Append('\n');
         sb.Append("phase=").Append((int)s.TurnPhase).Append('\n');
         sb.Append("active=").Append(s.ActiveCombatantId?.value ?? "").Append('\n');
+        // Only a party fight has a team phase; leaving the line out otherwise keeps every solo hash as it was.
+        if (s.PhaseTeam is { } phaseTeam)
+        {
+            sb.Append("phase_team=").Append(phaseTeam.value).Append('\n');
+            sb.Append("ended=");
+            foreach (var id in s.EndedThisPhase.IsDefault ? [] : s.EndedThisPhase)
+                sb.Append(id.value).Append(',');
+            sb.Append('\n');
+        }
         sb.Append("status_num=").Append(s.NextStatusInstanceNumber).Append('\n');
         sb.Append("card_num=").Append(s.NextCardInstanceNumber).Append('\n');
         sb.Append("chain_num=").Append(s.NextEffectChainNumber).Append('\n');

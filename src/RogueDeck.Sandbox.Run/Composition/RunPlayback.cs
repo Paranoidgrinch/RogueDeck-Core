@@ -80,12 +80,15 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
     //
     // mapGenerator picks which generator draws this run's acts (MapGenerators; map rework S11). Null keeps the
     // rule-based one, and the choice is written into the run so a resume rebuilds the map this run actually has.
+    //
+    // party names the characters in seat order (multiplayer): more than one starts a party run built from the
+    // roster, the first seat being the run's character. Null or a single seat is the solo run it always was.
     public void Start(
         RunBlueprint blueprint, int seed, bool interactive, string? characterId = null,
-        string? mapGenerator = null) =>
+        string? mapGenerator = null, IReadOnlyList<string>? party = null) =>
         StartSession(blueprint, interactive,
-            _ => blueprint.CreateInitialRun(new RunId("play"), seed, characterId, mapGenerator),
-            characterId);
+            _ => blueprint.CreateInitialRun(new RunId("play"), seed, characterId, mapGenerator, party),
+            party is { Count: > 0 } ? party[0] : characterId, party: party);
 
     // Resume a SAVED run against its blueprint (the map + content are content, supplied here; the live progress comes
     // from the save). The runner continues from the saved position (RunRunner resume support) instead of re-walking.
@@ -200,12 +203,13 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
     // every display map a frontend (or the runner's card evaluator) reads. Shared on purpose: a run walked
     // through the replay session and the same run walked by a seat that answers inline must not be able to
     // differ in what they were built from, or comparing them proves nothing.
-    private RunContentRegistry Prepare(RunBlueprint blueprint, string? characterId, out RunStart start)
+    private RunContentRegistry Prepare(
+        RunBlueprint blueprint, string? characterId, out RunStart start, IReadOnlyList<string>? party = null)
     {
         var content = BuildContent(blueprint);
         // The CHOSEN character's start decides the display name and the party shape — not the blueprint's
         // default Start (a roster character may bring its own name and party).
-        start = blueprint.ResolveStart(characterId);
+        start = party is { Count: > 1 } ? blueprint.PartyStart(party) : blueprint.ResolveStart(characterId);
         (CardCosts, CardNames, EnemyNames, HeroName) = DisplayNames(blueprint, start);
         CardFullCosts = blueprint.Cards.ToDictionary(card => card.Id, card => card.Costs);
         ResourceNames = blueprint.CombatResources.ToDictionary(
@@ -287,13 +291,13 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
 
     private void StartSession(
         RunBlueprint blueprint, bool interactive, Func<RunContentRegistry, RunState> makeRun,
-        string? characterId = null, bool? partyOverride = null)
+        string? characterId = null, bool? partyOverride = null, IReadOnlyList<string>? party = null)
     {
         Error = null;
         Dispose();
         try
         {
-            var content = Prepare(blueprint, characterId, out var start);
+            var content = Prepare(blueprint, characterId, out var start, party);
 
             // A party run (party deckbuilding C2) uses the simultaneous team phase. Interactive party fights are
             // driven per member by the PartyInteractiveCombatDriver; a non-interactive party run auto-resolves them
@@ -467,7 +471,7 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
 
         var builder = new RunContentRegistryBuilder()
             .SetEncounters(new EncounterCatalog(
-                library, blueprint.Encounters, RebuildEncounterTriggers(blueprint.Encounters)));
+                library, blueprint.Encounters, RebuildEncounterTriggers(blueprint.Encounters), blueprint.Balance));
         RegisterRelics(builder, blueprint.Relics);
         // The roster, and which content is whose (CharacterContent).
         foreach (var character in blueprint.Characters)

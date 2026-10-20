@@ -32,6 +32,27 @@ public sealed record BalanceManifest
     // default (an unvalued entity contributes nothing).
     public BalanceDefaults Defaults { get; init; } = new();
 
+    // HOW MUCH TOUGHER A FIGHT IS PER EXTRA HERO (multiplayer M3): each member beyond the first adds this share of
+    // an enemy's authored health — 0.75 makes a two-hero fight's enemies 175% as hard to bring down, a four-hero
+    // one's 325%. Zero (the default, and not written) leaves every fight as authored, whoever is in it.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public double PartyEnemyHealthPerExtraMember { get; init; }
+
+    // Whom an enemy hits in a party fight: "FirstAlive" (the default, not written), "Random", "LowestHealth",
+    // "HighestHealth" or "Nearest" (Scenario's PartyEnemyTargeting). A random pick is drawn per round and enemy and
+    // shown on the enemy's intent before it acts.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? PartyEnemyTargeting { get; init; }
+
+    // An enemy's health for a party of `members`: the authored figure, scaled, never below it.
+    public int PartyEnemyHealth(int authored, int members) =>
+        members <= 1 || PartyEnemyHealthPerExtraMember <= 0
+            ? authored
+            : Math.Max(authored, (int)Math.Round(
+                authored * (1 + PartyEnemyHealthPerExtraMember * (members - 1)), MidpointRounding.AwayFromZero));
+
     private static readonly IReadOnlyDictionary<string, int> Empty = new Dictionary<string, int>();
 }
 

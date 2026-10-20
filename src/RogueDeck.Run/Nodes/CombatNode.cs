@@ -247,10 +247,10 @@ public sealed class AutoPlayCombatDriver : ICombatDriver
 public sealed class PartyAutoPlayCombatDriver : ICombatDriver
 {
     private readonly int _maxRounds;
-    private readonly PartyEnemyTargeting _targeting;
+    private readonly PartyEnemyTargeting? _targeting;
 
-    public PartyAutoPlayCombatDriver(
-        int maxRounds = 200, PartyEnemyTargeting targeting = PartyEnemyTargeting.FirstAlive)
+    // targeting: null aims as the fight was authored to (CompiledScenario.PartyTargeting).
+    public PartyAutoPlayCombatDriver(int maxRounds = 200, PartyEnemyTargeting? targeting = null)
     {
         if (maxRounds <= 0)
             throw new ArgumentOutOfRangeException(nameof(maxRounds));
@@ -363,27 +363,37 @@ public sealed class CombatNodeResolver : INodeResolver
         // relic reacting to the win queues first; the player then picks via the run's entity chooser (headless takes
         // the first offers), exactly like a shop/smith. Both payload kinds carry it: the code payload and the
         // data EncounterRef.
+        // A PARTY'S SPOILS ARE EACH MEMBER'S. The fight was the party's; the reward is offered to every member
+        // in turn, on their own dice and into their own deck — the fallen too, who fought it as well.
         if (result.Result == CombatResult.Victory)
         {
-            switch (node.Payload)
-            {
-                case CombatNodePayload { VictoryReward: { } reward } payload:
-                    run.EnqueueEffect(new OfferRewardRunEffect(
-                        payload.VictoryRewardId, reward, payload.VictoryRewardPickCount));
-                    break;
-                case EncounterRef { VictoryReward: { } reward, VictoryRewardGranted: true } reference:
-                    var id = reference.VictoryRewardId ?? new RewardId("combat");
-                    foreach (var offer in reward.Generate(run))
-                        run.EnqueueEffect(new GrantRewardRunEffect(new RewardId($"{id}:{offer.Id}"), offer.Grant));
-                    break;
-                case EncounterRef { VictoryReward: { } reward } reference:
-                    run.EnqueueEffect(new OfferRewardRunEffect(
-                        reference.VictoryRewardId ?? new RewardId("combat"), reward, reference.VictoryRewardPickCount));
-                    break;
-            }
+            if (run.Party.Count > 1)
+                PartyRooms.ForEachMember(context, _ => OfferVictoryReward(run, node));
+            else
+                OfferVictoryReward(run, node);
         }
 
         return new NodeOutcome($"combat resolved ({result.Result}).");
+    }
+
+    private static void OfferVictoryReward(RunState run, Node node)
+    {
+        switch (node.Payload)
+        {
+            case CombatNodePayload { VictoryReward: { } reward } payload:
+                run.EnqueueEffect(new OfferRewardRunEffect(
+                    payload.VictoryRewardId, reward, payload.VictoryRewardPickCount));
+                break;
+            case EncounterRef { VictoryReward: { } reward, VictoryRewardGranted: true } reference:
+                var id = reference.VictoryRewardId ?? new RewardId("combat");
+                foreach (var offer in reward.Generate(run))
+                    run.EnqueueEffect(new GrantRewardRunEffect(new RewardId($"{id}:{offer.Id}"), offer.Grant));
+                break;
+            case EncounterRef { VictoryReward: { } reward } reference:
+                run.EnqueueEffect(new OfferRewardRunEffect(
+                    reference.VictoryRewardId ?? new RewardId("combat"), reward, reference.VictoryRewardPickCount));
+                break;
+        }
     }
 
     // A combat node carries either a data EncounterRef (resolved via the catalog) or a Func escape hatch.
@@ -458,9 +468,19 @@ public sealed class CombatNodeResolver : INodeResolver
         // fight as a player-team ally carrying its OWN wounded HP, its OWN deck (mapped copy-by-copy), and its own
         // energy — so it draws and plays from its own deck. A party (>1 member) fights with simultaneous team turns
         // so members act concurrently. A single-member run adds nothing and is unchanged.
+        //
+        // EVERY MEMBER IS A PLAYER TO THE ENCOUNTER. What the encounter hands the hero — its resources, and the
+        // statuses it opens with (among them the marker the content finds "the player" by) — every member gets
+        // too; on top of that each brings its own character's moves and standing rules, and not the hero's.
         if (run.Party.Count > 1)
         {
             blueprint.SimultaneousTeamTurns = true;
+            var encounterStatuses = blueprint.Hero.StartingStatuses.ToList();
+            foreach (var own in run.CombatStatusesOf(run.Primary))
+                encounterStatuses.Remove(own);
+            var resources = blueprint.Hero.Resources.Count > 0
+                ? blueprint.Hero.Resources.ToList()
+                : [new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3)];
             foreach (var member in run.Party.Skip(1))
             {
                 var ally = new AllyBlueprint(member.Id.Value)
@@ -470,9 +490,14 @@ public sealed class CombatNodeResolver : INodeResolver
                     MaxHealth = member.Health.Max,
                     CurrentHealth = member.Health.Current,
                 };
-                ally.Resources.Add(new ResourceSpec(StandardCombatIds.EnergyResource, 3, 3));
+                ally.Resources.AddRange(resources);
+                ally.StartingStatuses.AddRange(encounterStatuses);
+                ally.StartingStatuses.AddRange(run.CombatStatusesOf(member));
+                ally.Actions.AddRange(run.CombatActionsOf(member));
                 foreach (var card in member.Deck)
-                    ally.Deck.Add(new DeckEntry(_deckMapper(card), 1));
+                    ally.Deck.Add(new DeckEntry(
+                        _deckMapper(card), 1,
+                        card.Tags.Count == 0 ? null : card.Tags.Select(tag => new TagId(tag.Value)).ToList()));
                 blueprint.Allies.Add(ally);
             }
         }

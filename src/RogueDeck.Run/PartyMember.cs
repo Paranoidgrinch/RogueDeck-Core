@@ -44,6 +44,24 @@ public sealed class PartyMember
         StartingConsumableIds = consumableIds ?? [];
     }
 
+    // WHICH CHARACTER THIS MEMBER IS (a party built from the roster): what it may be offered, and the moves and
+    // standing rules it brings into every fight. Member 0 keeps these on the run itself (RunState.CharacterId,
+    // CombatActions, CombatStatuses), so they stay empty for it; read them through RunState.CharacterOf and its
+    // siblings, which know that. Null character ⇒ a member authored without one, who counts as the run's.
+    public string? CharacterId { get; private set; }
+    public IReadOnlyList<CardDefinitionId> CombatActions { get; private set; } = [];
+    public IReadOnlyList<Scenario.Authoring.StartingStatusSpec> CombatStatuses { get; private set; } = [];
+
+    public void SetCharacter(
+        string? characterId,
+        IReadOnlyList<CardDefinitionId>? actions,
+        IReadOnlyList<Scenario.Authoring.StartingStatusSpec>? statuses)
+    {
+        CharacterId = characterId;
+        CombatActions = actions ?? [];
+        CombatStatuses = statuses ?? [];
+    }
+
     public PartyMember(
         RunMemberId id, HealthState health, string? displayNameKey = null, CombatantDefinitionId? definitionId = null)
     {
