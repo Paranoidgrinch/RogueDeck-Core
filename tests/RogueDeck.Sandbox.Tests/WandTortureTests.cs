@@ -731,4 +731,24 @@ public class WandTortureTests
             driver.SupplyCardChoice([installed.Single().Id]);
         Assert.Equal(CardZone.ExhaustPile, driver.Current!.State.GetCardZones(Hero(play)).GetCard(second.Id).Zone);
     }
+
+    // Gust turn after turn, the draw pile running dry and the discard shuffled back in: every turn start asks once,
+    // the answer is taken, and the fight moves on.
+    [Fact]
+    public void Gust_every_turn_through_a_reshuffle_asks_once_and_moves_on()
+    {
+        using var play = Start(Apprentice(["breeze", "breeze", "breeze", "spark", "spark", "spark", "chalk_line"]));
+        var driver = play.CombatDriver!;
+        for (var turn = 0; turn < 6; turn++)
+        {
+            foreach (var breeze in driver.Current!.Hand.Where(c => c.DefinitionId.value == "breeze").ToList())
+                driver.PlayCard(breeze.Id, Dummy(play));
+            driver.EndTurn();
+            for (var guard = 0; guard < 4 && driver.PendingCardChoice is { } offered; guard++)
+                driver.SupplyCardChoice([.. offered.Take(driver.PendingCardChoiceCount).Select(c => c.Id)]);
+            Assert.Null(driver.PendingCardChoice);
+            Assert.Null(play.Session!.Error);
+            Assert.True(driver.Current!.IsHeroTurn);
+        }
+    }
 }
