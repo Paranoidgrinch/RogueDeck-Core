@@ -322,6 +322,7 @@ public static class CombatJson
          .Register("sel.eventTarget", typeof(EventTargetCombatantTargetSelector))
          .Register("sel.allAllies", typeof(AllAlliesOfSourceCombatantTargetSelector))
          .Register("sel.allEnemies", typeof(AllEnemiesOfSourceCombatantTargetSelector))
+         .Register("sel.otherEnemies", typeof(OtherEnemiesOfSourceCombatantTargetSelector))
          .Register("sel.allDamagedAllies", typeof(AllDamagedAlliesOfSourceCombatantTargetSelector))
          .Register("sel.iterationTarget", typeof(IterationTargetCombatantTargetSelector))
          .Register("sel.lowestHealthEnemy", typeof(LowestHealthEnemyOfSourceCombatantTargetSelector))

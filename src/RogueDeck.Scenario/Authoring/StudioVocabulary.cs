@@ -31,6 +31,8 @@ public static class StudioVocabulary
                 "The unit performing the effect — the card's player, the acting enemy, or the unit whose trigger fired."),
             ["allEnemies"] = ("every enemy",
                 "Every living unit on the opposing team."),
+            ["otherEnemies"] = ("every other enemy",
+                "Every living unit on the opposing team except the one the effect is aimed at."),
             ["allAllies"] = ("every ally including self",
                 "Every living unit on the acting unit's own team, itself included."),
             ["lowestHealthEnemy"] = ("weakest enemy",

@@ -169,6 +169,26 @@ public sealed class AllEnemiesOfSourceCombatantTargetSelector : ICombatantTarget
     }
 }
 
+// Every living enemy of the source EXCEPT the event target — "another enemy" ("move its Singe to another enemy").
+public sealed class OtherEnemiesOfSourceCombatantTargetSelector : ICombatantTargetSelector
+{
+    public IReadOnlyCollection<CombatantId> ResolveTargets(CombatantTargetSelectionContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        if (context.Source is null)
+            return Array.Empty<CombatantId>();
+
+        return context.Combat.Combatants
+            .Where(combatant =>
+                combatant.TeamId != context.Source.TeamId &&
+                combatant.IsAlive &&
+                combatant.Id != context.EventTargetId)
+            .Select(combatant => combatant.Id)
+            .ToArray();
+    }
+}
+
 public sealed record AllCombatantsTargetSelector(bool AliveOnly = true) : ICombatantTargetSelector
 {
     public bool MayIncludeDownedTargets => !AliveOnly;
@@ -677,6 +697,9 @@ public static class CombatantTargetSelectors
 
     public static ICombatantTargetSelector AllEnemiesOfSource { get; } =
         new AllEnemiesOfSourceCombatantTargetSelector();
+
+    public static ICombatantTargetSelector OtherEnemiesOfSource { get; } =
+        new OtherEnemiesOfSourceCombatantTargetSelector();
 
     public static ICombatantTargetSelector AllAliveCombatants { get; } =
         new AllCombatantsTargetSelector(AliveOnly: true);

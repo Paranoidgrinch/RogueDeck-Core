@@ -770,6 +770,7 @@ public static class CombatProgramModel
         ("eventTarget", CombatantTargetSelectors.EventTarget),
         ("source", CombatantTargetSelectors.Source),
         ("allEnemies", CombatantTargetSelectors.AllEnemiesOfSource),
+        ("otherEnemies", CombatantTargetSelectors.OtherEnemiesOfSource),
         ("allAllies", CombatantTargetSelectors.AllAlliesOfSource),
         ("lowestHealthEnemy", CombatantTargetSelectors.LowestHealthEnemyOfSource),
         ("highestHealthEnemy", CombatantTargetSelectors.HighestHealthEnemyOfSource),
