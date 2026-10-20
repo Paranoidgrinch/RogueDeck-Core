@@ -327,7 +327,7 @@ public static class RunBot
         if (used >= ActionsInATurn)
             return null;
         var enemy = FirstEnemy(combat);
-        foreach (var action in combat.Actions)
+        foreach (var action in WandBotPolicy.Order(combat.Registry, combat.State, combat.HeroId, combat.Actions))
             if (combat.CanUse(action, enemy))
                 return action;
         return null;
@@ -349,7 +349,7 @@ public static class RunBot
         if (used >= ActionsInATurn * Math.Max(1, combat.ActiveMembers().Count))
             return null;
         var enemy = FirstEnemy(combat);
-        foreach (var action in combat.ActionsOf(member))
+        foreach (var action in WandBotPolicy.Order(combat.Registry, combat.State, member, combat.ActionsOf(member)))
             if (combat.CanUse(member, action, enemy))
                 return action;
         return null;
