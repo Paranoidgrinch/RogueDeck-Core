@@ -18,7 +18,12 @@ public enum CardZone
     // ingredients, a hoard. Not played, not discarded, not exhausted: the cards simply wait here, in the order
     // they were set down, until an effect moves them on. What setting a card aside costs, how many may wait, and
     // what is done with them is content (a set-aside action, a character action). Appended last, like the Queue.
-    SetAsidePile
+    SetAsidePile,
+
+    // Cards INSCRIBED into a wand (WandState): taken from the hand without being played, they wait in an ordered
+    // row of slots and are read as a program whenever the wand is cast. Which slot a card sits in is the wand's to
+    // say; this pile only says the card is there. Appended last, like the others.
+    Wand
 }
 
 // Where a card lands in its destination zone. Draw takes from the front (index 0 = the "top"), so Top places a card
@@ -157,6 +162,7 @@ public sealed class CombatantCardZones
     private readonly List<CardInstance> _banishedPile = new();
     private readonly List<CardInstance> _queue = new();
     private readonly List<CardInstance> _setAside = new();
+    private readonly List<CardInstance> _wand = new();
 
     public IReadOnlyList<CardInstance> DrawPile => _drawPile;
     public IReadOnlyList<CardInstance> Hand => _hand;
@@ -170,6 +176,9 @@ public sealed class CombatantCardZones
     // In the order they were set down: index 0 waited longest.
     public IReadOnlyList<CardInstance> SetAside => _setAside;
 
+    // In the order they were inscribed; their place in the program is WandState.Slots.
+    public IReadOnlyList<CardInstance> Wand => _wand;
+
     public IReadOnlyCollection<CardInstance> AllCards => _drawPile
         .Concat(_hand)
         .Concat(_discardPile)
@@ -177,6 +186,7 @@ public sealed class CombatantCardZones
         .Concat(_banishedPile)
         .Concat(_queue)
         .Concat(_setAside)
+        .Concat(_wand)
         .ToArray();
 
     public void AddCard(CardInstance card)
@@ -348,6 +358,7 @@ public sealed class CombatantCardZones
             CardZone.BanishedPile => _banishedPile,
             CardZone.QueuePile => _queue,
             CardZone.SetAsidePile => _setAside,
+            CardZone.Wand => _wand,
             _ => throw new InvalidOperationException($"Unsupported card zone '{zone}'.")
         };
     }

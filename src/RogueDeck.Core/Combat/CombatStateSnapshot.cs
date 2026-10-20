@@ -72,7 +72,11 @@ public sealed record CombatantCardZonesSnapshot(
     ImmutableArray<CardInstanceSnapshot> QueuePile = default,
     // The cards set aside (CardZone.SetAsidePile) — captured from the day the zone exists, so a fight saved with
     // ingredients waiting comes back with them (the Queue's lesson). Defaulted for every older save: empty.
-    ImmutableArray<CardInstanceSnapshot> SetAsidePile = default
+    ImmutableArray<CardInstanceSnapshot> SetAsidePile = default,
+    // The cards inscribed into a wand (CardZone.Wand). Their slots are in CombatStateSnapshot.Wands.
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    ImmutableArray<CardInstanceSnapshot> WandPile = default
 );
 
 // Immutable capture of a single combatant at a point in time.
@@ -154,7 +158,13 @@ public sealed record CombatStateSnapshot(
     TeamId? PhaseTeam = null,
     [property: System.Text.Json.Serialization.JsonIgnore(
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
-    ImmutableArray<CombatantId> EndedThisPhase = default
+    ImmutableArray<CombatantId> EndedThisPhase = default,
+
+    // THE WANDS (WandState), in TurnOrder. Only a wand bearer's fight has any, so every other snapshot reads and
+    // hashes as it always did.
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    ImmutableArray<WandSnapshot> Wands = default
 );
 
 // One trigger's count. A named record, not a tuple — see the warning below.

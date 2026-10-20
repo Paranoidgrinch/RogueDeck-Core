@@ -150,4 +150,40 @@ public class CombatSaveJsonRoundTripTests
         { Combat = new CombatSaveData("n1", quiet) }), StringComparison.Ordinal);
         Assert.Empty(CombatState.Restore(ThroughTheSaveFile(quiet)).TriggerActivity);
     }
+    // A WAND survives the file: the cards in it, which slot each holds (a gap included), what it has left to spend,
+    // the spell it is keeping and the once-only rules it has already used. A fight without a wand writes none of it.
+    [Fact]
+    public void A_wand_comes_back_through_the_file_slot_for_slot()
+    {
+        var combat = AFightInProgress();
+        var zones = combat.GetCardZones(HeroId);
+        zones.AddCard(new CardInstance(new CardInstanceId("card_000010"), new CardDefinitionId("ink_blot"), HeroId, CardZone.Wand));
+        zones.AddCard(new CardInstance(new CardInstanceId("card_000011"), new CardDefinitionId("candle_stub"), HeroId, CardZone.Wand));
+        combat.SetWand(HeroId, WandState.Restore(new WandSnapshot(
+            HeroId, ["card_000010", null, "card_000011", null, null],
+            Focus: 4, Exhaustion: 3, ExhaustionCap: 10, CastsThisTurn: 1, InscribedThisTurn: 2, BurnOutUsedThisTurn: true,
+            GustResolvedThisTurn: 2, InscribedSinceCast: 1, FreeInscriptionUsed: true, WandCardsExhausted: 1,
+            GroundCredit: 2, ElementsThisTurn: (int)(WandElement.SingeApplied | WandElement.GustGained),
+            StoredSpell: new WandStoredSpell(WandStoreTrigger.NextCast,
+                [new WandFrozenEffect(WandEffectKind.Damage, 6, Hits: 2), new WandFrozenEffect(WandEffectKind.Status, 1, Status: new StatusDefinitionId("singe"))],
+                new CardDefinitionId("candle_stub")),
+            AshTraces: [8], TurnLatches: ["bent_nib"], CombatLatches: ["second_hand"])));
+
+        var before = combat.CreateSnapshot();
+        var restored = CombatState.Restore(ThroughTheSaveFile(before));
+
+        Assert.Equal(CombatStateHasher.ComputeHash(before), CombatStateHasher.ComputeHash(restored.CreateSnapshot()));
+        var wand = restored.GetWand(HeroId)!;
+        Assert.Equal([new CardInstanceId("card_000010"), null, new CardInstanceId("card_000011"), null, null], wand.Slots);
+        Assert.Equal((4, 3, 10), (wand.Focus, wand.Exhaustion, wand.ExhaustionCap));
+        Assert.Equal(WandStoreTrigger.NextCast, wand.StoredSpell!.Trigger);
+        Assert.Equal(2, wand.StoredSpell.Effects.Length);
+        Assert.All(restored.GetCardZones(HeroId).Wand, c => Assert.Equal(CardZone.Wand, c.Zone));
+        Assert.Contains("bent_nib", wand.TurnLatches);
+        Assert.Equal([8], wand.AshTraces);
+
+        var quiet = AFightInProgress().CreateSnapshot();
+        Assert.True(quiet.Wands.IsDefault);
+        Assert.Null(CombatState.Restore(ThroughTheSaveFile(quiet)).GetWand(HeroId));
+    }
 }

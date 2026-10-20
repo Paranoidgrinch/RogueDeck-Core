@@ -156,6 +156,7 @@ public sealed class CombatState
     private readonly List<StatusInstance> _globalStatuses = new();
     private readonly Dictionary<CombatantId, CombatantCardZones> _cardZonesByCombatant = new();
     private readonly Dictionary<CombatantId, CombatantCardPlayTurnStats> _cardPlayTurnStatsByCombatant = new();
+    private readonly Dictionary<CombatantId, WandState> _wandsByCombatant = new();
     private readonly List<CombatLogEntry> _combatLog = new();
     private readonly List<TemporaryTriggeredProgram> _temporaryTriggeredPrograms = new();
 
@@ -163,6 +164,20 @@ public sealed class CombatState
     public IReadOnlyList<CombatantId> TurnOrder => _turnOrder;
     public IReadOnlyList<StatusInstance> GlobalStatuses => _globalStatuses;
     public IReadOnlyDictionary<CombatantId, CombatantCardZones> CardZonesByCombatant => _cardZonesByCombatant;
+
+    // The wands in this fight (WandState), by bearer. A combatant without one has no entry.
+    public IReadOnlyDictionary<CombatantId, WandState> WandsByCombatant => _wandsByCombatant;
+
+    public WandState? GetWand(CombatantId combatantId) => _wandsByCombatant.GetValueOrDefault(combatantId);
+
+    // Give a combatant its wand (or replace it): done once, when a bearer's fight opens, and by a restore.
+    public void SetWand(CombatantId combatantId, WandState wand)
+    {
+        ArgumentNullException.ThrowIfNull(wand);
+        if (!TryGetCombatant(combatantId, out _))
+            throw new InvalidOperationException($"Combatant with id '{combatantId}' does not exist.");
+        _wandsByCombatant[combatantId] = wand;
+    }
 
     public IReadOnlyCollection<IEffectRequest> PendingEffects => _pendingEffects;
 
@@ -837,7 +852,15 @@ public sealed class CombatState
                 RestorePile(target, combatantId, zones.QueuePile, CardZone.QueuePile);
             if (!zones.SetAsidePile.IsDefault)
                 RestorePile(target, combatantId, zones.SetAsidePile, CardZone.SetAsidePile);
+            if (!zones.WandPile.IsDefault)
+                RestorePile(target, combatantId, zones.WandPile, CardZone.Wand);
         }
+
+        // The wands, after the cards they hold. Absent in every snapshot of a fight without one.
+        if (!snapshot.Wands.IsDefault)
+            foreach (var wand in snapshot.Wands)
+                if (combat.Combatants.Any(c => c.Id == wand.Owner))
+                    combat._wandsByCombatant[wand.Owner] = WandState.Restore(wand);
 
         // What each turn remembers. Default (an older snapshot) leaves the fresh, empty stats in place, which
         // is exactly what a restore did for everyone before this was captured.

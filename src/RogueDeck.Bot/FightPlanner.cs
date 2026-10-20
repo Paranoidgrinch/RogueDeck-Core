@@ -357,8 +357,17 @@ public sealed class FightPlanner(int horizon = 5, int beam = 16, int perTurn = 3
                 Pile(sb, "queue", zones.QueuePile);
             if (!zones.SetAsidePile.IsDefaultOrEmpty)
                 Pile(sb, "aside", zones.SetAsidePile);
+            if (!zones.WandPile.IsDefaultOrEmpty)
+                Pile(sb, "wand", zones.WandPile);
             sb.Append('\n');
         }
+
+        // A wand's program and what it has left to spend are as much the position as the hand is.
+        if (!snapshot.Wands.IsDefaultOrEmpty)
+            foreach (var wand in snapshot.Wands)
+                sb.Append(wand.Owner.value).Append(" wand ").Append(string.Join(',', wand.Slots.Select(s => s ?? "_")))
+                    .Append(" f").Append(wand.Focus).Append(" e").Append(wand.Exhaustion).Append('/').Append(wand.ExhaustionCap)
+                    .Append(" c").Append(wand.CastsThisTurn).Append(wand.StoredSpell is null ? "" : " stored").Append('\n');
 
         return sb.ToString();
     }

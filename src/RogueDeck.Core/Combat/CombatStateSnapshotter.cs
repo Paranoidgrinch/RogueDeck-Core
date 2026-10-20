@@ -72,7 +72,13 @@ public static class CombatStateSnapshotter
             // In TurnOrder, not set order, so two captures of the same moment are the same capture.
             EndedThisPhase: combat.EndedThisPhase.Count == 0
                 ? default
-                : combat.TurnOrder.Where(combat.HasMemberEnded).ToImmutableArray());
+                : combat.TurnOrder.Where(combat.HasMemberEnded).ToImmutableArray(),
+            Wands: combat.WandsByCombatant.Count == 0
+                ? default
+                : combat.TurnOrder
+                    .Where(combat.WandsByCombatant.ContainsKey)
+                    .Select(id => combat.WandsByCombatant[id].Capture(id))
+                    .ToImmutableArray());
     }
 
     private static CombatantSnapshot SnapshotCombatant(CombatantState c) =>
@@ -132,7 +138,8 @@ public static class CombatStateSnapshotter
             ExhaustPile: zones.ExhaustPile.Select(SnapshotCard).ToImmutableArray(),
             BanishedPile: zones.BanishedPile.Select(SnapshotCard).ToImmutableArray(),
             QueuePile: zones.Queue.Select(SnapshotCard).ToImmutableArray(),
-            SetAsidePile: zones.SetAside.Select(SnapshotCard).ToImmutableArray());
+            SetAsidePile: zones.SetAside.Select(SnapshotCard).ToImmutableArray(),
+            WandPile: zones.Wand.Count == 0 ? default : zones.Wand.Select(SnapshotCard).ToImmutableArray());
 
     private static CardInstanceSnapshot SnapshotCard(CardInstance c) =>
         new(
