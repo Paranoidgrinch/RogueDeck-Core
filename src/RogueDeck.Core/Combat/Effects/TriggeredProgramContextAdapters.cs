@@ -146,6 +146,15 @@ public static class TriggeredProgramContextAdapters
             },
             ActionStartingTriggeredEffectTargetResolver.CreateActionBuildContext);
 
+    public static readonly TriggeredProgramAdapter<WandCastResolvedCombatEvent, WandCastTriggeredEffectContext>
+        WandCast = new(
+            (combat, registry, e) =>
+            {
+                if (!combat.TryGetCombatant(e.CombatantId, out var caster)) return null;
+                return new WandCastTriggeredEffectContext(combat, registry, e, caster!);
+            },
+            WandCastTriggeredEffectTargetResolver.CreateActionBuildContext);
+
     public static readonly TriggeredProgramAdapter<ActionResolvedCombatEvent, ActionResolvedTriggeredEffectContext>
         ActionResolved = new(
             (combat, registry, e) =>

@@ -59,6 +59,12 @@ public sealed record WandRules
     public StatusDefinitionId? Gust { get; init; }
     public StatusDefinitionId? WardWax { get; init; }
 
+    // What a wand learns over a fight: each stack of Rote on the bearer adds 1 to every damage hit a Speak deals,
+    // each stack of Poise 1 to every Block a Speak gives — before Heighten, so a Heighten multiplies them too.
+    // The wand's own, not the card's: a played card is not touched by either.
+    public StatusDefinitionId? Rote { get; init; }
+    public StatusDefinitionId? Poise { get; init; }
+
     // Which statuses switch on which relic rule. A rule whose status is not named here never runs.
     public IReadOnlyDictionary<WandHook, StatusDefinitionId> Hooks { get; init; } =
         new Dictionary<WandHook, StatusDefinitionId>();

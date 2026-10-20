@@ -165,6 +165,9 @@ public static class CombatStateHasher
             .Append(" burned=").Append(w.WandCardsExhausted)
             .Append(" credit=").Append(w.GroundCredit)
             .Append(" el=").Append(w.ElementsThisTurn);
+        // Written only once a wand has cast, so a fight that never casts hashes as it did before these existed.
+        if (w.CastsThisCombat > 0 || w.SpeaksThisCombat > 0)
+            sb.Append(" combat=").Append(w.CastsThisCombat).Append('/').Append(w.SpeaksThisCombat);
         if (w.StoredSpell is { } stored)
         {
             sb.Append(" stored=").Append((int)stored.Trigger).Append(':').Append(stored.SourceCard?.value ?? "");

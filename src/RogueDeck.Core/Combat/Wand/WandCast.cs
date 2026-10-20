@@ -101,6 +101,7 @@ internal sealed class WandCast
     {
         _wand.Focus -= _plan.FocusCost + _plan.ExtraFocus;
         _wand.CastsThisTurn++;
+        _wand.CastsThisCombat++;
         _wand.SingeSpentThisCast = 0;
         _wand.Casting = true;
         _oldFlow = Stacks(Bearer, _rules.Flow);
@@ -340,6 +341,7 @@ internal sealed class WandCast
         _resolved[step.Index] = resolved;
         _last = resolved;
         _speaksResolved++;
+        _wand.SpeaksThisCombat++;
 
         // Kept instead of spoken: the copyable part waits for its trigger; the rest still happens now.
         if (keep is { } keeper && _wand.StoredSpell is null && !_storedThisCast && copyable.Count > 0)
@@ -380,6 +382,10 @@ internal sealed class WandCast
                 amount += atom.Bonus;
             if (amount <= 0)
                 continue;
+            if (atom.Kind == WandAtomKind.Damage && _rules.Rote is { } rote)
+                amount += Stacks(Bearer, rote);
+            else if (atom.Kind == WandAtomKind.Block && _rules.Poise is { } poise)
+                amount += Stacks(Bearer, poise);
             var kind = atom.Kind switch
             {
                 WandAtomKind.Damage => WandEffectKind.Damage,

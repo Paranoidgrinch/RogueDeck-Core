@@ -68,6 +68,8 @@ public static class EncounterTriggerRebuild
                 id, Program<ActionResolvedTriggeredEffectContext>(data)),
             TriggerEvent.ActionStarting => TriggeredProgramContextAdapters.ActionStarting.Define(
                 id, Program<ActionStartingTriggeredEffectContext>(data)),
+            TriggerEvent.WandCast => TriggeredProgramContextAdapters.WandCast.Define(
+                id, Program<WandCastTriggeredEffectContext>(data)),
             _ => throw new InvalidOperationException($"Trigger event '{ev}' is not supported for an encounter trigger."),
         };
     }

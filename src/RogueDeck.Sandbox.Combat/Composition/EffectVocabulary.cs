@@ -68,4 +68,7 @@ public enum TriggerEvent
     // automatic "a program fired" event would be both a flood and the wrong question.
     RuleAnnounced,
     ActionStarting, // when the bearer is about to take an enemy action (before anything it does)
+    // when the bearer's wand cast has settled (the Sorcerer's Apprentice) — not a card play, so nothing
+    // listening to CardPlayed hears it
+    WandCast,
 }

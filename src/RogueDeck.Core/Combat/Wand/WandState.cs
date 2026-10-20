@@ -54,6 +54,10 @@ public sealed class WandState
     public bool FreeInscriptionUsed { get; internal set; }
     public int WandCardsExhausted { get; internal set; }
 
+    // This combat: successful casts, and the Speaks they resolved — what a card that grows over a fight reads.
+    public int CastsThisCombat { get; internal set; }
+    public int SpeaksThisCombat { get; internal set; }
+
     // Exhaustion credit waiting for the next successful cast (one at most), and the elements that have actually
     // happened this player turn (a bit per WandElement).
     public int GroundCredit { get; internal set; }
@@ -131,7 +135,8 @@ public sealed class WandState
         StoredSpell,
         [.. _ashTraces],
         [.. _turnLatches.Order(StringComparer.Ordinal)],
-        [.. _combatLatches.Order(StringComparer.Ordinal)]);
+        [.. _combatLatches.Order(StringComparer.Ordinal)],
+        CastsThisCombat, SpeaksThisCombat);
 
     public static WandState Restore(WandSnapshot snapshot)
     {
@@ -148,6 +153,8 @@ public sealed class WandState
             GroundCredit = snapshot.GroundCredit,
             ElementsThisTurn = snapshot.ElementsThisTurn,
             StoredSpell = snapshot.StoredSpell,
+            CastsThisCombat = snapshot.CastsThisCombat,
+            SpeaksThisCombat = snapshot.SpeaksThisCombat,
         };
         for (var i = 0; i < snapshot.Slots.Length; i++)
             wand._slots[i] = snapshot.Slots[i] is { } id ? new CardInstanceId(id) : null;
@@ -234,4 +241,6 @@ public sealed record WandSnapshot(
     WandStoredSpell? StoredSpell,
     ImmutableArray<int> AshTraces,
     ImmutableArray<string> TurnLatches,
-    ImmutableArray<string> CombatLatches);
+    ImmutableArray<string> CombatLatches,
+    int CastsThisCombat = 0,
+    int SpeaksThisCombat = 0);

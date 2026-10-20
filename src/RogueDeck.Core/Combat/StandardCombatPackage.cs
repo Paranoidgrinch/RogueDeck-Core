@@ -161,6 +161,7 @@ public sealed class StandardCombatPackage : ICombatPackage
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.StatusApplicationBlocked.CreateHandler());
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.StatusApplicationAmplified.CreateHandler());
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.ActionResolved.CreateHandler());
+        registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.WandCast.CreateHandler());
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.ActionStarting.CreateHandler());
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.StatusesRemovedByPolarity.CreateHandler());
         registry.RegisterCombatEventHandler(TriggeredProgramContextAdapters.StatusRemoved.CreateHandler());

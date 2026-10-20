@@ -66,6 +66,7 @@ public static class StatusTriggerPrograms
             [TriggerEvent.ActionResolved] = For<ActionResolvedTriggeredEffectContext>(),
             [TriggerEvent.RuleAnnounced] = For<RuleAnnouncedTriggeredEffectContext>(),
             [TriggerEvent.ActionStarting] = For<ActionStartingTriggeredEffectContext>(),
+            [TriggerEvent.WandCast] = For<WandCastTriggeredEffectContext>(),
         };
 
     public static StatusTriggerProgram Get(TriggerEvent ev) => ByEvent[ev];

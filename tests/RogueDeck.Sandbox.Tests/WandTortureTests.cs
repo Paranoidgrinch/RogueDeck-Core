@@ -751,4 +751,54 @@ public class WandTortureTests
             Assert.True(driver.Current!.IsHeroTurn);
         }
     }
+
+    // ── what a wand learns over a fight ──────────────────────────────────────────────────────────────────────
+
+    // Rote adds to every damage hit a Speak deals, Poise to every Block one gives; a rule listening to WandCast hears
+    // each settled cast; and the wand counts its casts and Speaks for the whole combat.
+    [Fact]
+    public void Rote_grows_the_speak_a_cast_trigger_feeds_it_and_the_combat_counts_casts()
+    {
+        var learns = CombatProgramModel.Build<WandCastTriggeredEffectContext>(Apply("rote", 1, "source"));
+        var student = new StatusData
+        {
+            Id = "student", NameKey = "Student", UsesStacks = true,
+            Triggers = [new StatusTriggerData("WandCast", System.Text.Json.JsonSerializer.SerializeToElement(
+                learns, CombatJson.CreateOptions<WandCastTriggeredEffectContext>()))],
+        };
+        var rote = new StatusData
+        {
+            Id = "rote", NameKey = "Rote", UsesStacks = true, Polarity = StatusPolarity.Buff,
+            StackingBehavior = StatusStackingBehavior.MergeWithExistingInstance,
+        };
+        using var play = Start(Apprentice(
+            ["candle_stub", "candle_stub", "candle_stub", "candle_stub", "candle_stub"],
+            rules: Rules with { Rote = new StatusDefinitionId("rote") },
+            statuses: [student, rote], heroStatuses: ["student"]));
+        var driver = play.CombatDriver!;
+
+        Inscribe(play, "candle_stub", 0);
+        driver.PlayCard(driver.Current!.Hand.First(c => c.DefinitionId.value == "candle_stub").Id, Dummy(play));
+        var before = DummyHp(play);
+        Cast(play);
+        // The first cast: 4, and the Singe of the first slot (spent by nothing yet). Then the rule hears it.
+        Assert.Equal(before - 4, DummyHp(play));
+        Assert.Equal(1, FightStacks(play, "rote"));
+        Assert.Equal((1, 1), (Wand(play).CastsThisCombat, Wand(play).SpeaksThisCombat));
+
+        driver.EndTurn();
+        foreach (var card in driver.Current!.Hand.Where(c => c.DefinitionId.value == "candle_stub").Take(2).ToList())
+            driver.PlayCard(card.Id, Dummy(play));
+        before = DummyHp(play);
+        var singe = FightStacks(play, "singe", Dummy(play));
+        Cast(play);
+        // 4 + 1 Rote, and a Singe on the dummy makes the hit 2 larger still.
+        Assert.Equal(before - (5 + (singe > 0 ? 2 : 0)), DummyHp(play));
+        Assert.Equal(2, FightStacks(play, "rote"));
+        Assert.Equal((2, 2), (Wand(play).CastsThisCombat, Wand(play).SpeaksThisCombat));
+    }
+
+    private static int FightStacks(RunPlayback play, string status, CombatantId? on = null) =>
+        play.CombatDriver!.Current!.State.GetCombatant(on ?? Hero(play)).Statuses
+            .Where(s => s.DefinitionId.value == status).Sum(s => s.Stacks);
 }
