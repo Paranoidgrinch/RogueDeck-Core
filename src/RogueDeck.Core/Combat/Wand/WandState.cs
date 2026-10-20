@@ -65,6 +65,15 @@ public sealed class WandState
     // Charges that make the next Burn Out also strike (each the damage it deals), oldest first.
     public IReadOnlyList<int> AshTraces => _ashTraces;
 
+    // While a cast runs (never across a save — a cast completes inside its action): whether it is running, how much
+    // Singe its direct hits have spent, and whether the effect now resolving is a copy (Echo), which the element
+    // record for The Fourfold Lesson does not count.
+    internal bool Casting { get; set; }
+    internal int SingeSpentThisCast { get; set; }
+    internal bool CopyingNow { get; set; }
+    // What the last SpendFocus took — read by the card text right after it ("5 Block per Focus spent").
+    internal int FocusSpent { get; set; }
+
     public IReadOnlySet<string> TurnLatches => _turnLatches;
     public IReadOnlySet<string> CombatLatches => _combatLatches;
 

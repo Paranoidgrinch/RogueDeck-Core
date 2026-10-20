@@ -81,6 +81,7 @@ public sealed class EffectNodeExecutorRegistry
         r.RegisterOpenGeneric(typeof(ModifySelectedResourceNode<>), new ModifySelectedResourceNodeExecutor());
         r.RegisterOpenGeneric(typeof(StealSelectedStatusNode<>), new StealSelectedStatusNodeExecutor());
         r.RegisterOpenGeneric(typeof(SetCombatantCounterNode<>), new SetCombatantCounterNodeExecutor());
+        r.RegisterOpenGeneric(typeof(WandNode<>), new WandNodeExecutor());
         r.RegisterOpenGeneric(typeof(AnnounceRuleNode<>), new AnnounceRuleNodeExecutor());
         r.RegisterOpenGeneric(typeof(MarkCardInstanceNode<>), new MarkCardInstanceNodeExecutor());
         r.RegisterOpenGeneric(typeof(SetCardInstanceMarkCounterNode<>), new SetCardInstanceMarkCounterNodeExecutor());

@@ -136,6 +136,9 @@ public sealed class InteractiveCombat : ICombatView
     // anything like it): granted by statuses in force on them.
     public DisclosureSpec HeroDisclosure => DisclosureSpec.For(_combat, _registry, _heroId);
 
+    // The fight's definitions — what a host needs to compile a wand's plan for its preview (WandCompiler).
+    public CombatDefinitionRegistry Registry => _registry;
+
     // The top of the hero's own draw pile, as far as their sight reaches. Empty without a disclosure.
     public IReadOnlyList<CardInstance> RevealedDrawPile
     {

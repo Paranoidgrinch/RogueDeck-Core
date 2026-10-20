@@ -319,3 +319,10 @@ public sealed record TemporaryRuleActivatedCombatEvent(
     Type SourceEventType,
     CombatantId? ActiveCombatantId
 ) : ICombatEvent;
+
+// A wand was cast and has settled: how many instructions ran and how many Speaks resolved. Not a card play.
+public sealed record WandCastResolvedCombatEvent(
+    CombatantId CombatantId,
+    int Executed,
+    int Speaks
+) : ICombatEvent;

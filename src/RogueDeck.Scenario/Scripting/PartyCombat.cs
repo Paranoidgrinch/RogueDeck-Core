@@ -142,6 +142,9 @@ public sealed class PartyCombat
 
     // Open the first player phase — see InteractiveCombat.StartOpeningTurn for why this is separable: a rule
     // that raises a prompt as the opening hands are dealt needs its chooser installed before they are.
+    // The fight's definitions (a wand's preview compiles against them).
+    public CombatDefinitionRegistry Registry => _registry;
+
     public void StartOpeningPhase() => _phases.StartTeamPhase(_combat, _registry, PlayerTeam);
 
     // ── State views ──────────────────────────────────────────────────────────────

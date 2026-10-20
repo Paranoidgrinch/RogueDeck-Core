@@ -195,6 +195,9 @@ public sealed class MoveCardToZoneEffectHandler : EffectRequestHandler<MoveCardT
         }
 
         zones.MoveCardToZone(request.CardInstanceId, request.ToZone, request.Placement);
+        // A card that leaves a wand frees its slot, whatever moved it.
+        if (fromZone == CardZone.Wand)
+            combat.GetWand(request.CombatantId)?.Clear(request.CardInstanceId);
 
         if (request.OutcomeSlot is { } slot)
             slot.Value = new MoveCardToZoneOutcome(
