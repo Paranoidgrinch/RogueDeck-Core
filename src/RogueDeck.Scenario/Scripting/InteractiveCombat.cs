@@ -10,7 +10,7 @@ namespace RogueDeck.Scenario.Scripting;
 // same NarrativeLogRenderer renders a live log. Like the rest of the harness it only sequences engine
 // calls — no new combat semantics. The caller chooses which enemy action fires each round through the
 // supplied enemyIntent selector (combatant id + 1-based round → action id, or null to pass).
-public sealed class InteractiveCombat
+public sealed class InteractiveCombat : ICombatView
 {
     private readonly CombatState _combat;
     private readonly CombatDefinitionRegistry _registry;
@@ -434,6 +434,9 @@ public sealed class InteractiveCombat
         fork._combat.TraceListener = null;
         return fork;
     }
+
+    // A fight with one hero: every enemy means that hero.
+    public CombatantId? IntendedTarget(CombatantId enemy) => IsOver || enemy == _heroId ? null : _heroId;
 
     public int HeroHealth => _combat.TryGetCombatant(_heroId, out var hero) && hero is not null
         ? hero.Health.Current

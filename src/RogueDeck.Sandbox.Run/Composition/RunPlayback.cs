@@ -391,6 +391,81 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
         }
     }
 
+    // ── ONE ANSWER, HOWEVER IT ARRIVED (multiplayer M4) ──────────────────────────────────────────────────
+    // Gives a recorded answer to the run through the same door a click would have used — a party member's card
+    // through the party driver, an interlude through Continue (which moves the baseline there), a seated pick
+    // through its seat — so a run fed its answers off the network walks exactly the path the player's own
+    // machine walked, checkpoints and all. False when the run is not standing where the answer belongs; the
+    // answer is then not given, and the caller has fallen out of step.
+    public bool Apply(ReplayEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        if (Session is not { } session || Script is not { } script)
+            return false;
+        var before = script.AnsweredCount;
+        switch (entry)
+        {
+            case InterludeContinueEntry when session.IsAwaitingInterlude:
+                session.Continue();
+                return true;
+            case CombatPlayEntry { Member: { } member } play when PartyCombatDriver is { Current: not null } party:
+                party.PlayCardFor(member, play.Card, play.Target);
+                break;
+            case CombatActionEntry { Member: { } member } action when PartyCombatDriver is { Current: not null } party:
+                party.UseActionFor(member, action.Action, action.Target);
+                break;
+            case CombatEndTurnEntry { Member: { } member } when PartyCombatDriver is { Current: not null } party:
+                party.EndTurnFor(member);
+                break;
+            case CardPicksEntry picks when PartyCombatDriver is { PendingCardChoice: not null } party:
+                party.SupplyCardChoice(picks.Picks);
+                break;
+            case OptionPicksEntry picks when PartyCombatDriver is { PendingOptionChoice: not null } party:
+                party.SupplyOptionChoice(picks.Indices);
+                break;
+            case CombatPlayEntry { Member: null } play when CombatDriver is { Current: not null } solo:
+                solo.PlayCard(play.Card, play.Target);
+                break;
+            case CombatActionEntry { Member: null } action when CombatDriver is { Current: not null } solo:
+                solo.UseAction(action.Action, action.Target);
+                break;
+            case CombatEndTurnEntry { Member: null } when CombatDriver is { Current: not null } solo:
+                solo.EndTurn();
+                break;
+            case CardPicksEntry picks when CombatDriver is { PendingCardChoice: not null } solo:
+                solo.SupplyCardChoice(picks.Picks);
+                break;
+            case OptionPicksEntry picks when CombatDriver is { PendingOptionChoice: not null } solo:
+                solo.SupplyOptionChoice(picks.Indices);
+                break;
+            case CombatConsumableEntry use:
+                UseConsumableInCombat(use.Instance);
+                break;
+            case NodePickEntry pick:
+                session.PickNode(pick.NodeId);
+                break;
+            case EventPickEntry pick when pick.Seat is { } seat:
+                session.PickFor(seat, pick.ChoiceId);
+                break;
+            case EventPickEntry pick:
+                session.Pick(pick.ChoiceId);
+                break;
+            case EntityPicksEntry picks when picks.Seat is { } seat:
+                session.PickEntitiesFor(seat, picks.Indices);
+                break;
+            case EntityPicksEntry picks:
+                session.PickEntities(picks.Indices);
+                break;
+            case ParkConsumableEntry use when use.Seat is { } seat:
+                session.UseConsumableFor(seat, use.Instance);
+                break;
+            case ParkConsumableEntry use:
+                session.UseConsumable(use.Instance);
+                break;
+        }
+        return script.AnsweredCount > before;
+    }
+
     // Use a held consumable's combat-use program during a live fight. The use is recorded on the replay script and
     // applied INSIDE the fight during the replay (the driver looks the program up on the live run and removes the
     // spent copy), so it re-applies deterministically. No-op unless a fight is parked and the consumable has a

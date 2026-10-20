@@ -77,11 +77,17 @@ public sealed class ReplayScript
     // which is why a run recording (RunRecorder) listens here instead of reading the script.
     public event Action<ReplayEntry>? Answered;
 
+    // How many answers have been given since the run began — recorded or announced, never reset by a
+    // checkpoint. What a network host numbers its entries by, and how a caller tells an answer that was taken
+    // from one that was ignored.
+    public int AnsweredCount { get; private set; }
+
     public void Advance(ReplayEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
         _entries.Add(entry);
         _taken.Add(false);
+        AnsweredCount++;
         OnAdvance?.Invoke();
         Answered?.Invoke(entry);
     }
@@ -89,7 +95,28 @@ public sealed class ReplayScript
     // An answer the session gave by MOVING ITS BASELINE instead of recording it (continuing past an interlude
     // checkpoints: the snapshot already contains it). Nothing is added to the script, but the answer was still
     // given, and a run recording must still hear it — or its replay parks at an interlude nobody continued.
-    internal void Announce(ReplayEntry entry) => Answered?.Invoke(entry);
+    internal void Announce(ReplayEntry entry)
+    {
+        AnsweredCount++;
+        Answered?.Invoke(entry);
+    }
+
+    // The next untaken answer of this kind that belongs to SOME member, whoever — for a question the whole party
+    // stands at but each member answers from their own things (a consumable used between rooms).
+    internal bool TryTakeSeated<T>(out T entry) where T : ReplayEntry
+    {
+        var at = _cursor;
+        while (at < _entries.Count && _taken[at])
+            at++;
+        if (Seat is null && at < _entries.Count && _entries[at] is T { Seat: not null } match)
+        {
+            _taken[at] = true;
+            entry = match;
+            return true;
+        }
+        entry = default!;
+        return false;
+    }
 
     internal void Reset()
     {

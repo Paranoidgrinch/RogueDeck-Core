@@ -66,6 +66,12 @@ public sealed class InteractiveRunSession
     public string? PendingSeat { get; private set; }
     public SeatPrompt? PendingFor(string seat) => _seats.GetValueOrDefault(seat);
 
+    // WHOSE QUESTION THE SINGLE Pending* PROPERTIES SHOW. Null (the default) shows the first waiting seat. A
+    // machine at a multiplayer table sets its own member here, so its screen shows its own question — and,
+    // while only the others are still choosing, none at all: IsWaitingOnOthers says so.
+    public string? ViewSeat { get; set; }
+    public bool IsWaitingOnOthers => _seatOrder.Count > 0 && PendingSituation is null && PendingEntities is null;
+
     // Raised once after every replay (an answer was applied, or the run finished); the UI re-renders on it.
     public event Action? Changed;
 
@@ -227,7 +233,7 @@ public sealed class InteractiveRunSession
 
     public void UseConsumableFor(string seat, ConsumableInstanceId instance)
     {
-        if (PendingFor(seat) is not { Situation: not null })
+        if (PendingFor(seat) is not { Situation: not null } && !PendingInterlude)
             return;
         _script.Advance(new ParkConsumableEntry(instance) { Seat = seat });
     }
@@ -256,9 +262,11 @@ public sealed class InteractiveRunSession
 
     public void ParkMembers()
     {
+        if (ViewSeat is { } viewer && !_seats.ContainsKey(viewer))
+            throw new ReplayParkedException(); // this machine's member is through; the others are still asked
         if (_seatOrder.Count > 0)
         {
-            var first = _seats[_seatOrder[0]];
+            var first = _seats[ViewSeat ?? _seatOrder[0]];
             PendingSeat = first.Seat;
             PendingSituation = first.Situation;
             PendingChoices = first.Choices;
@@ -282,6 +290,15 @@ public sealed class InteractiveRunSession
             if (_script.TryTake<ParkConsumableEntry>(out var use))
             {
                 run.EnqueueEffect(new UseConsumableRunEffect(use.Instance));
+                _processor.ResolvePending(run, _registry);
+                continue;
+            }
+            // A party member drinking from their own bag between rooms: spent from — and on — that member.
+            if (_script.TryTakeSeated<ParkConsumableEntry>(out var own)
+                && run.Party.FirstOrDefault(m => m.Id.Value == own.Seat) is { } member)
+            {
+                using var scope = run.PushActiveMember(member);
+                run.EnqueueEffect(new UseConsumableRunEffect(own.Instance));
                 _processor.ResolvePending(run, _registry);
                 continue;
             }

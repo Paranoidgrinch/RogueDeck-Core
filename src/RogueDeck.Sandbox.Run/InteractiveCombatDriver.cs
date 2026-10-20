@@ -11,7 +11,7 @@ namespace RogueDeck.Sandbox.Run;
 // over, the replay PARKS with Current surfacing the live fight to the UI. Each UI action (PlayCard/EndTurn)
 // records an entry and replays the run, which deterministically reaches this same fight and advances it one
 // action. Pass AutoPlayCombatDriver instead for headless play (balancing / simulate).
-public sealed class InteractiveCombatDriver : ICombatDriver, IReplayResettable, IDisposable
+public sealed class InteractiveCombatDriver : ICombatDriver, IReplayResettable, ICombatSeat, IDisposable
 {
     private readonly ReplayScript _script;
     private readonly UiCombatCardChooser _cardChooser;
@@ -19,6 +19,9 @@ public sealed class InteractiveCombatDriver : ICombatDriver, IReplayResettable, 
 
     // The fight currently awaiting the player, or null when no combat is in progress.
     public InteractiveCombat? Current { get; private set; }
+
+    // A solo fight is its own one hero's view.
+    ICombatView? ICombatSeat.Current => Current;
 
     // A pending in-combat card choice (e.g. Armaments): the candidate cards the player must pick from, how many,
     // and what for — null when no card choice is awaiting a pick. The UI renders these and calls SupplyCardChoice.

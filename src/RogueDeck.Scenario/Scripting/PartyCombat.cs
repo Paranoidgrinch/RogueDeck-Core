@@ -102,6 +102,7 @@ public sealed class PartyCombat
     // ── State views ──────────────────────────────────────────────────────────────
 
     public CombatState State => _combat;
+    public CompiledScenario Compiled => _compiled;
     public CombatResult Result => _combat.Result;
     public bool IsOver => _combat.Result != CombatResult.Ongoing;
     public int Round => _combat.CurrentRound;
@@ -188,6 +189,52 @@ public sealed class PartyCombat
             RunEnemyPhaseThenNextPlayerPhase();
     }
 
+    // The enemy's telegraph for the round in hand (or `ahead` rounds past it): its authored intent. Null for a
+    // player-team member, an actionless enemy, or a finished fight.
+    public ActionIntent? UpcomingIntentFor(CombatantId combatant, int ahead = 0)
+    {
+        if (IsOver || !_combat.TryGetCombatant(combatant, out var c) || c is null || c.TeamId == PlayerTeam)
+            return null;
+        return _enemyIntent(_combat, combatant, _combat.CurrentRound + ahead) is { } actionId
+            ? _compiled.IntentFor(actionId)
+            : null;
+    }
+
+    // The same fight, rebuilt from its snapshot — a copy to try things on (the end-of-turn forecast).
+    public PartyCombat Fork() =>
+        new(_compiled, CombatState.Restore(_combat.CreateSnapshot(), _registry), _enemyIntent, _targeting);
+
+    // WHAT THE ENEMIES WILL DO TO ONE MEMBER if every hero ends their turn now: played out on a fork, blow by
+    // blow, exactly as InteractiveCombat.Foresee does for a hero alone. Null when the fight is over or the
+    // player phase is not open.
+    public Foresight? Foresee(CombatantId member)
+    {
+        if (IsOver || ActiveMembers().Count == 0)
+            return null;
+        var fork = Fork();
+        var blows = new List<IncomingBlow>();
+        fork._watch = (enemy, action, target, health, guard) =>
+        {
+            if (target == member)
+                blows.Add(new IncomingBlow(enemy, action is { } id ? _compiled.IntentFor(id) : null, health + guard, health, guard));
+        };
+        foreach (var active in fork.ActiveMembers())
+            fork.EndTurn(active);
+        var after = fork._combat.TryGetCombatant(member, out var hero) && hero is not null ? hero.Health.Current : 0;
+        return new Foresight(blows.Sum(b => b.Amount), blows.Sum(b => b.Health), after,
+            fork.Result == CombatResult.Defeat || after <= 0, blows);
+    }
+
+    // Handed each enemy's blow as it lands on a FORK: who acted, with what, at whom, and the health and guard
+    // it took. Never set on a real fight.
+    private Action<CombatantId, EnemyActionDefinitionId?, CombatantId, int, int>? _watch;
+
+    private (int Health, int Guard) Standing(CombatantId id) =>
+        _combat.TryGetCombatant(id, out var c) && c is not null
+            ? (c.Health.Current,
+               c.DefensivePools.TryGetValue(StandardCombatIds.BlockDefensivePool, out var pool) ? pool.Current : 0)
+            : (0, 0);
+
     private void RunEnemyPhaseThenNextPlayerPhase()
     {
         // Players all ended → hand off to the enemy phase (every enemy gets TurnStarted at once).
@@ -206,8 +253,14 @@ public sealed class PartyCombat
             var actionId = _enemyIntent(_combat, enemy.Id, _combat.CurrentRound);
             if (actionId is { } id && _registry.TryGetEnemyAction(id, out _) && IntendedTarget(enemy.Id) is { } targetId)
             {
+                var before = Standing(targetId);
                 _combat.EnqueueEffect(new ExecuteEnemyActionEffectRequest(enemy.Id, id, targetId));
                 _queues.ResolvePendingQueues(_combat, _registry);
+                if (_watch is { } watch)
+                {
+                    var after = Standing(targetId);
+                    watch(enemy.Id, id, targetId, Math.Max(0, before.Health - after.Health), Math.Max(0, before.Guard - after.Guard));
+                }
             }
 
             if (!IsOver && !_combat.HasMemberEnded(enemy.Id))

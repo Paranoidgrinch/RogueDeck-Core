@@ -276,6 +276,45 @@ public class PartyCombatResumeTests
         Assert.True(aimedAt.Count > 1, $"every enemy aimed only at {string.Join(",", aimedAt)}");
     }
 
+    // ONE SEAT'S VIEW OF A PARTY FIGHT (multiplayer M5): that member's hand and energy, its turn while it has not
+    // ended, and a forecast of the enemy turn in which only the blows aimed at that member land on it — the same
+    // members the intents name.
+    [Fact]
+    public void A_seat_sees_its_own_hand_its_own_turn_and_the_blows_meant_for_it()
+    {
+        var blueprint = RunJson.BlueprintFromJson(BureaucratsSample.Json(), RunJson.CreateOptions());
+        blueprint = blueprint with { Balance = blueprint.Balance with { PartyEnemyTargeting = "Random" } };
+        using var play = new RunPlayback(() => { });
+        play.Start(blueprint, 3, interactive: true, party: ["bureaucrat", "bureaucrat", "bureaucrat"]);
+        var fight = ReachFight(play);
+        var members = fight.ActiveMembers();
+        var entries = new List<ReplayEntry>();
+        var seats = members.Select(m => new PartyCombatSeat(play.PartyCombatDriver!, m, e =>
+        {
+            entries.Add(e);
+            play.Apply(e);
+        })).ToList();
+
+        var second = seats[1].Current!;
+        Assert.Equal(members[1], second.HeroId);
+        Assert.Equal(fight.HandOf(members[1]).Select(c => c.Id), second.Hand.Select(c => c.Id));
+        Assert.True(second.IsHeroTurn);
+
+        var aims = fight.State.Combatants.Where(c => c.TeamId == StandardCombatIds.EnemyTeam && c.IsAlive)
+            .ToDictionary(e => e.Id, e => fight.IntendedTarget(e.Id));
+        foreach (var seat in seats)
+        {
+            var sight = seat.Current!.Foresee();
+            Assert.NotNull(sight);
+            Assert.All(sight.Blows, blow => Assert.Equal(seat.Member, aims[blow.Enemy]));
+        }
+
+        seats[1].EndTurn();
+        Assert.Equal([new CombatEndTurnEntry(members[1])], entries);
+        Assert.False(seats[1].Current!.IsHeroTurn);
+        Assert.True(seats[0].Current!.IsHeroTurn);
+    }
+
     private static List<int> SoloEnemies(RunPlayback play)
     {
         var session = play.Session!;
