@@ -386,7 +386,13 @@ public class PartyCombatResumeTests
         await RunBot.Play(play, new BotOptions { Seed = seed, Budget = 1200 }, new NullBotLog());
         recorder.Detach();
 
-        var recording = RunRecordingJson.FromJson(RunRecordingJson.ToJson(recorder.Recording));
+        var table = recorder.Recording with
+        {
+            Table = [new RunRecordingPlayer("Host", "h"), new RunRecordingPlayer("Ann", "a"), new RunRecordingPlayer("Ben", "b")],
+        };
+        var recording = RunRecordingJson.FromJson(RunRecordingJson.ToJson(table));
+        Assert.Equal(["Host", "Ann", "Ben"], recording.Table!.Select(p => p.Name));
+        Assert.Contains(recording.Answers, a => a[0].StartsWith('@'));
         var outcome = RunReplayer.Replay(blueprint, recording);
         Assert.True(outcome.Error is null, outcome.Error);
         Assert.True(outcome.Divergence is null, outcome.Divergence);

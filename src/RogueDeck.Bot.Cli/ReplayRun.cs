@@ -47,8 +47,12 @@ public static class ReplayRun
             return 2;
         }
 
+        // A table's run names every seat: who sat there, and who they played.
+        var who = recording.Table is { Count: > 1 } table && recording.Start.Party is { } party
+            ? string.Join(", ", table.Select((p, i) => $"{p.Name} as {(i < party.Length ? party[i] : "?")}"))
+            : recording.Start.Character ?? "default character";
         Console.WriteLine($"run: {recording.Player?.Name ?? "?"} ({recording.Player?.Id ?? "?"}) · seed {recording.Start.Seed}"
-            + $" · {recording.Start.Character ?? "default character"} · {recording.Answers.Count} answers"
+            + $" · {who} · {recording.Answers.Count} answers"
             + $" · {recording.Rooms.Count} room checks · result {recording.Result ?? "open"} · resumed {recording.Resumes}x");
         var hash = RunRecorder.ContentHash(documentJson);
         if (recording.Game.Content is { } recorded && recorded != hash)

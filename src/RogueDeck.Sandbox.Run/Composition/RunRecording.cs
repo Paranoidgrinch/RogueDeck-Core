@@ -29,6 +29,10 @@ public sealed record RunRecording
 
     public int Format { get; init; } = CurrentFormat;
     public RunRecordingPlayer? Player { get; init; }
+    // A run played at a multiplayer table: who sat in each seat, in seat order (Start.Party says who they played).
+    // `Player` is the host, who kept the recording. Absent for a run played alone.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<RunRecordingPlayer>? Table { get; init; }
     public RunRecordingGame Game { get; init; } = new();
     public RunRecordingStart Start { get; init; } = new();
     public List<string[]> Answers { get; init; } = [];
