@@ -27,6 +27,9 @@ public interface ICombatView
     IReadOnlyList<CardInstance> RevealedDrawPile { get; }
     IReadOnlyList<CardDefinitionId> Actions { get; }
 
+    // The fight's definitions — what a screen compiles this hero's wand against for its preview (WandCompiler).
+    CombatDefinitionRegistry Registry { get; }
+
     ActionIntent? UpcomingIntentFor(CombatantId combatant);
     IReadOnlyList<ActionIntent> UpcomingIntentsFor(CombatantId combatant);
     bool CanPlay(CardInstanceId cardInstanceId);

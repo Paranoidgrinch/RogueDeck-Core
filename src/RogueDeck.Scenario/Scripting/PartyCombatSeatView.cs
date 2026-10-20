@@ -15,6 +15,7 @@ public sealed class PartyCombatSeatView(PartyCombat combat, CombatantId member) 
     public PartyCombat Combat { get; } = combat ?? throw new ArgumentNullException(nameof(combat));
 
     public CombatState State => Combat.State;
+    public CombatDefinitionRegistry Registry => Combat.Registry;
     public CombatantId HeroId { get; } = member;
     public int Round => Combat.Round;
     public int Turn => Combat.State.CurrentTurn;
