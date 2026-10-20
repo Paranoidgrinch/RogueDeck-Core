@@ -82,6 +82,35 @@ public static class BotReport
             + $"elites={OfTaken(p => p.Count(MapNodeTags.Elite))}/{s.FewestElites}";
     }
 
+    // ── THE BALANCE BENCH'S LINE (Apprentice master §16 stage 6) ────────────────────────────────────────────
+    // What the fights cost in turns and what a turn did. Its own line, for the reason the clearance line is.
+    //   turns/fight     hero turns a fight took, fights won and lost alike
+    //   cards/turn      cards that resolved; actions/turn the hero's own actions (wand, cauldron)
+    //   wand:           only for a hero with one —
+    //     casts/turn    casts per hero turn
+    //     inscribed     share of the cards put to use that went into the wand rather than being played
+    //     idle          turns the wand held something and was not cast
+    //     focus-left    Focus still unspent when the turn was ended
+    //     fill          slots occupied at the turn's end, of the slots the wand had; fill5+ the same over turns
+    //                   with five or six slots
+    //     exh/cast      Exhaustion a casting turn added (Burn Out in it subtracted), per cast
+    public static string Bench(BotResult r)
+    {
+        ArgumentNullException.ThrowIfNull(r);
+        var b = r.Bench;
+        static string Per(int part, int whole) =>
+            (whole == 0 ? 0.0 : (double)part / whole).ToString("0.00", CultureInfo.InvariantCulture);
+        var line = $"sim-bench: seed={r.Seed} character={r.Character ?? "—"} result={r.Result} cleared={r.ClearedActs} "
+            + $"fights={b.FightsEnded} won={b.FightsWon} turns={b.HeroTurns} turns/fight={Per(b.FightTurns, b.FightsEnded)} "
+            + $"cards/turn={Per(b.CardsPlayed, b.HeroTurns)} actions/turn={Per(b.ActionsUsed, b.HeroTurns)}";
+        if (b.WandTurns > 0)
+            line += $" wand: casts/turn={Per(b.Casts, b.WandTurns)} inscribed={Per(b.Inscriptions, b.Inscriptions + b.CardsPlayed)} "
+                + $"idle={Per(b.IdleWandTurns, b.WandTurns)} focus-left={Per(b.FocusLeft, b.WandTurns)} "
+                + $"fill={Per(b.SlotsFilled, b.SlotsHeld)} fill5+={(b.BigWandTurns == 0 ? "—" : Per(b.BigWandSlotsFilled, b.BigWandSlotsHeld))} "
+                + $"exh/cast={Per(b.ExhaustionGained, b.Casts)} burnouts={b.BurnOuts}";
+        return line;
+    }
+
     public static string Result(BotResult r)
     {
         ArgumentNullException.ThrowIfNull(r);

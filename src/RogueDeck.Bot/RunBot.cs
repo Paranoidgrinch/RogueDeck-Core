@@ -92,6 +92,7 @@ public static class RunBot
                         {
                             actionsUsed++;
                             driver.UseAction(action, FirstEnemy(combat));
+                            mind.AfterAction();
                         }
                         else
                         {
@@ -310,12 +311,12 @@ public static class RunBot
     // one of them and not by the other. A park is the engine working; only what the RULES refuse counts here.
     private const int ActionsInATurn = 6;
 
-    private static CombatantId? FirstEnemy(InteractiveCombat combat) =>
+    internal static CombatantId? FirstEnemy(InteractiveCombat combat) =>
         combat.State.Combatants
             .FirstOrDefault(c => c.Id != combat.HeroId && c.IsAlive && c.TeamId == StandardCombatIds.EnemyTeam)?.Id;
 
     // The first of the hero's actions that can be used now, while this turn's budget of actions lasts.
-    private static CardDefinitionId? UsableAction(
+    internal static CardDefinitionId? UsableAction(
         InteractiveCombat combat, ref (int Round, int Turn) turn, ref int used)
     {
         var now = (combat.State.CurrentRound, combat.State.CurrentTurn);

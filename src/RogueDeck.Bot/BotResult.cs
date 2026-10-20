@@ -58,4 +58,34 @@ public sealed record BotResult
     public bool Clean => Crash.Length == 0 && Error == "none" && Problems == 0 && Complete;
 
     public required bool Complete { get; init; }
+
+    // Who walked, and what the fights cost turn by turn — the balance bench's line (BotReport.Bench). Nothing the
+    // golden set diffs reads it.
+    public string? Character { get; init; }
+    public BenchTally Bench { get; init; } = new();
+}
+
+// Counted at every hero turn's end, from the fight as it stands: what the turn played, and — for a hero with a wand
+// — what the wand did with it. Totals; the report divides.
+public sealed class BenchTally
+{
+    public int HeroTurns { get; set; }
+    public int FightsEnded { get; set; }
+    public int FightTurns { get; set; }
+    public int FightsWon { get; set; }
+    public int CardsPlayed { get; set; }
+    public int ActionsUsed { get; set; }
+
+    public int WandTurns { get; set; }
+    public int Casts { get; set; }
+    public int Inscriptions { get; set; }
+    public int BurnOuts { get; set; }
+    public int IdleWandTurns { get; set; }
+    public int FocusLeft { get; set; }
+    public int SlotsFilled { get; set; }
+    public int SlotsHeld { get; set; }
+    public int BigWandTurns { get; set; }
+    public int BigWandSlotsFilled { get; set; }
+    public int BigWandSlotsHeld { get; set; }
+    public int ExhaustionGained { get; set; }
 }
