@@ -142,6 +142,8 @@ public enum WandField
     StoredSpell,
     // How many of the four elements happened this turn.
     ElementsThisTurn,
+    // How much Singe the direct hits of the cast now running have spent.
+    SingeSpentThisCast,
 }
 
 public sealed class WandValueExpression<TContext> : ICombatExpression<TContext, int>
@@ -175,6 +177,7 @@ public sealed class WandValueExpression<TContext> : ICombatExpression<TContext, 
             WandField.FocusSpent => wand.FocusSpent,
             WandField.StoredSpell => wand.StoredSpell is null ? 0 : 1,
             WandField.ElementsThisTurn => System.Numerics.BitOperations.PopCount((uint)wand.ElementsThisTurn),
+            WandField.SingeSpentThisCast => wand.SingeSpentThisCast,
             _ => 0,
         };
     }

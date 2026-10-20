@@ -70,9 +70,15 @@ public sealed record WandRules
     public int InkstonePoints { get; init; } = 2;
     public int SootyFerruleFocus { get; init; } = 1;
 
+    // Statuses that strengthen the NEXT cast and are spent by it (Glass Rod): every Speak's damage and Block by
+    // Percent, the cast's Exhaustion by Strain.
+    public IReadOnlyList<WandCastBoost> CastBoosts { get; init; } = [];
+
     public int FocusCostFor(int executed) =>
         executed <= 0 ? 0 : CastFocusCost[Math.Min(executed, CastFocusCost.Count - 1)];
 }
+
+public sealed record WandCastBoost(StatusDefinitionId Status, int Percent, int Strain);
 
 // The rules a relic adds to the wand (Sorcerer's Apprentice master §10), each switched on by a status
 // (WandRules.Hooks). Kept as named rules because each reaches into a different moment of the wand's own

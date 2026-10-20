@@ -668,4 +668,37 @@ public class WandTortureTests
         Assert.False(plan.IsLegal);
         Assert.Contains("effects", plan.Illegal);
     }
+
+    // A boost waiting for the next cast (Glass Rod) strengthens its damage and Block, strains it, and is spent by it.
+    [Fact]
+    public void A_next_cast_boost_is_spent_by_the_next_cast()
+    {
+        var primed = new StatusData { Id = "glass_rod_primed", NameKey = "Glass Rod", UsesStacks = true };
+        var rod = Plain("glass_rod", Apply("glass_rod_primed", 1, "source"), cost: 0);
+        var rules = Rules with { CastBoosts = [new WandCastBoost(new StatusDefinitionId("glass_rod_primed"), 50, 3)] };
+        using var play = Start(Apprentice(["glass_rod", "candle_stub", "spark", "spark", "spark"], [rod], rules, [primed]));
+        Play(play, "glass_rod");
+        Play(play, "spark");
+        Inscribe(play, "candle_stub", 0);
+        Assert.Equal(4, Plan(play).Exhaustion);
+        var before = DummyHp(play);
+        Cast(play);
+        Assert.Equal(before - 6, DummyHp(play));                  // 4 × 1.5
+        Assert.Equal(4, Wand(play).Exhaustion);
+        Assert.Equal(0, Stacks(play, Hero(play), "glass_rod_primed"));
+    }
+
+    // "Look at the top 3": a chosen card limited to the first cards of the draw pile is offered only those.
+    [Fact]
+    public void A_choice_from_the_top_of_the_draw_pile_offers_only_the_top()
+    {
+        var dish = Plain("ink_dish", new CombatNodeModel("moveCardToZone", "source",
+            Card: new CombatCardSpec("chosen", CardZone.DrawPile, Purpose: "choose one", Top: 3), ToZone: CardZone.Hand), cost: 0);
+        using var play = Start(Apprentice(["ink_dish", "spark", "spark", "spark", "spark", "chalk_line", "chalk_line", "chalk_line", "chalk_line", "chalk_line"], [dish]));
+        var driver = play.CombatDriver!;
+        driver.PlayCard(driver.Current!.Hand.First(c => c.DefinitionId.value == "ink_dish").Id, Dummy(play));
+        var offered = Assert.IsAssignableFrom<IReadOnlyList<CardInstance>>(driver.PendingCardChoice);
+        Assert.Equal(3, offered.Count);
+        Assert.Equal(driver.Current!.State.GetCardZones(Hero(play)).DrawPile.Take(3).Select(c => c.Id), offered.Select(c => c.Id));
+    }
 }

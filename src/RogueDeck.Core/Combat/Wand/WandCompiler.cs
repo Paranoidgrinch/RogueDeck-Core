@@ -103,6 +103,14 @@ public static class WandCompiler
         plan.Executed = plan.Steps.Count;
         plan.FocusCost = rules.FocusCostFor(plan.Executed);
 
+        // A boost waiting for this cast (Glass Rod).
+        var bearerState = combat.GetCombatant(bearer);
+        foreach (var boost in rules.CastBoosts.Where(b => bearerState.Statuses.Any(s => s.DefinitionId == b.Status)))
+        {
+            plan.Boosts.Add(boost);
+            plan.Strain += boost.Strain;
+        }
+
         Bind(plan, combat, registry, wand, rules, target, options);
         Settle(plan, combat, registry, wand, rules, target);
         return plan;
@@ -588,6 +596,8 @@ public sealed class WandPlan(CombatantId bearer, CombatantId? target, int start,
     public bool FullWand { get; } = full;
 
     public List<WandStep> Steps { get; } = [];
+    // The next-cast boosts this cast spends.
+    public List<WandCastBoost> Boosts { get; } = [];
     // Slots a Stop cut off.
     public List<int> Skipped { get; } = [];
     public bool Backward { get; internal set; }

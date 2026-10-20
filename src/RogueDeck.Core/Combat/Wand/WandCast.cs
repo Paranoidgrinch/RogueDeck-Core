@@ -259,6 +259,8 @@ internal sealed class WandCast
 
         if (step.BoneSpacer)
             parts = HeightenAll(parts, _rules.BoneSpacerPercent, WandFilter.Any, 0);
+        foreach (var boost in _plan.Boosts)
+            parts = HeightenAll(parts, boost.Percent, WandFilter.DamageOrDefense, 0);
 
         foreach (var index in step.Modifiers)
         {
@@ -720,6 +722,8 @@ internal sealed class WandCast
         _wand.Exhaustion = Math.Clamp(_wand.Exhaustion + load, 0, _wand.ExhaustionCap);
         _wand.GroundCredit = 0;
         _wand.InscribedSinceCast = 0;
+        foreach (var boost in _plan.Boosts)
+            _combat.EnqueueEffect(new RemoveStatusEffectRequest(Bearer, boost.Status));
 
         // Burned cards leave the wand for the Exhaust pile, through the ordinary move (CardMovedToZone hears it).
         foreach (var card in _burns.Distinct())
