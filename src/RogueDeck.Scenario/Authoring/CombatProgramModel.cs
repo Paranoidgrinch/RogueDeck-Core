@@ -246,7 +246,13 @@ public sealed record CombatNodeModel(
     // player. Empty / "" canonically for every other kind so build<->classify round-trips exactly. How many
     // options the player takes rides in Amount, like every other count.
     IReadOnlyList<string>? OptionLabels = null,
-    string Purpose = "")
+    string Purpose = "",
+    // wand: which wand move (WandAction by name) and whether it is taken without paying its Focus. Amount is the
+    // move's number where it has one. "" / false canonically for every other kind.
+    string WandMove = "",
+    bool Free = false,
+    // forEachCardInZone: only the cards carrying this per-instance MARK ("" = any). "" canonically for other kinds.
+    string MarkFilter = "")
 {
     public CombatAmountSpec AmountOrDefault => Amount ?? CombatAmountSpec.FromConst(3);
     // The primary / secondary target selectors assembled from their key + parameterization.
@@ -281,9 +287,9 @@ public sealed record CombatNodeModel(
     // for each card in the owner's zone (optional definition filter in ToDefinition, optional tag filter in
     // ToTag, optional first-N limit in TakeFirst) → run the body once per card.
     public static CombatNodeModel ForEachCard(string selectorKey, CardZone zone, CombatNodeModel body,
-        string filter = "", string tag = "", int? takeFirst = null) =>
+        string filter = "", string tag = "", int? takeFirst = null, string mark = "") =>
         new("forEachCardInZone", SelectorKey: selectorKey, Children: new[] { body }, FromZone: zone,
-            ToDefinition: filter, ToTag: tag, TakeFirst: takeFirst);
+            ToDefinition: filter, ToTag: tag, TakeFirst: takeFirst, MarkFilter: mark);
 
     public static CombatNodeModel Repeat(CombatAmountSpec count, CombatNodeModel body) =>
         new("repeat", Amount: count, Children: new[] { body });
@@ -917,6 +923,8 @@ public static class CombatProgramModel
                 SelectorFor(spec.ReadSelector ?? new CombatSelectorSpec("source")),
                 SelectorFor(spec.ReadSelector2OrDefault)),
             "cardCost" => new CardCostExpression<TContext>(BuildCard<TContext>(spec.ReadCardOrDefault), new ResourceId(spec.ReadId)),
+            // The wand of the program's source (WandValueExpression); ReadId names the field.
+            "wandValue" => new WandValueExpression<TContext>(Enum.Parse<WandField>(spec.ReadId)),
             _ => new ConstantExpression<TContext>(spec.Const),
         };
     }
@@ -1000,6 +1008,7 @@ public static class CombatProgramModel
                 new CombatAmountSpec("gridDistance", ReadSelector: gf, ReadSelector2: gt),
             CardCostExpression<TContext> e => ClassifyCard(e.Card) is { } cc
                 ? new CombatAmountSpec("cardCost", ReadId: e.Resource.value, ReadCard: cc) : CombatAmountSpec.Advanced,
+            WandValueExpression<TContext> e => new CombatAmountSpec("wandValue", ReadId: e.Field.ToString()),
             _ => CombatAmountSpec.Advanced,
         };
 
@@ -1116,7 +1125,8 @@ public static class CombatProgramModel
                     SelectorFor(model.PrimarySelector), model.FromZone, BuildBody<TContext>(model),
                     definitionFilter: string.IsNullOrEmpty(model.ToDefinition) ? null : new CardDefinitionId(model.ToDefinition),
                     tagFilter: string.IsNullOrEmpty(model.ToTag) ? null : new TagId(model.ToTag),
-                    takeFirst: model.TakeFirst);
+                    takeFirst: model.TakeFirst,
+                    markFilter: string.IsNullOrEmpty(model.MarkFilter) ? null : new TagId(model.MarkFilter));
             case "repeat":
                 return new RepeatEffectNode<TContext>(BuildAmount<TContext>(model.AmountOrDefault), BuildBody<TContext>(model));
             case "repeatUntil":
@@ -1173,6 +1183,8 @@ public static class CombatProgramModel
             "modifyStatusDuration" => new ModifyStatusDurationNode<TContext>(selector, new StatusDefinitionId(model.StatusId), amount),
             "modifyStatusCharges" => new ModifyStatusChargesNode<TContext>(selector, new StatusDefinitionId(model.StatusId), amount),
             "setCombatantCounter" => new SetCombatantCounterNode<TContext>(selector, new CounterId(model.CounterId), amount, model.Relative),
+            "wand" => new WandNode<TContext>(Enum.Parse<WandAction>(model.WandMove),
+                model.Amount is null ? null : amount, model.Free),
             "removeSelectedStatus" => new RemoveSelectedStatusNode<TContext>(selector, model.SelectionOrDefault),
             "modifySelectedStatusStacks" => new ModifySelectedStatusStacksNode<TContext>(selector, model.SelectionOrDefault, amount),
             "stealSelectedStatus" => new StealSelectedStatusNode<TContext>(selector, model.SelectionOrDefault, SelectorFor(model.SecondarySelector)),
@@ -1297,6 +1309,11 @@ public static class CombatProgramModel
                 return scAmount.IsAdvanced
                     ? null
                     : WithSelector(n.TargetSelector, new CombatNodeModel("setCombatantCounter", "source", scAmount, CounterId: n.CounterId.value, Relative: n.Relative));
+            case WandNode<TContext> n:
+                var wandAmount = n.Amount is null ? null : ClassifyAmount(n.Amount);
+                return wandAmount is { IsAdvanced: true }
+                    ? null
+                    : new CombatNodeModel("wand", "source", wandAmount, WandMove: n.Action.ToString(), Free: n.Free);
             case RemoveSelectedStatusNode<TContext> n:
                 return WithSelector(n.TargetSelector, new CombatNodeModel("removeSelectedStatus", "source", Selection: n.Selection));
             case ModifySelectedStatusStacksNode<TContext> n:
@@ -1415,7 +1432,7 @@ public static class CombatProgramModel
                 when fc.MaxIterations == ForEachCardInZoneNode<TContext>.DefaultMaxIterations:
                 return ClassifyNode<TContext>(fc.Body) is { } fcBody
                     ? WithSelector(fc.OwnerSelector, CombatNodeModel.ForEachCard("source", fc.Zone, fcBody,
-                        fc.DefinitionFilter?.value ?? "", fc.TagFilter?.value ?? "", fc.TakeFirst))
+                        fc.DefinitionFilter?.value ?? "", fc.TagFilter?.value ?? "", fc.TakeFirst, fc.MarkFilter?.value ?? ""))
                     : null;
             case RepeatEffectNode<TContext> r
                 when r.MaxCount == RepeatEffectNode<TContext>.DefaultMaxCount:
