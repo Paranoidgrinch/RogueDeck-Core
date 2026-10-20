@@ -80,9 +80,12 @@ internal sealed class WandCast
     {
         foreach (var effect in seal.Effects)
         {
-            if (effect.Kind == WandEffectKind.Block && bearer.DefensivePools.TryGetValue(StandardCombatIds.BlockDefensivePool, out var block))
+            if (effect.Kind == WandEffectKind.Block)
             {
-                block.SetCurrent(block.Current + effect.Amount);
+                if (bearer.DefensivePools.TryGetValue(StandardCombatIds.BlockDefensivePool, out var block))
+                    block.SetCurrent(block.Current + effect.Amount);
+                else
+                    bearer.AddDefensivePool(StandardCombatIds.BlockDefensivePool, new ValuePoolState(current: effect.Amount));
                 combat.EnqueueEvent(new BlockGainedCombatEvent(bearer.Id, effect.Amount, effect.Amount, bearer.Id, seal.SourceCard));
             }
             else if (effect.Kind == WandEffectKind.WardWax && rules.WardWax is { } wax)
