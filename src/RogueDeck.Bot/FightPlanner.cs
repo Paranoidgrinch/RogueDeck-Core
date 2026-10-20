@@ -33,6 +33,10 @@ public sealed record PlannedFight(
     IReadOnlyList<string> Lines)
 {
     public int HealthLost => HeroHealthAtStart - HeroHealthAtEnd;
+
+    // The hero's health (and Block) after each played turn, the enemies' answer included — for reading where a fight
+    // was lost, beside Lines.
+    public IReadOnlyList<(int Health, int Block)> AfterEachTurn { get; init; } = [];
 }
 
 public sealed class FightPlanner(int horizon = 5, int beam = 16, int perTurn = 300, int turnCap = 40)
@@ -54,6 +58,7 @@ public sealed class FightPlanner(int horizon = 5, int beam = 16, int perTurn = 3
             .Where(c => c.Id != now.HeroId && c.TeamId == StandardCombatIds.EnemyTeam)
             .Sum(c => c.Health.Max));
         var lines = new List<string>();
+        var after = new List<(int, int)>();
         var turns = 0;
 
         while (!now.IsOver && turns < turnCap)
@@ -69,13 +74,14 @@ public sealed class FightPlanner(int horizon = 5, int beam = 16, int perTurn = 3
                 break;
             now = chosen.After;
             lines.Add(chosen.Played);
+            after.Add((now.HeroHealth, now.HeroGuard));
             turns++;
         }
 
         return new PlannedFight(
             now.Result == CombatResult.Victory, now.IsOver, heroAtStart,
             now.Result == CombatResult.Defeat ? 0 : now.HeroHealth, turns, _positions,
-            clock.Elapsed.TotalSeconds, lines);
+            clock.Elapsed.TotalSeconds, lines) { AfterEachTurn = after };
     }
 
     // ONE TURN, for a driver that plays the real fight itself (TextPlay's `f`): what the planner would lay down
