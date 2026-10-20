@@ -130,7 +130,11 @@ public sealed record CombatCardSpec(
                                          // pot"). Null offers the whole zone; kept out of the wire format when unset.
     [property: System.Text.Json.Serialization.JsonIgnore(
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
-    string? ExcludeTag = null)
+    string? ExcludeTag = null,
+    // chosen only: offer only the first this-many cards of the zone — "look at the top 3 of your draw pile".
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    int? Top = null)
 {
     // iterated reads the loop's current card and has no zone of its own; the others select from a zone.
     public bool UsesZone => Kind is "inZone" or "chosen" or "random";
@@ -1211,7 +1215,7 @@ public static class CombatProgramModel
         where TContext : class => spec.Kind switch
         {
             "chosen" => new ChosenCardInZoneExpression<TContext>(spec.Zone, spec.Purpose,
-                spec.ExcludeTag is { Length: > 0 } excluded ? new TagId(excluded) : null),
+                spec.ExcludeTag is { Length: > 0 } excluded ? new TagId(excluded) : null, spec.Top),
             "random" => new RandomCardInZoneExpression<TContext>(spec.Zone),
             "iterated" => new IteratedCardExpression<TContext>(),
             _ => new CardInZoneExpression<TContext>(spec.Zone, spec.Index), // "inZone"
@@ -1506,7 +1510,7 @@ public static class CombatProgramModel
         {
             CardInZoneExpression<TContext> e => new CombatCardSpec("inZone", e.Zone, e.Index),
             ChosenCardInZoneExpression<TContext> e => new CombatCardSpec("chosen", e.Zone, Purpose: e.Purpose,
-                ExcludeTag: e.ExcludeTag?.value),
+                ExcludeTag: e.ExcludeTag?.value, Top: e.Top),
             RandomCardInZoneExpression<TContext> e => new CombatCardSpec("random", e.Zone),
             IteratedCardExpression<TContext> => new CombatCardSpec("iterated"),
             _ => null,

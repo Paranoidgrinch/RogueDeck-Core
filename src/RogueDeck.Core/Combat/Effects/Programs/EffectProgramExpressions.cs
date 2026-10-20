@@ -1879,12 +1879,18 @@ public sealed class ChosenCardInZoneExpression<TContext>
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public TagId? ExcludeTag { get; }
 
+    // Only the first this-many cards of the zone are offered — the top of a draw pile. Null offers them all.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public int? Top { get; }
+
     public ChosenCardInZoneExpression(
-        CardZone zone, string purpose = "choose a card", TagId? excludeTag = null)
+        CardZone zone, string purpose = "choose a card", TagId? excludeTag = null, int? top = null)
     {
         Zone = zone;
         Purpose = purpose;
         ExcludeTag = excludeTag;
+        Top = top;
     }
 
     public CardInstanceId? Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
@@ -1894,6 +1900,8 @@ public sealed class ChosenCardInZoneExpression<TContext>
             return null;
 
         var cards = combat.GetCardZones(ownerId).GetCardsInZone(Zone);
+        if (Top is { } top)
+            cards = cards.Take(Math.Max(0, top)).ToList();
         if (ExcludeTag is { } excluded && combat.DefinitionRegistry is { } registry)
             cards = cards.Where(card =>
                 !registry.CardDefinitions.TryGetValue(card.DefinitionId, out var definition)
