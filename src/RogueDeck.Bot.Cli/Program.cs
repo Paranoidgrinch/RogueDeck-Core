@@ -156,7 +156,7 @@ public static class Program
         var log = new DelegateBotLog(line => text.AppendLine(line));
 
         var meta = new InMemoryMetaStore();
-        var character = RollCharacter(blueprint, seed);
+        var character = options.Character ?? RollCharacter(blueprint, seed);
 
         using var play = new RunPlayback(() => { }, meta);
         var how = new BotOptions
@@ -185,6 +185,7 @@ public static class Program
             text.AppendLine(line);
         text.AppendLine(BotReport.Fitness(result));
         text.AppendLine(BotReport.Clearance(result));
+        text.AppendLine(BotReport.Bench(result));
         text.AppendLine(BotReport.Result(result));
         var survey = Survey(blueprint, seed, maps, character, generator, result.Walked, options);
         foreach (var line in survey)
@@ -207,7 +208,7 @@ public static class Program
         {
             try
             {
-                foreach (var act in MapOracle.SurveyRun(blueprint, seed, RollCharacter(blueprint, seed), generator))
+                foreach (var act in MapOracle.SurveyRun(blueprint, seed, options.Character ?? RollCharacter(blueprint, seed), generator))
                     Console.WriteLine(BotReport.Oracle(seed, maps, act));
             }
             catch (Exception ex)
@@ -242,7 +243,7 @@ public static class Program
         var placed = new Dictionary<int, List<(bool Elite, int Outside)>>();
         for (var seed = options.SeedFrom; seed < options.SeedFrom + options.Runs; seed++)
         {
-            var character = RollCharacter(blueprint, seed);
+            var character = options.Character ?? RollCharacter(blueprint, seed);
             var loadout = new BalanceCalculator(blueprint.Balance, blueprint.Encounters)
                 .LoadoutStrength(blueprint.ResolveStart(character), blueprint.Deck, character);
             var acts = blueprint.BuildActPlan(seed, loadout, generator);

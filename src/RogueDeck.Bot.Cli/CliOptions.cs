@@ -12,6 +12,9 @@ public sealed record CliOptions
     public int Timeout { get; init; } = 1800;
     public int? Health { get; init; }
 
+    // Who plays every run, by id. Null: the roll Godot makes from the seed (RollCharacter).
+    public string? Character { get; init; }
+
     // ⚠ DRIVE THE RUN THROUGH THE REPLAY MODEL the UI needs, instead of walking it once with the bot in the
     // seat the engine asks (R5). It is the same brain, the same answers and the same report either way —
     // `golden.sh --console` proves that by playing the whole set both ways — but the replay model re-executes
@@ -38,6 +41,8 @@ public sealed record CliOptions
           --timeout N        seconds one run may take before the watchdog writes it off (default 1800)
           --immortal         a body that survives the whole game (9999 hp)
           --health N         a stated body
+          --character <id>   who plays every run (bureaucrat, hedge_witch, sorcerers_apprentice …); without
+                             it each seed rolls one the way Godot does
           --replay           drive through the replay model instead of answering the engine inline (slower;
                              it is the driver the frontend uses, and half of what golden.sh checks)
           --oracle           after the run, read the MAPS it walked: every path through every act, what
@@ -66,6 +71,7 @@ public sealed record CliOptions
         var oracleOnly = false;
         var lanes = false;
         int? health = null;
+        string? character = null;
         var replay = false;
         string? outDir = null;
 
@@ -84,6 +90,7 @@ public sealed record CliOptions
                 case "--timeout": timeout = Number(Next()); break;
                 case "--immortal": health = 9999; break;
                 case "--health": health = Number(Next()); break;
+                case "--character": character = Next(); break;
                 case "--replay": replay = true; break;
                 case "--oracle": oracle = true; break;
                 case "--oracle-only": oracleOnly = oracle = true; break;
@@ -105,6 +112,7 @@ public sealed record CliOptions
             Steps = steps,
             Timeout = timeout,
             Health = health,
+            Character = string.IsNullOrEmpty(character) ? null : character,
             Replay = replay,
             Oracle = oracle,
             OracleOnly = oracleOnly,
