@@ -52,10 +52,13 @@ public sealed class CompiledCombatLibrary
         IEnumerable<IPreDownInterceptor>? preDownInterceptors = null,
         IEnumerable<IStatusApplicationInterceptor>? statusApplicationInterceptors = null,
         IEnumerable<ResourceRefillSpec>? turnStartResourceRefills = null,
-        IEnumerable<DefensivePoolDefinition>? defensivePools = null)
+        IEnumerable<DefensivePoolDefinition>? defensivePools = null,
+        WandRules? wand = null)
     {
         var builder = new CombatDefinitionRegistryBuilder();
         new StandardCombatPackage(cardsDrawnPerTurn).RegisterDefinitions(builder);
+        if (wand is not null)
+            builder.SetWandRules(wand);
 
         foreach (var status in statuses ?? [])
             builder.RegisterStatus(status.Compile());

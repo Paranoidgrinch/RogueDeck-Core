@@ -64,6 +64,9 @@ public sealed class ScenarioBlueprint
     // self-contained behaviour: everything this blueprint needs is authored on this blueprint.
     public CompiledCombatLibrary? Library { get; set; }
 
+    // The wand rules of a self-contained scenario (a library brings its own). Null ⇒ no wands.
+    public WandRules? Wand { get; set; }
+
     public CompiledScenario Compile()
     {
         if (Hero is null)
@@ -83,6 +86,8 @@ public sealed class ScenarioBlueprint
             : new CombatDefinitionRegistryBuilder();
         if (Library is null)
             new StandardCombatPackage(CardsDrawnPerTurn).RegisterDefinitions(builder);
+        if (Wand is not null)
+            builder.SetWandRules(Wand);
 
         foreach (var status in Statuses)
             builder.RegisterStatus(status.Compile());

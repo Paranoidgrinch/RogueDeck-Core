@@ -80,6 +80,15 @@ public sealed class CombatDefinitionRegistryBuilder
 
     public bool IsBuilt => _built is not null;
 
+    private WandRules? _wand;
+
+    // The game's wand rules (WandRules). One per registry; a base's carry over unless replaced.
+    public void SetWandRules(WandRules rules)
+    {
+        EnsureNotBuilt();
+        _wand = rules ?? throw new ArgumentNullException(nameof(rules));
+    }
+
     public bool AllowUnsafeSideEffects
     {
         get => _allowUnsafeSideEffects;
@@ -419,7 +428,10 @@ public sealed class CombatDefinitionRegistryBuilder
             Merged(_base?.DefensivePoolsImmutable, _defensivePoolDefinitions),
             MergedEventHandlers(),
             NodeExecutors,
-            _allowUnsafeSideEffects);
+            _allowUnsafeSideEffects)
+        {
+            Wand = _wand ?? _base?.Wand,
+        };
 
         return _built;
     }

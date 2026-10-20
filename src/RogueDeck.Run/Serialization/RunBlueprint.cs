@@ -93,6 +93,12 @@ public sealed record RunBlueprint(
     // unweighted map is unaffected. Round-trips via RunJson; old documents deserialize with the empty default.
     public BalanceManifest Balance { get; init; } = new();
 
+    // The rules of the wand (WandRules) — the Sorcerer's Apprentice's spell program — when this game has one.
+    // Absent from the JSON when null, so a game without wands writes no line about them.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public WandRules? Wand { get; init; }
+
     // The rules a run's map is generated from, per run, at run start (RuleBasedMapGenerator). Null (the default) ⇒
     // no procedural generation: the authored Map above is used as-is, exactly as before. When set, CreateInitialRun
     // builds the map from these rules + the run seed + the starting loadout strength (see Balance), guaranteeing the

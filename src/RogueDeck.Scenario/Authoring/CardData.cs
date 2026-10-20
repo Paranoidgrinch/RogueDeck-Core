@@ -44,6 +44,12 @@ public sealed record CardData
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public ICombatExpression<CardPlayContext, bool>? PlayCondition { get; init; }
 
+    // What the card does in a wand (CardDefinition.Wand). Absent from the wire when unset, so every card without one
+    // round-trips byte-identically.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public WandImprint? Wand { get; init; }
+
     public static CardData From(CardBlueprint card)
     {
         ArgumentNullException.ThrowIfNull(card);
@@ -63,6 +69,7 @@ public sealed record CardData
             QueueOnPlay = card.QueueOnPlay,
             IsAction = card.IsAction,
             PlayCondition = card.PlayCondition,
+            Wand = card.Wand,
         };
     }
 
@@ -81,6 +88,7 @@ public sealed record CardData
             QueueOnPlay = QueueOnPlay,
             IsAction = IsAction,
             PlayCondition = PlayCondition,
+            Wand = Wand,
         };
         card.Costs.AddRange(Costs);
         card.Tags.AddRange(Tags);

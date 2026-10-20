@@ -85,6 +85,7 @@ public sealed class CardBlueprint
     public bool QueueOnPlay { get; set; }
     public bool IsAction { get; set; }
     public ICombatExpression<CardPlayContext, bool>? PlayCondition { get; set; }
+    public WandImprint? Wand { get; set; }
 
     public CardBlueprint(string id)
     {
@@ -114,6 +115,7 @@ public sealed class CardBlueprint
             QueueOnPlay = QueueOnPlay,
             IsAction = IsAction,
             PlayCondition = PlayCondition,
+            Wand = Wand,
         };
         builder.Costs.AddRange(Costs);
         builder.Tags.AddRange(Tags);

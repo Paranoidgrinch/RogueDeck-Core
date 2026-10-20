@@ -46,6 +46,10 @@ public sealed class CardDefinition
     // context before anything is paid; null ⇒ always.
     public ICombatExpression<CardPlayContext, bool>? PlayCondition { get; init; }
 
+    // WHAT THIS CARD DOES IN A WAND (WandImprint) — its second mode, read when a wand holding it is cast. Null for
+    // every card that cannot be inscribed.
+    public WandImprint? Wand { get; init; }
+
     internal CardDefinition(
         CardDefinitionId id,
         PackageId packageId,
@@ -111,6 +115,7 @@ public sealed class CardDefinitionBuilder
     // A character action rather than a card (see CardDefinition.IsAction), and when it may be played/used.
     public bool IsAction { get; set; }
     public ICombatExpression<CardPlayContext, bool>? PlayCondition { get; set; }
+    public WandImprint? Wand { get; set; }
 
     public CardDefinitionBuilder(
         CardDefinitionId id,
@@ -162,6 +167,7 @@ public sealed class CardDefinitionBuilder
         {
             IsAction = IsAction,
             PlayCondition = PlayCondition,
+            Wand = Wand,
         };
 
         return _built;

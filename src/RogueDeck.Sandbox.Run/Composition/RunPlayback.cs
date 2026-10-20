@@ -543,7 +543,10 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
                 .Select(r => new ResourceSpec(new ResourceId(r.Id), r.StartingAmount, r.Max)).ToArray(),
             heroResourceRefills: blueprint.CombatResources
                 .Where(r => r.RefillEachTurn)
-                .Select(r => new ResourceRefillSpec(new ResourceId(r.Id), r.Max)).ToArray());
+                .Select(r => new ResourceRefillSpec(new ResourceId(r.Id), r.Max)).ToArray())
+        {
+            Wand = blueprint.Wand,
+        };
 
         var builder = new RunContentRegistryBuilder()
             .SetEncounters(new EncounterCatalog(

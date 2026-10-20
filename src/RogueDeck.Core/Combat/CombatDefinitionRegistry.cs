@@ -73,6 +73,9 @@ public sealed class CombatDefinitionRegistry
         _nodeExecutorRegistry = nodeExecutorRegistry;
     }
 
+    // The wand's rulebook (WandRules), or null in a game without wands.
+    public WandRules? Wand { get; init; }
+
     /// <summary>Always true: a <see cref="CombatDefinitionRegistry"/> only exists post-build.</summary>
     public bool IsBuilt => true;
 

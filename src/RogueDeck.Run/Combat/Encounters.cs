@@ -54,6 +54,9 @@ public sealed class CombatContentLibrary
     public IReadOnlyList<ResourceSpec> HeroResources { get; }
     public IReadOnlyList<ResourceRefillSpec> HeroResourceRefills { get; }
 
+    // The wand rules every fight is built with; null ⇒ no wands in this game.
+    public WandRules? Wand { get; init; }
+
     public CombatContentLibrary(
         IReadOnlyList<CardBlueprint>? cards = null,
         IReadOnlyList<EnemyActionBlueprint>? enemyActions = null,
@@ -249,7 +252,8 @@ public sealed class EncounterCatalog
                 triggeredPrograms: _library.TriggeredPrograms,
                 preDownInterceptors: _library.PreDownInterceptors,
                 statusApplicationInterceptors: _library.StatusApplicationInterceptors,
-                turnStartResourceRefills: _library.HeroResourceRefills);
+                turnStartResourceRefills: _library.HeroResourceRefills,
+                wand: _library.Wand);
             _compiledLibraries[cardsDrawnPerTurn] = compiled;
             return compiled;
         }
