@@ -283,7 +283,8 @@ public class WandTortureTests
         play.CombatDriver!.Current!.State.GetCombatant(who).Statuses.Where(s => s.DefinitionId.value == status).Sum(s => s.Stacks);
 
     private static int Block(RunPlayback play) =>
-        play.CombatDriver!.Current!.State.GetCombatant(Hero(play)).DefensivePools[StandardCombatIds.BlockDefensivePool].Current;
+        play.CombatDriver!.Current!.State.GetCombatant(Hero(play)).DefensivePools
+            .GetValueOrDefault(StandardCombatIds.BlockDefensivePool)?.Current ?? 0;
 
     // §15 A2/A3/A6: inscribing is not a play — no CardPlayed, no Focus — and the card leaves the hand for the wand,
     // not for the discard or the Exhaust pile. Only the FIRST inscription of the combat is free.
@@ -468,5 +469,203 @@ public class WandTortureTests
         var back = resumed.CombatDriver!.Current!;
         Assert.Equal(expected, CombatStateHasher.ComputeHash(back.State.CreateSnapshot()));
         Assert.Equal(2, back.State.GetWand(back.HeroId)!.Occupied);
+    }
+
+    // ── the grammar (§15 C, D) ────────────────────────────────────────────────────────────────────────────────
+
+    private static WandPlan Plan(RunPlayback play, WandCompiler.Options? options = null)
+    {
+        var combat = play.CombatDriver!.Current!;
+        return WandCompiler.Compile(combat.State, combat.Registry, Hero(play), Dummy(play), options);
+    }
+
+    // Load the wand with these cards in these slots (Focus enough for all of it), turn by turn as hands allow.
+    private static RunPlayback Loaded(IReadOnlyList<(string Card, int Slot)> wand, IEnumerable<CardData>? extra = null,
+        IEnumerable<StatusData>? statuses = null, IEnumerable<string>? heroStatuses = null, IReadOnlyList<string>? also = null)
+    {
+        var deck = wand.Select(w => w.Card).Concat(also ?? [])
+            .Concat(Enumerable.Repeat("spark", Math.Max(0, 5 - wand.Count - (also?.Count ?? 0)))).ToList();
+        var play = Start(Apprentice(deck, extra, statuses: statuses, heroStatuses: heroStatuses));
+        foreach (var _ in Enumerable.Range(0, 2))
+            if (play.CombatDriver!.Current!.Hand.Any(c => c.DefinitionId.value == "spark"))
+                Play(play, "spark");
+        foreach (var (card, slot) in wand)
+        {
+            while (Wand(play).Focus < 1 && Wand(play).FreeInscriptionUsed)
+                Spark(play);
+            Inscribe(play, card, slot);
+        }
+        while (Wand(play).Focus < 4)
+            Spark(play);
+        return play;
+    }
+
+    // One more Focus: a spark from the hand, or the next turn's.
+    private static void Spark(RunPlayback play)
+    {
+        if (!play.CombatDriver!.Current!.Hand.Any(c => c.DefinitionId.value == "spark")
+            || play.CombatDriver.Current.HeroEnergy == 0 && false)
+            play.CombatDriver.EndTurn();
+        if (play.CombatDriver!.Current!.Hand.Any(c => c.DefinitionId.value == "spark"))
+            Play(play, "spark");
+        else
+            play.CombatDriver.EndTurn();
+    }
+
+    private static CardData Speak(string id, params WandAtom[] atoms) =>
+        Card(id, new WandImprint { Operation = WandOperation.Speak, Atoms = atoms });
+
+    // §15 C18: an Echo with nothing before it fizzles, and the plan says so before anything is paid.
+    [Fact]
+    public void An_echo_with_nothing_to_copy_fizzles_in_the_plan()
+    {
+        using var play = Loaded([("flyleaf", 0), ("candle_stub", 1)]);
+        var plan = Plan(play);
+        Assert.True(plan.Steps[0].Fizzled);
+        Assert.Contains("copy", plan.Steps[0].FizzleReason);
+        var before = DummyHp(play);
+        Cast(play);
+        Assert.Equal(before - 4, DummyHp(play));                  // only the Candle Stub — and it is not first, no Singe
+        Assert.Equal(0, Stacks(play, Dummy(play), "singe"));
+    }
+
+    // §12.2: Candle Stub first gets its Singe; Ink Blot then heightens the Chalk Line, and the Flyleaf copies THAT.
+    [Fact]
+    public void Where_a_card_sits_decides_what_it_reaches()
+    {
+        using var play = Loaded([("candle_stub", 0), ("ink_blot", 1), ("chalk_line", 2), ("flyleaf", 3)]);
+        var plan = Plan(play);
+        Assert.Equal(2, plan.Steps[1].Target);                   // Ink Blot → Chalk Line
+        Assert.Equal(2, plan.Steps[3].Source);                   // Flyleaf copies Chalk Line
+        var before = DummyHp(play);
+        var block = Block(play);
+        Cast(play);
+        Assert.Equal(before - 4, DummyHp(play));
+        Assert.Equal(1, Stacks(play, Dummy(play), "singe"));
+        Assert.Equal(block + 6 + 3, Block(play));
+    }
+
+    // §15 C19: Fork makes one hit two of 60 % (rounded up), each its own hit for Singe; Join folds the next two damage
+    // Speaks into one hit of both plus its bonus.
+    [Fact]
+    public void Fork_splits_a_hit_and_join_folds_two_into_one()
+    {
+        var fork = Card("split_wick", new WandImprint { Operation = WandOperation.Shape, Rule = WandRule.Fork, Percent = 60, Amount = 2 });
+        var join = Card("cracked_slate", new WandImprint { Operation = WandOperation.Shape, Rule = WandRule.Join, Amount = 3 });
+        var jab = Speak("jab", Hit(5));
+        using (var play = Loaded([("split_wick", 0), ("candle_stub", 1)], [fork, join, jab]))
+        {
+            var before = DummyHp(play);
+            Cast(play);
+            Assert.Equal(before - 6, DummyHp(play));              // 3 + 3 — and the Candle Stub is not first
+        }
+        using (var play = Loaded([("cracked_slate", 0), ("candle_stub", 1), ("jab", 2)], [fork, join, jab], also: ["sear"]))
+        {
+            Play(play, "sear");
+            var before = DummyHp(play);
+            Cast(play);
+            Assert.Equal(before - (4 + 5 + 3 + 2), DummyHp(play)); // one hit: one Singe
+            Assert.Equal(1, Stacks(play, Dummy(play), "singe"));
+        }
+    }
+
+    // §15 C23: Soak turns a damage-only Speak into Block — the damage is never dealt, so no Singe is spent.
+    [Fact]
+    public void Soak_turns_the_hit_into_block_and_spends_no_singe()
+    {
+        var cup = Card("cup_of_water", new WandImprint { Operation = WandOperation.Shape, Rule = WandRule.Soak, Percent = 80 });
+        var jab = Speak("jab", Hit(5));
+        using var play = Loaded([("cup_of_water", 0), ("jab", 1)], [cup, jab], also: ["sear"]);
+        Play(play, "sear");
+        var before = DummyHp(play);
+        var block = Block(play);
+        Cast(play);
+        Assert.Equal(before, DummyHp(play));
+        Assert.Equal(block + 4, Block(play));
+        Assert.Equal(2, Stacks(play, Dummy(play), "singe"));
+    }
+
+    // §15 C20/C21: Keep stores the next Speak instead of speaking it; the next successful cast lets it go first.
+    [Fact]
+    public void Keep_stores_a_speak_for_the_next_cast()
+    {
+        var leaf = Card("folded_leaf", new WandImprint { Operation = WandOperation.Keep, Percent = 100, Filter = WandFilter.Any });
+        var jab = Speak("jab", Hit(5));
+        using var play = Loaded([("folded_leaf", 0), ("jab", 1)], [leaf, jab]);
+        var before = DummyHp(play);
+        Cast(play);
+        Assert.Equal(before, DummyHp(play));
+        Assert.Equal(WandStoreTrigger.NextCast, Wand(play).StoredSpell!.Trigger);
+
+        // Next cast: the stored 5 first, then the program again (which stores the jab once more).
+        play.CombatDriver!.EndTurn();
+        Play(play, "spark");
+        Play(play, "spark");
+        before = DummyHp(play);
+        Cast(play);
+        Assert.Equal(before - 5, DummyHp(play));
+        Assert.NotNull(Wand(play).StoredSpell);
+    }
+
+    // §15 C24: a Stop ends the cast after the Speak before it; nothing after it runs or is paid for.
+    [Fact]
+    public void A_stop_ends_the_cast_and_what_follows_is_not_paid_for()
+    {
+        var whistle = Card("penny_whistle", new WandImprint { Operation = WandOperation.Stop, Amount = 2 });
+        using var play = Loaded([("candle_stub", 0), ("penny_whistle", 1), ("flyleaf", 2), ("chalk_line", 3)], [whistle]);
+        var plan = Plan(play);
+        Assert.Equal(2, plan.Executed);
+        Assert.Equal(2, plan.FocusCost);
+        Assert.Equal([2, 3], plan.Skipped);
+        Assert.Equal(0, plan.Exhaustion);                         // 1 − 2, never below zero
+        var block = Block(play);
+        Cast(play);
+        Assert.Equal(block, Block(play));
+    }
+
+    // §15 D26: with Brass Dividers a run of slots is cast alone, priced alone, and draws nothing from outside it.
+    [Fact]
+    public void Brass_dividers_cast_a_section_on_its_own()
+    {
+        var dividers = new StatusData { Id = "brass_dividers", NameKey = "Brass Dividers", UsesStacks = true };
+        using var play = Loaded([("ink_blot", 0), ("candle_stub", 1), ("chalk_line", 2), ("flyleaf", 3)],
+            statuses: [dividers], heroStatuses: ["brass_dividers"]);
+        var section = Plan(play, new WandCompiler.Options(0, 1));
+        Assert.Equal(2, section.FocusCost);
+        Assert.Equal(2, section.Executed);
+
+        var driver = play.CombatDriver!;
+        var before = DummyHp(play);
+        driver.UseAction(new CardDefinitionId("cast"), Dummy(play));
+        var options = Assert.IsAssignableFrom<IReadOnlyList<string>>(driver.PendingOptionChoice);
+        driver.SupplyOptionChoice([options.ToList().IndexOf("Slots 1–2")]);
+        Assert.Null(play.Session!.Error);
+        Assert.Equal(before - 6, DummyHp(play));                  // heightened, and nothing copied it
+        Assert.Contains(nameof(WandHook.BrassDividers), Wand(play).TurnLatches);
+    }
+
+    // §15 D28: A Perfect Copy rotates the cards one occupied place AFTER a full cast; the cast itself ran as it stood.
+    [Fact]
+    public void A_perfect_copy_rotates_after_the_cast()
+    {
+        var copy = Card("a_perfect_copy", new WandImprint { Operation = WandOperation.Order, Rule = WandRule.Rotate });
+        using var play = Loaded([("ink_blot", 0), ("candle_stub", 1), ("flyleaf", 2), ("a_perfect_copy", 3)], [copy]);
+        var before = DummyHp(play);
+        Cast(play);
+        Assert.Equal(before - 9, DummyHp(play));
+        var zones = play.CombatDriver!.Current!.State.GetCardZones(Hero(play));
+        Assert.Equal(["a_perfect_copy", "ink_blot", "candle_stub", "flyleaf"],
+            Wand(play).Slots.Select(s => zones.GetCard(s!.Value).DefinitionId.value));
+    }
+
+    // §15 C25: a cast that would emit more effects than the cap is refused in the plan, not cut short.
+    [Fact]
+    public void A_cast_past_the_effect_cap_is_refused()
+    {
+        var flurry = Speak("flurry", Hit(1, hits: 30));
+        using var play = Loaded([("flurry", 0)], [flurry]);
+        var plan = Plan(play);
+        Assert.False(plan.IsLegal);
+        Assert.Contains("effects", plan.Illegal);
     }
 }
