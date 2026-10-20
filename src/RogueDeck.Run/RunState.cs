@@ -46,6 +46,9 @@ public sealed class RunState
     // Retarget the single-hero accessors at `member` for the duration of the returned scope; disposing restores
     // the previous target. ForMemberRunEffect wraps each selected member in one of these, then resolves ordinary
     // effects inline so they mutate that member. Scopes nest (restore is stacked, not reset-to-primary).
+    // Whether a member scope is open — the run is answering for one member, not for the party.
+    public bool IsMemberScoped => _activeMember is not null;
+
     public MemberScope PushActiveMember(PartyMember member)
     {
         ArgumentNullException.ThrowIfNull(member);
@@ -435,7 +438,7 @@ public sealed class RunState
         _pendingCombatModifiers.Clear();
         // An opening promised for several fights stays in the queue for the next one, a fight fewer.
         foreach (var opening in taken.OfType<HeroOpeningRuleModifier>().Where(o => o.Combats > 1))
-            _pendingCombatModifiers.Add(new HeroOpeningRuleModifier(opening.Rule, opening.Combats - 1));
+            _pendingCombatModifiers.Add(new HeroOpeningRuleModifier(opening.Rule, opening.Combats - 1, opening.Member));
         return taken;
     }
 
@@ -607,6 +610,10 @@ public sealed class RunState
                 : null,
             // Parallel to PendingOpenings, and written only when some opening has more than one fight left — a
             // plain list of ints, never a tuple (System.Text.Json drops tuple fields).
+            // …and whose they are, written only when some opening is not the hero's (a party member's).
+            PendingOpeningMembers = _pendingCombatModifiers.Cast<HeroOpeningRuleModifier>().Any(m => m.Member is not null)
+                ? _pendingCombatModifiers.Cast<HeroOpeningRuleModifier>().Select(m => m.Member?.Value).ToList()
+                : null,
             PendingOpeningCombats = _pendingCombatModifiers.Cast<HeroOpeningRuleModifier>().Any(m => m.Combats > 1)
                 ? _pendingCombatModifiers.Cast<HeroOpeningRuleModifier>().Select(m => m.Combats).ToList()
                 : null,
@@ -722,7 +729,8 @@ public sealed class RunState
         var openings = data.PendingOpenings ?? [];
         for (var index = 0; index < openings.Count; index++)
             run.AddPendingCombatModifier(new HeroOpeningRuleModifier(
-                openings[index], data.PendingOpeningCombats?.ElementAtOrDefault(index) ?? 1));
+                openings[index], data.PendingOpeningCombats?.ElementAtOrDefault(index) ?? 1,
+                data.PendingOpeningMembers?.ElementAtOrDefault(index) is { } member ? new RunMemberId(member) : null));
         foreach (var removed in data.RemovedCards ?? [])
             run.RememberRemovedCard(new RemovedCardRecord(
                 new CardDefinitionId(removed.DefinitionId), removed.UpgradeLevel,

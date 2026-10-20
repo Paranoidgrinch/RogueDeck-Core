@@ -34,6 +34,18 @@ public sealed class TriggeredProgramAdapter<TEvent, TEventContext>
             priority, filters, reentryPolicy, gatingStatus);
     }
 
+    // The same rule, heard only when its OWNER is the one the event is about — the combatant whose turn starts,
+    // who takes the damage, who plays the card. A party member's opening is theirs, not whoever moves first.
+    public TriggeredProgramDefinition<TEventContext> DefineFor(
+        TriggeredEffectDefinitionId id, EffectProgram<TEventContext> program, int priority, CombatantId owner) =>
+        Define(id, program, priority, filters: [new OwnedBy(BuildContextFactory, owner)]);
+
+    private sealed class OwnedBy(Func<TEventContext, TriggeredEffectActionBuildContext> build, CombatantId owner)
+        : ITriggeredProgramFilter<TEventContext>
+    {
+        public bool Matches(TEventContext context) => build(context).TargetSelectionContext.Source?.Id == owner;
+    }
+
     public TriggeredProgramCombatEventHandler<TEvent, TEventContext> CreateHandler()
         => new();
 }

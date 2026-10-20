@@ -315,6 +315,36 @@ public class PartyCombatResumeTests
         Assert.True(seats[0].Current!.IsHeroTurn);
     }
 
+    // A PARTY MEMBER'S RELIC IS THEIRS (multiplayer). Almost every combat relic in the game works by promising
+    // the next fight an opening as a room is entered; a member's promise used to be heard by nobody, and an
+    // opening, when it came, went to the hero. Now the partner's Queue Token guards the partner, and the hero
+    // stands in the first round with nothing.
+    [Fact]
+    public void A_partners_relic_opens_the_partners_fight_and_not_the_heros()
+    {
+        var blueprint = PartySample();
+        RunStart Armed(RunStart start) => start with
+        {
+            StartingParty = [.. start.StartingParty.Select(m => m with { StartingRelics = ["queue_token"] })],
+        };
+        blueprint = blueprint with
+        {
+            Start = Armed(blueprint.Start),
+            Characters = blueprint.Characters.Select(c => c with { Start = Armed(c.Start) }).ToList(),
+        };
+        using var play = new RunPlayback(() => { });
+        play.Start(blueprint, 1, interactive: true);
+        var fight = ReachFight(play);
+        Assert.Contains(play.Session!.Run.Party[1].Relics, r => r.Id.Value == "queue_token");
+
+        int Guard(CombatantId id) =>
+            fight.State.GetCombatant(id).DefensivePools.TryGetValue(StandardCombatIds.BlockDefensivePool, out var pool)
+                ? pool.Current : 0;
+        var members = fight.ActiveMembers();
+        Assert.True(Guard(members[1]) >= 4, $"the partner opened with {Guard(members[1])} block");
+        Assert.Equal(0, Guard(members[0]));
+    }
+
     private static List<int> SoloEnemies(RunPlayback play)
     {
         var session = play.Session!;

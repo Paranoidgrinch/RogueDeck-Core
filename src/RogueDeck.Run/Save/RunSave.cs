@@ -124,6 +124,12 @@ public sealed record RunSaveData(
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<int>? PendingOpeningCombats { get; init; }
 
+    // Parallel to PendingOpenings: the party member each opening belongs to, null for the hero. Absent unless some
+    // opening is a party member's.
+    [System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string?>? PendingOpeningMembers { get; init; }
+
     // What the run has removed from the deck and could still give back (RemovedCardRecord). Null (the default)
     // when nothing has been removed, so a save taken before anything left the deck round-trips byte-identically.
     [System.Text.Json.Serialization.JsonIgnore(

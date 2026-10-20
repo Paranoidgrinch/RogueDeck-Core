@@ -198,6 +198,11 @@ public abstract class CombatantBlueprint
     // per-combatant card machinery. Empty (the default) ⇒ a deckless combatant (enemies, auto-acting board units).
     public List<DeckEntry> Deck { get; } = new();
 
+    // Temporary rules installed when the combat opens (e.g. a consumable's "next combat starts with 20 block").
+    // Applied by the run→combat bridge as pending combat modifiers; installed by ScenarioCombatFactory at build.
+    // On every combatant, because a party member's own relic or event opens THAT member's fight (multiplayer).
+    public List<TemporaryRuleInstallSpec> OpeningTemporaryRules { get; } = new();
+
     // Optional starting cell on the 2D combat grid; null = unplaced (flat arena, today's behavior). Applied by
     // ScenarioCombatFactory when the combatant is added.
     public CombatPosition? Position { get; init; }
@@ -214,10 +219,6 @@ public abstract class CombatantBlueprint
 
 public sealed class HeroBlueprint : CombatantBlueprint
 {
-    // Temporary rules installed when the combat opens (e.g. a consumable's "next combat starts with 20 block").
-    // Applied by the run→combat bridge as pending combat modifiers; installed by ScenarioCombatFactory at build.
-    public List<TemporaryRuleInstallSpec> OpeningTemporaryRules { get; } = new();
-
     // The hero's own ACTIONS in this fight (card definitions with IsAction), usable without being drawn.
     public List<CardDefinitionId> Actions { get; } = new();
 

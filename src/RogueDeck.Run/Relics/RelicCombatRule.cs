@@ -30,6 +30,9 @@ public sealed class RelicCombatTrigger
     public required Type EventType { get; init; }
     public required Type ContextType { get; init; }
     public required Func<TriggeredEffectDefinitionId, object, int, ITriggeredEffectDefinition> Build { get; init; }
+
+    // The same, heard only when the event is about `owner` (a party member's own opening).
+    public required Func<TriggeredEffectDefinitionId, object, int, CombatantId, ITriggeredEffectDefinition> BuildFor { get; init; }
     public required Func<object, JsonElement> Serialize { get; init; }
     public required Func<JsonElement, object> Deserialize { get; init; }
 
@@ -63,6 +66,8 @@ public static class RelicCombatTriggers
             EventType = typeof(TEvent),
             ContextType = typeof(TContext),
             Build = (id, program, priority) => adapter.Define(id, (EffectProgram<TContext>)program, priority),
+            BuildFor = (id, program, priority, owner) =>
+                adapter.DefineFor(id, (EffectProgram<TContext>)program, priority, owner),
             Serialize = program => JsonSerializer.SerializeToElement((EffectProgram<TContext>)program, options),
             Deserialize = element => JsonSerializer.Deserialize<EffectProgram<TContext>>(element, options)!,
             NewProgram = newProgram,

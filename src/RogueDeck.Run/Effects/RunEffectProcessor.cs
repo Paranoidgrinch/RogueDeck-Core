@@ -60,6 +60,28 @@ public sealed class RunEffectProcessor
                 Dispatch(run, runEvent, eventType, program);
         }
 
+        // THE REST OF THE PARTY'S RELICS (multiplayer). An event the whole party lives through — a room entered,
+        // a fight won, an act begun — reaches every member's relics, each read and answered as its own member:
+        // the reaction is built in that member's scope and resolves there, so a relic's gold and its next-fight
+        // opening are its holder's. An event raised inside one member's own room is that member's alone, and
+        // only its relics (run.Relics, above) hear it.
+        if (run.Party.Count > 1 && !run.IsMemberScoped)
+            foreach (var member in run.Party.Skip(1))
+            {
+                List<IRunEffectRequest> effects;
+                using (run.PushActiveMember(member))
+                {
+                    effects = [];
+                    foreach (var relic in member.Relics)
+                        if (relic.Enabled)
+                            foreach (var program in relic.Definition.RunPrograms)
+                                if (program.EventType == eventType)
+                                    effects.AddRange(program.Build(runEvent, run));
+                }
+                if (effects.Count > 0)
+                    run.EnqueueEffect(new AsMemberRunEffect(member.Id, effects));
+            }
+
         foreach (var installed in run.InstalledPrograms.ToArray())
             Dispatch(run, runEvent, eventType, installed.Reaction);
     }

@@ -222,6 +222,22 @@ public sealed class ForMemberRunEffectHandler : RunEffectHandler<ForMemberRunEff
     }
 }
 
+// Effects that belong to one party member, resolved with the run pointed at them — a party member's relic answering
+// an event of the whole party. Built by the run itself (RunEffectProcessor), never authored, never saved.
+public sealed record AsMemberRunEffect(RunMemberId Member, IReadOnlyList<IRunEffectRequest> Effects) : IRunEffectRequest;
+
+public sealed class AsMemberRunEffectHandler : RunEffectHandler<AsMemberRunEffect>
+{
+    protected override void Resolve(RunState run, RunDefinitionRegistry registry, AsMemberRunEffect request)
+    {
+        if (run.Party.FirstOrDefault(m => m.Id == request.Member) is not { } member)
+            return;
+        using (run.PushActiveMember(member))
+            foreach (var effect in request.Effects)
+                registry.GetEffectHandler(effect.GetType()).Resolve(run, registry, effect);
+    }
+}
+
 // A reward is just a named bundle of other effects — the run author decides what it contains.
 public sealed record GrantRewardRunEffect(RewardId Reward, IReadOnlyList<IRunEffectRequest> Effects)
     : IRunEffectRequest;

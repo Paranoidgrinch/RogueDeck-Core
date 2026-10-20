@@ -104,6 +104,23 @@ public class PartyFromRosterTests
         Assert.Equal([Cauldron], back.CombatStatusesOf(back.Party[2]));
     }
 
+    // An opening promised to a party member waits for the next fight as THEIRS, across a save.
+    [Fact]
+    public void A_members_pending_opening_survives_a_save_as_theirs()
+    {
+        var run = Roster().CreateInitialRun(new RunId("run"), party: ["clerk", "witch"]);
+        var rule = new RelicCombatRule { Trigger = "turnStarted", Program = RelicCombatTriggers.Get("turnStarted").NewProgram() };
+        run.AddPendingCombatModifier(new HeroOpeningRuleModifier(rule, 2, run.Party[1].Id));
+        run.AddPendingCombatModifier(new HeroOpeningRuleModifier(rule));
+
+        var back = RunState.Restore(RunSaveJson.FromJson(RunSaveJson.ToJson(run.Snapshot())), run.Map, content: null);
+
+        var openings = back.ConsumePendingCombatModifiers().Cast<HeroOpeningRuleModifier>().ToList();
+        Assert.Equal([run.Party[1].Id, null], openings.Select(o => o.Member));
+        var still = Assert.Single(back.ConsumePendingCombatModifiers().Cast<HeroOpeningRuleModifier>());
+        Assert.Equal(run.Party[1].Id, still.Member);
+    }
+
     // A member written by hand into a start — the party a blueprint authored before parties came from the roster —
     // counts as the run's character and brings nothing of its own, which is exactly what it did before.
     [Fact]

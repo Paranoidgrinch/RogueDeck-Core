@@ -71,6 +71,7 @@ public sealed class StandardRunPackage : IRunPackage
             .RegisterEffectHandler(new AddConsumableByIdRunEffectHandler())
             .RegisterEffectHandler(new UseConsumableRunEffectHandler())
             .RegisterEffectHandler(new InstallNextCombatOpeningRunEffectHandler())
+            .RegisterEffectHandler(new AsMemberRunEffectHandler())
             .RegisterEffectHandler(new ShredEngine.AddShredRunEffectHandler())
             .RegisterEffectHandler(new ShredEngine.RemoveShredRunEffectHandler())
             .RegisterEffectHandler(new ShredEngine.AddComposedCardRunEffectHandler());

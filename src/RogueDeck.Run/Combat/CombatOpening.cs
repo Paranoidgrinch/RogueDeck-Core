@@ -20,23 +20,35 @@ public sealed class HeroOpeningRuleModifier : IRunCombatModifier
     // x kaempfe"). When a fight takes it, one with a count less goes back into the queue for the next.
     public int Combats { get; }
 
-    public HeroOpeningRuleModifier(RelicCombatRule rule, int combats = 1)
+    // WHOSE FIGHT IT OPENS, in a party (multiplayer): the member whose relic, event or consumable promised it.
+    // Null is the hero — member 0, and everyone in a solo run — which is every opening there ever was before.
+    public RunMemberId? Member { get; }
+
+    public HeroOpeningRuleModifier(RelicCombatRule rule, int combats = 1, RunMemberId? member = null)
     {
         ArgumentNullException.ThrowIfNull(rule);
         _rule = rule;
         Combats = Math.Max(1, combats);
+        Member = member;
     }
 
     public void Apply(ScenarioBlueprint blueprint, RunState run)
     {
         ArgumentNullException.ThrowIfNull(blueprint);
-        if (blueprint.Hero is not { } hero)
+        CombatantBlueprint? hero = Member is { } member
+            ? blueprint.Allies.FirstOrDefault(a => a.Id == member.Value)
+            : blueprint.Hero;
+        if (hero is null)
             return;
 
-        var definition = RelicCombatTriggers.Get(_rule.Trigger).Build(
-            new TriggeredEffectDefinitionId($"opening:{_rule.Trigger}:{hero.OpeningTemporaryRules.Count}"),
-            _rule.Program,
-            _rule.Priority);
+        // A member's opening listens for that member alone: in a party fight every hero's turn starts at once, and
+        // the first of them to start is the hero, not whoever the opening was promised to.
+        var trigger = RelicCombatTriggers.Get(_rule.Trigger);
+        var id = new TriggeredEffectDefinitionId(
+            $"opening:{(Member is { } owner ? owner.Value + ":" : "")}{_rule.Trigger}:{hero.OpeningTemporaryRules.Count}");
+        var definition = Member is null
+            ? trigger.Build(id, _rule.Program, _rule.Priority)
+            : trigger.BuildFor(id, _rule.Program, _rule.Priority, hero.CombatantId);
         hero.OpeningTemporaryRules.Add(new TemporaryRuleInstallSpec(definition, TemporaryRuleLifetime.OneShot));
     }
 }
@@ -53,6 +65,9 @@ public sealed record InstallNextCombatOpeningRunEffect(
 
 public sealed class InstallNextCombatOpeningRunEffectHandler : RunEffectHandler<InstallNextCombatOpeningRunEffect>
 {
+    // The opening belongs to whoever the run is pointed at when it is promised: a member's own room, a member's
+    // relic answering a party event. Member 0 is written as no one, so a solo run's openings are what they were.
     protected override void Resolve(RunState run, RunDefinitionRegistry registry, InstallNextCombatOpeningRunEffect request) =>
-        run.AddPendingCombatModifier(new HeroOpeningRuleModifier(request.Rule, request.Combats ?? 1));
+        run.AddPendingCombatModifier(new HeroOpeningRuleModifier(request.Rule, request.Combats ?? 1,
+            ReferenceEquals(run.ActiveMember, run.Primary) ? null : run.ActiveMember.Id));
 }
