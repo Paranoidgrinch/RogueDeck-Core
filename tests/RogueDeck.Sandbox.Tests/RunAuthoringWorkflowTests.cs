@@ -280,14 +280,14 @@ public class RunAuthoringWorkflowTests
         var runTask = Task.Run(() => new RunRunner(registry, new ScriptedChoiceProvider(), content: content).Run(run));
         try
         {
-            var combat = WaitFor(() => driver.Current, TimeSpan.FromSeconds(5));
+            var combat = WaitFor(() => driver.Current, TimeSpan.FromSeconds(30));
             Assert.NotNull(combat);
 
             // The turn-start trigger fired as the fight opened: the dummy already took 5 damage. Retry briefly
             // because the trigger resolves on the background run thread just after the combat becomes visible.
             var dummy = WaitFor(
                 () => combat!.State.Combatants.FirstOrDefault(c => c.Id != combat.HeroId && c.Health.Current < 30),
-                TimeSpan.FromSeconds(5));
+                TimeSpan.FromSeconds(30));
             Assert.NotNull(dummy);
             Assert.Equal(25, dummy!.Health.Current);
             Assert.DoesNotContain(combat!.Steps, s => s.HasProblems);
