@@ -762,13 +762,18 @@ public class WandTortureTests
         var learns = CombatProgramModel.Build<WandCastTriggeredEffectContext>(Apply("rote", 1, "source"));
         var student = new StatusData
         {
-            Id = "student", NameKey = "Student", UsesStacks = true,
+            Id = "student",
+            NameKey = "Student",
+            UsesStacks = true,
             Triggers = [new StatusTriggerData("WandCast", System.Text.Json.JsonSerializer.SerializeToElement(
                 learns, CombatJson.CreateOptions<WandCastTriggeredEffectContext>()))],
         };
         var rote = new StatusData
         {
-            Id = "rote", NameKey = "Rote", UsesStacks = true, Polarity = StatusPolarity.Buff,
+            Id = "rote",
+            NameKey = "Rote",
+            UsesStacks = true,
+            Polarity = StatusPolarity.Buff,
             StackingBehavior = StatusStackingBehavior.MergeWithExistingInstance,
         };
         using var play = Start(Apprentice(

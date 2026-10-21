@@ -81,7 +81,8 @@ public sealed class FightPlanner(int horizon = 5, int beam = 16, int perTurn = 3
         return new PlannedFight(
             now.Result == CombatResult.Victory, now.IsOver, heroAtStart,
             now.Result == CombatResult.Defeat ? 0 : now.HeroHealth, turns, _positions,
-            clock.Elapsed.TotalSeconds, lines) { AfterEachTurn = after };
+            clock.Elapsed.TotalSeconds, lines)
+        { AfterEachTurn = after };
     }
 
     // ONE TURN, for a driver that plays the real fight itself (TextPlay's `f`): what the planner would lay down
