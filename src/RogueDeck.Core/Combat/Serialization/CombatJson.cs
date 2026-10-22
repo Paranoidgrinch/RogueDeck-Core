@@ -271,7 +271,8 @@ public static class CombatJson
          .Register("cardCost", typeof(CardCostExpression<>))
          .Register("cardInstanceMarkCounter", typeof(CardInstanceMarkCounterExpression<>))
          .Register("iterationTargetStatusStacks", typeof(IterationTargetStatusStacksExpression<>))
-         .Register("eventAmount", typeof(EventAmountExpression<>));
+         .Register("eventAmount", typeof(EventAmountExpression<>))
+         .Register("eventBlockedAmount", typeof(EventBlockedAmountExpression<>));
 
         // bool condition expressions.
         r.Register("compare", typeof(ComparisonExpression<>))

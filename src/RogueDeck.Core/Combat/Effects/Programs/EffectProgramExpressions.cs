@@ -998,6 +998,21 @@ public sealed class EventAmountExpression<TContext> : ICombatExpression<TContext
         };
 }
 
+// The part of a hit that Block absorbed, in a damage trigger — the other half of what EventAmountExpression reads
+// (the HP part). A rule that lets a blow "ignore Block" after the fact needs exactly this number: the Block to give
+// back and the damage still owed. 0 outside a damage trigger.
+public sealed class EventBlockedAmountExpression<TContext> : ICombatExpression<TContext, int>
+    where TContext : class
+{
+    public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat) =>
+        context.SourceContext switch
+        {
+            DamageReceivedTriggeredEffectContext received => received.CombatEvent.BlockedDamage,
+            DamageDealtTriggeredEffectContext dealt => dealt.CombatEvent.BlockedDamage,
+            _ => 0,
+        };
+}
+
 // ── Boolean combat-state expressions ─────────────────────────────────────────
 
 public sealed class TargetHasStatusExpression<TContext> : ICombatExpression<TContext, bool>
