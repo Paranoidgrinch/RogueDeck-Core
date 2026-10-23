@@ -235,6 +235,25 @@ public class CombatDecreeTests
     }
 
     [Fact]
+    public void Each_stack_makes_the_blow_a_quarter_heavier_but_never_less_than_one()
+    {
+        var registry = Registry(status =>
+            status.PassiveModifiers.Add(new PassiveModifierSpec(
+                PassiveModifierPipeline.DamageReceived, PassiveModifierOperation.AddPercentPerStack, 25,
+                RestrictDamageKind: null)));
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        Wear(combat, registry, GoblinId);
+
+        // 6 and a quarter of it, rounded down: 7.
+        Hit(combat, registry, 6);
+        Assert.Equal(5, combat.GetCombatant(GoblinId).Health.Current);
+
+        // A quarter of 2 is nothing; the stack still adds 1.
+        Hit(combat, registry, 2);
+        Assert.Equal(2, combat.GetCombatant(GoblinId).Health.Current);
+    }
+
+    [Fact]
     public void The_first_blow_each_turn_falls_upon_nothing()
     {
         var registry = Registry(status =>

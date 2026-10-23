@@ -40,7 +40,11 @@ public enum PassiveModifierOperation
     // say. "No single blow shall exceed twenty" is not 20 less damage and not damage halved; it is a
     // number no amount may pass, whoever threw it and however large it was going to be. Magnitude 0 is a
     // legal ceiling and means the amount is annulled.
-    ClampMax
+    ClampMax,
+
+    // amount += Magnitude % of it for each stack, rounded down but at least 1 a stack — "every stack makes the
+    // blow a quarter heavier" without small blows slipping through untouched. A zero amount stays zero.
+    AddPercentPerStack
 }
 
 // A magnitude computed at evaluation time from the live state of the combatant the spec is read from.
@@ -209,6 +213,8 @@ internal static class DeclarativePassiveModifierEngine
                 PassiveModifierOperation.AddFlat => current + magnitude,
                 PassiveModifierOperation.ScalePercent => current * magnitude / 100,
                 PassiveModifierOperation.ClampMax => Math.Min(current, Math.Max(0, magnitude)),
+                PassiveModifierOperation.AddPercentPerStack when current > 0 =>
+                    current + Math.Max(entry.stacks, current * magnitude * entry.stacks / 100),
                 _ => current
             };
         }
