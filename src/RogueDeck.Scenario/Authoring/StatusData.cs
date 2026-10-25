@@ -132,7 +132,7 @@ public sealed record StatusData
         foreach (var tag in Tags)
             status.Tags.Add(new TagId(tag));
         foreach (var modifier in PassiveModifiers)
-            status.PassiveModifiers.Add(modifier.ToSpec());
+            status.PassiveModifiers.Add(modifier.ToSpec(new StatusDefinitionId(Id)));
         foreach (var rule in CombatRules ?? [])
             status.CombatRules.Add(rule.ToSpec());
         return status;
@@ -244,19 +244,25 @@ public sealed record PassiveModifierData(
     // action and the rule has to survive from one to the next. Kept out of the wire format when false.
     [property: System.Text.Json.Serialization.JsonIgnore(
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
-    bool OncePerTurn = false)
+    bool OncePerTurn = false,
+    // The magnitude is the carrying status's own stack count, read live (StatusStacksMagnitude) — a ceiling that
+    // is spent as it is used. Magnitude is then ignored. Kept out of the wire format when false.
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    bool MagnitudeFromStacks = false)
 {
     public static PassiveModifierData From(PassiveModifierSpec spec) => new(
         spec.Pipeline, spec.Operation, spec.Magnitude, spec.Priority, spec.RestrictDamageKind,
         spec.AppliesToStatusId?.value, spec.RestrictSourceCardTag?.value, spec.OncePerAction,
-        spec.OncePerTurn);
+        spec.OncePerTurn, spec.MagnitudeExpression is StatusStacksMagnitude);
 
-    public PassiveModifierSpec ToSpec() => new(
+    public PassiveModifierSpec ToSpec(StatusDefinitionId? owner = null) => new(
         Pipeline, Operation, Magnitude, Priority, RestrictDamageKind,
         AppliesToStatusId is null ? null : new StatusDefinitionId(AppliesToStatusId),
         RestrictSourceCardTag: RestrictSourceCardTag is null ? null : new TagId(RestrictSourceCardTag),
         OncePerAction: OncePerAction,
-        OncePerTurn: OncePerTurn);
+        OncePerTurn: OncePerTurn,
+        MagnitudeExpression: MagnitudeFromStacks && owner is { } status ? new StatusStacksMagnitude(status) : null);
 }
 
 // One rule of combat a status changes while it is worn — the authoring face of CombatRuleSpec.

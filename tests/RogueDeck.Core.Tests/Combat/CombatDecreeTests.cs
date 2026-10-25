@@ -234,6 +234,23 @@ public class CombatDecreeTests
         Assert.Equal(6, combat.GetCombatant(GoblinId).Health.Current);
     }
 
+    // A ceiling read from the status's own stacks: as the stacks are spent, the ceiling follows them.
+    [Fact]
+    public void A_ceiling_can_be_the_stacks_of_the_status_that_carries_it()
+    {
+        var registry = Registry(status =>
+            status.PassiveModifiers.Add(new PassiveModifierSpec(
+                PassiveModifierPipeline.DamageReceived, PassiveModifierOperation.ClampMax, 0,
+                RestrictDamageKind: null, MagnitudeExpression: new StatusStacksMagnitude(DecreeId))));
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        Wear(combat, registry, GoblinId);
+        combat.EnqueueEffect(new ApplyStatusEffectRequest(GoblinId, DecreeId, Stacks: 4));
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+
+        Hit(combat, registry, 30);   // five stacks: five gets through
+        Assert.Equal(7, combat.GetCombatant(GoblinId).Health.Current);
+    }
+
     [Fact]
     public void Each_stack_makes_the_blow_a_quarter_heavier_but_never_less_than_one()
     {

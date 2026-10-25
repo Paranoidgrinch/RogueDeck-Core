@@ -76,6 +76,20 @@ public sealed class MissingHealthMagnitude : IPassiveModifierMagnitude
     }
 }
 
+// Magnitude = the stacks of one status on the combatant the spec is read from — normally the status that carries
+// the spec, so its number IS its stack count. "This round you can take at most N more" is a ClampMax whose N is
+// spent as blows land: the status counts down and the ceiling follows it.
+public sealed class StatusStacksMagnitude(StatusDefinitionId status) : IPassiveModifierMagnitude
+{
+    public StatusDefinitionId Status { get; } = status;
+
+    public int Evaluate(CombatState combat, CombatantState combatant)
+    {
+        ArgumentNullException.ThrowIfNull(combatant);
+        return combatant.Statuses.Where(s => s.DefinitionId == Status).Sum(s => s.Stacks);
+    }
+}
+
 // A declarative passive-modifier rule carried on a StatusDefinition.
 //
 // Determinism: within one pipeline all applicable specs (across every status on the combatant) are
