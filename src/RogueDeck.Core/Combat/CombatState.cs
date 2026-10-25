@@ -402,7 +402,8 @@ public sealed class CombatState
         Trace(new EffectEnqueuedTraceEvent(
             CurrentRound, CurrentTurn,
             request.GetType().Name,
-            chain.Id.Value));
+            chain.Id.Value,
+            chain.TriggeredEffectDefinitionIds.Count > 0 ? chain.TriggeredEffectDefinitionIds[^1].value : null));
         EnqueueEffect(request, chain);
     }
 

@@ -32,10 +32,13 @@ public sealed record CommandAppliedTraceEvent(
 // Effect queue
 // -----------------------------------------------------------------------
 
+// TriggerId: the triggered effect whose program enqueued this request (the innermost one of its chain), or null for a
+// root chain (a card, an action, an enemy move). A UI explaining "why did this happen" names it as the cause.
 public sealed record EffectEnqueuedTraceEvent(
     int Round, int Turn,
     string RequestType,
-    long ChainId
+    long ChainId,
+    string? TriggerId = null
 ) : CombatTraceEvent(Round, Turn);
 
 public sealed record EffectResolvedTraceEvent(
