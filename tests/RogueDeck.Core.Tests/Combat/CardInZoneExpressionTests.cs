@@ -130,6 +130,24 @@ public class CardInZoneExpressionTests
         Assert.Equal(other, chosen.Evaluate(MakeContext(combat), combat));
     }
 
+    // Borrowed Candle (bnb, 2026-11-02): "put a card from your hand on top of your draw pile" offered the Candle
+    // itself, and the Candle put back was never exhausted.
+    [Fact]
+    public void A_chosen_card_never_offers_the_card_being_played()
+    {
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        var playing = AddCard(combat, "candle", CardZone.Hand);
+        var other = AddCard(combat, "h2", CardZone.Hand);
+        combat.SetCardChooser(new PicksFirst());
+        var context = new EffectExecutionContext<CardPlayContext>(
+            new CardPlayContext(null!, playing),
+            new TriggeredEffectActionBuildContext(
+                new CombatantTargetSelectionContext(Combat: combat, Source: combat.GetCombatant(HeroId), EventTargetId: GoblinId),
+                new TriggeredEffectActionSource(SourceCombatantId: HeroId)));
+
+        Assert.Equal(other, new ChosenCardInZoneExpression<CardPlayContext>(CardZone.Hand, "put a card back").Evaluate(context, combat));
+    }
+
     private sealed class PicksFirst : ICombatCardChooser
     {
         public IReadOnlyList<CardInstanceId> ChooseCards(
