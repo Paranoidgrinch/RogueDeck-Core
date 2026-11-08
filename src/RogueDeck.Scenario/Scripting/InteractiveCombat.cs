@@ -189,8 +189,7 @@ public sealed class InteractiveCombat : ICombatView
         var hero = _combat.GetCombatant(_heroId);
         if (!CombatCardPlayProcessor.IsCardPlayAllowed(_combat, _registry, action, hero, target, cardInstanceId: null))
             return false;
-        return ActionCost(actionId, target)
-            .All(cost => hero.Resources.TryGetValue(cost.ResourceId, out var pool) && pool.Current >= cost.Amount);
+        return CombatCardPlayProcessor.CanPayCosts(action, hero, ActionCost(actionId, target));
     }
 
     // What an action costs right now, every modifier applied ("the first ingredient each turn is free").

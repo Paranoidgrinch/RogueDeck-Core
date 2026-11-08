@@ -379,7 +379,8 @@ public static class RunBot
     public static bool CanPay(RunPlayback play, CombatantState payer, string definitionId)
     {
         ArgumentNullException.ThrowIfNull(payer);
-        return FullCosts(play, definitionId).All(cost =>
+        // A Pledge card is always payable: it pays what there is and owes the rest.
+        return play.PledgeCards.Contains(definitionId) || FullCosts(play, definitionId).All(cost =>
             payer.Resources.TryGetValue(cost.ResourceId, out var pool) && pool.Current >= cost.Amount);
     }
 

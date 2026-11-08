@@ -123,6 +123,16 @@ public sealed class CombatCardPlayProcessor
         var costsToPay = CalculateCosts(combat, registry, card, source, targetCombatantId, cardInstanceId, trace: true);
 
         EnsureCostsCanBePaid(source, card, costsToPay);
+
+        // A PLEDGE card is played on credit: what the owner cannot cover is left unpaid, and the shortfall is
+        // written to the payer BEFORE anything the card does, so its own program can read it ("counter") and
+        // answer for it. Written on every play of such a card, 0 when it was paid in full.
+        if (card.Tags.Contains(StandardCombatIds.PledgeTag))
+        {
+            costsToPay = PledgedCosts(source, costsToPay, out var shortfall);
+            source.SetCounter(StandardCombatIds.PledgeShortfallCounter, shortfall);
+        }
+
         PayCosts(source, costsToPay);
 
         // An ACTION is used, not played: what it costs is paid all the same, but nothing that watches card
@@ -515,11 +525,53 @@ public sealed class CombatCardPlayProcessor
             .ToArray();
     }
 
+    // Whether the source can pay these (already modified) costs for this card right now. A Pledge card always
+    // can: it pays what there is and owes the rest. The one answer every playability check asks — the play
+    // path, the effect-request path, the hosts and the bots — so they cannot disagree about a pledge.
+    public static bool CanPayCosts(
+        CardDefinition card,
+        CombatantState source,
+        IEnumerable<CalculatedResourceCost> costs)
+    {
+        ArgumentNullException.ThrowIfNull(card);
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(costs);
+
+        return card.Tags.Contains(StandardCombatIds.PledgeTag)
+            || costs.All(cost => source.Resources.TryGetValue(cost.ResourceId, out var resource)
+                                 && resource.Current >= cost.Amount);
+    }
+
+    // What a pledge actually pays: min(cost, available) per resource (nothing of a resource it does not have),
+    // and the total left unpaid.
+    private static IReadOnlyList<CalculatedResourceCost> PledgedCosts(
+        CombatantState source,
+        IReadOnlyCollection<CalculatedResourceCost> costs,
+        out int shortfall)
+    {
+        shortfall = 0;
+        var paid = new List<CalculatedResourceCost>(costs.Count);
+        foreach (var cost in costs)
+        {
+            var available = source.Resources.TryGetValue(cost.ResourceId, out var resource)
+                ? Math.Max(0, resource.Current)
+                : 0;
+            var amount = Math.Min(cost.Amount, available);
+            shortfall += cost.Amount - amount;
+            if (amount > 0)
+                paid.Add(new CalculatedResourceCost(cost.ResourceId, amount));
+        }
+        return paid;
+    }
+
     private static void EnsureCostsCanBePaid(
         CombatantState source,
         CardDefinition card,
         IReadOnlyCollection<CalculatedResourceCost> costsToPay)
     {
+        if (card.Tags.Contains(StandardCombatIds.PledgeTag))
+            return;
+
         foreach (var cost in costsToPay)
         {
             if (!source.Resources.TryGetValue(cost.ResourceId, out var resource))

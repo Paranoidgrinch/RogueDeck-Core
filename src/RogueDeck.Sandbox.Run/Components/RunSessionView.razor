@@ -369,6 +369,8 @@
     // whole economy, not just energy. Hosts that don't supply them keep the energy-only behaviour.
     [Parameter] public IReadOnlyDictionary<string, IReadOnlyList<ResourceCost>>? CardFullCosts { get; set; }
     [Parameter] public IReadOnlyDictionary<string, string> ResourceNames { get; set; } = new Dictionary<string, string>();
+    // The Pledge-tagged card ids (RunPlayback.PledgeCards): never greyed out for want of a resource.
+    [Parameter] public IReadOnlySet<string> PledgeCards { get; set; } = new HashSet<string>();
 
     // Composed (shred:) cards never appear in the authored cost dicts — their definitions are synthesized
     // per fight; a host that can resolve them supplies this (RunPlayback.ComposedCostsFor).
@@ -398,8 +400,9 @@
     }
 
     // Whether the combatant can pay ALL of the card's costs right now (energy and custom resources alike).
+    // A Pledge card always can: it pays what there is and owes the rest.
     private bool CanPay(CombatantState payer, string definitionId) =>
-        FullCosts(definitionId).All(cost =>
+        PledgeCards.Contains(definitionId) || FullCosts(definitionId).All(cost =>
             payer.Resources.TryGetValue(cost.ResourceId, out var pool) && pool.Current >= cost.Amount);
 
     // "⚡ 3/3 · Embers 1/10 · Blood 0/5" — every resource pool the combatant carries, energy first.

@@ -187,8 +187,7 @@ public sealed class PartyCombat
         var member = _combat.GetCombatant(memberId);
         if (!CombatCardPlayProcessor.IsCardPlayAllowed(_combat, _registry, action, member, target, cardInstanceId: null))
             return false;
-        return ActionCost(memberId, actionId, target)
-            .All(cost => member.Resources.TryGetValue(cost.ResourceId, out var pool) && pool.Current >= cost.Amount);
+        return CombatCardPlayProcessor.CanPayCosts(action, member, ActionCost(memberId, actionId, target));
     }
 
     // What one member's action costs right now, every modifier applied.

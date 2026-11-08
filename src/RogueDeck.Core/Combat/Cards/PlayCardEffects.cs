@@ -10,7 +10,7 @@ namespace RogueDeck.Core.Combat;
 // WasPlayed=false (no-op, no exception) when:
 //   - the player combatant is not alive or not found
 //   - the card instance is not in the player's hand
-//   - the player cannot afford the card's costs
+//   - the player cannot afford the card's costs (a Pledge card always can — StandardCombatIds.PledgeTag)
 public sealed record PlayCardEffectRequest(
     CombatantId PlayerId,
     CardInstanceId CardInstanceId,
@@ -71,14 +71,10 @@ public sealed class PlayCardEffectHandler : EffectRequestHandler<PlayCardEffectR
         var costs = CombatCardPlayProcessor.CalculateCostsInternal(
             combat, registry, card, player, request.TargetCombatantId, request.CardInstanceId);
 
-        foreach (var cost in costs)
+        if (!CombatCardPlayProcessor.CanPayCosts(card, player, costs))
         {
-            if (!player.Resources.TryGetValue(cost.ResourceId, out var resource) ||
-                resource.Current < cost.Amount)
-            {
-                NoOp(request);
-                return;
-            }
+            NoOp(request);
+            return;
         }
 
         CombatCardPlayProcessor.EnqueueCardPlayEffects(
@@ -128,8 +124,7 @@ public sealed class UseActionEffectHandler : EffectRequestHandler<UseActionEffec
 
         var costs = CombatCardPlayProcessor.CalculateCostsInternal(
             combat, registry, action, player, request.TargetCombatantId, null);
-        if (costs.Any(cost => !player.Resources.TryGetValue(cost.ResourceId, out var resource)
-                              || resource.Current < cost.Amount))
+        if (!CombatCardPlayProcessor.CanPayCosts(action, player, costs))
         {
             Report(request, used: false);
             return;

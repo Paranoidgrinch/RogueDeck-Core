@@ -72,6 +72,13 @@ public static class StandardCombatIds
     // with a downside; adding one to a deck uses the existing add-card machinery.
     public static readonly TagId UnplayableTag = new("unplayable");
 
+    // A card carrying this tag may be played without enough of a resource for its cost: the owner pays what
+    // they have (every cost modifier still applies first) and the unpaid rest is the SHORTFALL, written to
+    // PledgeShortfallCounter on the payer before the card's program runs (0 when it was paid in full), so the
+    // card itself can answer for the debt — read it with the "counter" amount and e.g. apply a status.
+    public static readonly TagId PledgeTag = new("pledge");
+    public static readonly CounterId PledgeShortfallCounter = new("standard.pledge_shortfall");
+
     // A per-instance MARK, not a definition tag: this copy of the card was made for this fight only (a Temporary
     // copy). Played, it goes to the Exhaust pile whatever its definition says.
     public static readonly TagId TemporaryCopyMark = new("temporary_copy");

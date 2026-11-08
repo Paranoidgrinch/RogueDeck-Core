@@ -33,6 +33,10 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
         new Dictionary<string, IReadOnlyList<ResourceCost>>();
     public IReadOnlyDictionary<string, string> ResourceNames { get; private set; } = new Dictionary<string, string>();
 
+    // The card ids tagged Pledge (StandardCombatIds.PledgeTag): playable whatever the payer has left, so an
+    // affordability check over CardFullCosts must let them through.
+    public IReadOnlySet<string> PledgeCards { get; private set; } = new HashSet<string>(StringComparer.Ordinal);
+
     // Shred display names (id → name), for resolving a composed card's derived "shred:…" id into its
     // parts' names in the session view.
     public IReadOnlyDictionary<string, string> ShredNames { get; private set; } = new Dictionary<string, string>();
@@ -212,6 +216,10 @@ public sealed class RunPlayback(Action onChanged, IMetaStore? metaStore = null) 
         start = party is { Count: > 1 } ? blueprint.PartyStart(party) : blueprint.ResolveStart(characterId);
         (CardCosts, CardNames, EnemyNames, HeroName) = DisplayNames(blueprint, start);
         CardFullCosts = blueprint.Cards.ToDictionary(card => card.Id, card => card.Costs);
+        PledgeCards = blueprint.Cards
+            .Where(card => card.Tags.Contains(StandardCombatIds.PledgeTag))
+            .Select(card => card.Id)
+            .ToHashSet(StringComparer.Ordinal);
         ResourceNames = blueprint.CombatResources.ToDictionary(
             r => r.Id, r => string.IsNullOrWhiteSpace(r.DisplayName) ? r.Id : r.DisplayName);
         ShredNames = blueprint.Shreds.ToDictionary(
