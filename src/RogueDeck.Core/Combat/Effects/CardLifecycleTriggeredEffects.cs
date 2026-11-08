@@ -207,6 +207,18 @@ public sealed record HandDiscardedCardCountAmount
     }
 }
 
+// Bearer filter for a status trigger: only the discarding combatant's own statuses may react to its discard.
+public sealed record HandDiscardedSourceHasStatusTriggerFilter(StatusDefinitionId StatusDefinitionId)
+    : ITriggeredProgramFilter<HandDiscardedTriggeredEffectContext>
+{
+    public bool Matches(HandDiscardedTriggeredEffectContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        return context.Source.Statuses.Any(status => status.DefinitionId == StatusDefinitionId);
+    }
+}
+
 public sealed record HandDiscardedCardDefinitionTriggerFilter(CardDefinitionId CardDefinitionId)
     : ITriggeredProgramFilter<HandDiscardedTriggeredEffectContext>
 {

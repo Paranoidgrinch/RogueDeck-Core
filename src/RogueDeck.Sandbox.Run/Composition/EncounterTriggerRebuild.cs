@@ -52,6 +52,8 @@ public static class EncounterTriggerRebuild
                 id, Program<RuleAnnouncedTriggeredEffectContext>(data)),
             TriggerEvent.CardsDrawn => TriggeredProgramContextAdapters.CardsDrawn.Define(
                 id, Program<CardsDrawnTriggeredEffectContext>(data)),
+            TriggerEvent.HandDiscarded => TriggeredProgramContextAdapters.HandDiscarded.Define(
+                id, Program<HandDiscardedTriggeredEffectContext>(data)),
             TriggerEvent.CardMovedToZone => TriggeredProgramContextAdapters.CardMovedToZone.Define(
                 id, Program<CardMovedToZoneTriggeredEffectContext>(data)),
             TriggerEvent.CardInstanceCreated => TriggeredProgramContextAdapters.CardInstanceCreated.Define(

@@ -110,6 +110,10 @@ public static class StatusDataRebuild
                 id, Program<CardsDrawnTriggeredEffectContext>(data),
                 gatingStatus: Gate, filters: Scoped<CardsDrawnTriggeredEffectContext>(c => c.Combat,
                     new CardsDrawnSourceHasStatusTriggerFilter(statusId))),
+            TriggerEvent.HandDiscarded => TriggeredProgramContextAdapters.HandDiscarded.Define(
+                id, Program<HandDiscardedTriggeredEffectContext>(data),
+                gatingStatus: Gate, filters: Scoped<HandDiscardedTriggeredEffectContext>(c => c.Combat,
+                    new HandDiscardedSourceHasStatusTriggerFilter(statusId))),
             TriggerEvent.CardMovedToZone => TriggeredProgramContextAdapters.CardMovedToZone.Define(
                 id, Program<CardMovedToZoneTriggeredEffectContext>(data),
                 gatingStatus: Gate, filters: Scoped<CardMovedToZoneTriggeredEffectContext>(c => c.Combat,

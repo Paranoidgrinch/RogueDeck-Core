@@ -71,4 +71,8 @@ public enum TriggerEvent
     // when the bearer's wand cast has settled (the Sorcerer's Apprentice) — not a card play, so nothing
     // listening to CardPlayed hears it
     WandCast,
+    // when the bearer's hand is discarded — the end-of-turn discard (and a "discard your hand" effect), ONE event
+    // for the whole hand, after the cards are in the discard pile. The event amount is how many cards went. Not a
+    // CardMovedToZone: that trigger means a card an effect moved, and the turn-end discard is not one.
+    HandDiscarded,
 }

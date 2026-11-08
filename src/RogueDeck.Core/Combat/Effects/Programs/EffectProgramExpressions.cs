@@ -994,6 +994,9 @@ public sealed class EventAmountExpression<TContext> : ICombatExpression<TContext
             // Without it a rule that rations draw has to read the hand instead, which is a different question
             // (a hand is what the draw left plus what was already there) and quietly wrong.
             CardsDrawnTriggeredEffectContext drawn => drawn.Cards.Count,
+            // A hand discard reports how many cards went — counted off the event, not off the resolved cards, so
+            // a card that has moved on again since is still one that was discarded.
+            HandDiscardedTriggeredEffectContext discarded => discarded.CombatEvent.CardInstanceIds.Count,
             _ => 0,
         };
 }
