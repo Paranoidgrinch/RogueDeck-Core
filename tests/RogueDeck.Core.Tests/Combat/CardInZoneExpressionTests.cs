@@ -311,6 +311,39 @@ public class CardInZoneExpressionTests
         Assert.Equal(appended, draw[^1].Id); // appended after d1
     }
 
+    // "Look at the top cards of your draw pile, put any on the bottom": a draw-pile card sent to the draw pile's
+    // Bottom changes place, not zone — repositioned, answered as not moved, and no CardMovedToZone raised (the
+    // same as a Top reposition), so a rule that hears cards moving between zones does not hear a reshuffle.
+    [Theory]
+    [InlineData(ZonePlacement.Bottom, 0, new[] { "d2", "d3", "d1" })]
+    [InlineData(ZonePlacement.Top, 2, new[] { "d3", "d1", "d2" })]
+    public void A_placement_within_the_same_zone_repositions_the_card_without_a_move_event(
+        ZonePlacement placement, int index, string[] expected)
+    {
+        var registry = CombatTestFactory.CreateStandardRegistry();
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        AddCard(combat, "d1", CardZone.DrawPile);
+        AddCard(combat, "d2", CardZone.DrawPile);
+        AddCard(combat, "d3", CardZone.DrawPile);
+
+        var moveKey = new EffectResultKey<MoveCardToZoneOutcome>("move");
+        var program = new EffectProgram<Ctx>(new MoveCardToZoneNode<Ctx>(
+            CombatantTargetSelectors.Source,
+            new CardInZoneExpression<Ctx>(CardZone.DrawPile, index),
+            CardZone.DrawPile,
+            resultKey: moveKey,
+            placement: placement));
+
+        var context = MakeContext(combat);
+        EffectProgramExecutor.Execute(program, context, combat);
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+
+        Assert.Equal(expected, combat.GetCardZones(HeroId).DrawPile.Select(c => c.Id.value));
+        Assert.True(context.TryGet(moveKey, out var outcome));
+        Assert.False(outcome!.WasMoved);
+        Assert.DoesNotContain(combat.CombatLog, e => e.Type == StandardCombatLogTypes.CardMovedToZone);
+    }
+
     // Multi-card selection: ForEachCardInZone runs its body once per card in a zone. With a definition filter it
     // touches only matching cards (Armaments+ "upgrade every Strike in hand"), leaving the rest alone; the body
     // targets the current card via IteratedCardExpression.

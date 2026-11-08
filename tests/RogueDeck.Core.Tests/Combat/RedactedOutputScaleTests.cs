@@ -135,7 +135,7 @@ public class RedactedOutputScaleTests
         Assert.Equal(0, revised.GetMarkCounter(StandardCombatIds.CardOutputScaleDenominatorCounter));
     }
 
-    // A card asked to go where it already is stays put — unless the request is about POSITION. "Fetch the
+    // A card asked to go where it already is stays in that zone, but a placement is about POSITION: "fetch the
     // partner to the top of the draw pile" has nowhere else to fetch from.
     [Fact]
     public void Moving_a_card_to_the_top_of_the_pile_it_is_already_in_reorders_it()
@@ -156,9 +156,10 @@ public class RedactedOutputScaleTests
 
         Assert.Equal(second.Id, zones.GetCardsInZone(CardZone.DrawPile)[0].Id);
 
-        // Bottom keeps the historical no-op, so nothing authored before placements existed shifts under it.
+        // Bottom is a position too ("put it on the bottom"): the card goes back under the other one.
         combat.EnqueueEffect(new MoveCardToZoneEffectRequest(HeroId, second.Id, CardZone.DrawPile));
         new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
-        Assert.Equal(second.Id, zones.GetCardsInZone(CardZone.DrawPile)[0].Id);
+        Assert.Equal(first.Id, zones.GetCardsInZone(CardZone.DrawPile)[0].Id);
+        Assert.Equal(second.Id, zones.GetCardsInZone(CardZone.DrawPile)[1].Id);
     }
 }
