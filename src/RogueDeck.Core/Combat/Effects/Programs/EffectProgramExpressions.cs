@@ -1016,6 +1016,21 @@ public sealed class EventBlockedAmountExpression<TContext> : ICombatExpression<T
         };
 }
 
+// What a hit asked for, in a damage trigger: the blow after its modifiers, before Block and before the target ran out
+// of HP. With the two halves above it tells an exact kill from an overkill (requested − blocked − HP part). 0 outside
+// a damage trigger.
+public sealed class EventRequestedAmountExpression<TContext> : ICombatExpression<TContext, int>
+    where TContext : class
+{
+    public int Evaluate(EffectExecutionContext<TContext> context, CombatState combat) =>
+        context.SourceContext switch
+        {
+            DamageReceivedTriggeredEffectContext received => received.CombatEvent.RequestedAmount,
+            DamageDealtTriggeredEffectContext dealt => dealt.CombatEvent.RequestedAmount,
+            _ => 0,
+        };
+}
+
 // ── Boolean combat-state expressions ─────────────────────────────────────────
 
 public sealed class TargetHasStatusExpression<TContext> : ICombatExpression<TContext, bool>
