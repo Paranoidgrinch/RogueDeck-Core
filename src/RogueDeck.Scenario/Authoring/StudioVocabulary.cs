@@ -331,6 +331,7 @@ public static class StudioVocabulary
         ["CardZone.Wand"] = "the wand",
         ["ZonePlacement.Top"] = "on top",
         ["ZonePlacement.Bottom"] = "at the bottom",
+        ["ZonePlacement.Random"] = "at a random place",
         ["CombatantLifecycleState.Removed"] = "removed from combat",
         ["CombatResult.Ongoing"] = "still ongoing",
         ["ResourcePoolFilter.Any"] = "any pool",

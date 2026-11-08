@@ -187,14 +187,14 @@ public sealed class MoveCardToZoneEffectHandler : EffectRequestHandler<MoveCardT
         // is logged, exactly as a Top reposition always was.
         if (fromZone == request.ToZone)
         {
-            zones.MoveCardToZone(request.CardInstanceId, request.ToZone, request.Placement);
+            Place(combat, zones, request);
             if (request.OutcomeSlot is { } noOpSlot)
                 noOpSlot.Value = new MoveCardToZoneOutcome(
                     request.CardInstanceId, fromZone, fromZone, WasMoved: false);
             return;
         }
 
-        zones.MoveCardToZone(request.CardInstanceId, request.ToZone, request.Placement);
+        Place(combat, zones, request);
         // A card that leaves a wand frees its slot, whatever moved it.
         if (fromZone == CardZone.Wand)
             combat.GetWand(request.CombatantId)?.Clear(request.CardInstanceId);
@@ -212,6 +212,22 @@ public sealed class MoveCardToZoneEffectHandler : EffectRequestHandler<MoveCardT
             request.CardInstanceId,
             fromZone,
             request.ToZone));
+    }
+
+    // Top and Bottom are fixed ends; Random picks one of the zone's Count+1 gaps (the zone counted without the
+    // card itself) from the combat's seeded RNG and advances it, like every other random choice in a fight.
+    private static void Place(CombatState combat, CombatantCardZones zones, MoveCardToZoneEffectRequest request)
+    {
+        if (request.Placement != ZonePlacement.Random)
+        {
+            zones.MoveCardToZone(request.CardInstanceId, request.ToZone, request.Placement);
+            return;
+        }
+
+        var others = zones.GetCardsInZone(request.ToZone).Count(c => c.Id != request.CardInstanceId);
+        var index = CombatRandom.CreateShuffledIndexes(others + 1, combat.RandomSeed, combat.RandomStep)[0];
+        combat.AdvanceRandomStep();
+        zones.MoveCardToZoneAt(request.CardInstanceId, request.ToZone, index);
     }
 }
 

@@ -989,6 +989,19 @@ public class CombatProgramModelTests
         Assert.Equal(ZonePlacement.Top, back!.Placement);
     }
 
+    [Fact]
+    public void MoveCardToZone_round_trips_the_random_placement()
+    {
+        var model = new CombatNodeModel("moveCardToZone", "source",
+            Card: new CombatCardSpec("chosen", CardZone.ExhaustPile), ToZone: CardZone.DrawPile,
+            Placement: ZonePlacement.Random);
+
+        var back = CombatProgramModel.Classify(CombatProgramModel.Build<CardPlayContext>(model));
+
+        Assert.Equal(model, back);
+        Assert.Equal(ZonePlacement.Random, back!.Placement);
+    }
+
     [Theory]
     [MemberData(nameof(CardSpecs))]
     public void TransformCard_round_trips_each_card_selector_and_its_target_definition(CombatCardSpec card)

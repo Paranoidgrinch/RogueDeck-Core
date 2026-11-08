@@ -28,11 +28,14 @@ public enum CardZone
 
 // Where a card lands in its destination zone. Draw takes from the front (index 0 = the "top"), so Top places a card
 // on top of the draw pile (a tutor / "put this card on top") and Bottom appends it (the historical default). Only
-// ordering matters for the draw pile, but the placement applies uniformly to any zone.
+// ordering matters for the draw pile, but the placement applies uniformly to any zone. Random inserts it at a
+// random index ("shuffle it into your draw pile"), drawn from the combat's seeded RNG — so only the effect path
+// (MoveCardToZoneEffectHandler) can place it; CardZones.MoveCardToZone takes an explicit index for it.
 public enum ZonePlacement
 {
     Bottom,
-    Top
+    Top,
+    Random
 }
 
 // The player-input collaborator for in-combat card selection — the combat analog of the run's IRunEntityChooser.
@@ -221,6 +224,11 @@ public sealed class CombatantCardZones
 
     public void MoveCardToZone(CardInstanceId id, CardZone zone, ZonePlacement placement = ZonePlacement.Bottom)
     {
+        if (placement == ZonePlacement.Random)
+            throw new ArgumentException(
+                "A Random placement needs the combat's RNG: move through MoveCardToZoneEffectRequest, " +
+                "or pass the index to MoveCardToZoneAt.", nameof(placement));
+
         var card = GetCard(id);
 
         RemoveFromCurrentZone(card);
@@ -230,6 +238,22 @@ public sealed class CombatantCardZones
             destination.Insert(0, card); // the front is the draw "top"
         else
             destination.Add(card);
+    }
+
+    // Moves a card to an exact index of the destination zone (0 = the top), counted AFTER the card has left
+    // where it was — so 0..Count of the zone without it are all valid.
+    public void MoveCardToZoneAt(CardInstanceId id, CardZone zone, int index)
+    {
+        var card = GetCard(id);
+        var destination = GetMutableZone(zone);
+        var others = destination.Count - (card.Zone == zone ? 1 : 0);
+        if (index < 0 || index > others)
+            throw new ArgumentOutOfRangeException(nameof(index),
+                $"Index {index} is outside zone '{zone}' ({others} other cards).");
+
+        RemoveFromCurrentZone(card);
+        card.SetZone(zone);
+        destination.Insert(index, card);
     }
 
     public IReadOnlyList<CardInstance> MoveAllCardsFromZone(

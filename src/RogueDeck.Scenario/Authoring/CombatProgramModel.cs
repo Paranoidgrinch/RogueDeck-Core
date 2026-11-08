@@ -176,7 +176,8 @@ public sealed record CombatNodeModel(
     // defaults for kinds that don't use them so build↔classify round-trips exactly.
     string ToTag = "",
     int? TakeFirst = null,
-    // moveCardToZone: where the card lands in the destination zone (Top = a tutor / put-on-top; Bottom = default).
+    // moveCardToZone: where the card lands in the destination zone (Top = a tutor / put-on-top; Bottom = default;
+    // Random = shuffled in at a random index, from the combat's seeded RNG).
     // Canonically Bottom for other kinds so build↔classify round-trips exactly.
     ZonePlacement Placement = ZonePlacement.Bottom,
     // Status-instance selection ops (removeSelectedStatus / modifySelectedStatusStacks / stealSelectedStatus): which

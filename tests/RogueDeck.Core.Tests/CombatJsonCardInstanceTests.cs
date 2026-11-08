@@ -49,6 +49,7 @@ public class CombatJsonCardInstanceTests
             new ExplicitCardInstanceExpression<CardPlayContext>(new CardInstanceId("c-1"));
         RoundTrips(new MoveCardToZoneNode<CardPlayContext>(Source, card, CardZone.DiscardPile));
         RoundTrips(new MoveCardToZoneNode<CardPlayContext>(Source, card, CardZone.DrawPile, placement: ZonePlacement.Top));
+        RoundTrips(new MoveCardToZoneNode<CardPlayContext>(Source, card, CardZone.DrawPile, placement: ZonePlacement.Random));
         RoundTrips(new CreateCardCopyNode<CardPlayContext>(Source, card, CardZone.Hand));
         RoundTrips(new ReplayCardProgramNode<CardPlayContext>(card, Source));
         RoundTrips(new PlayCardNode<CardPlayContext>(Source, card));
