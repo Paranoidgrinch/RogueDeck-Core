@@ -143,6 +143,26 @@ public class ForesightTests
         Assert.Equal(CombatResult.Defeat, combat.Result);
         Assert.Null(combat.Foresee());
     }
+
+    // ⚠ BEFORE THE OPENING HAND IS DEALT THERE IS NO TURN TO END. A driver builds the fight with its opening
+    // turn held back, publishes it so the screen can draw behind a prompt raised at the opening deal, and only
+    // then opens the turn. The hero is already the active combatant in that window, and the screen asked for
+    // the forecast: the fork tried to end a turn that had not begun and threw ("no turn is currently in
+    // progress"), caught by the screen at the Act IV vaults and at Inanna. Nothing is coming yet, so there is
+    // nothing to foresee, and ending the turn there is a no-op like any other end of turn out of order.
+    [Fact]
+    public void Before_the_opening_turn_there_is_nothing_to_foresee_and_nothing_to_end()
+    {
+        var compiled = Fight().Compile();
+        var combat = new InteractiveCombat(compiled, EnemyIntentSelectors.Build(compiled), startOpeningTurn: false);
+
+        Assert.Null(combat.Foresee());
+        combat.EndTurn();
+        Assert.Equal(CombatTurnPhase.WaitingToStartTurn, combat.State.TurnPhase);
+
+        combat.StartOpeningTurn();
+        Assert.NotNull(combat.Foresee());
+    }
 }
 
 // A fork is not only for looking at — B5 PLAYS on it. If a card cannot be played on a copy of a fight, a

@@ -346,7 +346,9 @@ public sealed class InteractiveCombat : ICombatView
     // the method it always was.
     private void EndTurn(Action<CombatantId, EnemyActionDefinitionId?, int, int>? watch)
     {
-        if (!IsHeroTurn)
+        // ⚠ The hero is the active combatant BEFORE the opening hand is dealt too (a driver holds the opening
+        // turn back while it installs its choosers and publishes the fight). There is no turn to end then.
+        if (!IsHeroTurn || _combat.TurnPhase != CombatTurnPhase.TurnInProgress)
             return;
 
         var heroBefore = _collector.Events.Count;
@@ -451,10 +453,11 @@ public sealed class InteractiveCombat : ICombatView
             : 0;
 
     // What ending the turn right now would cost: blow by blow, and in total. Null when there is nothing to
-    // foresee (the fight is over, or it is not the hero's turn to end).
+    // foresee (the fight is over, or it is not the hero's turn to end, or that turn has not opened yet).
     public Foresight? Foresee()
     {
-        if (IsOver || !IsHeroTurn)
+        // Before the opening turn has started (see EndTurn) nothing is coming yet, so nothing is foreseen.
+        if (IsOver || !IsHeroTurn || _combat.TurnPhase != CombatTurnPhase.TurnInProgress)
             return null;
 
         var fork = Fork();
