@@ -89,6 +89,8 @@ public static class RunEventFields
     public const string CombatHeroHpRemaining = "combat.heroHpRemaining";
     public const string CombatVictory = "combat.victory";
     public const string CombatDefeat = "combat.defeat";
+    // How many enemy bodies were down when the fight ended (CombatResolvedRunEvent.Fallen).
+    public const string CombatFallenCount = "combat.fallenCount";
     public const string HealthNewCurrent = "health.newCurrent";
     public const string HealthMax = "health.max";
     public const string ResourceNewAmount = "resource.newAmount";
@@ -108,6 +110,7 @@ public static class RunEventFields
         RegisterInt(CombatHeroHpRemaining, e => e is CombatResolvedRunEvent c ? c.HeroHpRemaining : null);
         RegisterBool(CombatVictory, e => e is CombatResolvedRunEvent c ? c.Result == RogueDeck.Core.Combat.CombatResult.Victory : null);
         RegisterBool(CombatDefeat, e => e is CombatResolvedRunEvent c ? c.Result == RogueDeck.Core.Combat.CombatResult.Defeat : null);
+        RegisterInt(CombatFallenCount, e => e is CombatResolvedRunEvent c ? c.Fallen?.Count ?? 0 : null);
         RegisterInt(HealthNewCurrent, e => e is RunHealthChangedRunEvent h ? h.NewCurrent : null);
         RegisterInt(HealthMax, e => e is RunHealthChangedRunEvent h ? h.Max : null);
         RegisterInt(ResourceNewAmount, e => e is ResourceChangedRunEvent r ? r.NewAmount : null);

@@ -56,8 +56,26 @@ public sealed record AppendOfferGrantRule(
     IReadOnlyList<string>? OfferTags = null,
     IRunExpression<bool>? Condition = null) : IRewardRule;
 
+// Take offers off the table — "card rewards offer 2 cards instead of 3", "no card rewards after fights". Removes
+// `Count` matching offers from the end (the last drawn first), never more than there are; Count 0 or less removes
+// every match. The reward is left as it is otherwise, and a reward emptied this way simply offers nothing.
+public sealed record DropOffersRule(
+    RewardMatch Match,
+    int Count = 1,
+    RewardMatch? OfferMatch = null,
+    IRunExpression<bool>? Condition = null) : IRewardRule;
+
+// A SECOND OPINION: a matching reward carries one more offer, "draw anew", which puts the same reward on the
+// table again, freshly drawn — once: the redrawn reward is tagged "redrawn" and offers no second redraw.
+public sealed record RedrawOfferRule(
+    RewardMatch Match,
+    IRunExpression<bool>? Condition = null) : IRewardRule;
+
 public static class RewardRules
 {
+    public const string RedrawnTag = "redrawn";
+    public const string RedrawKind = "redraw";
+
     // Apply every rule the player is wearing to one reward's offers, in relic order. Returns the offers to show.
     public static void Apply(
         RunState run,
@@ -95,6 +113,10 @@ public static class RewardRules
                 case AppendOfferGrantRule append:
                     Sweeten(run, offers, append);
                     break;
+
+                case DropOffersRule drop:
+                    Drop(offers, drop);
+                    break;
             }
         }
     }
@@ -111,6 +133,19 @@ public static class RewardRules
             if (fresh is null)
                 return;
             offers.Add(fresh);
+        }
+    }
+
+    private static void Drop(List<RewardOffer> offers, DropOffersRule rule)
+    {
+        var match = rule.OfferMatch ?? new RewardMatch();
+        var left = rule.Count <= 0 ? int.MaxValue : rule.Count;
+        for (var i = offers.Count - 1; i >= 0 && left > 0; i--)
+        {
+            if (!match.Matches(offers[i].Kind, offers[i].Tags))
+                continue;
+            offers.RemoveAt(i);
+            left--;
         }
     }
 

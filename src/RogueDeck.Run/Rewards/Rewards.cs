@@ -159,6 +159,16 @@ public sealed class OfferRewardRunEffectHandler : RunEffectHandler<OfferRewardRu
             run, run.ActiveRewardRules, request.Kind, request.Tags, request.Source, offers);
         if (offers.Count == 0)
             return;
+        if (request.Tags?.Contains(RewardRules.RedrawnTag) != true && run.ActiveRewardRules.OfType<RedrawOfferRule>().Any(rule =>
+                rule.Match.Matches(request.Kind, request.Tags)
+                && (rule.Condition is null || rule.Condition.Evaluate(new RunEvalContext(run, null)))))
+            offers.Add(new RewardOffer($"{request.Reward.Value}:redraw",
+                [new OfferRewardRunEffect(new RewardId(request.Reward.Value + ":redrawn"), request.Source, request.PickCount)
+                {
+                    Kind = request.Kind,
+                    Tags = [.. request.Tags ?? [], RewardRules.RedrawnTag],
+                }],
+                Kind: RewardRules.RedrawKind));
 
         run.AddLog(StandardRunLogTypes.RewardOffered, $"Offered reward '{request.Reward}' ({offers.Count} offers).");
         run.RaiseEvent(new RewardOfferedRunEvent(
@@ -280,9 +290,23 @@ public static class CharacterContent
         return run.CharacterOf(run.ActiveMember) ?? run.Content?.DefaultCharacter;
     }
 
+    // A RUN MAY LOCK CONTENT IT WOULD OTHERWISE OFFER — a card or relic the player has not earned yet in a meta
+    // progression. The lock is a run flag "locked:<id>", or the profile flag "locked:<id>" the runner mirrors in
+    // as "meta.locked:<id>". A locked id is never drawn into a reward, a shop or a random draw; everything else
+    // about the run is untouched, and a run without such flags offers what it always did.
+    public const string LockedPrefix = "locked:";
+
+    public static bool IsLocked(RunState run, string contentId)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        return run.HasFlag(new RunFlagId(LockedPrefix + contentId)) || run.HasFlag(new RunFlagId("meta." + LockedPrefix + contentId));
+    }
+
     public static bool Allows(RunState run, string contentId)
     {
         ArgumentNullException.ThrowIfNull(run);
+        if (IsLocked(run, contentId))
+            return false;
         if (run.Content is not { } content
             || !content.CharacterExclusive.TryGetValue(contentId, out var owners))
             return true;

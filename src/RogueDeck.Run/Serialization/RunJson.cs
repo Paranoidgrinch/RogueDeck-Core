@@ -293,7 +293,9 @@ public static class RunJson
     {
         r.Register("reward.addOffer", typeof(AddRewardOfferRule))
          .Register("reward.drawMore", typeof(DrawMoreOffersRule))
-         .Register("reward.appendGrant", typeof(AppendOfferGrantRule));
+         .Register("reward.appendGrant", typeof(AppendOfferGrantRule))
+         .Register("reward.drop", typeof(DropOffersRule))
+         .Register("reward.redraw", typeof(RedrawOfferRule));
 
         r.Register("reward.fixed", typeof(FixedRewardSource))
          .Register("reward.pool", typeof(PoolRewardSource));

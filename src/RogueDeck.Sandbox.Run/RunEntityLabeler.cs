@@ -26,8 +26,19 @@ public sealed class RunEntityLabeler
     // so the naming has to be here rather than inside whoever happened to ask first. A reward offer is
     // described by what it grants, a deck card / relic by its display name; raw ids appear only when no
     // labeler was supplied (older test rigs).
+    // AN OFFER MAY BE FACE DOWN (tagged "face_down", e.g. by a reward rule's OfferTags): it is shown as a sealed
+    // envelope — no name, no text, no picture — until it is taken.
+    public const string FaceDownTag = "face_down";
+    public const string FaceDownName = "Sealed envelope";
+
+    public const string RedrawName = "Draw anew";
+
+    private static bool FaceDown(RewardOffer offer) => offer.Tags?.Contains(FaceDownTag) == true;
+
     public static string Display(object? candidate, RunEntityLabeler? labeler) => candidate switch
     {
+        RewardOffer offer when FaceDown(offer) => FaceDownName,
+        RewardOffer { Kind: RewardRules.RedrawKind } => RedrawName,
         RewardOffer offer => labeler?.Offer(offer) ?? offer.Id,
         RunCardInstance card => labeler is { } known
             ? known.Card(card.DefinitionId, card.UpgradeLevel)
@@ -63,6 +74,8 @@ public sealed class RunEntityLabeler
     // its title. Sourced from the presentation manifest (a card's description text); empty when unknown.
     public string Description(object? candidate) => candidate switch
     {
+        RewardOffer offer when FaceDown(offer) => "What is inside shows once it is opened.",
+        RewardOffer { Kind: RewardRules.RedrawKind } => "Put these back and draw the same reward again, once.",
         RewardOffer offer => string.Join("  ·  ",
             offer.Grant.Select(DescribeGrant).Where(s => s.Length > 0)),
         RunCardInstance card => CardDescription(card.DefinitionId.value),
@@ -76,6 +89,7 @@ public sealed class RunEntityLabeler
     // has a picture at all, because a bundle that contains a card IS a card reward to the eye looking at it.
     public static EntityArt? ArtFor(object? candidate) => candidate switch
     {
+        RewardOffer offer when FaceDown(offer) => null,
         RewardOffer offer => ArtForGrant(offer.Grant),
         RunCardInstance card => new EntityArt(EntityArt.Card, card.DefinitionId.value, card.UpgradeLevel),
         RelicInstance relic => new EntityArt(EntityArt.Relic, relic.Id.Value),
