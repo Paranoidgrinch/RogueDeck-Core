@@ -200,6 +200,7 @@ public static class RunJson
          .Register("event.rewardHasTag", typeof(EventRewardHasTagExpression))
          .Register("event.rewardIsKind", typeof(EventRewardIsKindExpression))
          .Register("event.resourceIs", typeof(EventResourceIsExpression))
+         .Register("event.choiceIs", typeof(EventChoiceIsExpression))
          .Register("inShop", typeof(InShopExpression))
          .Register("actFlag", typeof(ActFlagSetExpression));
     }

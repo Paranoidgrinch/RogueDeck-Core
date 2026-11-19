@@ -80,6 +80,33 @@ public sealed class EventResourceIsExpression : IRunExpression<bool>
     public bool Evaluate(RunEvalContext context) => RunEventFields.ReadResourceIs(Resource, context.Event);
 }
 
+// "The event choice just made is X" — optionally "…at a room tagged Y" (a campfire's "rest" is not some other
+// event's "rest"). Valid in a reaction to an event choice; the room's tags are read off the run's map.
+public sealed class EventChoiceIsExpression : IRunExpression<bool>
+{
+    public string ChoiceId { get; }
+    public string? NodeTag { get; }
+
+    public EventChoiceIsExpression(string choiceId, string? nodeTag = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(choiceId);
+        ChoiceId = choiceId;
+        NodeTag = nodeTag;
+    }
+
+    public bool Evaluate(RunEvalContext context)
+    {
+        if (context.Event is not EventChoiceMadeRunEvent made)
+            throw new InvalidOperationException(
+                $"Event field 'event.choiceIs' was evaluated without a matching event in context (was '{context.Event?.GetType().Name ?? "none"}').");
+        if (!string.Equals(made.ChoiceId, ChoiceId, StringComparison.Ordinal))
+            return false;
+        return NodeTag is null
+            || context.Run.Map.Nodes.FirstOrDefault(n => n.Id == made.NodeId) is { } node
+            && node.Tags.Contains(NodeTag, StringComparer.Ordinal);
+    }
+}
+
 // The catalog of readable event fields, keyed by a stable string. Content may register more; the built-in
 // keys cover the standard events. A reader returns null when the event in scope is not the expected type,
 // which surfaces as a clear evaluation error.
