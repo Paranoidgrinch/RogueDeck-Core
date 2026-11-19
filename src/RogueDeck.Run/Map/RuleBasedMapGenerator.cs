@@ -362,7 +362,7 @@ public static class RuleBasedMapGenerator
     // the thing that changed, the content is not, and a second copy of "which fight stands here" would drift.
     internal static EncounterId? SelectEncounter(
         MapNodeKind kind, int row, int rows, MapGenerationSpec spec, EncounterSelector selector,
-        int startingLoadout, MapGenRandom rng, ISet<EncounterId> used)
+        int startingLoadout, MapGenRandom rng, ISet<EncounterId> used, IReadOnlyDictionary<EncounterId, int>? forbidden = null)
     {
         if (!IsCombatRole(kind) || !selector.HasCandidates(kind))
             return null;
@@ -394,7 +394,7 @@ public static class RuleBasedMapGenerator
         var loadout = spec.BalanceTargets.AssumedLoadout(startingLoadout, row);
         var target = spec.BalanceTargets.TargetNet(row);
         var picked = selector.Select(
-            kind, loadout, target, spec.BalanceTargets.Tolerance, rng.Next, used, eligible);
+            kind, loadout, target, spec.BalanceTargets.Tolerance, rng.Next, used, eligible, forbidden, row);
         used.Add(picked);
         return picked;
     }

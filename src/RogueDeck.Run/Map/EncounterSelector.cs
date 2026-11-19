@@ -31,7 +31,8 @@ public sealed class EncounterSelector
     // the node empty.
     public EncounterId Select(
         MapNodeKind role, int loadoutStrength, int targetNet, int tolerance, Func<int, int> next,
-        ISet<EncounterId>? exclude = null, Func<EncounterId, bool>? eligible = null)
+        ISet<EncounterId>? exclude = null, Func<EncounterId, bool>? eligible = null,
+        IReadOnlyDictionary<EncounterId, int>? forbidden = null, int row = -1)
     {
         ArgumentNullException.ThrowIfNull(next);
         var all = _distribution.For(role);
@@ -54,6 +55,35 @@ public sealed class EncounterSelector
         var candidates = exclude is null || exclude.Count == 0
             ? open
             : open.Where(e => !exclude.Contains(e.Encounter)).ToList();
+
+        // `forbidden` is harder than `exclude`: the fights already on a route into this room, each with the row it
+        // stands at. When the act-wide draw has run dry, a repeat is taken from what the routes in have NOT met —
+        // in the depth band first, then from the whole role. Only a role whose every fight is already on a route
+        // in repeats one, and then the one met furthest back.
+        if (forbidden is { Count: > 0 })
+        {
+            bool Fresh(EncounterPoolEntry e) => !forbidden.ContainsKey(e.Encounter);
+            candidates = candidates.Where(Fresh).ToList();
+            if (candidates.Count == 0)
+                candidates = open.Where(Fresh).ToList();
+            if (candidates.Count == 0)
+                candidates = all.Where(e => Fresh(e) && (exclude is null || !exclude.Contains(e.Encounter))).ToList();
+            if (candidates.Count == 0)
+                candidates = all.Where(Fresh).ToList();
+            if (candidates.Count == 0)
+            {
+                // Never straight after itself: when the band's furthest-back fight stood in the row just before,
+                // the whole role is searched for one further back.
+                var pool = open;
+                var furthest = pool.Min(e => forbidden[e.Encounter]);
+                if (row >= 0 && row - furthest < 2)
+                {
+                    pool = all;
+                    furthest = pool.Min(e => forbidden[e.Encounter]);
+                }
+                candidates = pool.Where(e => forbidden[e.Encounter] == furthest).ToList();
+            }
+        }
         if (candidates.Count == 0)
             candidates = open;
 

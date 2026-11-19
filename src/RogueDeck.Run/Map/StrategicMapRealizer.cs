@@ -46,6 +46,15 @@ public static class StrategicMapRealizer
         var builder = new RunMapBuilder();
         var roles = new Dictionary<NodeId, MapNodeKind>();
 
+        // NO FIGHT TWICE ON ONE ROUTE (playtest 2026-11-19: "pro route auf einer map immernoch 2 mal der gleiche
+        // elite"). The act-wide no-replacement draw above runs dry inside a stage's depth band, and then it used to
+        // start over — on whichever route. Each room now also knows every fight placed on a room that leads to it
+        // (rows are realized in order, so those are all placed), and never takes one of them: two rooms on one
+        // route can only share a fight when the whole role has nothing else to give.
+        var parents = topology.Edges.GroupBy(e => e.To).ToDictionary(g => g.Key, g => g.Select(e => e.From).ToList());
+        // Per room: every fight on a route into it, with the deepest row it stands at there.
+        var routeFights = new Dictionary<NodeId, Dictionary<EncounterId, int>>();
+
         foreach (var row in topology.Rows)
             foreach (var slot in row.Slots)
             {
@@ -55,15 +64,28 @@ public static class StrategicMapRealizer
                 // mimics to offer, so that adding one to the pools later does not shift every other room's draw.
                 // There is no guarantee row to exempt here — the strategic generator promises nothing per route
                 // that a mimic could quietly break (the floor of challenge counts a mimic as the fight it is).
+                // Upstream fights are gathered first: a mimic whose every fight already stands on a route into this
+                // room stays a plain treasure rather than meeting the player twice.
+                var upstream = new Dictionary<EncounterId, int>();
+                foreach (var parent in parents.GetValueOrDefault(slot.Id) ?? [])
+                    if (routeFights.TryGetValue(parent, out var above))
+                        foreach (var (fight, at) in above)
+                            upstream[fight] = Math.Max(at, upstream.GetValueOrDefault(fight, -1));
+
                 if (kind == MapNodeKind.Treasure && content.TreasureMimicChancePercent > 0
                     && rng.Next(100) < content.TreasureMimicChancePercent
-                    && selector.HasCandidates(MapNodeKind.Mimic))
+                    && selector.HasCandidates(MapNodeKind.Mimic)
+                    && selector.Candidates(MapNodeKind.Mimic).Any(id => !upstream.ContainsKey(id)))
                 {
                     kind = MapNodeKind.Mimic;
                 }
 
                 var encounter = RuleBasedMapGenerator.SelectEncounter(
-                    kind, row.Index, rows, content, selector, startingLoadout, rng, usedEncounters);
+                    kind, row.Index, rows, content, selector, startingLoadout, rng, usedEncounters, upstream);
+                var mine = new Dictionary<EncounterId, int>(upstream);
+                if (encounter is { } placed)
+                    mine[placed] = row.Index;
+                routeFights[slot.Id] = mine;
                 var nodeRef = RuleBasedMapGenerator.SelectNodeRef(kind, content, row.Index, rows, rng, usedRefs);
                 var realized = realize(kind, new MapCoord(row.Index, slot.Column), encounter, nodeRef);
 
