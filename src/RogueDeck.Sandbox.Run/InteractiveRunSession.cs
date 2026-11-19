@@ -131,6 +131,8 @@ public sealed class InteractiveRunSession
         var run = _makeRun();
         _run = run;
         _script.Run = run;
+        // A rebase walks again to where the run already stands: nothing in it happens for the first time.
+        run.Trace = _script.Trace is { } trace && !_rebasing ? new LiveRunTrace(trace, _script) : null;
         try
         {
             // The meta profile rides along safely under replay: parked replays throw before the runner's
@@ -462,4 +464,32 @@ public sealed record EntitySelectionRequest(
     // never has to know whether the art list is there at all (an older rig builds a request without one).
     public EntityArt? ArtAt(int index) =>
         Arts is not null && index >= 0 && index < Arts.Count ? Arts[index] : null;
+}
+
+// Passes a replay attempt's trace on only once the attempt has caught up with the recorded answers (ReplayScript.Trace).
+internal sealed class LiveRunTrace(IRunTraceSink inner, ReplayScript script) : IRunTraceSink
+{
+    public void EventRaised(RunState run, IRunEvent runEvent)
+    {
+        if (script.IsCaughtUp)
+            inner.EventRaised(run, runEvent);
+    }
+
+    public void Reacted(RunState run, string source, IRunEvent runEvent, IReadOnlyList<IRunEffectRequest> effects)
+    {
+        if (script.IsCaughtUp)
+            inner.Reacted(run, source, runEvent, effects);
+    }
+
+    public void EffectResolved(RunState run, IRunEffectRequest effect, string cause, IReadOnlyList<string> changes)
+    {
+        if (script.IsCaughtUp)
+            inner.EffectResolved(run, effect, cause, changes);
+    }
+
+    public void Logged(RunState run, RunLogEntry entry)
+    {
+        if (script.IsCaughtUp)
+            inner.Logged(run, entry);
+    }
 }

@@ -953,8 +953,31 @@ public sealed class RunState
     public void EnqueueEffect(IRunEffectRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+        if (Trace is not null && ResolvingCause is { } cause)
+            _causes.TryAdd(request, cause);
         _effects.Enqueue(request);
     }
+
+    // ── Diagnostic trace (see IRunTraceSink) ───────────────────────────────────────
+    // Who queued each effect: a relic or program reacting to an event, or (inherited) whatever effect was resolving
+    // when it was queued. Kept only while a sink is attached; an effect queued by a room itself has no entry.
+
+    public IRunTraceSink? Trace { get; set; }
+
+    private readonly Dictionary<IRunEffectRequest, string> _causes = new(ReferenceEqualityComparer.Instance);
+
+    internal string? ResolvingCause { get; set; }
+
+    internal void EnqueueEffect(IRunEffectRequest request, string cause)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (Trace is not null)
+            _causes.TryAdd(request, cause);
+        _effects.Enqueue(request);
+    }
+
+    internal string? TakeCause(IRunEffectRequest request) =>
+        _causes.Remove(request, out var cause) ? cause : null;
 
     public void RaiseEvent(IRunEvent runEvent)
     {
@@ -963,7 +986,12 @@ public sealed class RunState
         _undispatched.Enqueue(runEvent);
     }
 
-    public void AddLog(string type, string message) => _log.Add(new RunLogEntry(type, message));
+    public void AddLog(string type, string message)
+    {
+        var entry = new RunLogEntry(type, message);
+        _log.Add(entry);
+        Trace?.Logged(this, entry);
+    }
 
     public bool HasPendingWork => _effects.Count > 0 || _undispatched.Count > 0;
 

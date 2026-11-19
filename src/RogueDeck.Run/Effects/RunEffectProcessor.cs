@@ -34,13 +34,39 @@ public sealed class RunEffectProcessor
             // Effects first: keep state consistent before any relic observes an event.
             if (run.TryDequeueEffect(out var effect))
             {
-                registry.GetEffectHandler(effect.GetType()).Resolve(run, registry, effect);
+                if (run.Trace is { } trace)
+                    ResolveTraced(run, registry, effect, trace);
+                else
+                    registry.GetEffectHandler(effect.GetType()).Resolve(run, registry, effect);
                 continue;
             }
 
             if (run.TryDequeueEvent(out var runEvent))
+            {
+                run.Trace?.EventRaised(run, runEvent);
                 DispatchToSubscribers(run, runEvent);
+            }
         }
+    }
+
+    // One effect under the trace: its cause (or the room the run stands in, for an effect a room queued itself) is
+    // inherited by everything it queues, and the state is measured on both sides of it. A handler that drains the
+    // queue itself nests here and restores the outer cause on the way out.
+    private static void ResolveTraced(RunState run, RunDefinitionRegistry registry, IRunEffectRequest effect, IRunTraceSink trace)
+    {
+        var cause = run.TakeCause(effect) ?? $"room {run.CurrentNodeId?.Value ?? "-"}";
+        var before = RunStateSnapshot.Of(run);
+        var outer = run.ResolvingCause;
+        run.ResolvingCause = cause;
+        try
+        {
+            registry.GetEffectHandler(effect.GetType()).Resolve(run, registry, effect);
+        }
+        finally
+        {
+            run.ResolvingCause = outer;
+        }
+        trace.EffectResolved(run, effect, cause, before.To(RunStateSnapshot.Of(run)));
     }
 
     // Every raised event goes to two kinds of subscriber, in a deterministic order: relic programs first (in
@@ -57,7 +83,7 @@ public sealed class RunEffectProcessor
             if (!relic.Enabled)
                 continue;
             foreach (var program in relic.Definition.RunPrograms)
-                Dispatch(run, runEvent, eventType, program);
+                Dispatch(run, runEvent, eventType, program, $"relic {relic.Id.Value}");
         }
 
         // THE REST OF THE PARTY'S RELICS (multiplayer). An event the whole party lives through — a room entered,
@@ -79,20 +105,27 @@ public sealed class RunEffectProcessor
                                     effects.AddRange(program.Build(runEvent, run));
                 }
                 if (effects.Count > 0)
-                    run.EnqueueEffect(new AsMemberRunEffect(member.Id, effects));
+                {
+                    var cause = $"relics of {member.Id.Value}";
+                    run.Trace?.Reacted(run, cause, runEvent, effects);
+                    run.EnqueueEffect(new AsMemberRunEffect(member.Id, effects), cause);
+                }
             }
 
         foreach (var installed in run.InstalledPrograms.ToArray())
-            Dispatch(run, runEvent, eventType, installed.Reaction);
+            Dispatch(run, runEvent, eventType, installed.Reaction, $"program {installed.Id.Value}");
     }
 
     private static void Dispatch(
-        RunState run, IRunEvent runEvent, Type eventType, ITriggeredRunEffectDefinition program)
+        RunState run, IRunEvent runEvent, Type eventType, ITriggeredRunEffectDefinition program, string source)
     {
         if (program.EventType != eventType)
             return;
 
-        foreach (var effect in program.Build(runEvent, run))
-            run.EnqueueEffect(effect);
+        var effects = program.Build(runEvent, run).ToList();
+        if (effects.Count > 0)
+            run.Trace?.Reacted(run, source, runEvent, effects);
+        foreach (var effect in effects)
+            run.EnqueueEffect(effect, source);
     }
 }

@@ -69,6 +69,23 @@ public sealed class ReplayScript
     // consumables) can resolve against the run's inventory.
     public RunState? Run { get; internal set; }
 
+    // A diagnostic sink for the run (RunDiagnostics). Every replay attempt builds a fresh run and walks the answers
+    // again, so the session hangs a filter on each one that passes on only what happens once every recorded answer
+    // has been taken — the consequences of the newest answer, each told once.
+    public IRunTraceSink? Trace { get; set; }
+
+    // Every recorded answer has been taken by this replay attempt: what the run does now, it does for the first time.
+    public bool IsCaughtUp
+    {
+        get
+        {
+            foreach (var taken in _taken)
+                if (!taken)
+                    return false;
+            return true;
+        }
+    }
+
     // The session's replay trigger; Advance records an answer and re-runs the whole script.
     internal Action? OnAdvance { get; set; }
 
