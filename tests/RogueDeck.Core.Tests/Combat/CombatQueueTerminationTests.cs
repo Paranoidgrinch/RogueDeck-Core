@@ -51,6 +51,26 @@ public class CombatQueueTerminationTests
         Assert.Equal(1, combat.PendingEffectCount);
     }
 
+    // The fall that decides a fight still gets written down: a tally queued behind the victory (a fee for the last
+    // corpse) lands; nothing else does, and what does not stays queued.
+    [Fact]
+    public void CounterBookkeepingQueuedBehindTheVictoryIsStillWritten()
+    {
+        var registry = CombatTestFactory.CreateStandardRegistry();
+        var combat = CreateCombatWithHero();
+        var hero = new CombatantId("hero_001");
+
+        combat.EnqueueEffect(new SetCombatResultEffectRequest(CombatResult.Victory));
+        combat.EnqueueEffect(new DealDamageEffectRequest(TargetCombatantId: hero, Amount: 5));
+        combat.EnqueueEffect(new SetCombatantCounterEffectRequest(hero, new CounterId("fee"), 6));
+
+        new CombatQueueProcessor().ResolvePendingQueues(combat, registry);
+
+        Assert.Equal(6, combat.GetCombatant(hero).GetCounter(new CounterId("fee")));
+        Assert.Equal(20, combat.GetCombatant(hero).Health.Current);
+        Assert.Equal(1, combat.PendingEffectCount);
+    }
+
     [Fact]
     public void CombatQueueProcessorDoesNotProcessEventsAfterCombatResultChanges()
     {

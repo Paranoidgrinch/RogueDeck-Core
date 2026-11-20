@@ -55,5 +55,31 @@ public sealed class CombatEffectQueueProcessor
 
             resolvedEffects++;
         }
+
+        // ★ THE BOOKS ARE CLOSED AFTER THE FIGHT IS DECIDED. The blow that drops the last enemy queues the
+        // victory first and everything answering the fall after it — so a rule that tallies what that fall was
+        // worth (a fee per papered corpse, a bounty for an exact kill) never got to write it down, and in a
+        // fight against one enemy it never paid at all (relic audit 2026-11-19). Counter bookkeeping already
+        // queued is still written; everything else that was queued stays where it is, unresolved, as before.
+        if (combat.Result != CombatResult.Ongoing && combat.HasPendingEffects)
+        {
+            var waiting = new List<PendingEffectQueueEntry>();
+            while (combat.HasPendingEffects)
+                waiting.Add(combat.DequeueNextEffectEntry());
+            foreach (var entry in waiting)
+            {
+                if (entry.Request is not SetCombatantCounterEffectRequest)
+                {
+                    combat.RequeueEffectEntry(entry);
+                    continue;
+                }
+                using (combat.EnterEffectChain(entry.EffectChain))
+                    _resolver.Resolve(combat, registry, entry.Request);
+                combat.Trace(new EffectResolvedTraceEvent(
+                    combat.CurrentRound, combat.CurrentTurn,
+                    entry.Request.GetType().Name,
+                    entry.EffectChain.Id.Value));
+            }
+        }
     }
 }

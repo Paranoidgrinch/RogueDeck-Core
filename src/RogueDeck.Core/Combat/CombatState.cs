@@ -455,6 +455,15 @@ public sealed class CombatState
             _pendingEffectOwners.Dequeue());
     }
 
+    // Put an entry taken off the queue back at its end, untouched — chain, owner and all. For a pass that only
+    // resolves SOME of what is waiting (the bookkeeping after a fight is decided) and leaves the rest as it was.
+    internal void RequeueEffectEntry(PendingEffectQueueEntry entry)
+    {
+        _pendingEffects.Enqueue(entry.Request);
+        _pendingEffectChains.Enqueue(entry.EffectChain);
+        _pendingEffectOwners.Enqueue(entry.OwningProgramExecutionId);
+    }
+
     public void EnqueueEvent(ICombatEvent combatEvent)
     {
         ArgumentNullException.ThrowIfNull(combatEvent);
