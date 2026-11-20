@@ -99,6 +99,40 @@ public class EffectProgramPhase3ExpressionTests
 
     // ── Combat-value expressions ─────────────────────────────────────────────
 
+    // ── Latches claimed as they are read ─────────────────────────────────────
+
+    [Fact]
+    public void ClaimLatchExpression_ClaimsOnceAndWritesTheStampAtOnce()
+    {
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        var latch = new ClaimLatchExpression<Ctx>(CombatantTargetSelectors.Source, new CounterId("once"));
+
+        Assert.True(EvalBool(latch, combat, HeroId));
+        // Written there and then, not queued: a second event of the same effect finds it taken.
+        Assert.Equal(1, combat.GetCombatant(HeroId).GetCounter(new CounterId("once")));
+        Assert.False(EvalBool(latch, combat, HeroId));
+
+        // Cleared (as a turn-start program clears it): open again.
+        combat.GetCombatant(HeroId).SetCounter(new CounterId("once"), 0);
+        Assert.True(EvalBool(latch, combat, HeroId));
+    }
+
+    [Fact]
+    public void ClaimLatchExpression_WithAStamp_IsOpenUntilTheCounterHoldsIt()
+    {
+        var combat = CombatTestFactory.CreateCombatWithHeroAndGoblin();
+        var latch = new ClaimLatchExpression<Ctx>(
+            CombatantTargetSelectors.EventTarget, new CounterId("round"), new ConstantExpression<Ctx>(3));
+
+        Assert.True(EvalBool(latch, combat, HeroId, GoblinId));
+        Assert.Equal(3, combat.GetCombatant(GoblinId).GetCounter(new CounterId("round")));
+        Assert.Equal(0, combat.GetCombatant(HeroId).GetCounter(new CounterId("round")));
+        Assert.False(EvalBool(latch, combat, HeroId, GoblinId));
+
+        // Nobody to hold it: nothing is claimed.
+        Assert.False(EvalBool(latch, combat, HeroId, eventTarget: null));
+    }
+
     [Fact]
     public void CombatantCurrentHealthExpression_ReturnsCurrentHealth()
     {

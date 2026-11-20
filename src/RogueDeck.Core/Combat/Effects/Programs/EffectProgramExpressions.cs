@@ -2289,6 +2289,55 @@ public sealed class ClaimOnceThisActionExpression<TContext> : ICombatExpression<
     }
 }
 
+// "Not yet — and now it is." A latch on a combatant's counter, CLAIMED as it is read: true when the counter does not
+// already hold the stamp, in which case the stamp is written there and then, not through the effect queue. The stamp
+// is 1 by default (a latch a turn-start program clears back to 0); a rule that stamps the ROUND it was spent in
+// ("not yet this round") passes the round number and needs no clearing.
+//
+// Why at once: one effect can raise the same event several times before the queue moves on — a blow that strikes
+// twice, a status filed on every enemy, two cards exhausted by one card. Each of those events runs its triggers while
+// the effects of the first are still waiting, so a latch written by an ordinary counter node is read as open by every
+// one of them, and "the first time each turn" pays two or three times (relic audit 2026-11-20: Bruise Cup, Witness
+// Slate, Parade Spur). The ledger is bookkeeping, not a change to the fight, so nothing else answers its writing.
+//
+// The authoring caveats are ClaimOnceThisActionExpression's: one counter per rule, and put the claim LAST in an And,
+// so a rule whose other conditions failed does not burn its use.
+public sealed class ClaimLatchExpression<TContext> : ICombatExpression<TContext, bool>
+    where TContext : class
+{
+    public ICombatantTargetSelector Holder { get; }
+    public CounterId CounterId { get; }
+    public ICombatExpression<TContext, int>? Stamp { get; }
+
+    public ClaimLatchExpression(ICombatantTargetSelector holder, CounterId counterId,
+        ICombatExpression<TContext, int>? stamp = null)
+    {
+        ArgumentNullException.ThrowIfNull(holder);
+        Holder = ScalarTargetExpression.RequireSingleSelector(holder);
+        CounterId = counterId;
+        Stamp = stamp;
+    }
+
+    public bool Evaluate(EffectExecutionContext<TContext> context, CombatState combat)
+    {
+        ArgumentNullException.ThrowIfNull(combat);
+        var targets = Holder.ResolveTargets(context.GetTargetSelectionContext());
+        if (targets.Count == 0
+            || !combat.TryGetCombatant(ScalarTargetExpression.RequireSingle(targets), out var holder) || holder is null)
+            return false;
+
+        var stamp = Stamp?.Evaluate(context, combat) ?? 1;
+        if (holder.GetCounter(CounterId) == stamp)
+            return false;
+
+        holder.SetCounter(CounterId, stamp);
+        combat.AddLogEntry(
+            StandardCombatLogTypes.CombatantCounterModified,
+            $"Counter '{CounterId.value}' on '{holder.Id.value}' is now {stamp} (latch claimed).");
+        return true;
+    }
+}
+
 // "Does this combatant intend to <kind>?" — reads the telegraph the driver installed on the combat.
 //
 // The Bureaucrat has a run of cards that pay attention to what an enemy is about to do ("apply 3 Paperwork.

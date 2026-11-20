@@ -296,6 +296,7 @@ public static class CombatJson
          .Register("eventIsReplicated", typeof(TriggerEventIsReplicatedExpression<>))
          .Register("eventCardZone", typeof(TriggerEventCardZoneExpression<>))
          .Register("claimOnceThisAction", typeof(ClaimOnceThisActionExpression<>))
+         .Register("claimLatch", typeof(ClaimLatchExpression<>))
          .Register("intends", typeof(TargetIntendsExpression<>))
          .Register("actionDealtDamage", typeof(ActionDealtDamageExpression<>))
          .Register("iterationTargetHasStatus", typeof(IterationTargetHasStatusExpression<>));
