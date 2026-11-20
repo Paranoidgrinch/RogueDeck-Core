@@ -169,6 +169,28 @@ public sealed class AllEnemiesOfSourceCombatantTargetSelector : ICombatantTarget
     }
 }
 
+// Every living enemy of the EVENT TARGET — "the one this happened to". In a reaction to a status or a blow that
+// landed on the bearer, the SOURCE is whoever dealt it (usually an enemy), so "enemies of the source" would be the
+// bearer's own side; this is the side across from the one it happened to.
+public sealed class AllEnemiesOfEventTargetCombatantTargetSelector : ICombatantTargetSelector
+{
+    public EffectContextCapability RequiredContextCapabilities => EffectContextCapability.EventTarget;
+
+    public IReadOnlyCollection<CombatantId> ResolveTargets(CombatantTargetSelectionContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        if (context.EventTargetId is not { } targetId || !context.Combat.TryGetCombatant(targetId, out var target)
+            || target is null)
+            return Array.Empty<CombatantId>();
+
+        return context.Combat.Combatants
+            .Where(combatant => combatant.TeamId != target.TeamId && combatant.IsAlive)
+            .Select(combatant => combatant.Id)
+            .ToArray();
+    }
+}
+
 // Every living enemy of the source EXCEPT the event target — "another enemy" ("move its Singe to another enemy").
 public sealed class OtherEnemiesOfSourceCombatantTargetSelector : ICombatantTargetSelector
 {
@@ -697,6 +719,9 @@ public static class CombatantTargetSelectors
 
     public static ICombatantTargetSelector AllEnemiesOfSource { get; } =
         new AllEnemiesOfSourceCombatantTargetSelector();
+
+    public static ICombatantTargetSelector AllEnemiesOfEventTarget { get; } =
+        new AllEnemiesOfEventTargetCombatantTargetSelector();
 
     public static ICombatantTargetSelector OtherEnemiesOfSource { get; } =
         new OtherEnemiesOfSourceCombatantTargetSelector();
