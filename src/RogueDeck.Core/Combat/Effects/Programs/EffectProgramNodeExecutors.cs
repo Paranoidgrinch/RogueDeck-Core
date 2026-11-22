@@ -904,7 +904,11 @@ internal sealed class ApplyStatusNodeExecutor : IEffectNodeExecutor
         Action<CombatState>? onComplete, Action<IEffectNode, CombatState, Action<CombatState>?> dispatch)
     {
         var typed = (IApplyStatusNodeCore)node;
-        var stacks = ctx.ScaleOutput(typed.EvaluateStacks(ctx, combat));
+        var stacks = typed.EvaluateStacks(ctx, combat);
+        if (!(combat.DefinitionRegistry is { } definitions
+              && definitions.TryGetStatus(typed.StatusDefinitionId, out var applied)
+              && applied?.Tags.Contains(StandardCombatIds.WholeStatusTag) == true))
+            stacks = ctx.ScaleOutput(stacks);
         var targetList = typed.TargetSelector.ResolveTargetsTraced(ctx, combat).ToList();
         var slots = typed.ResultKey is not null
             ? targetList.Select(_ => new ApplyStatusOutcomeSlot()).ToList()

@@ -95,6 +95,11 @@ public static class StandardCombatIds
     // no runtime hook. Authored like any tag (CardData.Tags).
     public static readonly TagId InnateTag = new("innate");
 
+    // A status that is INSTALLED, not counted: its stacks say how many copies of a lasting rule are in place, not
+    // how much of something a card did. A scaled play (Redacted's half) never divides such an application — half
+    // of one installation rounded down is no installation at all, which wiped the whole card (run 2026-11-22).
+    public static readonly TagId WholeStatusTag = new("whole");
+
     // Reserved per-instance mark counters that scale a card's NEXT play output (the engine substrate for
     // Redacted). When a card instance carries both, the card-play pipeline installs OutputScale = Num/Den on
     // the play's execution context (halving = 1/2), scaling the card's own damage/Block/heal/draw/energy/status
