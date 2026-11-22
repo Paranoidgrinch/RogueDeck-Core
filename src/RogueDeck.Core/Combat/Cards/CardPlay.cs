@@ -539,7 +539,16 @@ public sealed class CombatCardPlayProcessor
 
         return card.Tags.Contains(StandardCombatIds.PledgeTag)
             || costs.All(cost => source.Resources.TryGetValue(cost.ResourceId, out var resource)
-                                 && resource.Current >= cost.Amount);
+                                 && resource.Current + ReserveOf(source, cost.ResourceId) >= cost.Amount);
+    }
+
+    // How much of a resource the source holds in reserve (StandardCombatIds.ReserveTagPrefix): the stacks of its
+    // active statuses tagged as a reserve of it.
+    public static int ReserveOf(CombatantState source, ResourceId resource)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        var tag = StandardCombatIds.ReserveTag(resource);
+        return source.Statuses.Where(status => status.Tags.Contains(tag)).Sum(status => Math.Max(0, status.Stacks));
     }
 
     // What a pledge actually pays: min(cost, available) per resource (nothing of a resource it does not have),
@@ -554,7 +563,7 @@ public sealed class CombatCardPlayProcessor
         foreach (var cost in costs)
         {
             var available = source.Resources.TryGetValue(cost.ResourceId, out var resource)
-                ? Math.Max(0, resource.Current)
+                ? Math.Max(0, resource.Current) + ReserveOf(source, cost.ResourceId)
                 : 0;
             var amount = Math.Min(cost.Amount, available);
             shortfall += cost.Amount - amount;
@@ -580,7 +589,7 @@ public sealed class CombatCardPlayProcessor
                     $"Combatant '{source.Id}' does not have resource '{cost.ResourceId}'.");
             }
 
-            if (resource.Current < cost.Amount)
+            if (resource.Current + ReserveOf(source, cost.ResourceId) < cost.Amount)
             {
                 throw new InvalidOperationException(
                     $"Combatant '{source.Id}' cannot pay {cost.Amount} '{cost.ResourceId}' for card '{card.Id}'.");
@@ -595,7 +604,24 @@ public sealed class CombatCardPlayProcessor
         foreach (var cost in costsToPay)
         {
             var resource = source.Resources[cost.ResourceId];
-            resource.SetCurrent(resource.Current - cost.Amount);
+            // The pool first; what it cannot cover comes out of the reserve, stack by stack.
+            var fromPool = Math.Min(cost.Amount, Math.Max(0, resource.Current));
+            resource.SetCurrent(resource.Current - fromPool);
+            var owed = cost.Amount - fromPool;
+            if (owed <= 0)
+                continue;
+            var tag = StandardCombatIds.ReserveTag(cost.ResourceId);
+            foreach (var reserve in source.Statuses.Where(status => status.Tags.Contains(tag)).ToList())
+            {
+                if (owed <= 0)
+                    break;
+                var taken = Math.Min(owed, reserve.Stacks);
+                owed -= taken;
+                if (taken >= reserve.Stacks)
+                    source.RemoveStatus(reserve);
+                else
+                    reserve.SetStacks(reserve.Stacks - taken);
+            }
         }
     }
 }

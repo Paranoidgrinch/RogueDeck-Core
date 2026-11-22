@@ -77,6 +77,13 @@ public static class StandardCombatIds
     // PledgeShortfallCounter on the payer before the card's program runs (0 when it was paid in full), so the
     // card itself can answer for the debt — read it with the "counter" amount and e.g. apply a status.
     public static readonly TagId PledgeTag = new("pledge");
+
+    // A status tagged "reserve:<resource>" is a RESERVE of that resource: its stacks count toward paying a cost in
+    // it, and a cost the pool cannot cover takes the rest from them (the pool first). Held Energy is the case in
+    // point — Energy kept back because the pool was full when it was promised; without this a card the pool and the
+    // reserve could pay together was unplayable (user, 2026-11-22).
+    public const string ReserveTagPrefix = "reserve:";
+    public static TagId ReserveTag(ResourceId resource) => new(ReserveTagPrefix + resource.value);
     public static readonly CounterId PledgeShortfallCounter = new("standard.pledge_shortfall");
 
     // A per-instance MARK, not a definition tag: this copy of the card was made for this fight only (a Temporary

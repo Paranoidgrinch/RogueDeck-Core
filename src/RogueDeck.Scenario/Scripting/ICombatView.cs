@@ -33,6 +33,22 @@ public interface ICombatView
     ActionIntent? UpcomingIntentFor(CombatantId combatant);
     IReadOnlyList<ActionIntent> UpcomingIntentsFor(CombatantId combatant);
     bool CanPlay(CardInstanceId cardInstanceId);
+
+    // Whether the hero can pay for this copy RIGHT NOW: its cost with every modifier applied (a "next card costs 1
+    // less", a surcharge, a price written on the copy) against the pool and any reserve of it (Held Energy). The
+    // printed cost is not the price — a screen that checked it greyed out a card the engine would have taken.
+    bool CanAfford(CardInstanceId cardInstanceId)
+    {
+        var zones = State.GetCardZones(HeroId);
+        if (!zones.ContainsCard(cardInstanceId))
+            return false;
+        var card = zones.GetCard(cardInstanceId);
+        if (!Registry.CardDefinitions.TryGetValue(card.DefinitionId, out var definition))
+            return false;
+        var hero = State.GetCombatant(HeroId);
+        return CombatCardPlayProcessor.CanPayCosts(definition, hero,
+            CombatCardPlayProcessor.PreviewCosts(State, Registry, definition, hero, cardInstanceId: cardInstanceId));
+    }
     bool CanUse(CardDefinitionId actionId, CombatantId? target = null);
     IReadOnlyList<CalculatedResourceCost> ActionCost(CardDefinitionId actionId, CombatantId? target = null);
     Foresight? Foresee();

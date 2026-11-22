@@ -381,7 +381,8 @@ public static class RunBot
         ArgumentNullException.ThrowIfNull(payer);
         // A Pledge card is always payable: it pays what there is and owes the rest.
         return play.PledgeCards.Contains(definitionId) || FullCosts(play, definitionId).All(cost =>
-            payer.Resources.TryGetValue(cost.ResourceId, out var pool) && pool.Current >= cost.Amount);
+            payer.Resources.TryGetValue(cost.ResourceId, out var pool)
+            && pool.Current + CombatCardPlayProcessor.ReserveOf(payer, cost.ResourceId) >= cost.Amount);
     }
 
     // `count` distinct indices out of `available`, in random order (never more than there are).
