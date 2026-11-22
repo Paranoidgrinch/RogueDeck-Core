@@ -23,6 +23,10 @@ public sealed class RunState
     private readonly HashSet<RunFlagId> _flags = new();
     private readonly Dictionary<RunCounterId, int> _counters = new();
     private readonly List<IRunCombatModifier> _pendingCombatModifiers = new();
+    // The queue as it stood before the fight now being fought took its share (ConsumePendingCombatModifiers). A save
+    // taken INSIDE that fight writes this rather than the queue: the restored run re-enters the fight's node, and the
+    // node takes its openings again — from the queue as the fight first found it, not from what it left behind.
+    private IRunCombatModifier[]? _queueBeforeThisFight;
     private readonly List<RewardModifierRegistration> _rewardModifiers = new();
     private readonly HashSet<RunFlagId> _actFlags = new();
     private int _nextConsumableSeq;
@@ -435,6 +439,7 @@ public sealed class RunState
     public IReadOnlyList<IRunCombatModifier> ConsumePendingCombatModifiers()
     {
         var taken = _pendingCombatModifiers.ToArray();
+        _queueBeforeThisFight = taken;
         _pendingCombatModifiers.Clear();
         // An opening promised for several fights stays in the queue for the next one, a fight fewer.
         foreach (var opening in taken.OfType<HeroOpeningRuleModifier>().Where(o => o.Combats > 1))
@@ -559,6 +564,14 @@ public sealed class RunState
     // between nodes. It rides along untouched; everything else about the capture is the same.
     public RunSaveData Snapshot(CombatSaveData? combat = null)
     {
+        // ⚠ A SAVE INSIDE A FIGHT KEEPS THE OPENINGS THAT FIGHT TOOK. Restoring it re-enters the fight's node, which
+        // takes its share of the queue again; written as the fight left it, an opening promised for three fights
+        // lost one more fight at every save the fight was resumed from — and a fight checkpoints at every turn, so
+        // "the next three fights" ended with the first (event audit 2026-11-20).
+        List<IRunCombatModifier> pending = combat is not null && _queueBeforeThisFight is { } before
+            ? [.. before.OfType<HeroOpeningRuleModifier>()]
+            : [.. _pendingCombatModifiers];
+
         // A pending OPENING is nothing but its rule, so it saves by value and comes back waiting for the same
         // fight — which is what lets an event promise something about "your next combat" and still be saved
         // before walking into it. Every other pending modifier is a body that cannot be captured.
@@ -605,17 +618,17 @@ public sealed class RunState
                     new Dictionary<string, int>())
                 { Composition = r.Composition }).ToArray()
                 : null,
-            PendingOpenings = _pendingCombatModifiers.Count > 0
-                ? _pendingCombatModifiers.Cast<HeroOpeningRuleModifier>().Select(m => m.Rule).ToList()
+            PendingOpenings = pending.Count > 0
+                ? pending.Cast<HeroOpeningRuleModifier>().Select(m => m.Rule).ToList()
                 : null,
             // Parallel to PendingOpenings, and written only when some opening has more than one fight left — a
             // plain list of ints, never a tuple (System.Text.Json drops tuple fields).
             // …and whose they are, written only when some opening is not the hero's (a party member's).
-            PendingOpeningMembers = _pendingCombatModifiers.Cast<HeroOpeningRuleModifier>().Any(m => m.Member is not null)
-                ? _pendingCombatModifiers.Cast<HeroOpeningRuleModifier>().Select(m => m.Member?.Value).ToList()
+            PendingOpeningMembers = pending.Cast<HeroOpeningRuleModifier>().Any(m => m.Member is not null)
+                ? pending.Cast<HeroOpeningRuleModifier>().Select(m => m.Member?.Value).ToList()
                 : null,
-            PendingOpeningCombats = _pendingCombatModifiers.Cast<HeroOpeningRuleModifier>().Any(m => m.Combats > 1)
-                ? _pendingCombatModifiers.Cast<HeroOpeningRuleModifier>().Select(m => m.Combats).ToList()
+            PendingOpeningCombats = pending.Cast<HeroOpeningRuleModifier>().Any(m => m.Combats > 1)
+                ? pending.Cast<HeroOpeningRuleModifier>().Select(m => m.Combats).ToList()
                 : null,
             UnrestrictedSteps = UnrestrictedSteps,
             ActIndex = ActIndex,
