@@ -83,6 +83,13 @@ public sealed class ShopShelf
         ShopPricing.Adjust(
             service.BasePriceIn(_run), service.Id, service.EffectiveKind, service.Tags, _rules, _run, _spentRules);
 
+    // Rerolls bought in this visit: each one raises the next by the reroll's PriceStep.
+    public int Rerolls { get; private set; }
+
+    public int PriceOf(ShopReroll reroll) => reroll.Price + reroll.PriceStep * Rerolls;
+
+    public void NoteReroll() => Rerolls++;
+
     public void MarkSold(string entryId)
     {
         _sold.Add(entryId);

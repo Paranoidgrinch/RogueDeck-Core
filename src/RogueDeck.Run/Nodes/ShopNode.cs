@@ -37,8 +37,14 @@ public static class ShopEntryKinds
     public const string Service = "service";
 }
 
-// A paid reroll: spend Price of Currency to redraw the shop's display from its offer pool.
-public sealed record ShopReroll(RunResourceId Currency, int Price);
+// A paid reroll: spend Price of Currency to redraw the shop's display from its offer pool. PriceStep is added for
+// every reroll already bought in this visit, so turning the stock over and over gets dearer (100, 150, 200, ...).
+public sealed record ShopReroll(
+    RunResourceId Currency,
+    int Price,
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    int PriceStep = 0);
 
 // A shop service — a paid action that is NOT part of the item stock: e.g. "remove a card from your deck" (the
 // classic StS store service). Effects run when purchased, before the price is paid (they may use a ChooseByPlayer
@@ -228,6 +234,7 @@ public sealed class ShopNodeResolver : INodeResolver
 
                 if (chosen.Id == RerollChoiceId)
                 {
+                    shelf.NoteReroll();
                     run.AddLog(StandardRunLogTypes.ShopRerolled, $"Node '{node.Id}': shop rerolled.");
                     run.RaiseEvent(new ShopRerolledRunEvent(node.Id));
                     context.ResolvePendingEffects();
@@ -300,7 +307,7 @@ public sealed class ShopNodeResolver : INodeResolver
                 RerollChoiceId,
                 Array.Empty<IRunEffectRequest>(),
                 TextKey: "event.shop.reroll",
-                Costs: new[] { PayCost(reroll.Currency, reroll.Price) }));
+                Costs: new[] { PayCost(reroll.Currency, shelf.PriceOf(reroll)) }));
 
         // Leave is always available, so a broke player is never stranded.
         choices.Add(new EventChoice(LeaveChoiceId, Array.Empty<IRunEffectRequest>(), TextKey: "event.shop.leave"));

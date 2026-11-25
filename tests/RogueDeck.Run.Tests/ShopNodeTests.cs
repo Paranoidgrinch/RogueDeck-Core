@@ -167,6 +167,37 @@ public class ShopNodeTests
     }
 
     [Fact]
+    public void Each_reroll_in_a_visit_costs_its_step_more_than_the_last()
+    {
+        var run = NewRun(500);
+        var shop = new ShopDefinition(
+            new[] { Item("a", 30, "a"), Item("b", 30, "b"), Item("c", 30, "c") },
+            OfferCount: 1,
+            Reroll: new ShopReroll(Gold, 100, PriceStep: 50));
+
+        Resolve(run, shop, "reroll", "reroll", "reroll", "leave");
+
+        Assert.Equal(50, run.GetResource(Gold));                         // 500 − 100 − 150 − 200
+        Assert.Equal(3, run.EventHistory.OfType<ShopRerolledRunEvent>().Count());
+    }
+
+    [Fact]
+    public void A_new_visit_prices_the_reroll_from_its_base_again()
+    {
+        var run = NewRun(260);
+        var shop = new ShopDefinition(
+            new[] { Item("a", 300, "a"), Item("b", 300, "b") },
+            OfferCount: 1,
+            Reroll: new ShopReroll(Gold, 100, PriceStep: 50));
+
+        Resolve(run, shop, "reroll", "leave");
+
+        Assert.Equal(160, run.GetResource(Gold));
+        var next = new ShopShelf(run, shop);
+        Assert.Equal(100, next.PriceOf(shop.Reroll!));                   // a new visit starts at the base again
+    }
+
+    [Fact]
     public void The_card_removal_service_removes_a_chosen_card_for_its_price()
     {
         var run = NewRun(100);
