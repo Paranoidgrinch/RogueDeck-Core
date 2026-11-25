@@ -133,6 +133,26 @@ public sealed class EventTargetCombatantTargetSelector : ICombatantTargetSelecto
     }
 }
 
+// Like EventTarget, but resolves the event's target even when that hit downed it — for counting what a killing
+// blow did to its target (a DamageReceived program reading or marking the body it just felled). Downed-permissive,
+// so it is rejected against living-only operations at build (RDCP016) unless wrapped as one body (FirstTarget).
+public sealed class EventTargetIncludingDownedCombatantTargetSelector : ICombatantTargetSelector
+{
+    public TargetSelectorCardinality Cardinality => TargetSelectorCardinality.ZeroOrOne;
+    public bool MayIncludeDownedTargets => true;
+    public EffectContextCapability RequiredContextCapabilities => EffectContextCapability.EventTarget;
+
+    public IReadOnlyCollection<CombatantId> ResolveTargets(CombatantTargetSelectionContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        if (context.EventTargetId is not { } targetId || !context.Combat.TryGetCombatant(targetId, out _))
+            return Array.Empty<CombatantId>();
+
+        return new[] { targetId };
+    }
+}
+
 public sealed class AllAlliesOfSourceCombatantTargetSelector : ICombatantTargetSelector
 {
     public IReadOnlyCollection<CombatantId> ResolveTargets(CombatantTargetSelectionContext context)
@@ -709,6 +729,10 @@ public static class CombatantTargetSelectors
 
     public static ICombatantTargetSelector EventTarget { get; } =
         new EventTargetCombatantTargetSelector();
+
+    // The event's target even when the hit downed it.
+    public static ICombatantTargetSelector EventTargetIncludingDowned { get; } =
+        new EventTargetIncludingDownedCombatantTargetSelector();
 
     // Semantic alias: the combatant receiving or being targeted by the effect.
     public static ICombatantTargetSelector Defender { get; } =

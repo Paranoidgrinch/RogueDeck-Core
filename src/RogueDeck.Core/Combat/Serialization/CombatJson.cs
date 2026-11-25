@@ -323,6 +323,7 @@ public static class CombatJson
         r.Register("sel.source", typeof(SourceCombatantTargetSelector))
          .Register("sel.sourceIncludingDowned", typeof(SourceIncludingDownedCombatantTargetSelector))
          .Register("sel.eventTarget", typeof(EventTargetCombatantTargetSelector))
+         .Register("sel.eventTargetIncludingDowned", typeof(EventTargetIncludingDownedCombatantTargetSelector))
          .Register("sel.allAllies", typeof(AllAlliesOfSourceCombatantTargetSelector))
          .Register("sel.allEnemies", typeof(AllEnemiesOfSourceCombatantTargetSelector))
          .Register("sel.otherEnemies", typeof(OtherEnemiesOfSourceCombatantTargetSelector))
